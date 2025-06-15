@@ -30,6 +30,7 @@ static void grid_move_cursor(struct grid *g, int x, int y);
 
 static void send_escape(struct fsm *f) {
   assert(f->seq.n);
+  logmsg("Escape: %.*s", f->seq.n - 1, f->seq.buffer + 1);
   fwrite(f->seq.buffer, 1, f->seq.n, stdout);
   f->seq.n = 0;
 }
@@ -126,14 +127,13 @@ static void apply_buffered_csi(struct fsm *fsm) {
     grid_move_cursor(g, 0, move);
   } break;
   case 'C': { /* move right */
-    logmsg("Move right %d", move);
     grid_move_cursor(g, move, 0);
   } break;
   case 'D': { /* move left */
     grid_move_cursor(g, -move, 0);
   } break;
   default: {
-    logmsg("Unhandled CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+    // logmsg("Unhandled CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
   } break;
   }
 }
@@ -196,10 +196,28 @@ static void grid_clear_line(struct grid *g, int line) {
   }
 }
 
+static inline int grid_get_logical_line(struct grid *g) {
+  int physical = g->cursor.y;
+  assert(physical >= 0 && physical < g->h);
+  int logical = (g->h + physical - g->offset) % g->h;
+  assert(logical >= 0 && logical < g->h);
+  return logical;
+}
+static inline void grid_set_logical_line(struct grid *g, int logical) {
+  assert(logical >= 0 && logical < g->h);
+  int physical = (g->h + logical + g->offset) % g->h;
+  assert(physical >= 0 && physical < g->h);
+  g->cursor.y = physical;
+}
+
 static void grid_move_cursor(struct grid *g, int x, int y) {
+  // For the 'x' coordinate, the logical and physical coordinates are always synced
   g->cursor.x = CLAMP(g->cursor.x + x, 0, g->w - 1);
+
   // This is a bit more convoluted because we need to translate physical / logical coordinates
-  g->cursor.y = CLAMP(g->cursor.y + y, g->offset, g->offset + g->h - 1);
+  int ly = grid_get_logical_line(g);
+  ly = CLAMP(ly + y, 0, g->h - 1);
+  grid_set_logical_line(g, ly);
 }
 
 static void grid_advance_cursor_y(struct grid *g) {
@@ -254,18 +272,15 @@ static void grid_carriage_return(struct grid *g) {
 }
 
 static void ground_carriage_return(struct fsm *fsm, uint8_t ch) {
-  debugthis;
   grid_carriage_return(fsm->active_grid);
 }
 
 static void grid_backspace(struct grid *g) {
   // Move cursor back, but not past the first column
-  debugthis;
   g->cursor.x = MAX(0, g->cursor.x - 1);
 }
 
 static void ground_backspace(struct fsm *fsm, uint8_t ch) {
-  debugthis;
   grid_backspace(fsm->active_grid);
 }
 static void ground_vtab(struct fsm *fsm, uint8_t ch) {
@@ -304,6 +319,7 @@ static void ground_accept(struct fsm *fsm) {
   fsm->cell.symbol = clear;
 }
 static void ground_reject(struct fsm *fsm) {
+  debugthis;
   struct utf8 clear = {0};
   struct utf8 copy = fsm->cell.symbol;
   fsm->cell.symbol = clear;
