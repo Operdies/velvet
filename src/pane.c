@@ -94,8 +94,8 @@ void pane_read(struct pane *pane, bool *exit) {
 }
 
 void pane_resize(struct pane *pane, int w, int h) {
-  int debugsize = 10;
-  if (debugsize) w = h = debugsize;
+  // int debugsize = 10;
+  // if (debugsize) w = h = debugsize;
   if (pane->w != w || pane->h != h) {
     struct winsize ws = {.ws_col = w, .ws_row = h};
     if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);
