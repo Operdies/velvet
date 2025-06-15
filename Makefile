@@ -3,22 +3,22 @@ MAKEFLAGS += --no-builtin-rules
 
 INCLUDE_DIR = $(abspath .)/include
 OUT_DIR = bin
-COMMANDS = vv
+COMMANDS = vv test
 CMD_DIR = cmd
 CC = cc
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
 CMD_OUT = $(patsubst %.c.o, %, $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
-OBJECTS = 
+OBJECTS = pane utils collections emulator
 OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
-FRAMEWORKS = 
+LIBS = 
 
-CFLAGS += -std=c23 -O0 -g -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP
-LDFLAGS += $(FRAMEWORKS)
+CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
+LDFLAGS += $(LIBS)
 
 
 .PHONY: all
@@ -57,8 +57,9 @@ $(RELEASE_DIR)/vv: $(UNITY_SRC) | $(RELEASE_DIR)
 	strip $(RELEASE_DIR)/vv
 
 .PHONY: release
-release: CFLAGS = -std=c23 -O3 -march=native -mtune=native -flto -ffast-math -DNDEBUG -Wall -Wextra -I$(INCLUDE_DIR)
-release: LDFLAGS = -flto $(FRAMEWORKS)
+release: OPT = -march=native -mtune=native -flto -ffast-math
+release: CFLAGS = -std=c23 -O3 $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
+release: LDFLAGS = -flto $(LIBS)
 release: $(RELEASE_DIR)/vv
 
 .PHONY: scan

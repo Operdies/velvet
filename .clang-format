@@ -1,0 +1,18 @@
+Language:        C
+BasedOnStyle:    LLVM
+
+# Formatting
+ColumnLimit:     120
+IndentWidth:     2
+TabWidth:        2
+UseTab:          Never
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: false
+AllowShortLoopsOnASingleLine: true
+
+DerivePointerAlignment: false
+PointerAlignment: Right
+
+SpaceBeforeParens: ControlStatements
+AlignTrailingComments: true
