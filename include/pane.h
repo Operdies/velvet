@@ -20,5 +20,6 @@ struct pane *pane_from_pty(struct pane *lst, int pty);
 void pane_read(struct pane *pane, bool *exit);
 int pane_count(struct pane *pane);
 void pane_remove(struct pane **lst, struct pane *rem);
+void pane_draw(struct pane *pane, bool redraw);
 
 #endif /*  PANE_H */

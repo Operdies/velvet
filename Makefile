@@ -17,7 +17,8 @@ OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
 LIBS = 
 
-CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
+# CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
+CFLAGS += -std=c23 -fsanitize=address -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
 LDFLAGS += $(LIBS)
 
 

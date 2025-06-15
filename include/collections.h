@@ -3,6 +3,7 @@
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
 
 #include <stddef.h>
 #include <stdint.h>

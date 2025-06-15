@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
@@ -12,13 +13,12 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "utils.h"
+#include "emulator.h"
 #include "pane.h"
+#include "utils.h"
 
 #define MAX_LINES 100
 #define MAX_LINE_LENGTH 100
-
-static struct pane *focused = NULL;
 
 static struct {
   union {
@@ -63,11 +63,13 @@ static void install_signal_handlers(void) {
 static int nmaster = 1;
 static float factor = 0.5;
 
-static void arrange(struct winsize ws, struct pane *panes) {
+static struct pane *focused = NULL;
+static struct pane *lst = NULL;
+
+static void arrange(struct winsize ws, struct pane *p) {
   int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
 
-  n = 0;
-  for (struct pane *p = panes; p; p = p->next) n++;
+  n = pane_count(p);
 
   i = my = sy = sw = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -88,19 +90,19 @@ static void arrange(struct winsize ws, struct pane *panes) {
   }
 
   for (; i < nmaster && i < n; i++) {
-    struct pane *p = &panes[i];
     p->x = mx;
     p->y = my;
     my += mh;
     pane_resize(p, mw, mh);
+    p = p->next;
   }
 
   for (; i < n; i++) {
-    struct pane *p = &panes[i];
     p->x = mw;
     p->y = sy;
     sy += sh;
     pane_resize(p, sw, sh);
+    p = p->next;
   }
 }
 
@@ -119,6 +121,28 @@ struct termios original_terminfo;
 static void restore_terminfo() {
   leavealternatescreen();
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
+}
+
+static void pane_focus(struct pane *pane) {
+  if (pane && pane->fsm.active_grid) {
+    focused = pane;
+    char fmt[40];
+    // set cursor position within the pane
+    struct grid *g = pane->fsm.active_grid;
+    struct cursor *c = &g->cursor;
+    int lineno = 1 + pane->y + (c->y - g->offset + g->h) % g->h;
+    int columnno = 1 + pane->x + c->x;
+    int n = sprintf((char *)fmt, "\x1b[%d;%dH", lineno, columnno);
+    write(STDOUT_FILENO, fmt, n);
+  }
+}
+
+static void focusnext(void) {
+  if (focused && focused->next) {
+    pane_focus(focused->next);
+  } else {
+    pane_focus(lst);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -144,13 +168,12 @@ int main(int argc, char **argv) {
 
   install_signal_handlers();
 
-  struct pane *lst = NULL;
   {
     struct pane *prev = lst;
     for (int i = 1; i < argc; i++) {
       struct pane *p = calloc(1, sizeof(*p));
       p->process = strdup(argv[i]);
-      p->next = lst;
+      logmsg("Create %s", p->process);
       if (lst) {
         prev->next = p;
       } else {
@@ -179,7 +202,7 @@ int main(int argc, char **argv) {
     nfds = 1 + i;
   }
 
-  char buf[4096];
+  char readbuffer[4096];
   bool running = true;
   for (; running && pane_count(lst);) {
 
@@ -210,49 +233,62 @@ int main(int argc, char **argv) {
 
     if (fds[0].revents & POLL_IN) {
       // handle stdin
-      int n = read(STDIN_FILENO, buf, sizeof(buf));
+      int n = read(STDIN_FILENO, readbuffer, sizeof(readbuffer));
+      if (n == -1) {
+        die("read:");
+      }
       if (n == 0) {
         break;
       }
       for (int i = 0; i < n; i++) {
-        if (buf[i] == CTRL('W')) {
+        if (readbuffer[i] == CTRL('J')) {
+          focusnext();
+          continue;
+        }
+        if (readbuffer[i] == CTRL('W')) {
           logmsg("Exit by ^W");
           exit(0);
         }
-      }
-      write(focused->pty, buf, n);
-      if (n > 0) {
-        logmsg("stdin: %d %.*s", n, n, buf);
+        // TODO: batched writes
+        write(focused->pty, readbuffer + i, 1);
       }
       if (n == -1) {
         die("read:");
       }
     }
 
-    {
-      for (int i = 1; i < nfds; i++) {
-        if (fds[i].revents & POLL_OUT) {
-          struct pane *p = pane_from_pty(lst, fds[i].fd);
-          logmsg("[%d] Read from %s", p->pty, p->process);
-          if (p) {
-            bool exit = false;
-            pane_read(p, &exit);
-            if (exit) {
-              pane_remove(&lst, p);
-            }
+    for (int i = 1; i < nfds; i++) {
+      if (fds[i].revents & POLL_OUT) {
+        struct pane *p = pane_from_pty(lst, fds[i].fd);
+        if (p) {
+          bool exit = false;
+          pane_read(p, &exit);
+          if (exit) {
+            if (p == focused) focused = p->next;
+            pane_remove(&lst, p);
+            pane_destroy(p);
           }
         }
       }
     }
 
+    char hide_cursor[] = "\x1b[?25l";
+    char show_cursor[] = "\x1b[?25h";
+    write(STDOUT_FILENO, hide_cursor, sizeof(hide_cursor));
+    for (struct pane *p = lst; p; p = p->next) {
+      pane_draw(p, false);
+    }
+
     arrange(ws, lst);
-    // TODO: Move cursor to correct cell in focused pane
+    if (!focused) focused = lst;
+    pane_focus(focused);
+    write(STDOUT_FILENO, show_cursor, sizeof(show_cursor));
 
     {
       int i = 0;
       for (struct pane *p = lst; p; p = p->next) {
         fds[i + 1].fd = p->pty;
-        fds[i = 1].events = POLL_OUT;
+        fds[i + 1].events = POLL_OUT;
         i++;
       }
       nfds = 1 + i;

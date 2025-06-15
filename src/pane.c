@@ -35,22 +35,40 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
   return nullptr;
 }
 
-static void pane_draw(struct pane *pane) {
-  // TODO: render dirty lines
-  static struct string linebuf = {0};
-  linebuf.len = 0;
+void pane_draw(struct pane *pane, bool redraw) {
+  static struct string outbuffer = {0};
+  static uint8_t fg, bg;
+  static uint32_t attr;
   struct grid *g = pane->fsm.opts.alternate_screen ? &pane->fsm.alternate : &pane->fsm.primary;
-  assert(g->w < 1024);
-  for (int i = 0; i < g->h; i++) {
-    if (!g->dirty[i]) continue;
+  uint8_t fmt[100];
+  string_clear(&outbuffer);
+  for (int i0 = 0; i0 < g->h; i0++) {
+    int row = (i0 + g->offset) % g->h;
+    if (!redraw && !g->dirty[row]) continue;
+    g->dirty[row] = false;
+    int lineno = 1 + pane->y + i0;
+    int columnno = 1 + pane->x;
+    int n = sprintf((char *)fmt, "\x1b[%d;%dH", lineno, columnno);
+    string_push(&outbuffer, fmt, n);
+
     for (int j = 0; j < g->w; j++) {
-      uint8_t ch = g->cells[i * g->w + j].ch.utf8[0];
-      // linebuf[linebuf_size] = ch ? ch : ' ';
-      // linebuf_size++;
-      string_push(&linebuf, &ch, 1);
+      struct cell *c = &g->cells[row * g->w + j];
+      if (c->fg != fg) {
+        // TODO: apply fg
+        fg = c->fg;
+      }
+      if (c->bg != bg) {
+        // TODO: apply bg
+        bg = c->bg;
+      }
+      if (c->attr != attr) {
+        // TODO: apply attributes
+        attr = c->attr;
+      }
+      string_push(&outbuffer, c->symbol.utf8, c->symbol.len);
     }
-    write(STDOUT_FILENO, linebuf.content, linebuf.len);
   }
+  write(STDOUT_FILENO, outbuffer.content, outbuffer.len);
 }
 
 void pane_read(struct pane *pane, bool *exit) {
@@ -67,22 +85,23 @@ void pane_read(struct pane *pane, bool *exit) {
     pane->fsm.w = pane->w;
     pane->fsm.h = pane->h;
     fsm_process(&pane->fsm, buf, n);
-    pane_draw(pane);
   }
 
   if (n == 0) {
     // stdout closed
-    pane_destroy(pane);
     *exit = true;
   }
 }
 
 void pane_resize(struct pane *pane, int w, int h) {
-  struct winsize ws = {.ws_col = w, .ws_row = h};
-  ioctl(pane->pty, TIOCSWINSZ, &ws);
-  kill(pane->pid, SIGWINCH);
-  pane->w = w;
-  pane->h = h;
+  w = 6; h = 6;
+  if (pane->w != w || pane->h != h) {
+    struct winsize ws = {.ws_col = w, .ws_row = h};
+    if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);
+    if (pane->pid) kill(pane->pid, SIGWINCH);
+    pane->w = w;
+    pane->h = h;
+  }
 }
 
 void pane_start(struct pane *pane) {
@@ -91,20 +110,31 @@ void pane_start(struct pane *pane) {
   if (pid < 0) die("forkpty:");
 
   if (pid == 0) {
-    execlp(pane->process, pane->process, (char *)NULL);
+    execlp(pane->process, pane->process, NULL);
     die("execlp:");
   }
 }
 
 void pane_remove(struct pane **lst, struct pane *rem) {
   assert(lst), assert(*lst), assert(rem);
-  struct pane **assign = lst;
-  for (struct pane *p = *lst; p; assign = &p->next, p = p->next) {
-    if (p == rem) {
-      *assign = p->next;
-      return;
-    }
+  if (*lst == rem) {
+    *lst = rem->next;
+    return;
   }
+  struct pane *prev = *lst;
+  for (struct pane *p = prev->next; p; p = p->next) {
+    if (p == rem) {
+      prev->next = p->next;
+    }
+    prev = p;
+  }
+  // struct pane **assign = lst;
+  // for (struct pane *p = *lst; p; assign = &p->next, p = p->next) {
+  //   if (p == rem) {
+  //     *assign = p->next;
+  //     return;
+  //   }
+  // }
 }
 
 int pane_count(struct pane *pane) {
