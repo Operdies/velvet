@@ -132,7 +132,7 @@ static void pane_focus(struct pane *pane) {
     struct cursor *c = &g->cursor;
     int lineno = 1 + pane->y + (c->y - g->offset + g->h) % g->h;
     int columnno = 1 + pane->x + c->x;
-    int n = sprintf((char *)fmt, "\x1b[%d;%dH", lineno, columnno);
+    int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     write(STDOUT_FILENO, fmt, n);
   }
 }

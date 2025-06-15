@@ -48,7 +48,7 @@ void pane_draw(struct pane *pane, bool redraw) {
     g->dirty[row] = false;
     int lineno = 1 + pane->y + i0;
     int columnno = 1 + pane->x;
-    int n = sprintf((char *)fmt, "\x1b[%d;%dH", lineno, columnno);
+    int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     string_push(&outbuffer, fmt, n);
 
     for (int j = 0; j < g->w; j++) {

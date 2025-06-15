@@ -265,6 +265,7 @@ static void ground_esc(struct fsm *fsm, uint8_t ch) {
   fsm->seq.buffer[fsm->seq.n++] = ch;
 }
 static void ground_noop(struct fsm *fsm, uint8_t ch) {
+  (void)fsm, (void)ch;
 }
 
 static void grid_carriage_return(struct grid *g) {
@@ -272,6 +273,7 @@ static void grid_carriage_return(struct grid *g) {
 }
 
 static void ground_carriage_return(struct fsm *fsm, uint8_t ch) {
+  (void)ch;
   grid_carriage_return(fsm->active_grid);
 }
 
@@ -281,15 +283,15 @@ static void grid_backspace(struct grid *g) {
 }
 
 static void ground_backspace(struct fsm *fsm, uint8_t ch) {
+  (void)ch;
   grid_backspace(fsm->active_grid);
 }
 static void ground_vtab(struct fsm *fsm, uint8_t ch) {
-  // Ignore wrapping rules and preserve column
-  debugthis;
+  (void)ch;
   grid_advance_cursor_y(fsm->active_grid);
 }
 static void ground_tab(struct fsm *fsm, uint8_t ch) {
-  debugthis;
+  (void)ch;
   const int tabwidth = 8;
   int x = fsm->active_grid->cursor.x;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
@@ -302,12 +304,12 @@ static void ground_tab(struct fsm *fsm, uint8_t ch) {
 }
 
 static void ground_bell(struct fsm *fsm, uint8_t ch) {
-  debugthis;
+  (void)fsm, (void)ch;
   write(STDOUT_FILENO, "\a", 1);
 }
 
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
-  debugthis;
+  (void)ch;
   grid_advance_cursor_y(fsm->active_grid);
   if (fsm->opts.auto_return) grid_carriage_return(fsm->active_grid);
 }

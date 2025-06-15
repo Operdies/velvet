@@ -17,8 +17,8 @@ OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
 LIBS = 
 
-# CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
-CFLAGS += -std=c23 -fsanitize=address -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
+# CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP
+CFLAGS += -std=c23 -fsanitize=address -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR)  -MMD -MP
 LDFLAGS += $(LIBS)
 
 
@@ -59,7 +59,7 @@ $(RELEASE_DIR)/vv: $(UNITY_SRC) | $(RELEASE_DIR)
 
 .PHONY: release
 release: OPT = -march=native -mtune=native -flto -ffast-math
-release: CFLAGS = -std=c23 -O3 $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -I/opt/homebrew/include -MMD -MP
+release: CFLAGS = -std=c23 -O3 $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP
 release: LDFLAGS = -flto $(LIBS)
 release: $(RELEASE_DIR)/vv
 
