@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
-#include <sys/ttycom.h>
 #include <termios.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "collections.h"
 #include "emulator.h"

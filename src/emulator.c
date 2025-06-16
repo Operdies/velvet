@@ -504,7 +504,7 @@ static void process_ground(struct fsm *fsm, uint8_t ch) {
   utf8_push(&fsm->cell.symbol, ch);
   uint8_t len = fsm->cell.symbol.len;
   uint8_t exp = fsm->cell.symbol.expected;
-  assert(exp >= 0), assert(exp <= 4);
+  assert(exp <= 4);
 
   if (exp == 0) {
     // Invalid sequence

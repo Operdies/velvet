@@ -72,7 +72,7 @@ struct cell {
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
 static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
-const static struct cell empty_cell = {.symbol = utf8_blank};
+static const struct cell empty_cell = {.symbol = utf8_blank};
 
 struct cell_ringbuf {
   struct cell **buf;

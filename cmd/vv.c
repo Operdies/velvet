@@ -1,21 +1,27 @@
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
-#include <sys/signal.h>
-#include <sys/ttycom.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include "emulator.h"
 #include "pane.h"
 #include "utils.h"
+#include <signal.h>
+
+#ifndef POLL_IN
+#define POLL_IN POLLIN
+#endif
+
+#ifndef POLL_OUT
+#define POLL_OUT POLLOUT
+#endif
 
 #define MAX_LINES 100
 #define MAX_LINE_LENGTH 100
@@ -46,10 +52,10 @@ static void install_signal_handlers(void) {
   struct sigaction sa = {0};
   sa.sa_sigaction = &signal_handler;
   sa.sa_flags = SA_SIGINFO;
-  if (sigaction(SIGWINCH, &sa, NULL) < 0) {
+  if (sigaction(SIGWINCH, &sa, NULL) == -1) {
     die("sigaction:");
   }
-  if (sigaction(SIGINT, &sa, NULL) < 0) {
+  if (sigaction(SIGINT, &sa, NULL) == -1) {
     die("sigaction:");
   }
 

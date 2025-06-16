@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <unistd.h>
 
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   assert(f);

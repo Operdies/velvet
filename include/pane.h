@@ -1,7 +1,6 @@
 #ifndef PANE_H
 #define PANE_H
 
-#include <sys/syslimits.h>
 #include "emulator.h"
 #include "collections.h"
 
