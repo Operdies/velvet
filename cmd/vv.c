@@ -106,23 +106,6 @@ static void arrange(struct winsize ws, struct pane *p) {
   }
 }
 
-static void leavealternatescreen(void) {
-  char buf[] = "\0330x1b[2J\033[H\033[?1049l";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-static void enteralternatescreen(void) {
-  char buf[] = "\033[?1049h\033[2J\033[H";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-struct termios original_terminfo;
-
-static void restore_terminfo() {
-  leavealternatescreen();
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
-}
-
 static void pane_focus(struct pane *pane) {
   if (pane && pane->fsm.active_grid) {
     focused = pane;
@@ -146,25 +129,8 @@ static void focusnext(void) {
 }
 
 int main(int argc, char **argv) {
-  struct termios raw_term;
-  struct winsize ws;
-
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
-    die("ioctl TIOCGWINSZ:");
-  }
-
-  // Save and configure raw terminal mode
-  if (tcgetattr(STDIN_FILENO, &original_terminfo) == -1) {
-    die("tcgetattr:");
-  }
-  atexit(restore_terminfo);
-
-  raw_term = original_terminfo;
-  cfmakeraw(&raw_term);
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
-    die("tcsetattr:");
-  }
-  enteralternatescreen();
+  enter_alternate_screen();
+  enable_raw_mode();
 
   install_signal_handlers();
 
@@ -247,7 +213,8 @@ int main(int argc, char **argv) {
         }
         if (readbuffer[i] == CTRL('W')) {
           logmsg("Exit by ^W");
-          exit(0);
+          running = false;
+          break;
         }
         // TODO: batched writes
         write(focused->pty, readbuffer + i, 1);
@@ -294,6 +261,7 @@ int main(int argc, char **argv) {
       nfds = 1 + i;
     }
   }
-  restore_terminfo();
+  exit_raw_mode();
+  leave_alternate_screen();
   printf("[exited]\n");
 }

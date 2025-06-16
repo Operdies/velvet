@@ -18,7 +18,7 @@
             "type": "codelldb",
             "request": "launch",
             "program": "bin/vv",
-            "args": ["bash", "ls"],
+            "args": ["bash", "zsh"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

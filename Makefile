@@ -59,7 +59,7 @@ $(RELEASE_DIR)/vv: $(UNITY_SRC) | $(RELEASE_DIR)
 
 .PHONY: release
 release: OPT = -march=native -mtune=native -flto -ffast-math
-release: CFLAGS = -std=c23 -O3 $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP
+release: CFLAGS = -std=c23 -O3 $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP -DNDEBUG
 release: LDFLAGS = -flto $(LIBS)
 release: $(RELEASE_DIR)/vv
 

@@ -12,7 +12,7 @@
 #define BELL '\a'
 #define BSP '\b'
 #define DEL 0x7f
-#define ESC 0x1b
+#define ESC '\e'
 #define FORMFEED '\f'
 #define NEWLINE '\n'
 #define RET '\r'
@@ -27,6 +27,7 @@
 static void grid_insert(struct grid *g, struct cell c, bool wrap);
 static void grid_destroy(struct grid *grid);
 static void grid_move_cursor(struct grid *g, int x, int y);
+static void grid_move_cursor_abs(struct grid *g, int x, int y);
 
 static void send_escape(struct fsm *f) {
   assert(f->seq.n);
@@ -35,22 +36,14 @@ static void send_escape(struct fsm *f) {
   f->seq.n = 0;
 }
 
-// static void parse_csi_params(uint8_t *buffer, size_t start, size_t end, int *params, int *count) {
-//   *count = 0;
-//   size_t i = start;
-//   while (i < end) {
-//     int val = 0;
-//     int digits = 0;
-//     while (i < end && buffer[i] >= '0' && buffer[i] <= '9') {
-//       val = val * 10 + (buffer[i] - '0');
-//       i++;
-//       digits++;
-//     }
-//     if (digits == 0) val = 0;
-//     params[(*count)++] = val;
-//     if (i < end && buffer[i] == ';') i++;
-//   }
-// }
+static void fsm_update_active_grid(struct fsm *fsm) {
+  struct grid *g = fsm->opts.alternate_screen ? &fsm->alternate : &fsm->primary;
+  if (fsm->active_grid != g) {
+    logmsg("Activate %s screen", fsm->opts.alternate_screen ? "secondary" : "primary");
+    fsm->active_grid = g;
+    for (int i = 0; i < g->h; i++) g->dirty[i] = true;
+  }
+}
 
 static void parse_csi_params(uint8_t *buffer, int len, int *params, int nparams, int *count) {
   *count = 0;
@@ -92,15 +85,42 @@ static void apply_buffered_csi(struct fsm *fsm) {
     return;
   }
 
-  logmsg("CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+  // logmsg("CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
 
   int params[10] = {0};
   int count = 0;
-  parse_csi_params(buffer + 2, len - 3, params, 10, &count);
+  int dec = buffer[2] == '?'; /* DEC Private Mode indicator */
+  parse_csi_params(buffer + (2 + dec), len - (3 + dec), params, 10, &count);
   int move = count > 0 ? params[0] : 1;
 
+  if (dec) {
+    bool on = final_byte == 'h';
+    bool off = final_byte == 'l';
+    if (!on && !off) {
+      logmsg("DEC command missing on/off terminator: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+      return;
+    }
+    switch (params[0]) {
+    case 1: { /* Cursor keys send application */
+    } break;
+    case 3: { /* 132 column mode */
+    } break;
+    case 1049: { /* alternate cursor */
+      fsm->opts.alternate_screen = on;
+      fsm_update_active_grid(fsm);
+    } break;
+    case 2004: {
+      fsm->opts.bracketed_paste = on;
+    } break;
+    default: {
+      logmsg("Unhandled CSI DEC: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+    } break;
+    }
+    return;
+  }
+
   switch (final_byte) {
-  case 'K': {
+  case 'K': { /* delete operations */
     int mode = params[0];
     struct cursor start = fsm->active_grid->cursor;
     struct cursor end = fsm->active_grid->cursor;
@@ -120,6 +140,7 @@ static void apply_buffered_csi(struct fsm *fsm) {
     }
     grid_erase_line_range(g, start, end);
   } break;
+    /* cursor movement */
   case 'A': { /* move up */
     grid_move_cursor(g, 0, -move);
   } break;
@@ -132,8 +153,15 @@ static void apply_buffered_csi(struct fsm *fsm) {
   case 'D': { /* move left */
     grid_move_cursor(g, -move, 0);
   } break;
+  case 'H': { /* cursor move to coordinate */
+    int x = params[1];
+    int y = params[0];
+    grid_move_cursor_abs(g, x, y);
+  } break;
+  case 'm': { /* color */
+  } break;
   default: {
-    // logmsg("Unhandled CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+    logmsg("Unhandled CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
   } break;
   }
 }
@@ -158,6 +186,12 @@ static void fix_grid(struct grid *g, int w, int h) {
     for (int i = 0; i < h; i++) {
       g->dirty[i] = true;
     }
+
+    for (int i = 0; i < h; i++) {
+      for (int j = 0; j < w; j++) {
+        g->cells[i * w + j] = empty_cell;
+      }
+    }
   }
 
   // TODO: Enlarge grids if too small
@@ -179,14 +213,10 @@ static void fix_grid(struct grid *g, int w, int h) {
   }
 }
 
-static struct grid *fsm_active_grid2(struct fsm *fsm) {
-  return fsm->opts.alternate_screen ? &fsm->alternate : &fsm->primary;
-}
-
 static void fix_grids(struct fsm *fsm) {
   fix_grid(&fsm->primary, fsm->w, fsm->h);
   fix_grid(&fsm->alternate, fsm->w, fsm->h);
-  fsm->active_grid = fsm_active_grid2(fsm);
+  fsm_update_active_grid(fsm);
 }
 
 static void grid_clear_line(struct grid *g, int line) {
@@ -210,6 +240,13 @@ static inline void grid_set_logical_line(struct grid *g, int logical) {
   g->cursor.y = physical;
 }
 
+static void grid_move_cursor_abs(struct grid *g, int x, int y) {
+  g->cursor.x = CLAMP(x, 0, g->w - 1);
+  int ly = CLAMP(y, 0, g->h - 1);
+  grid_set_logical_line(g, ly);
+  logmsg("Move cursor to %d;%d", g->cursor.x, ly);
+}
+
 static void grid_move_cursor(struct grid *g, int x, int y) {
   // For the 'x' coordinate, the logical and physical coordinates are always synced
   g->cursor.x = CLAMP(g->cursor.x + x, 0, g->w - 1);
@@ -218,6 +255,22 @@ static void grid_move_cursor(struct grid *g, int x, int y) {
   int ly = grid_get_logical_line(g);
   ly = CLAMP(ly + y, 0, g->h - 1);
   grid_set_logical_line(g, ly);
+}
+
+static void grid_invalidate(struct grid *g) {
+  for (int i = 0; i < g->h; i++) {
+    g->dirty[i] = true;
+  }
+}
+
+static void grid_advance_cursor_y_reverse(struct grid *g) {
+  int ly = grid_get_logical_line(g);
+  if (ly == 0) {
+    g->offset = (g->h + g->offset - 1) % g->h;
+    grid_clear_line(g, g->offset);
+    grid_invalidate(g);
+  }
+  grid_move_cursor(g, 0, -1);
 }
 
 static void grid_advance_cursor_y(struct grid *g) {
@@ -232,6 +285,7 @@ static void grid_advance_cursor_y(struct grid *g) {
   }
   assert(c->y < g->h);
 }
+
 static void grid_advance_cursor(struct grid *g, bool wrap) {
   struct cursor *c = &g->cursor;
   c->x++;
@@ -430,6 +484,10 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
       case '8': {
         fsm->state = fsm_ground;
         fsm->active_grid->cursor = fsm->active_grid->saved_cursor;
+      } break;
+      case 'M': { /* Cursor up one line, scroll if at top */
+        grid_advance_cursor_y_reverse(fsm->active_grid);
+        fsm->state = fsm_ground;
       } break;
       default: {
         // Unrecognized escape. Treat this char as escaped and continue parsing normally.

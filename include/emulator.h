@@ -13,6 +13,50 @@ struct utf8 {
   uint8_t expected;
 };
 
+enum TextAttributes {
+    ATTR_NONE               = 0,
+
+    ATTR_BOLD               = 1u << 0,   // SGR 1
+    ATTR_FAINT              = 1u << 1,   // SGR 2
+    ATTR_ITALIC             = 1u << 2,   // SGR 3
+    ATTR_UNDERLINE          = 1u << 3,   // SGR 4
+
+    ATTR_BLINK_SLOW         = 1u << 4,   // SGR 5
+    ATTR_BLINK_RAPID        = 1u << 5,   // SGR 6
+    ATTR_REVERSE            = 1u << 6,   // SGR 7
+    ATTR_CONCEAL            = 1u << 7,   // SGR 8
+    ATTR_CROSSED_OUT        = 1u << 8,   // SGR 9
+
+    ATTR_UNDERLINE_DOUBLE   = 1u << 9,   // SGR 21 or CSI 4:2m
+    ATTR_UNDERLINE_CURLY    = 1u << 10,  // CSI 4:3m
+    ATTR_UNDERLINE_DOTTED   = 1u << 11,  // CSI 4:4m
+    ATTR_UNDERLINE_DASHED   = 1u << 12,  // CSI 4:5m
+
+    ATTR_FRAMED             = 1u << 13,  // SGR 51
+    ATTR_ENCIRCLED          = 1u << 14,  // SGR 52
+    ATTR_OVERLINED          = 1u << 15,  // SGR 53
+
+    // Font (SGR 10–19): store in separate field if needed.
+    // Optionally: 3 bits reserved for font ID (bits 16–18)
+
+    // Reserve for future use
+    ATTR_RESERVED_1         = 1u << 16,
+    ATTR_RESERVED_2         = 1u << 17,
+    ATTR_RESERVED_3         = 1u << 18,
+
+    // Masks for groups
+    ATTR_UNDERLINE_ANY      = ATTR_UNDERLINE |
+                              ATTR_UNDERLINE_DOUBLE |
+                              ATTR_UNDERLINE_CURLY |
+                              ATTR_UNDERLINE_DOTTED |
+                              ATTR_UNDERLINE_DASHED,
+
+    ATTR_BLINK_ANY          = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
+
+    ATTR_ALL                = 0x0007FFFF,  // Update if you add more flags
+
+};
+
 void utf8_push(struct utf8 *u, uint8_t byte);
 bool utf8_valid(struct utf8 *u);
 
@@ -22,7 +66,7 @@ struct cell {
   // are split across a line barrier
   // TODO: variable width cells (e.g. double width emojis)
   struct utf8 symbol;
-  uint32_t attr;
+  enum TextAttributes attr;
   uint8_t fg, bg;
   bool wrapped;
 };
