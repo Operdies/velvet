@@ -35,13 +35,11 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
   return nullptr;
 }
 
-void pane_draw(struct pane *pane, bool redraw) {
-  static struct string outbuffer = {0};
+void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   static uint8_t fg, bg;
   static uint32_t attr;
   struct grid *g = pane->fsm.opts.alternate_screen ? &pane->fsm.alternate : &pane->fsm.primary;
   uint8_t fmt[100];
-  string_clear(&outbuffer);
   for (int i0 = 0; i0 < g->h; i0++) {
     int row = (i0 + g->offset) % g->h;
     if (!redraw && !g->dirty[row]) continue;
@@ -49,7 +47,7 @@ void pane_draw(struct pane *pane, bool redraw) {
     int lineno = 1 + pane->y + i0;
     int columnno = 1 + pane->x;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
-    string_push(&outbuffer, fmt, n);
+    string_push(outbuffer, fmt, n);
 
     for (int j = 0; j < g->w; j++) {
       struct cell *c = &g->cells[row * g->w + j];
@@ -65,10 +63,9 @@ void pane_draw(struct pane *pane, bool redraw) {
         // TODO: apply attributes
         attr = c->attr;
       }
-      string_push(&outbuffer, c->symbol.utf8, c->symbol.len);
+      string_push(outbuffer, c->symbol.utf8, c->symbol.len);
     }
   }
-  write(STDOUT_FILENO, outbuffer.content, outbuffer.len);
 }
 
 void pane_read(struct pane *pane, bool *exit) {

@@ -168,6 +168,8 @@ int main(int argc, char **argv) {
     nfds = 1 + i;
   }
 
+  static struct string draw_buffer = {0};
+
   char readbuffer[4096];
   bool running = true;
   for (; running && pane_count(lst);) {
@@ -239,17 +241,34 @@ int main(int argc, char **argv) {
       }
     }
 
+    string_clear(&draw_buffer);
     char hide_cursor[] = "\x1b[?25l";
     char show_cursor[] = "\x1b[?25h";
-    write(STDOUT_FILENO, hide_cursor, sizeof(hide_cursor));
+    string_push(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     for (struct pane *p = lst; p; p = p->next) {
-      pane_draw(p, false);
+      pane_draw(p, false, &draw_buffer);
+    }
+
+    if (focused && focused->fsm.opts.cursor_hidden == false)
+      string_push(&draw_buffer, show_cursor, sizeof(show_cursor));
+
+    {
+      size_t written = 0;
+      while (written < draw_buffer.len) {
+        ssize_t n = write(STDOUT_FILENO, draw_buffer.content + written, draw_buffer.len - written);
+        if (n == 0) {
+          die("stdout closed?");
+        }
+        if (n == -1) {
+          die("write:");
+        }
+        written += n;
+      }
     }
 
     arrange(ws, lst);
     if (!focused) focused = lst;
     pane_focus(focused);
-    write(STDOUT_FILENO, show_cursor, sizeof(show_cursor));
 
     {
       int i = 0;
@@ -261,6 +280,8 @@ int main(int argc, char **argv) {
       nfds = 1 + i;
     }
   }
+
+  string_destroy(&draw_buffer);
   exit_raw_mode();
   leave_alternate_screen();
   printf("[exited]\n");

@@ -13,7 +13,7 @@ struct utf8 {
   uint8_t expected;
 };
 
-enum TextAttributes {
+enum cell_attributes {
     ATTR_NONE               = 0,
 
     ATTR_BOLD               = 1u << 0,   // SGR 1
@@ -66,7 +66,7 @@ struct cell {
   // are split across a line barrier
   // TODO: variable width cells (e.g. double width emojis)
   struct utf8 symbol;
-  enum TextAttributes attr;
+  enum cell_attributes attr;
   uint8_t fg, bg;
   // Track newline locations to support rewrapping
   bool newline;
@@ -123,6 +123,8 @@ struct pane_options {
   bool alternate_screen;
   /* if enabled, pasted content should be wrapped with ESC[200~ and ESC[201~ */
   bool bracketed_paste;
+  /* turned on / off by CSI ?25h/l */
+  bool cursor_hidden;
 };
 
 /* finite state machine for parsing ansi escape codes */

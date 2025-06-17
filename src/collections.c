@@ -8,7 +8,7 @@ static size_t next_size(size_t min) {
   return MAX(min * 2, 1024);
 }
 
-void string_push(struct string *str, uint8_t *bytes, size_t len) {
+void string_push(struct string *str, char *src, size_t len) {
   size_t required = str->len + len;
   if (str->content == nullptr || str->cap < required) {
     uint8_t *prev = str->content;
@@ -20,7 +20,7 @@ void string_push(struct string *str, uint8_t *bytes, size_t len) {
       free(prev);
     }
   }
-  memcpy(str->content + str->len, bytes, len);
+  memcpy(str->content + str->len, src, len);
   str->len += len;
 }
 

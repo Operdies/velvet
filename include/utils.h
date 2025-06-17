@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 void logmsg(char *fmt, ...);
-void die(char *fmt, ...);
+_Noreturn void die(char *fmt, ...);
 void *ecalloc(size_t sz, size_t count);
 void leave_alternate_screen(void);
 void enter_alternate_screen(void);

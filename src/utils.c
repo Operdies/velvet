@@ -1,11 +1,11 @@
 #include "utils.h"
 #include <assert.h>
-#include <sys/ioctl.h>
-#include <stdarg.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
@@ -35,7 +35,7 @@ void *ecalloc(size_t sz, size_t count) {
   return ptr;
 }
 
-void die(char *fmt, ...) {
+_Noreturn void die(char *fmt, ...) {
   exit_raw_mode();
   va_list ap;
   va_start(ap);
@@ -102,3 +102,5 @@ void enable_raw_mode(void) {
     die("tcsetattr:");
   }
 }
+
+
