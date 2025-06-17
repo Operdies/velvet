@@ -68,7 +68,8 @@ struct cell {
   struct utf8 symbol;
   enum TextAttributes attr;
   uint8_t fg, bg;
-  bool wrapped;
+  // Track newline locations to support rewrapping
+  bool newline;
 };
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};

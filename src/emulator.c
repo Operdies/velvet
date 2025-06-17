@@ -24,10 +24,18 @@
 
 #define debugthis logmsg("Function: %s, File: %s, Line: %d\n", __func__, __FILE__, __LINE__)
 
+#define grid_start(g) (0)
+#define grid_end(g) (g->w - 1)
+#define grid_top(g) (0)
+#define grid_bottom(g) (g->h - 1)
+#define grid_column(g) (g->cursor.x)
+#define grid_line(g) (g->cursor.y)
+
 static void grid_insert(struct grid *g, struct cell c, bool wrap);
 static void grid_destroy(struct grid *grid);
 static void grid_move_cursor(struct grid *g, int x, int y);
-static void grid_move_cursor_abs(struct grid *g, int x, int y);
+static void grid_set_visual_cursor(struct grid *g, int x, int y);
+static inline struct cell *grid_current_cell(struct grid *g);
 
 static void send_escape(struct fsm *f) {
   assert(f->seq.n);
@@ -71,6 +79,16 @@ static void grid_erase_line_range(struct grid *g, struct cursor start, struct cu
   for (int i = start.x; i < end.x && i < g->w; i++) {
     int idx = c->y * g->w + i;
     g->cells[idx] = empty_cell;
+  }
+}
+
+static void grid_delete_characters(struct grid *g, int n) {
+  logmsg("Delete %d from %d", n, grid_column(g));
+  struct cell *line = &g->cells[g->w * grid_line(g)];
+  for (int col = grid_column(g); col < grid_end(g); col++) {
+    int rcol = col + n;
+    struct cell replacement = rcol >= grid_end(g) ? empty_cell : line[rcol];
+    line[col] = replacement;
   }
 }
 
@@ -156,7 +174,11 @@ static void apply_buffered_csi(struct fsm *fsm) {
   case 'H': { /* cursor move to coordinate */
     int x = params[1];
     int y = params[0];
-    grid_move_cursor_abs(g, x, y);
+    grid_set_visual_cursor(g, x, y);
+  } break;
+  case 'P': { /* delete characters */
+    int n = count > 0 ? params[0] : 1;
+    grid_delete_characters(g, n);
   } break;
   case 'm': { /* color */
   } break;
@@ -226,35 +248,35 @@ static void grid_clear_line(struct grid *g, int line) {
   }
 }
 
-static inline int grid_get_logical_line(struct grid *g) {
-  int physical = g->cursor.y;
-  assert(physical >= 0 && physical < g->h);
-  int logical = (g->h + physical - g->offset) % g->h;
-  assert(logical >= 0 && logical < g->h);
-  return logical;
+static inline int grid_get_visual_line(struct grid *g) {
+  assert(grid_line(g) >= 0 && grid_line(g) < g->h);
+  int visual = (g->h + grid_line(g) - g->offset) % g->h;
+  assert(visual >= 0 && visual < g->h);
+  return visual;
 }
-static inline void grid_set_logical_line(struct grid *g, int logical) {
-  assert(logical >= 0 && logical < g->h);
-  int physical = (g->h + logical + g->offset) % g->h;
+
+static inline void grid_set_visual_line(struct grid *g, int visual) {
+  assert(visual >= 0 && visual < g->h);
+  int physical = (g->h + visual + g->offset) % g->h;
   assert(physical >= 0 && physical < g->h);
   g->cursor.y = physical;
 }
 
-static void grid_move_cursor_abs(struct grid *g, int x, int y) {
-  g->cursor.x = CLAMP(x, 0, g->w - 1);
-  int ly = CLAMP(y, 0, g->h - 1);
-  grid_set_logical_line(g, ly);
-  logmsg("Move cursor to %d;%d", g->cursor.x, ly);
+static void grid_set_visual_cursor(struct grid *g, int x, int y) {
+  g->cursor.x = CLAMP(x, grid_start(g), grid_end(g));
+  int vis = CLAMP(y, grid_top(g), grid_bottom(g));
+  grid_set_visual_line(g, vis);
+  logmsg("Move cursor to %d;%d", g->cursor.x, vis);
 }
 
 static void grid_move_cursor(struct grid *g, int x, int y) {
-  // For the 'x' coordinate, the logical and physical coordinates are always synced
-  g->cursor.x = CLAMP(g->cursor.x + x, 0, g->w - 1);
+  // For the 'x' coordinate, the visual and physical coordinates are always synced
+  g->cursor.x = CLAMP(g->cursor.x + x, grid_start(g), grid_end(g));
 
-  // This is a bit more convoluted because we need to translate physical / logical coordinates
-  int ly = grid_get_logical_line(g);
-  ly = CLAMP(ly + y, 0, g->h - 1);
-  grid_set_logical_line(g, ly);
+  // This is a bit more convoluted because we need to translate physical / visual coordinates
+  int ly = grid_get_visual_line(g);
+  ly = CLAMP(ly + y, grid_top(g), grid_bottom(g));
+  grid_set_visual_line(g, ly);
 }
 
 static void grid_invalidate(struct grid *g) {
@@ -264,8 +286,11 @@ static void grid_invalidate(struct grid *g) {
 }
 
 static void grid_advance_cursor_y_reverse(struct grid *g) {
-  int ly = grid_get_logical_line(g);
+  int ly = grid_get_visual_line(g);
   if (ly == 0) {
+    // TODO: All offset manipulation should be abstracted to a 'scroll_screen' function or something
+    // TODO: Grid lines should be abstracted a bit, so instead of indexing a line, one would do grid_get_visual_line to
+    // get a cell pointer
     g->offset = (g->h + g->offset - 1) % g->h;
     grid_clear_line(g, g->offset);
     grid_invalidate(g);
@@ -344,6 +369,7 @@ static void ground_vtab(struct fsm *fsm, uint8_t ch) {
   (void)ch;
   grid_advance_cursor_y(fsm->active_grid);
 }
+
 static void ground_tab(struct fsm *fsm, uint8_t ch) {
   (void)ch;
   const int tabwidth = 8;
@@ -364,6 +390,8 @@ static void ground_bell(struct fsm *fsm, uint8_t ch) {
 
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
   (void)ch;
+  struct cell *c = grid_current_cell(fsm->active_grid);
+  c->newline = true;
   grid_advance_cursor_y(fsm->active_grid);
   if (fsm->opts.auto_return) grid_carriage_return(fsm->active_grid);
 }
@@ -521,6 +549,10 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
     }
     }
   }
+}
+
+struct cell *grid_current_cell(struct grid *g) {
+  return &g->cells[g->cursor.y * g->h + g->cursor.x];
 }
 
 void grid_destroy(struct grid *grid) {
