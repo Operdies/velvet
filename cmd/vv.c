@@ -15,14 +15,6 @@
 #include "utils.h"
 #include <signal.h>
 
-#ifndef POLL_IN
-#define POLL_IN POLLIN
-#endif
-
-#ifndef POLL_OUT
-#define POLL_OUT POLLOUT
-#endif
-
 #define MAX_LINES 100
 #define MAX_LINE_LENGTH 100
 
@@ -73,6 +65,8 @@ static struct pane *focused = NULL;
 static struct pane *lst = NULL;
 
 static void arrange(struct winsize ws, struct pane *p) {
+  if (!p)
+    return;
   int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
 
   n = pane_count(p);
@@ -141,15 +135,18 @@ int main(int argc, char **argv) {
   install_signal_handlers();
 
   {
-    struct pane *prev = lst;
+    struct pane *prev = NULL;
     for (int i = 1; i < argc; i++) {
       struct pane *p = calloc(1, sizeof(*p));
       p->process = strdup(argv[i]);
       logmsg("Create %s", p->process);
-      if (lst) {
-        prev->next = p;
-      } else {
+      if (!lst) {
+        // first element -- asign head
         lst = p;
+        prev = lst;
+      } else {
+        // Otherwise append to previous element
+        prev->next = p;
       }
       prev = p;
     }
@@ -167,8 +164,9 @@ int main(int argc, char **argv) {
     int i = 0;
     for (struct pane *p = lst; p; p = p->next) {
       pane_start(p);
+      set_nonblocking(p->pty);
       fds[i + 1].fd = p->pty;
-      fds[i + 1].events = POLL_OUT;
+      fds[i + 1].events = POLL_IN;
       i++;
     }
     nfds = 1 + i;
@@ -233,15 +231,18 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 1; i < nfds; i++) {
-      if (fds[i].revents & POLL_OUT) {
+      if (fds[i].revents & POLL_IN) {
         struct pane *p = pane_from_pty(lst, fds[i].fd);
         if (p) {
           bool exit = false;
           pane_read(p, &exit);
           if (exit) {
-            if (p == focused) focused = p->next;
+            if (p == focused) {
+              focused = p->next;
+            }
             pane_remove(&lst, p);
             pane_destroy(p);
+            if (!focused) focused = lst;
           }
         }
       }
@@ -274,13 +275,15 @@ int main(int argc, char **argv) {
 
     arrange(ws, lst);
     if (!focused) focused = lst;
-    pane_focus(focused);
+    if (focused)
+      pane_focus(focused);
+    write(STDOUT_FILENO, show_cursor, sizeof(show_cursor));
 
     {
       int i = 0;
       for (struct pane *p = lst; p; p = p->next) {
         fds[i + 1].fd = p->pty;
-        fds[i + 1].events = POLL_OUT;
+        fds[i + 1].events = POLL_IN;
         i++;
       }
       nfds = 1 + i;
@@ -291,4 +294,5 @@ int main(int argc, char **argv) {
   exit_raw_mode();
   leave_alternate_screen();
   printf("[exited]\n");
+  free(fds);
 }
