@@ -69,25 +69,41 @@ static void parse_csi_params(uint8_t *buffer, int len, int *params, int nparams,
   }
 }
 
-static void grid_erase_line_range(struct grid *g, struct cursor start, struct cursor end) {
-  assert(start.y == end.y);
-  assert(start.x <= end.x);
+/* inclusive erase between two cursor positions */
+static void grid_erase_between_cursors(struct grid *g, struct cursor from, struct cursor to) {
   struct cursor *c = &g->cursor;
   assert(c->y < g->h);
   assert(c->y >= 0);
-  g->dirty[c->y] = true;
-  for (int i = start.x; i < end.x && i < g->w; i++) {
-    int idx = c->y * g->w + i;
-    g->cells[idx] = empty_cell;
+  for (int y = from.y; y <= to.y; y++) {
+    g->dirty[c->y] = true;
+    int x = y == from.y ? from.x : 0;
+    int end = y == to.y ? to.x : grid_end(g);
+    for (; x <= end; x++) {
+      g->cells[y * g->w + x] = empty_cell;
+    }
   }
 }
 
-static void grid_delete_characters(struct grid *g, int n) {
-  logmsg("Delete %d from %d", n, grid_column(g));
+static void grid_insert_blanks_at_cursor(struct grid *g, int n) {
   struct cell *line = &g->cells[g->w * grid_line(g)];
+  int lcol = grid_column(g);
+  // ]1@ transforms:
+  // |some line_ here|
+  // |some line_  her|
+  for (int col = grid_end(g); col >= lcol; col--) {
+    int rcol = col - n;
+    struct cell replacement = rcol < lcol ? empty_cell : line[rcol];
+    line[col] = replacement;
+  }
+}
+
+static void grid_shift_from_cursor(struct grid *g, int n) {
+  if (n == 0) return;
+  struct cell *line = &g->cells[g->w * grid_line(g)];
+  g->dirty[grid_line(g)] = true;
   for (int col = grid_column(g); col < grid_end(g); col++) {
     int rcol = col + n;
-    struct cell replacement = rcol >= grid_end(g) ? empty_cell : line[rcol];
+    struct cell replacement = rcol > grid_end(g) ? empty_cell : line[rcol];
     line[col] = replacement;
   }
 }
@@ -103,13 +119,13 @@ static void apply_buffered_csi(struct fsm *fsm) {
     return;
   }
 
-  // logmsg("CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+  logmsg("CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
 
   int params[10] = {0};
   int count = 0;
   int dec = buffer[2] == '?'; /* DEC Private Mode indicator */
   parse_csi_params(buffer + (2 + dec), len - (3 + dec), params, 10, &count);
-  int move = count > 0 ? params[0] : 1;
+  int param1 = count > 0 ? params[0] : 1;
 
   if (dec) {
     bool on = final_byte == 'h';
@@ -119,9 +135,8 @@ static void apply_buffered_csi(struct fsm *fsm) {
       return;
     }
     switch (params[0]) {
-    case 1: { /* Cursor keys send application */
-    } break;
-    case 3: { /* 132 column mode */
+    case 25: { /* cursor hidden / shown */
+      fsm->opts.cursor_hidden = off;
     } break;
     case 1049: { /* alternate cursor */
       fsm->opts.alternate_screen = on;
@@ -138,49 +153,83 @@ static void apply_buffered_csi(struct fsm *fsm) {
   }
 
   switch (final_byte) {
+  case 'J': { /* Erase in display */
+    int mode = params[0];
+    struct cursor start = g->cursor;
+    struct cursor end = g->cursor;
+    switch (mode) {
+    case 1: { /* Erase from start of screen to cursor */
+      start.x = grid_start(g);
+      start.y = grid_top(g);
+    } break;
+    case 2: { /* Erase entire screen */
+      start.x = grid_start(g);
+      start.y = grid_top(g);
+      end.x = grid_end(g);
+      end.y = grid_bottom(g);
+    } break;
+    case 0:
+    default: { /* erase from cursor to end of screen */
+      end.x = grid_end(g);
+      end.y = grid_bottom(g);
+    } break;
+    }
+    grid_erase_between_cursors(g, start, end);
+  } break;
   case 'K': { /* delete operations */
     int mode = params[0];
-    struct cursor start = fsm->active_grid->cursor;
-    struct cursor end = fsm->active_grid->cursor;
-    if (mode == 0) {
-      // erase from cursor to end
-      end.x = g->w;
-    } else if (mode == 1) {
+    struct cursor start = g->cursor;
+    struct cursor end = g->cursor;
+    switch (mode) {
+    case 1: {
       // erase from start to cursor
-      start.x = 0;
-    } else if (mode == 2) {
+      start.x = grid_start(g);
+    } break;
+    case 2: {
       // erase entire line
-      start.x = 0;
-      end.x = g->w;
-    } else {
-      // unknown: erase from cursor to end
-      end.x = g->w;
+      start.x = grid_start(g);
+      end.x = grid_end(g);
+    } break;
+    case 0:
+    default: {
+      // erase from cursor to end
+      end.x = grid_end(g);
+    } break;
     }
-    grid_erase_line_range(g, start, end);
+    grid_erase_between_cursors(g, start, end);
   } break;
     /* cursor movement */
   case 'A': { /* move up */
-    grid_move_cursor(g, 0, -move);
+    grid_move_cursor(g, 0, -param1);
   } break;
   case 'B': { /* move down */
-    grid_move_cursor(g, 0, move);
+    grid_move_cursor(g, 0, param1);
   } break;
   case 'C': { /* move right */
-    grid_move_cursor(g, move, 0);
+    grid_move_cursor(g, param1, 0);
   } break;
   case 'D': { /* move left */
-    grid_move_cursor(g, -move, 0);
+    grid_move_cursor(g, -param1, 0);
   } break;
   case 'H': { /* cursor move to coordinate */
-    int x = params[1];
-    int y = params[0];
-    grid_set_visual_cursor(g, x, y);
+    int col = params[1];
+    int row = params[0];
+    grid_set_visual_cursor(g, col, row);
   } break;
   case 'P': { /* delete characters */
-    int n = count > 0 ? params[0] : 1;
-    grid_delete_characters(g, n);
+    grid_shift_from_cursor(g, param1);
+  } break;
+  case '@': { /* Insert blank characters */
+    grid_insert_blanks_at_cursor(g, param1);
   } break;
   case 'm': { /* color */
+  } break;
+  case 'r': { /* scroll region */
+    int scrollstart = params[0];
+    int scrollend = params[1];
+    // TODO: this is needed for vim to work correctly.
+    // But it requires significant changes
+    logmsg("TODO: Handle scroll regions");
   } break;
   default: {
     logmsg("Unhandled CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
@@ -289,8 +338,8 @@ static void grid_advance_cursor_y_reverse(struct grid *g) {
   int ly = grid_get_visual_line(g);
   if (ly == 0) {
     // TODO: All offset manipulation should be abstracted to a 'scroll_screen' function or something
-    // TODO: Grid lines should be abstracted a bit, so instead of indexing a line, one would do grid_get_visual_line to
-    // get a cell pointer
+    // TODO: Grid lines should be abstracted a bit, so instead of indexing a line, one would do grid_get_visual_line
+    // to get a cell pointer
     g->offset = (g->h + g->offset - 1) % g->h;
     grid_clear_line(g, g->offset);
     grid_invalidate(g);
@@ -326,8 +375,8 @@ static void grid_advance_cursor(struct grid *g, bool wrap) {
 
 static void grid_insert(struct grid *g, struct cell c, bool wrap) {
   /* Implementation notes:
-   * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all characters
-   * are single width.
+   * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
+   * characters are single width.
    * */
   // TODO: Handle y coordinate wrapping
   // TODO: line offset??
