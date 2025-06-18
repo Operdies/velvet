@@ -1,6 +1,12 @@
 MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Linux)
+    DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
+endif
+
 INCLUDE_DIR = $(abspath .)/include
 OUT_DIR = bin
 COMMANDS = vv test
@@ -17,7 +23,7 @@ OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
 LIBS = 
 
-DEFINES = -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
+DEFINES +=
 # CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP
 CFLAGS += -std=c23 $(DEFINES) -fsanitize=address -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR)  -MMD -MP
 LDFLAGS += $(LIBS)
@@ -59,7 +65,7 @@ $(RELEASE_DIR)/vv: $(UNITY_SRC) | $(RELEASE_DIR)
 	strip $(RELEASE_DIR)/vv
 
 .PHONY: release
-release: OPT = -march=native -mtune=native -flto -ffast-math
+release: OPT = -march=native -mtune=native -flto
 release: CFLAGS = -std=c23 $(DEFINES) -O3 $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP -DNDEBUG
 release: LDFLAGS = -flto $(LIBS)
 release: $(RELEASE_DIR)/vv

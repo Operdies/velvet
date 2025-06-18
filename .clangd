@@ -1,2 +1,0 @@
-CompileFlags:
- Add: [ -std=c23, -I/Users/alex/repos/vv/include, -I/opt/homebrew/include, -Wall, -Wextra, -Wno-unused-parameter ]

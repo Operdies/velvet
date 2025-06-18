@@ -46,7 +46,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   static uint32_t attr;
   struct grid *g = pane->fsm.opts.alternate_screen ? &pane->fsm.alternate
                                                    : &pane->fsm.primary;
-  uint8_t fmt[100];
+  char fmt[100];
   for (int i0 = 0; i0 < g->h; i0++) {
     int row = (i0 + g->offset) % g->h;
     if (!redraw && !g->dirty[row])
@@ -54,7 +54,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     g->dirty[row] = false;
     int lineno = 1 + pane->y + i0;
     int columnno = 1 + pane->x;
-    int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
+    int n = snprintf(fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     string_push(outbuffer, fmt, n);
 
     for (int j = 0; j < g->w; j++) {
@@ -71,46 +71,17 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
         // TODO: apply attributes
         attr = c->attr;
       }
-      string_push(outbuffer, c->symbol.utf8, c->symbol.len);
+      string_push(outbuffer, (char*)c->symbol.utf8, c->symbol.len);
     }
   }
 }
 
-void pane_read(struct pane *pane, bool *exit) {
-  static const int max_read = 1 << 16;
-  static unsigned char *buf;
-  if (!buf)
-    buf = calloc(1, max_read);
-  // Read at most `max_read` bytes.
-  // This is to avoid a spammy application from choking the main loop.
-  // If the application really wants to send another `max_read` bytes
-  // immediately it will be scheduled after other panes have been processed
-  int n = read(pane->pty, buf, max_read);
-  if (n > 0) {
-    // Pass current size information to fsm so it can determine if grids should
-    // be resized
-    pane->fsm.w = pane->w;
-    pane->fsm.h = pane->h;
-    fsm_process(&pane->fsm, buf, n);
-  }
-
-  if (n == 0) {
-    // stdout closed
-    *exit = true;
-  }
-
-  {
-    int status;
-    pid_t result = waitpid(pane->pid, &status, WNOHANG);
-    if (result == pane->pid && WIFEXITED(status)) {
-      *exit = true;
-      pane->pid = 0;
-    }
-  }
-
-  if (n == -1 && errno != EAGAIN) {
-    die("read:");
-  }
+void pane_write(struct pane *pane, uint8_t *buf, int n) {
+  // Pass current size information to fsm so it can determine if grids should
+  // be resized
+  pane->fsm.w = pane->w;
+  pane->fsm.h = pane->h;
+  fsm_process(&pane->fsm, buf, n);
 }
 
 void pane_resize(struct pane *pane, int w, int h) {

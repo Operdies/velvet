@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,10 +14,6 @@
 #include "emulator.h"
 #include "pane.h"
 #include "utils.h"
-#include <signal.h>
-
-#define MAX_LINES 100
-#define MAX_LINE_LENGTH 100
 
 static struct {
   union {
@@ -65,8 +62,7 @@ static struct pane *focused = NULL;
 static struct pane *lst = NULL;
 
 static void arrange(struct winsize ws, struct pane *p) {
-  if (!p)
-    return;
+  if (!p) return;
   int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
 
   n = pane_count(p);
@@ -106,7 +102,7 @@ static void arrange(struct winsize ws, struct pane *p) {
   }
 }
 
-static void pane_focus(struct pane *pane) {
+static void pane_focus(struct pane *pane, struct string *str) {
   if (pane && pane->fsm.active_grid) {
     focused = pane;
     char fmt[40];
@@ -116,15 +112,16 @@ static void pane_focus(struct pane *pane) {
     int lineno = 1 + pane->y + (c->y - g->offset + g->h) % g->h;
     int columnno = 1 + pane->x + c->x;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
-    write(STDOUT_FILENO, fmt, n);
+    // write(STDOUT_FILENO, fmt, n);
+    string_push(str, fmt, n);
   }
 }
 
 static void focusnext(void) {
   if (focused && focused->next) {
-    pane_focus(focused->next);
+    focused = focused->next;
   } else {
-    pane_focus(lst);
+    focused = lst;
   }
 }
 
@@ -234,8 +231,27 @@ int main(int argc, char **argv) {
       if (fds[i].revents & POLL_IN) {
         struct pane *p = pane_from_pty(lst, fds[i].fd);
         if (p) {
+          uint8_t buf[1 << 16];
           bool exit = false;
-          pane_read(p, &exit);
+          int n = read(p->pty, buf, sizeof(buf));
+          if (n == -1) {
+            if (errno == EAGAIN) continue;
+            die("read:");
+          }
+          if (n == 0) exit = true;
+          if (n > 0) {
+            pane_write(p, buf, n);
+          }
+
+          if (!exit) { // Check if hosted process exited
+            int status;
+            pid_t result = waitpid(p->pid, &status, WNOHANG);
+            if (result == p->pid && WIFEXITED(status)) {
+              exit = true;
+              p->pid = 0;
+            }
+          }
+
           if (exit) {
             if (p == focused) {
               focused = p->next;
@@ -256,10 +272,13 @@ int main(int argc, char **argv) {
       pane_draw(p, false, &draw_buffer);
     }
 
+    arrange(ws, lst);
+    if (!focused) focused = lst;
+    if (focused) pane_focus(focused, &draw_buffer);
     if (focused && focused->fsm.opts.cursor_hidden == false)
       string_push(&draw_buffer, show_cursor, sizeof(show_cursor));
 
-    {
+    { // flush draw buffer to stdout
       size_t written = 0;
       while (written < draw_buffer.len) {
         ssize_t n = write(STDOUT_FILENO, draw_buffer.content + written, draw_buffer.len - written);
@@ -273,13 +292,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    arrange(ws, lst);
-    if (!focused) focused = lst;
-    if (focused)
-      pane_focus(focused);
-    write(STDOUT_FILENO, show_cursor, sizeof(show_cursor));
-
-    {
+    { // update fd set
       int i = 0;
       for (struct pane *p = lst; p; p = p->next) {
         fds[i + 1].fd = p->pty;
