@@ -36,6 +36,10 @@ static void grid_destroy(struct grid *grid);
 static void grid_move_cursor(struct grid *g, int x, int y);
 static void grid_set_visual_cursor(struct grid *g, int x, int y);
 static inline struct cell *grid_current_cell(struct grid *g);
+static void grid_newline(struct grid *g, bool carriage);
+static void grid_advance_cursor_y_reverse(struct grid *g);
+static void grid_advance_cursor_y(struct grid *g);
+struct cell *grid_current_line(struct grid *g);
 
 static void send_escape(struct fsm *f) {
   assert(f->seq.n);
@@ -76,10 +80,17 @@ static void grid_erase_between_cursors(struct grid *g, struct cursor from, struc
   assert(c->y >= 0);
   for (int y = from.y; y <= to.y; y++) {
     g->dirty[c->y] = true;
+    struct cell *line = &g->cells[y * g->w];
     int x = y == from.y ? from.x : 0;
     int end = y == to.y ? to.x : grid_end(g);
+
+    // Track significant (deliberately inserted) characters. Needed for reflowing.
+    if (line->n_significant <= end) {
+      // If we are deleting the last significant cell, then we need to rewind the counter
+      line->n_significant = MAX(line->n_significant, x);
+    }
     for (; x <= end; x++) {
-      g->cells[y * g->w + x] = empty_cell;
+      line[x] = empty_cell;
     }
   }
 }
@@ -247,6 +258,28 @@ static void process_csi(struct fsm *fsm, unsigned char ch) {
   }
 }
 
+/* copy to content from one grid to another. This is a naive resizing implementation which just re-inserts everything
+ * and counts on the final grid to be accurate */
+static void grid_copy(struct grid *restrict dst, const struct grid *const restrict src) {
+  for (int i0 = 0; i0 < src->h; i0++) {
+    int row = (i0 + src->offset) % src->h;
+    int max_col = src->w - 1;
+
+    struct cell *line = &src->cells[row * src->w];
+
+    for (int col = 0; col < src->w && col < line->n_significant; col++) {
+      int index = row * src->w + col;
+      struct cell c = src->cells[index];
+      c.newline = false;
+      grid_insert(dst, c, true);
+    }
+    if (line->newline) {
+      grid_newline(dst, true);
+    }
+    dst->dirty[row] = true;
+  }
+}
+
 static void fix_grid(struct grid *g, int w, int h) {
   if (!g->cells) {
     g->cells = calloc(w * h, sizeof(*g->cells));
@@ -265,20 +298,10 @@ static void fix_grid(struct grid *g, int w, int h) {
     }
   }
 
-  // TODO: Enlarge grids if too small
-  // TODO: Reflow grids if dimensions changed
   if (g->h != h || g->w != w) {
     struct grid new = {.w = w, .h = h};
     fix_grid(&new, w, h);
-    for (int i = 0; i < g->w; i++) {
-      for (int j = 0; j < g->h; j++) {
-        int index = j + ((i + g->offset) % g->h);
-        struct cell *c = &g->cells[index];
-        grid_insert(&new, *c, true);
-      }
-    }
-    // TODO: Iterate all cells from `g' and insert them in `new'
-    // Insertion function should reflow
+    grid_copy(&new, g);
     grid_destroy(g);
     *g = new;
   }
@@ -328,9 +351,11 @@ static void grid_move_cursor(struct grid *g, int x, int y) {
   grid_set_visual_line(g, ly);
 }
 
-static void grid_invalidate(struct grid *g) {
-  for (int i = 0; i < g->h; i++) {
-    g->dirty[i] = true;
+void grid_invalidate(struct grid *g) {
+  if (g) {
+    for (int i = 0; i < g->h; i++) {
+      g->dirty[i] = true;
+    }
   }
 }
 
@@ -378,12 +403,11 @@ static void grid_insert(struct grid *g, struct cell c, bool wrap) {
    * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
    * characters are single width.
    * */
-  // TODO: Handle y coordinate wrapping
-  // TODO: line offset??
+  struct cell *line = grid_current_line(g);
   struct cursor *cur = &g->cursor;
-  // logmsg("[%dx%d] Insert line: %d, offset: %d", g->w, g->h, cur->y, g->offset);
   g->dirty[cur->y] = true;
   g->cells[cur->y * g->w + cur->x] = c;
+  line->n_significant = MAX(line->n_significant, cur->x + 1);
   grid_advance_cursor(g, wrap);
 }
 
@@ -437,12 +461,16 @@ static void ground_bell(struct fsm *fsm, uint8_t ch) {
   write(STDOUT_FILENO, "\a", 1);
 }
 
+static void grid_newline(struct grid *g, bool carriage) {
+  if (carriage) g->cursor.x = 0;
+  struct cell *c = grid_current_line(g);
+  c->newline = true;
+  grid_advance_cursor_y(g);
+}
+
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  struct cell *c = grid_current_cell(fsm->active_grid);
-  c->newline = true;
-  grid_advance_cursor_y(fsm->active_grid);
-  if (fsm->opts.auto_return) grid_carriage_return(fsm->active_grid);
+  grid_newline(fsm->active_grid, !fsm->opts.no_auto_return);
 }
 
 static void ground_accept(struct fsm *fsm) {
@@ -495,6 +523,8 @@ static void process_ground(struct fsm *fsm, uint8_t ch) {
       [TAB] = ground_tab,         [VTAB] = ground_vtab, [FORMFEED] = ground_newline,
       [NEWLINE] = ground_newline,
   };
+
+  // logmsg("process: %d", ch);
 
   if (dispatch[ch]) {
     dispatch[ch](fsm, ch);
@@ -600,8 +630,11 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
   }
 }
 
+struct cell *grid_current_line(struct grid *g) {
+  return &g->cells[g->cursor.y * g->w];
+}
 struct cell *grid_current_cell(struct grid *g) {
-  return &g->cells[g->cursor.y * g->h + g->cursor.x];
+  return &g->cells[g->cursor.y * g->w + g->cursor.x];
 }
 
 void grid_destroy(struct grid *grid) {

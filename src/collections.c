@@ -1,16 +1,15 @@
 #include "collections.h"
 #include "utils.h"
 #include <assert.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 static size_t next_size(size_t min) {
   return MAX(min * 2, 1024);
 }
 
-void string_push(struct string *str, char *src, size_t len) {
-  size_t required = str->len + len;
+static void ensure_capacity(struct string *str, size_t required) {
   if (str->content == nullptr || str->cap < required) {
     uint8_t *prev = str->content;
     size_t newsize = next_size(required);
@@ -21,7 +20,19 @@ void string_push(struct string *str, char *src, size_t len) {
       free(prev);
     }
   }
+}
+
+void string_push(struct string *str, char *src, size_t len) {
+  size_t required = str->len + len;
+  ensure_capacity(str, required);
   memcpy(str->content + str->len, src, len);
+  str->len += len;
+}
+
+void string_memset(struct string *str, uint8_t ch, size_t len) {
+  size_t required = str->len + len;
+  ensure_capacity(str, required);
+  memset(str->content + str->len, ch, len);
   str->len += len;
 }
 
@@ -50,7 +61,6 @@ bool string_flush(struct string *str, int fd, int *total_written) {
     }
     written += w;
   }
-  if (total_written)
-    *total_written = written;
+  if (total_written) *total_written = written;
   return true;
 }

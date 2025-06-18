@@ -68,6 +68,8 @@ struct cell {
   uint8_t fg, bg;
   // Track newline locations to support rewrapping
   bool newline;
+  // Track how many characters are significant on this line
+  int n_significant;
 };
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
@@ -122,7 +124,7 @@ struct pane_options {
    * inserting a character which would cause an overflow. Otherwise, the cursor
    * should stay at the last column. */
   bool nowrap;
-  bool auto_return;
+  bool no_auto_return;
   bool alternate_screen;
   /* if enabled, pasted content should be wrapped with ESC[200~ and ESC[201~ */
   bool bracketed_paste;
@@ -150,5 +152,6 @@ struct fsm {
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);
 void fsm_destroy(struct fsm *fsm);
+void grid_invalidate(struct grid *g);
 
 #endif /*  EMULATOR_H */

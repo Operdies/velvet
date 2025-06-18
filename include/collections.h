@@ -21,6 +21,7 @@ struct string {
 };
 
 void string_push(struct string *str, char *src, size_t len);
+void string_memset(struct string *str, uint8_t ch, size_t len);
 void string_clear(struct string *str);
 void string_destroy(struct string *str);
 /* flush the string instance to the specified file descriptor */
