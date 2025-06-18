@@ -1,2 +1,4 @@
 bin/
 dist/
+.cache/
+compile_commands.json
