@@ -64,8 +64,7 @@ static struct pane *focused = NULL;
 static struct pane *lst = NULL;
 
 static void arrange(struct winsize ws, struct pane *p) {
-  if (!p)
-    return;
+  if (!p) return;
   int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
 
   n = pane_count(p);
@@ -179,8 +178,7 @@ int main(int argc, char **argv) {
   for (; running && pane_count(lst);) {
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
-      if (errno == EAGAIN)
-        continue;
+      if (errno == EAGAIN) continue;
       if (errno == EINTR) {
         int signal = 0;
         if (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
@@ -190,6 +188,9 @@ int main(int argc, char **argv) {
               die("ioctl TIOCGWINSZ:");
             }
             arrange(ws, lst);
+            for (struct pane *p = lst; p; p = p->next) {
+              grid_invalidate(p->fsm.active_grid);
+            }
             break;
           default:
             running = false;
@@ -201,8 +202,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (polled <= 0)
-      continue;
+    if (polled <= 0) continue;
 
     if (fds[0].revents & POLL_IN) {
       // handle stdin
@@ -238,8 +238,7 @@ int main(int argc, char **argv) {
           uint8_t buf[1 << 16];
           int n = read(p->pty, buf, sizeof(buf));
           if (n == -1) {
-            if (errno == EAGAIN)
-              continue;
+            if (errno == EAGAIN) continue;
             die("read:");
           }
           if (n > 0) {
@@ -259,10 +258,8 @@ int main(int argc, char **argv) {
       pane_draw(p, false, &draw_buffer);
     }
 
-    if (!focused)
-      focused = lst;
-    if (focused)
-      pane_focus(focused, &draw_buffer);
+    if (!focused) focused = lst;
+    if (focused) pane_focus(focused, &draw_buffer);
     if (focused && focused->fsm.opts.cursor_hidden == false)
       string_push(&draw_buffer, show_cursor, sizeof(show_cursor));
 
@@ -282,8 +279,7 @@ int main(int argc, char **argv) {
           }
           pane_remove(&lst, p);
           pane_destroy(p);
-          if (!focused)
-            focused = lst;
+          if (!focused) focused = lst;
           p = next;
         } else {
           p = p->next;
