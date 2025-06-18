@@ -9,11 +9,13 @@
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "emulator.h"
 #include "pane.h"
 #include "utils.h"
+#include <sys/wait.h>
 
 static struct {
   union {
@@ -62,7 +64,8 @@ static struct pane *focused = NULL;
 static struct pane *lst = NULL;
 
 static void arrange(struct winsize ws, struct pane *p) {
-  if (!p) return;
+  if (!p)
+    return;
   int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
 
   n = pane_count(p);
@@ -174,10 +177,10 @@ int main(int argc, char **argv) {
   char readbuffer[4096];
   bool running = true;
   for (; running && pane_count(lst);) {
-
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
-      if (errno == EAGAIN) continue;
+      if (errno == EAGAIN)
+        continue;
       if (errno == EINTR) {
         int signal = 0;
         if (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
@@ -198,7 +201,8 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (polled <= 0) continue;
+    if (polled <= 0)
+      continue;
 
     if (fds[0].revents & POLL_IN) {
       // handle stdin
@@ -232,63 +236,58 @@ int main(int argc, char **argv) {
         struct pane *p = pane_from_pty(lst, fds[i].fd);
         if (p) {
           uint8_t buf[1 << 16];
-          bool exit = false;
           int n = read(p->pty, buf, sizeof(buf));
           if (n == -1) {
-            if (errno == EAGAIN) continue;
+            if (errno == EAGAIN)
+              continue;
             die("read:");
           }
-          if (n == 0) exit = true;
           if (n > 0) {
             pane_write(p, buf, n);
-          }
-
-          if (!exit) { // Check if hosted process exited
-            int status;
-            pid_t result = waitpid(p->pid, &status, WNOHANG);
-            if (result == p->pid && WIFEXITED(status)) {
-              exit = true;
-              p->pid = 0;
-            }
-          }
-
-          if (exit) {
-            if (p == focused) {
-              focused = p->next;
-            }
-            pane_remove(&lst, p);
-            pane_destroy(p);
-            if (!focused) focused = lst;
           }
         }
       }
     }
 
     string_clear(&draw_buffer);
+    // TODO: Don't write cursor if panes didn't draw
     char hide_cursor[] = "\x1b[?25l";
     char show_cursor[] = "\x1b[?25h";
     string_push(&draw_buffer, hide_cursor, sizeof(hide_cursor));
+    size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = lst; p; p = p->next) {
       pane_draw(p, false, &draw_buffer);
     }
 
-    arrange(ws, lst);
-    if (!focused) focused = lst;
-    if (focused) pane_focus(focused, &draw_buffer);
+    if (!focused)
+      focused = lst;
+    if (focused)
+      pane_focus(focused, &draw_buffer);
     if (focused && focused->fsm.opts.cursor_hidden == false)
       string_push(&draw_buffer, show_cursor, sizeof(show_cursor));
 
-    { // flush draw buffer to stdout
-      size_t written = 0;
-      while (written < draw_buffer.len) {
-        ssize_t n = write(STDOUT_FILENO, draw_buffer.content + written, draw_buffer.len - written);
-        if (n == 0) {
-          die("stdout closed?");
+    if (draw_buffer.len != initial_bytes) {
+      string_flush(&draw_buffer, STDOUT_FILENO, NULL);
+    }
+
+    {
+      for (struct pane *p = lst; p;) {
+        int status;
+        pid_t result = waitpid(p->pid, &status, WNOHANG);
+        if (result == p->pid && WIFEXITED(status)) {
+          struct pane *next = p->next;
+          p->pid = 0;
+          if (p == focused) {
+            focused = p->next;
+          }
+          pane_remove(&lst, p);
+          pane_destroy(p);
+          if (!focused)
+            focused = lst;
+          p = next;
+        } else {
+          p = p->next;
         }
-        if (n == -1) {
-          die("write:");
-        }
-        written += n;
       }
     }
 
@@ -301,6 +300,7 @@ int main(int argc, char **argv) {
       }
       nfds = 1 + i;
     }
+    arrange(ws, lst);
   }
 
   string_destroy(&draw_buffer);

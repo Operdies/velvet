@@ -83,7 +83,8 @@ void enter_alternate_screen(void) {
 }
 
 void exit_raw_mode(void) {
-  leave_alternate_screen();
+  char show_cursor[] = "\x1b[?25h";
+  write(STDOUT_FILENO, show_cursor, sizeof(show_cursor));
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
 }
 
