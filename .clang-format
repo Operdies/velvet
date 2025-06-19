@@ -1,18 +1,29 @@
 Language:        C
 BasedOnStyle:    LLVM
 
-# Formatting
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLambdasOnASingleLine: None
+AllowShortLoopsOnASingleLine: true
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBraces: Attach
 ColumnLimit:     120
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
 IndentWidth:     2
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
 TabWidth:        2
 UseTab:          Never
-BreakBeforeBraces: Attach
-AllowShortIfStatementsOnASingleLine: true
-AllowShortFunctionsOnASingleLine: false
-AllowShortLoopsOnASingleLine: true
+BraceWrapping:
+  AfterEnum: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyFunction: true
 
-DerivePointerAlignment: false
-PointerAlignment: Right
-
-SpaceBeforeParens: ControlStatements
-AlignTrailingComments: true
