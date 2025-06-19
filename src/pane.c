@@ -29,7 +29,6 @@ void pane_destroy(struct pane *pane) {
   pane->pid = 0;
   fsm_destroy(&pane->fsm);
   free(pane->process);
-  free(pane);
 }
 
 struct pane *pane_from_pty(struct pane *p, int pty) {

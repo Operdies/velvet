@@ -279,6 +279,7 @@ int main(int argc, char **argv) {
           }
           pane_remove(&lst, p);
           pane_destroy(p);
+          free(p);
           if (!focused) focused = lst;
           p = next;
         } else {
