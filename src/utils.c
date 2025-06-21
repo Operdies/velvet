@@ -10,22 +10,32 @@
 #include <unistd.h>
 
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
+  static char prevbuf[1024] = {0};
+  static char buf[1024] = {0};
+  static int repeat_count = 0;
   assert(f);
   assert(fmt);
   int n = strlen(fmt);
   char last = n > 0 ? fmt[n - 1] : 0;
   char secondTolast = n > 1 ? fmt[n - 2] : 0;
 
-  vfprintf(f, fmt, ap);
-  if (last != '\n') {
-    fputc('\n', f);
-  }
+  int n_buf = vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
 
   // Ensure at least one space
   if (last == ':') {
-    fprintf(f, " %s\n", strerror(errno));
+    n_buf += snprintf(buf + n_buf, sizeof(buf) - n_buf, " %s", strerror(errno));
+    // fprintf(f, " %s\n", strerror(errno));
   } else if (secondTolast == ':') {
-    fprintf(f, "%s\n", strerror(errno));
+    // fprintf(f, "%s\n", strerror(errno));
+    n_buf += snprintf(buf + n_buf, sizeof(buf) - n_buf, "%s", strerror(errno));
+  }
+  if (strncmp(buf, prevbuf, n_buf) != 0) {
+    repeat_count = 0;
+    fprintf(f, "\n%.*s", n_buf, buf);
+    memcpy(prevbuf, buf, n_buf);
+  } else {
+    repeat_count++;
+    fprintf(f, "\r%.*s (%d)", n_buf, buf, repeat_count);
   }
   fflush(f);
 }
@@ -104,5 +114,3 @@ void enable_raw_mode(void) {
     die("tcsetattr:");
   }
 }
-
-
