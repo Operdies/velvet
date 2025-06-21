@@ -189,6 +189,7 @@ static void handle_stdin(const char *const buf, int n) {
       }
     } break;
     case csi: {
+      // TODO: Bracketed paste
       if (ch >= 'A' && ch <= 'D' && focused->fsm.opts.application_mode) {
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, 'O');

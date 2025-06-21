@@ -52,11 +52,11 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   char fmt[100];
   for (int i0 = 0; i0 < g->h; i0++) {
     int row = (i0 + g->offset) % g->h;
-    if (!redraw && !g->dirty[row]) continue;
-    g->dirty[row] = false;
+    struct cell *line = &g->cells[row * g->w];
+    if (!redraw && !line->dirty) continue;
+    line->dirty = false;
     int lineno = 1 + pane->y + i0;
     int columnno = 1 + pane->x;
-    struct cell *line = &g->cells[row * g->w];
     int line_length = MIN(line->n_significant, g->w);
     // TODO: Get rid of snprintf since it's really slow
     int n = snprintf(fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
@@ -90,6 +90,7 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
   // be resized
   pane->fsm.w = pane->w;
   pane->fsm.h = pane->h;
+  pane->fsm.pty = pane->pty;
   fsm_process(&pane->fsm, buf, n);
 }
 

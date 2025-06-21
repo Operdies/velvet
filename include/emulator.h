@@ -70,6 +70,7 @@ struct cell {
   bool newline;
   // Track how many characters are significant on this line
   int n_significant;
+  bool dirty;
 };
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
@@ -94,7 +95,6 @@ struct grid {
   /* scroll region is local to the grid and is not persisted when the window /
    * pane is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
-  bool *dirty;        // dirty[h]
   struct cell *cells; // cells[w*h]
   // The cursor can be considered as an exact pointer into the grid, ignoring
   // all offsets.
@@ -105,10 +105,10 @@ struct grid {
 enum fsm_state {
   fsm_ground,
   fsm_escape,
-  // TODO:
   fsm_csi,
   fsm_osc,
   fsm_dcs,
+  fsm_pnd,
 };
 
 struct escape_sequence {
@@ -130,6 +130,12 @@ struct pane_options {
   bool bracketed_paste;
   /* turned on / off by CSI ?25h/l */
   bool cursor_hidden;
+  /* in application mode, arrow keys should be translated from ESC [ A-D to ESC
+   * O A-D */
+  bool application_mode;
+  /* when focus reporting is enabled, send ESC [ I and ESC [ O when the pane
+   * receives / loses keyboard focus */
+  bool focus_reporting;
 };
 
 /* finite state machine for parsing ansi escape codes */
@@ -137,6 +143,7 @@ struct pane_options {
 // TODO: Reset scroll region of all grids when pane is resized
 struct fsm {
   int w, h;
+  int pty;
   /* the current state of the machine */
   enum fsm_state state;
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)

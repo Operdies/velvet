@@ -9,6 +9,13 @@
 #include <termios.h>
 #include <unistd.h>
 
+static inline void leave_alternate_screen(void);
+static inline void enter_alternate_screen(void);
+static inline void exit_raw_mode(void);
+static inline void enable_raw_mode(void);
+static inline void enable_focus_reporting(void);
+static inline void disable_focus_reporting(void);
+
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   static char prevbuf[1024] = {0};
   static char buf[1024] = {0};
@@ -17,7 +24,6 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   assert(fmt);
   int n = strlen(fmt);
   char last = n > 0 ? fmt[n - 1] : 0;
-  char secondTolast = n > 1 ? fmt[n - 2] : 0;
 
   int n_buf = vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
 
@@ -109,4 +115,28 @@ void enable_raw_mode(void) {
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
     die("tcsetattr:");
   }
+}
+
+static void disable_focus_reporting(void) {
+  char buf[] = "\x1b[?1004l";
+  write(STDOUT_FILENO, buf, sizeof(buf));
+  logmsg("Focus reporting disabled");
+}
+
+static void enable_focus_reporting(void) {
+  // dprintf(STDOUT_FILENO, "\x1b[1004h");
+  char buf[] = "\x1b[?1004h";
+  write(STDOUT_FILENO, buf, sizeof(buf));
+  logmsg("Focus reporting enabled");
+}
+
+void enable_raw_mode_etc(void) {
+  enter_alternate_screen();
+  enable_raw_mode();
+  enable_focus_reporting();
+}
+void disable_raw_mode_etc(void) {
+  disable_focus_reporting();
+  exit_raw_mode();
+  leave_alternate_screen();
 }
