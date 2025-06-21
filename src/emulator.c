@@ -51,7 +51,6 @@ static void send_escape(struct fsm *f) {
 static void fsm_update_active_grid(struct fsm *fsm) {
   struct grid *g = fsm->opts.alternate_screen ? &fsm->alternate : &fsm->primary;
   if (fsm->active_grid != g) {
-    logmsg("Activate %s screen", fsm->opts.alternate_screen ? "secondary" : "primary");
     fsm->active_grid = g;
     for (int i = 0; i < g->h; i++) g->dirty[i] = true;
   }
@@ -385,30 +384,25 @@ static void grid_advance_cursor_y(struct grid *g) {
   assert(c->y < g->h);
 }
 
-static void grid_advance_cursor(struct grid *g, bool wrap) {
-  struct cursor *c = &g->cursor;
-  c->x++;
-  if (c->x >= g->w) {
-    if (wrap) {
-      c->x = 0;
-      grid_advance_cursor_y(g);
-    } else {
-      c->x = g->w - 1;
-    }
-  }
-}
-
 static void grid_insert(struct grid *g, struct cell c, bool wrap) {
   /* Implementation notes:
    * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
    * characters are single width.
    * */
-  struct cell *line = grid_current_line(g);
   struct cursor *cur = &g->cursor;
+  if (cur->x >= g->w) {
+    if (wrap) {
+      cur->x = 0;
+      grid_advance_cursor_y(g);
+    } else {
+      cur->x = g->w - 1;
+    }
+  }
+  struct cell *line = grid_current_line(g);
   g->dirty[cur->y] = true;
   g->cells[cur->y * g->w + cur->x] = c;
   line->n_significant = MAX(line->n_significant, cur->x + 1);
-  grid_advance_cursor(g, wrap);
+  cur->x++;
 }
 
 static void ground_esc(struct fsm *fsm, uint8_t ch) {

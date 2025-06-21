@@ -1,4 +1,5 @@
 #include "pane.h"
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 #define DOWN(x) CSI #x "B"
 #define RIGHT(x) CSI #x "C"
 #define LEFT(x) CSI #x "D"
+#define REGION(top, bottom) CSI #top ";" #bottom "r"
 
 typedef char grid_5x8[5][8];
 typedef char grid_5x5[5][5];
@@ -230,11 +232,11 @@ static void test_input_output(void) {
   test_grid_input_output("scrolling 2",
                          "line1   line2   line3   line4   line5   line6   ",
                          (grid_5x8){
+                             {"line2"},
                              {"line3"},
                              {"line4"},
                              {"line5"},
                              {"line6"},
-                             {"     "},
                          });
 }
 
@@ -263,18 +265,19 @@ static void test_reflow(void) {
                           "DDDDDDDD"
                           "EEEEEEEE",
                           (grid_5x8){
+                              {"AAAAAAAA"},
                               {"BBBBBBBB"},
                               {"CCCCCCCC"},
                               {"DDDDDDDD"},
                               {"EEEEEEEE"},
-                              {"        "},
                           },
+                          // We are displacing 3x5 characters, so we expect losing 8 A's and 7 B's
                           (grid_5x5){
-                              {"CCCCC"},
-                              {"CDDDD"},
-                              {"DDDDE"},
+                              {"BCCCC"},
+                              {"CCCCD"},
+                              {"DDDDD"},
+                              {"DDEEE"},
                               {"EEEEE"},
-                              {"EE   "},
                           });
   test_grid_reflow_shrink("shrink grid",
                           "AAAAAAA\n"
@@ -294,8 +297,19 @@ static void test_reflow(void) {
                           });
 }
 
+static void test_scroll_regions(void) {
+  test_grid_input_output("scroll region",
+                         REGION(2, 4) "Hello",
+                         (grid_5x8){
+                             {"     "},
+                             {"Hello"},
+                         });
+}
+
 int main(void) {
   test_input_output();
   test_reflow();
+  // test_scroll_regions();
+  logmsg("test end! :D");
   return n_failures;
 }

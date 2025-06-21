@@ -24,10 +24,6 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   // Ensure at least one space
   if (last == ':') {
     n_buf += snprintf(buf + n_buf, sizeof(buf) - n_buf, " %s", strerror(errno));
-    // fprintf(f, " %s\n", strerror(errno));
-  } else if (secondTolast == ':') {
-    // fprintf(f, "%s\n", strerror(errno));
-    n_buf += snprintf(buf + n_buf, sizeof(buf) - n_buf, "%s", strerror(errno));
   }
   if (strncmp(buf, prevbuf, n_buf) != 0) {
     repeat_count = 0;
