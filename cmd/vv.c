@@ -27,6 +27,9 @@ static struct {
   };
 } sigpipe;
 
+static char *focus_out = "\x1b[O";
+static char *focus_in = "\x1b[I";
+
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
   write(sigpipe.write, &sig, sizeof(sig));
@@ -119,17 +122,100 @@ static void pane_focus(struct pane *pane, struct string *str) {
   }
 }
 
-static void focusnext(void) {
-  if (focused && focused->next) {
-    focused = focused->next;
-  } else {
-    focused = lst;
+static void focus_pane(struct pane *p) {
+  if (p != focused) {
+    if (focused && focused->pty && focused->fsm.opts.focus_reporting) {
+      write(focused->pty, focus_out, strlen(focus_out));
+    }
+    if (p && p->pty && p->fsm.opts.focus_reporting) {
+      write(p->pty, focus_in, strlen(focus_in));
+    }
+    focused = p;
   }
 }
 
+static void focusnext(void) {
+  if (focused && focused->next) {
+    focus_pane(focused->next);
+  } else {
+    focus_pane(lst);
+  }
+}
+
+static bool running = true;
+static void handle_stdin(const char *const buf, int n) {
+  enum stdin_state {
+    normal,
+    esc,
+    csi,
+  };
+  static enum stdin_state s = normal;
+
+  static struct string writebuffer = {0};
+  string_clear(&writebuffer);
+
+  for (int i = 0; i < n; i++) {
+    char ch = buf[i];
+
+    switch (s) {
+    case normal: {
+      switch (ch) {
+      case 0x1b: {
+        s = esc;
+      } break;
+      case CTRL('W'): {
+        logmsg("Exit by ^W");
+        running = false;
+      } break;
+      case CTRL('J'): {
+        focusnext();
+      } break;
+      default: {
+        string_push_char(&writebuffer, ch);
+      } break;
+      }
+      break;
+    } break;
+    case esc: {
+      switch (ch) {
+      case '[': {
+        s = csi;
+      } break;
+      default: {
+        s = normal;
+        string_push_char(&writebuffer, 0x1b);
+        string_push_char(&writebuffer, ch);
+      } break;
+      }
+    } break;
+    case csi: {
+      if (ch >= 'A' && ch <= 'D' && focused->fsm.opts.application_mode) {
+        string_push_char(&writebuffer, 0x1b);
+        string_push_char(&writebuffer, 'O');
+        string_push_char(&writebuffer, ch);
+      } else if (ch == 'O' || ch == 'I') {
+        // Focus event. Forward it if the focused pane has the feature enabled
+        bool did_focus = ch == 'I';
+        if (focused->fsm.opts.focus_reporting) {
+          char *s = did_focus ? focus_in : focus_out;
+          string_push(&writebuffer, s, strlen(s));
+        }
+        // If the pane does not have the feature enabled, ignore it.
+      } else {
+        string_push_char(&writebuffer, 0x1b);
+        string_push_char(&writebuffer, '[');
+        string_push_char(&writebuffer, ch);
+      }
+      s = normal;
+    } break;
+    }
+  }
+
+  write(focused->pty, writebuffer.content, writebuffer.len);
+}
+
 int main(int argc, char **argv) {
-  enter_alternate_screen();
-  enable_raw_mode();
+  enable_raw_mode_etc();
 
   install_signal_handlers();
 
@@ -174,7 +260,6 @@ int main(int argc, char **argv) {
   static struct string draw_buffer = {0};
 
   char readbuffer[4096];
-  bool running = true;
   for (; running && pane_count(lst);) {
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
@@ -212,19 +297,7 @@ int main(int argc, char **argv) {
       if (n == 0) {
         break;
       }
-      for (int i = 0; i < n; i++) {
-        if (readbuffer[i] == CTRL('J')) {
-          focusnext();
-          continue;
-        }
-        if (readbuffer[i] == CTRL('W')) {
-          logmsg("Exit by ^W");
-          running = false;
-          break;
-        }
-        // TODO: batched writes
-        write(focused->pty, readbuffer + i, 1);
-      }
+      handle_stdin(readbuffer, n);
       if (n == -1) {
         die("read:");
       }
@@ -301,8 +374,8 @@ int main(int argc, char **argv) {
   }
 
   string_destroy(&draw_buffer);
-  exit_raw_mode();
-  leave_alternate_screen();
+
+  disable_raw_mode_etc();
   printf("[exited]\n");
   free(fds);
 }
