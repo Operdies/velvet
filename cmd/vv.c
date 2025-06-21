@@ -184,6 +184,7 @@ int main(int argc, char **argv) {
         if (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
           switch (signal) {
           case SIGWINCH:
+            logmsg("Sigwinch");
             if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
               die("ioctl TIOCGWINSZ:");
             }
@@ -202,9 +203,8 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (polled <= 0) continue;
-
     if (fds[0].revents & POLL_IN) {
+      polled--;
       // handle stdin
       int n = read(STDIN_FILENO, readbuffer, sizeof(readbuffer));
       if (n == -1) {
@@ -231,8 +231,9 @@ int main(int argc, char **argv) {
       }
     }
 
-    for (int i = 1; i < nfds; i++) {
+    for (int i = 1; polled > 0 && i < nfds; i++) {
       if (fds[i].revents & POLL_IN) {
+        polled--;
         struct pane *p = pane_from_pty(lst, fds[i].fd);
         if (p) {
           uint8_t buf[1 << 16];
