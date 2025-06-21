@@ -29,6 +29,10 @@ void string_push(struct string *str, char *src, size_t len) {
   str->len += len;
 }
 
+void string_push_char(struct string *str, char ch) {
+  string_push(str, &ch, 1);
+}
+
 void string_memset(struct string *str, uint8_t ch, size_t len) {
   size_t required = str->len + len;
   ensure_capacity(str, required);
