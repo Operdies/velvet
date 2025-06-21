@@ -153,5 +153,6 @@ struct fsm {
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);
 void fsm_destroy(struct fsm *fsm);
 void grid_invalidate(struct grid *g);
+void fsm_grid_resize(struct fsm *fsm);
 
 #endif /*  EMULATOR_H */

@@ -276,8 +276,8 @@ static void grid_copy(struct grid *restrict dst, const struct grid *const restri
     if (line->newline) {
       grid_newline(dst, true);
     }
-    dst->dirty[row] = true;
   }
+  for (int row = 0; row < dst->h; row++) dst->dirty[row] = true;
 }
 
 static void fix_grid(struct grid *g, int w, int h) {
@@ -307,7 +307,7 @@ static void fix_grid(struct grid *g, int w, int h) {
   }
 }
 
-static void fix_grids(struct fsm *fsm) {
+void fsm_grid_resize(struct fsm *fsm) {
   fix_grid(&fsm->primary, fsm->w, fsm->h);
   fix_grid(&fsm->alternate, fsm->w, fsm->h);
   fsm_update_active_grid(fsm);
@@ -518,9 +518,15 @@ void utf8_push(struct utf8 *u, uint8_t byte) {
 static void process_ground(struct fsm *fsm, uint8_t ch) {
   // These symbols have special behavior in terms of how they affect layout
   static void (*const dispatch[UINT8_MAX])(struct fsm *, uint8_t) = {
-      [NUL] = ground_noop,        [ESC] = ground_esc,   [RET] = ground_carriage_return,
-      [BSP] = ground_backspace,   [BELL] = ground_bell, [DEL] = ground_noop,
-      [TAB] = ground_tab,         [VTAB] = ground_vtab, [FORMFEED] = ground_newline,
+      [NUL] = ground_noop,
+      [ESC] = ground_esc,
+      [RET] = ground_carriage_return,
+      [BSP] = ground_backspace,
+      [BELL] = ground_bell,
+      [DEL] = ground_noop,
+      [TAB] = ground_tab,
+      [VTAB] = ground_vtab,
+      [FORMFEED] = ground_newline,
       [NEWLINE] = ground_newline,
   };
 
@@ -562,7 +568,7 @@ static void process_ground(struct fsm *fsm, uint8_t ch) {
 }
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
-  fix_grids(fsm);
+  fsm_grid_resize(fsm);
   for (int i = 0; i < n; i++) {
     uint8_t ch = buf[i];
     switch (fsm->state) {
