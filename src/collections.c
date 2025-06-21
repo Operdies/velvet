@@ -56,11 +56,13 @@ bool string_flush(struct string *str, int fd, int *total_written) {
       die("write:");
     }
     if (w == 0) {
-      *total_written = written;
+      if (total_written) *total_written = written;
+      string_clear(str);
       return true;
     }
     written += w;
   }
   if (total_written) *total_written = written;
+  string_clear(str);
   return true;
 }
