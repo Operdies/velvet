@@ -40,7 +40,15 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
 void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   static uint8_t fg, bg;
   static uint32_t attr;
-  struct grid *g = pane->fsm.opts.alternate_screen ? &pane->fsm.alternate : &pane->fsm.primary;
+
+  {
+    // Ensure the grid content is in sync with the pane just-in-time
+    pane->fsm.w = pane->w;
+    pane->fsm.h = pane->h;
+    fsm_grid_resize(&pane->fsm);
+  }
+
+  struct grid *g = pane->fsm.active_grid;
   char fmt[100];
   for (int i0 = 0; i0 < g->h; i0++) {
     int row = (i0 + g->offset) % g->h;
@@ -86,8 +94,6 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
 }
 
 void pane_resize(struct pane *pane, int w, int h) {
-  // int debugsize = 10;
-  // if (debugsize) w = h = debugsize;
   if (pane->w != w || pane->h != h) {
     struct winsize ws = {.ws_col = w, .ws_row = h};
     if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);

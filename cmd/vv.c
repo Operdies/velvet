@@ -184,7 +184,6 @@ int main(int argc, char **argv) {
         if (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
           switch (signal) {
           case SIGWINCH:
-            logmsg("Sigwinch");
             if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
               die("ioctl TIOCGWINSZ:");
             }
