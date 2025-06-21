@@ -24,7 +24,17 @@
             "environment": [],
             "externalConsole": false,
             "MIMode": "lldb"
+        },
+        {
+            "name": "Debug tests",
+            "type": "codelldb",
+            "request": "launch",
+            "program": "bin/test",
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb"
         }
-
     ]
 }
