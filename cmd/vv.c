@@ -170,6 +170,14 @@ static void handle_stdin(const char *const buf, int n) {
       case CTRL('J'): {
         focusnext();
       } break;
+      case CTRL('L'): {
+        logmsg("Grow");
+        pane_resize(focused, focused->w + 1, focused->h);
+      } break;
+      case CTRL('H'): {
+        logmsg("Shrink");
+        pane_resize(focused, focused->w - 1, focused->h);
+      } break;
       default: {
         string_push_char(&writebuffer, ch);
       } break;
@@ -273,10 +281,10 @@ int main(int argc, char **argv) {
             if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
               die("ioctl TIOCGWINSZ:");
             }
-            arrange(ws, lst);
-            for (struct pane *p = lst; p; p = p->next) {
-              grid_invalidate(p->fsm.active_grid);
-            }
+            // arrange(ws, lst);
+            // for (struct pane *p = lst; p; p = p->next) {
+            //   grid_invalidate(p->fsm.active_grid);
+            // }
             break;
           default:
             running = false;
@@ -293,15 +301,16 @@ int main(int argc, char **argv) {
       // handle stdin
       int n = read(STDIN_FILENO, readbuffer, sizeof(readbuffer));
       if (n == -1) {
-        die("read:");
+        if (errno == EINTR) {
+          // This can happen if the process was signaled during the read
+          continue;
+        }
+        die("read stdin:");
       }
       if (n == 0) {
         break;
       }
       handle_stdin(readbuffer, n);
-      if (n == -1) {
-        die("read:");
-      }
     }
 
     for (int i = 1; polled > 0 && i < nfds; i++) {
@@ -312,10 +321,15 @@ int main(int argc, char **argv) {
           uint8_t buf[1 << 16];
           int n = read(p->pty, buf, sizeof(buf));
           if (n == -1) {
-            if (errno == EAGAIN) continue;
-            die("read:");
+            if (errno == EAGAIN || errno == EINTR) continue;
+            die("read %s:", p->process);
           }
           if (n > 0) {
+            int fd = open("latest.bin", O_CREAT | O_TRUNC | O_RDWR);
+            if (fd > 0) {
+              write(fd, buf, n);
+              close(fd);
+            }
             pane_write(p, buf, n);
           }
         }
@@ -329,7 +343,7 @@ int main(int argc, char **argv) {
     string_push(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = lst; p; p = p->next) {
-      pane_draw(p, false, &draw_buffer);
+      pane_draw(p, true, &draw_buffer);
     }
 
     if (!focused) focused = lst;
@@ -371,7 +385,7 @@ int main(int argc, char **argv) {
       }
       nfds = 1 + i;
     }
-    arrange(ws, lst);
+    // arrange(ws, lst);
   }
 
   string_destroy(&draw_buffer);

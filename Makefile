@@ -9,7 +9,7 @@ endif
 
 INCLUDE_DIR = $(abspath .)/include
 OUT_DIR = bin
-COMMANDS = vv test statusbar
+COMMANDS = vv test statusbar dump
 CMD_DIR = cmd
 CC = cc
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))

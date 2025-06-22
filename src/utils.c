@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -31,8 +32,15 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   if (last == ':') {
     n_buf += snprintf(buf + n_buf, sizeof(buf) - n_buf, " %s", strerror(errno));
   }
+
+  for (int i = 0; i < n_buf; i++) {
+    // Assume utf8 continuation byte
+    if ((buf[i]) & 0x80) continue;
+    if (buf[i] == ' ') continue;
+    if (!isgraph(buf[i])) buf[i] = '.';
+  }
   if (strncmp(buf, prevbuf, n_buf) != 0) {
-    repeat_count = 0;
+    repeat_count = 1;
     fprintf(f, "\n%.*s", n_buf, buf);
     memcpy(prevbuf, buf, n_buf);
   } else {
@@ -40,6 +48,13 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
     fprintf(f, "\r%.*s (%d)", n_buf, buf, repeat_count);
   }
   fflush(f);
+}
+
+void flogmsg(FILE *f, char *fmt, ...) {
+  va_list ap;
+  va_start(ap);
+  vflogmsg(f, fmt, ap);
+  va_end(ap);
 }
 
 void *ecalloc(size_t sz, size_t count) {

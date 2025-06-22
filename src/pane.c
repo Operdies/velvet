@@ -28,6 +28,7 @@ void pane_destroy(struct pane *pane) {
   pane->pty = 0;
   pane->pid = 0;
   fsm_destroy(&pane->fsm);
+  if (pane->logfile > 0) close(pane->logfile);
   free(pane->process);
 }
 
@@ -80,8 +81,16 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     }
 
     int num_blanks = g->w - line_length;
-    if (num_blanks > 0)
-      string_memset(outbuffer, ' ', num_blanks);
+    if (num_blanks > 0) string_memset(outbuffer, ' ', num_blanks);
+  }
+}
+
+static void on_report_mouse_position(void *context, int row, int col) {
+  struct pane *p = context;
+  if (p->pty) {
+    char buf[30];
+    int n = snprintf(buf, sizeof(buf), "\x1b[%d;%dR", row, col);
+    write(p->pty, buf, n);
   }
 }
 
@@ -90,7 +99,10 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
   // be resized
   pane->fsm.w = pane->w;
   pane->fsm.h = pane->h;
-  pane->fsm.pty = pane->pty;
+  pane->fsm.on_report_cursor_position = on_report_mouse_position;
+  pane->fsm.context = pane;
+  if (pane->logfile > 0)
+    write(pane->logfile, buf, n);
   fsm_process(&pane->fsm, buf, n);
 }
 
@@ -114,6 +126,11 @@ void pane_start(struct pane *pane) {
     die("execlp:");
   }
   pane->pid = pid;
+  char buf[100];
+  int n = snprintf(buf, sizeof(buf), "%s_log.ansi", pane->process);
+  buf[n] = 0;
+  int fd = open(buf, O_CREAT | O_CLOEXEC | O_RDWR | O_TRUNC, 0644);
+  pane->logfile = fd;
 }
 
 void pane_remove(struct pane **lst, struct pane *rem) {

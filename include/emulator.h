@@ -66,21 +66,24 @@ struct cell {
   struct utf8 symbol;
   enum cell_attributes attr;
   uint8_t fg, bg;
+
+  // If enabled, the renderer should switch rendering mode when rendering this cell
+  bool charset_dec_special;
   // Track newline locations to support rewrapping
   bool newline;
-  // Track how many characters are significant on this line
+  // Indicates that this line is wrapped and should be cleared when written
+  bool end_of_line;
+  // Track how many characters are significant on this line. This is needed for
+  // reflowing when resizing grids.
   int n_significant;
+  // Track whether or not the line starting with this cell is dirty (should be
+  // re-rendered)
   bool dirty;
 };
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
 static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
 static const struct cell empty_cell = {.symbol = utf8_blank};
-
-struct cell_ringbuf {
-  struct cell **buf;
-  int n, c;
-};
 
 // 0-indexed grid coordinates
 struct cursor {
@@ -109,11 +112,36 @@ enum fsm_state {
   fsm_osc,
   fsm_dcs,
   fsm_pnd,
+  fsm_charset,
 };
 
 struct escape_sequence {
   uint8_t buffer[MAX_ESC_SEQ_LEN];
   int n;
+};
+
+struct modifier_options {
+  union {
+    // TODO: Implement these options?
+    // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Functions-using-CSI-_-ordered-by-the-final-character_s_
+    struct {
+      int modifyKeyboard;
+      int modifyCursorKeys;
+      int modifyFunctionKeys;
+      int modifyKeypadKeys;
+      int modifyOtherKeys;
+      int unused;
+      int modifyModifierKeys;
+      int modifySpecialKeys;
+    };
+    int options[8];
+  };
+};
+
+struct charset_options {
+  char g0;
+  char g1;
+  bool g1_active;
 };
 
 struct pane_options {
@@ -136,6 +164,10 @@ struct pane_options {
   /* when focus reporting is enabled, send ESC [ I and ESC [ O when the pane
    * receives / loses keyboard focus */
   bool focus_reporting;
+
+  struct modifier_options modifier_options;
+  bool application_keypad_mode;
+  struct charset_options charset_options;
 };
 
 /* finite state machine for parsing ansi escape codes */
@@ -143,7 +175,6 @@ struct pane_options {
 // TODO: Reset scroll region of all grids when pane is resized
 struct fsm {
   int w, h;
-  int pty;
   /* the current state of the machine */
   enum fsm_state state;
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
@@ -155,6 +186,10 @@ struct fsm {
   struct grid alternate;
   /* pointer to either primary or alternate */
   struct grid *active_grid;
+  /* callback invoked when cursor position is requested */
+  void (*on_report_cursor_position)(void *context, int row, int column);
+  /* user-defined context provided to callbacks */
+  void *context;
 };
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);

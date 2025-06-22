@@ -1,9 +1,11 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdio.h>
 #include <unistd.h>
 
 void logmsg(char *fmt, ...);
+void flogmsg(FILE *f, char *fmt, ...);
 _Noreturn void die(char *fmt, ...);
 void *ecalloc(size_t sz, size_t count);
 

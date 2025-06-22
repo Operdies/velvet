@@ -1,6 +1,8 @@
 Tasks that need doing in no particular order of priority:
 
 * Chroming (visually distinguish panes)
+* "minimize" windows to 1 or 2 lines (maybe the top bar is minimized)
+* Support multi-width characters (emojis, characters in other scripts?)
 * Scrollback buffer (unless?)
 * CSI: Configurable scroll region (needed for vim)
 * Color / style CSIs

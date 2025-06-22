@@ -11,6 +11,7 @@
 #define DOWN(x) CSI #x "B"
 #define RIGHT(x) CSI #x "C"
 #define LEFT(x) CSI #x "D"
+#define ABS(x, y) CSI #x ";" #y "H"
 #define REGION(top, bottom) CSI #top ";" #bottom "r"
 
 static bool exit_on_failure = true;
@@ -346,7 +347,7 @@ static void test_input_output(void) {
                              {"       Y"},
                          });
   test_grid_input_output("Normal Rendering",
-                         "Hello!\r\n" CSI "K" 
+                         "Hello!\r\n" CSI "K"
                          "Second line\r\n" CSI "K"
                          "Third line\r\n" CSI "K",
                          (grid_5x8){
@@ -359,6 +360,59 @@ static void test_input_output(void) {
                          "Hello!!\rworld",
                          (grid_5x8){
                              {"world!!"},
+                         });
+
+  test_grid_input_output("Delete Lines",
+                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M",
+                         (grid_5x8){
+                             {"Line2"},
+                             {"Line5"},
+                             {"Line6"},
+                         });
+  test_grid_input_output("Delete Too Many Lines",
+                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "10M",
+                         (grid_5x8){
+                             {"Line2"},
+                         });
+  test_grid_input_output("Delete Too Many Lines 2",
+                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(9, 1) CSI "10M",
+                         (grid_5x8){
+                             {"Line2"},
+                             {"Line3"},
+                             {"Line4"},
+                             {"Line5"},
+                             {"     "},
+                         });
+  test_grid_input_output("Delete All But Last",
+                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(1, 2) CSI "4M",
+                         (grid_5x8){
+                             {"Line6"},
+                         });
+  test_grid_input_output("Overflow Grid",
+                         "AAAAAAAA"
+                         "BBBBBBBB"
+                         "CCCCCCCC"
+                         "DDDDDDDD"
+                         "EEEEEEEEE",
+                         (grid_5x8){
+                             {"BBBBBBBB"},
+                             {"CCCCCCCC"},
+                             {"DDDDDDDD"},
+                             {"EEEEEEEE"},
+                             {"E"},
+                         });
+  test_grid_input_output("Fill Grid",
+                         "AAAAAAAA"
+                         "BBBBBBBB"
+                         "CCCCCCCC"
+                         "DDDDDDDD"
+                         "EEEEEEEE",
+                         (grid_5x8){
+                             {"AAAAAAAA"},
+                             {"BBBBBBBB"},
+                             {"CCCCCCCC"},
+                             {"DDDDDDDD"},
+                             {"EEEEEEEE"},
                          });
 }
 

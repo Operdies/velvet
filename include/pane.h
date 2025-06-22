@@ -8,6 +8,7 @@ struct pane {
   // TODO: scrollback
   char *process;
   int pty, pid;
+  int logfile;
   int x, y, w, h;
   struct pane *next;
   struct fsm fsm;
