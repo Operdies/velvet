@@ -148,7 +148,8 @@ static void assert_grid_equals(struct chargrid *expected, const struct grid *con
   free(actual);
 }
 
-static void test_grid_input_output(const char *const test_name, const char *const input, grid_5x8 expected1) {
+static void test_grid_input_output(const char *const outer_test_name, const char *const input, grid_5x8 expected1) {
+  char testname2[1024];
   const char *reset = "\x1b[2J\x1b[1;1H";
   struct chargrid *expected = make_chargrid(5, 8, expected1);
 
@@ -159,13 +160,15 @@ static void test_grid_input_output(const char *const test_name, const char *cons
     // 1. Write the input and verify the output
     pane_write(&p, (uint8_t *)input, strlen(input));
     pane_draw(&p, false, &output);
-    assert_grid_equals(expected, p.fsm.active_grid, test_name);
+    snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
+    assert_grid_equals(expected, p.fsm.active_grid, testname2);
 
     // 1.b Feed the render buffer back to the fsm and verify the output is clear
     pane_write(&p, output.content, output.len);
     string_clear(&output);
     pane_draw(&p, false, &output);
-    assert_grid_equals(expected, p.fsm.active_grid, test_name);
+    snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
+    assert_grid_equals(expected, p.fsm.active_grid, testname2);
   }
   {
     // 2. Clear the screen ensuring it is clean
@@ -173,17 +176,19 @@ static void test_grid_input_output(const char *const test_name, const char *cons
     pane_write(&p, (uint8_t *)reset, strlen(reset));
     pane_draw(&p, false, &output);
     struct chargrid *cleared = make_chargrid(5, 8, (grid_5x8){0});
-    assert_grid_equals(cleared, p.fsm.active_grid, test_name);
+    snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
+    assert_grid_equals(cleared, p.fsm.active_grid, testname2);
 
-    assert_ge(output.len, 0, test_name, "Output should not be empty after clear!");
+    assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
 
     // See 1.b
     pane_write(&p, output.content, output.len);
     string_clear(&output);
     pane_draw(&p, false, &output);
-    assert_grid_equals(cleared, p.fsm.active_grid, test_name);
+    snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
+    assert_grid_equals(cleared, p.fsm.active_grid, outer_test_name);
 
-    assert_ge(output.len, 0, test_name, "Output should not be empty after clear!");
+    assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
   }
   {
     // 3. Redraw the screen and verify output
@@ -191,13 +196,15 @@ static void test_grid_input_output(const char *const test_name, const char *cons
     pane_write(&p, (uint8_t *)reset, strlen(reset));
     pane_write(&p, (uint8_t *)input, strlen(input));
     pane_draw(&p, false, &output);
-    assert_grid_equals(expected, p.fsm.active_grid, test_name);
+    snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
+    assert_grid_equals(expected, p.fsm.active_grid, testname2);
 
     // See 1.b
     pane_write(&p, output.content, output.len);
     string_clear(&output);
     pane_draw(&p, false, &output);
-    assert_grid_equals(expected, p.fsm.active_grid, test_name);
+    snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
+    assert_grid_equals(expected, p.fsm.active_grid, testname2);
   }
   string_destroy(&output);
   pane_destroy(&p);
@@ -414,6 +421,17 @@ static void test_input_output(void) {
                              {"DDDDDDDD"},
                              {"EEEEEEEE"},
                          });
+
+  // test_grid_input_output("Test Clear Region",
+  //                        "ABCDEFGHIJKLMNOP"
+  //                        "ABCDEFGHIJKLMNOP" ABS(5,1) CSI "J",
+  //                        (grid_5x8){
+  //                            {"AAAAAAAA"},
+  //                            {"BBBBBBBB"},
+  //                            {"CCCCCCCC"},
+  //                            {"DDDDDDDD"},
+  //                            {"EEEEEEEE"},
+  //                        });
 }
 
 static void test_reflow(void) {
@@ -491,9 +509,45 @@ static void test_scroll_regions(void) {
                          });
 }
 
+static void test_erase(void) {
+  /*
+   * Test:
+   * 1K: Start to cursor
+   * 2K: Entire line
+   * [0]K: Cursor to end
+   * */
+  test_grid_input_output("Line Delete",
+                         "xxx" ABS(1, 2) CSI "1K\n"                    // Delete first two characters
+                                             "xxxx" CSI "2K\n"         // Delete line
+                                             "ababab" CSI "K\n"        // Delete nothing
+                                             "ababab" LEFT(5) CSI "K", // Delete all but first
+                         (grid_5x8){
+                             {"  x     "},
+                             {"        "},
+                             {"ababab  "},
+                             {"a       "},
+                         });
+
+  /* Test:
+   * 1J: Start of screen to cursor
+   * 2J: Entire screen (clear)
+   * [0]J: Cursor to end of screen
+   */
+  test_grid_input_output("CSI 1J: Clear Start To Cursor (simple)", "www" CSI "1J", (grid_5x8){0});
+  test_grid_input_output("CSI 2J: Clear Screen (simple)", "xxx" CSI "2J", (grid_5x8){0});
+  test_grid_input_output("CSI J: Clear Cursor To End (simple)", "www" ABS(1, 1) CSI "J", (grid_5x8){0});
+  test_grid_input_output(
+      "CSI 1J: Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CSI "1J", (grid_5x8){0});
+  test_grid_input_output(
+      "CSI J: Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 1) CSI "J", (grid_5x8){0});
+  test_grid_input_output(
+      "CSI 2J: Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 1) CSI "2J", (grid_5x8){0});
+}
+
 int main(void) {
-  test_input_output();
-  test_reflow();
+  // test_input_output();
+  // test_reflow();
+  test_erase();
   // test_scroll_regions();
   return n_failures;
 }

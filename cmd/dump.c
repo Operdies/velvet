@@ -19,8 +19,15 @@ static inline uint8_t utf8_expected_length(uint8_t ch) {
     return 0; /* invalid leading byte or continuation byte */
 }
 
+struct string symbuf = {0};
+static void flush_symbuf(void) {
+  if (symbuf.len) {
+    flogmsg(stdout, "LITERAL '%.*s'", symbuf.len, symbuf.content);
+    string_clear(&symbuf);
+  }
+}
+
 static void disassemble(FILE *f) {
-  struct string symbuf = {0};
   char buf[1024] = {0};
   int buf_idx = 0;
   char ch;
@@ -32,11 +39,16 @@ static void disassemble(FILE *f) {
     switch (s) {
     case normal: {
       if (ch == 0x1b) {
-        if (symbuf.len) {
-          flogmsg(stdout, "LITERAL '%.*s'", symbuf.len, symbuf.content);
-          string_clear(&symbuf);
-        }
+        flush_symbuf();
         s = escape;
+        break;
+      } else if (ch == '\r') {
+        flush_symbuf();
+        flogmsg(stdout, "CARRIAGE");
+        break;
+      } else if (ch == '\n') {
+        flush_symbuf();
+        flogmsg(stdout, "NEWLINE");
         break;
       }
 
@@ -111,10 +123,7 @@ static void disassemble(FILE *f) {
     } break;
     }
   }
-  if (symbuf.len) {
-    flogmsg(stdout, "SYMBOLS '%.*s'", symbuf.len, symbuf.content);
-    string_clear(&symbuf);
-  }
+  flush_symbuf();
 }
 
 int main(int argc, char **argv) {

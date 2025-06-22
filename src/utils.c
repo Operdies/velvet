@@ -17,9 +17,10 @@ static inline void enable_raw_mode(void);
 static inline void enable_focus_reporting(void);
 static inline void disable_focus_reporting(void);
 
+#define BUFSIZE 128
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
-  static char prevbuf[1024] = {0};
-  static char buf[1024] = {0};
+  static char prevbuf[BUFSIZE] = {0};
+  static char buf[BUFSIZE] = {0};
   static int repeat_count = 0;
   assert(f);
   assert(fmt);
@@ -27,6 +28,8 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   char last = n > 0 ? fmt[n - 1] : 0;
 
   int n_buf = vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
+  if (n_buf > BUFSIZE)
+    n_buf = BUFSIZE;
 
   // Ensure at least one space
   if (last == ':') {

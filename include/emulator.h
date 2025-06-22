@@ -85,8 +85,8 @@ static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
 static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
 static const struct cell empty_cell = {.symbol = utf8_blank};
 
-// 0-indexed grid coordinates
-struct cursor {
+// 0-indexed grid coordinates. This cursor points at a raw cell
+struct raw_cursor {
   int x, y;
 };
 
@@ -101,8 +101,8 @@ struct grid {
   struct cell *cells; // cells[w*h]
   // The cursor can be considered as an exact pointer into the grid, ignoring
   // all offsets.
-  struct cursor cursor;
-  struct cursor saved_cursor;
+  struct raw_cursor cursor;
+  struct raw_cursor saved_cursor;
 };
 
 enum fsm_state {

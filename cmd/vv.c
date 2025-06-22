@@ -113,7 +113,7 @@ static void pane_focus(struct pane *pane, struct string *str) {
     char fmt[40];
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
-    struct cursor *c = &g->cursor;
+    struct raw_cursor *c = &g->cursor;
     int lineno = 1 + pane->y + (c->y - g->offset + g->h) % g->h;
     int columnno = 1 + pane->x + c->x;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
@@ -281,10 +281,10 @@ int main(int argc, char **argv) {
             if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
               die("ioctl TIOCGWINSZ:");
             }
-            // arrange(ws, lst);
-            // for (struct pane *p = lst; p; p = p->next) {
-            //   grid_invalidate(p->fsm.active_grid);
-            // }
+            for (struct pane *p = lst; p; p = p->next) {
+              grid_invalidate(p->fsm.active_grid);
+            }
+            arrange(ws, lst);
             break;
           default:
             running = false;
@@ -325,11 +325,6 @@ int main(int argc, char **argv) {
             die("read %s:", p->process);
           }
           if (n > 0) {
-            int fd = open("latest.bin", O_CREAT | O_TRUNC | O_RDWR);
-            if (fd > 0) {
-              write(fd, buf, n);
-              close(fd);
-            }
             pane_write(p, buf, n);
           }
         }
@@ -343,7 +338,7 @@ int main(int argc, char **argv) {
     string_push(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = lst; p; p = p->next) {
-      pane_draw(p, true, &draw_buffer);
+      pane_draw(p, false, &draw_buffer);
     }
 
     if (!focused) focused = lst;
@@ -385,7 +380,7 @@ int main(int argc, char **argv) {
       }
       nfds = 1 + i;
     }
-    // arrange(ws, lst);
+    arrange(ws, lst);
   }
 
   string_destroy(&draw_buffer);
