@@ -2,6 +2,30 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug disassembler",
+            "type": "codelldb",
+            "request": "launch",
+            "program": "bin/dump",
+            "args": ["../log_vim.bin"],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb"
+        },
+        {
+            "name": "Debug vim",
+            "type": "codelldb",
+            "request": "launch",
+            "program": "bin/vv",
+            "args": ["vim"],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb"
+        },
+        {
             "name": "Debug vv",
             "type": "codelldb",
             "request": "launch",
