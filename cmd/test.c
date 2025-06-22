@@ -370,19 +370,22 @@ static void test_input_output(void) {
                          });
 
   test_grid_input_output("Delete Lines",
-                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M",
+                         CSI "?20h"
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M",
                          (grid_5x8){
                              {"Line2"},
                              {"Line5"},
                              {"Line6"},
                          });
   test_grid_input_output("Delete Too Many Lines",
-                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "10M",
+                         CSI "?20h" /* enable auto-return */
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "10M",
                          (grid_5x8){
                              {"Line2"},
                          });
   test_grid_input_output("Delete Too Many Lines 2",
-                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(9, 1) CSI "10M",
+                         CSI "?20h" /* enable auto-return */
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(9, 1) CSI "10M",
                          (grid_5x8){
                              {"Line2"},
                              {"Line3"},
@@ -391,7 +394,8 @@ static void test_input_output(void) {
                              {"     "},
                          });
   test_grid_input_output("Delete All But Last",
-                         "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(1, 2) CSI "4M",
+                         CSI "?20h" /* enable auto-return */
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(1, 2) CSI "4M",
                          (grid_5x8){
                              {"Line6"},
                          });
@@ -473,9 +477,9 @@ static void test_reflow(void) {
                               {"DDEEE"},
                               {"EEEEE"},
                           });
-  test_grid_reflow_shrink("shrink grid",
-                          "AAAAAAA\n"
-                          "BB\n"
+  test_grid_reflow_shrink("shrink grid 2",
+                          "AAAAAAA\r\n"
+                          "BB\r\n"
                           "DDDDDDD",
                           (grid_5x8){
                               {"AAAAAAA "},
@@ -517,9 +521,9 @@ static void test_erase(void) {
    * [0]K: Cursor to end
    * */
   test_grid_input_output("Line Delete",
-                         "xxx" ABS(1, 2) CSI "1K\n"                    // Delete first two characters
-                                             "xxxx" CSI "2K\n"         // Delete line
-                                             "ababab" CSI "K\n"        // Delete nothing
+                         "xxx" ABS(1, 2) CSI "1K\r\n"                  // Delete first two characters
+                                             "xxxx" CSI "2K\r\n"       // Delete line
+                                             "ababab" CSI "K\r\n"      // Delete nothing
                                              "ababab" LEFT(5) CSI "K", // Delete all but first
                          (grid_5x8){
                              {"  x     "},
@@ -538,15 +542,59 @@ static void test_erase(void) {
   test_grid_input_output("CSI J: Clear Cursor To End (simple)", "www" ABS(1, 1) CSI "J", (grid_5x8){0});
   test_grid_input_output(
       "CSI 1J: Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CSI "1J", (grid_5x8){0});
+  test_grid_input_output("CSI 1J: Clear Start To Cursor 2",
+                         "wwwwwwww"
+                         "wwwwwwww"
+                         "wwwwwwww"
+                         "wwwwwwww"
+                         "wwwwwwww" ABS(5, 7) CSI "1J",
+                         (grid_5x8){
+                             {""},
+                             {""},
+                             {""},
+                             {""},
+                             {"       w"},
+                         });
   test_grid_input_output(
       "CSI J: Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 1) CSI "J", (grid_5x8){0});
   test_grid_input_output(
+      "CSI J: Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 2) CSI "J", (grid_5x8){"w"});
+  test_grid_input_output(
       "CSI 2J: Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 1) CSI "2J", (grid_5x8){0});
+
+  test_grid_input_output("Backspace 0",
+                         "w\b\bxy\b\bab",
+                         (grid_5x8){
+                             {"ab"},
+                         });
+  test_grid_input_output("Backspace 1",
+                         "wwwww\b\b\bxxx\b\b\b\b\b\by",
+                         (grid_5x8){
+                             {"ywxxx"},
+                         });
+  test_grid_input_output("Insert Blanks 1",
+                         "helloooooo" LEFT(10) CSI "1P",
+                         (grid_5x8){
+                             {"helloooo"},
+                             {"o       "},
+                         });
+  test_grid_input_output("Insert Blanks 2",
+                         "www" LEFT(3)
+                         /* delete first w */ CSI "1P"
+                         /* displace last w past end of line */ CSI "7@",
+                         (grid_5x8){
+                             {"       w"},
+                         });
+  test_grid_input_output("Line Truncated",
+                         "abcd\r" CSI "2@",
+                         (grid_5x8){
+                             {"  abcd  "},
+                         });
 }
 
 int main(void) {
-  // test_input_output();
-  // test_reflow();
+  test_input_output();
+  test_reflow();
   test_erase();
   // test_scroll_regions();
   return n_failures;

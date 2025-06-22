@@ -83,11 +83,8 @@ static void parse_csi_params(uint8_t *buffer, int len, int *params, int nparams,
 
 /* inclusive erase between two cursor positions */
 static void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct raw_cursor to) {
-  logmsg("Clear from %d;%d to %d;%d", from.y, from.x, to.y, to.x);
-
   int virtual_start = (from.y - g->offset + g->h) % g->h;
   int virtual_end = (to.y - g->offset + g->h) % g->h;
-  logmsg("Virtual: Clear from %d to %d", virtual_start, virtual_end);
 
   from.y = virtual_start;
   to.y = virtual_end;
@@ -117,23 +114,28 @@ static void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, s
 
 static void grid_insert_blanks_at_cursor(struct grid *g, int n) {
   struct cell *line = &g->cells[g->w * grid_line(g)];
+  int sig = line->n_significant;
   int lcol = grid_column(g);
   for (int col = grid_end(g); col >= lcol; col--) {
     int rcol = col - n;
     struct cell replacement = rcol < lcol ? empty_cell : line[rcol];
     line[col] = replacement;
   }
+  line->n_significant = MIN(sig + n, grid_end(g));
 }
 
 static void grid_shift_from_cursor(struct grid *g, int n) {
   if (n == 0) return;
   struct cell *line = &g->cells[g->w * grid_line(g)];
-  line->dirty = true;
+  struct cell copy = *line;
   for (int col = grid_column(g); col < grid_end(g); col++) {
     int rcol = col + n;
     struct cell replacement = rcol > grid_end(g) ? empty_cell : line[rcol];
     line[col] = replacement;
   }
+  line->dirty = true;
+  line->end_of_line = false;
+  line->n_significant = MAX(0, copy.n_significant - n);
 }
 
 static void grid_set_scroll_region(struct grid *g, int top, int bottom) {
@@ -142,6 +144,7 @@ static void grid_set_scroll_region(struct grid *g, int top, int bottom) {
 }
 
 static void process_charset(struct fsm *fsm, unsigned char ch) {
+  (void)ch;
   // char *which = fsm->seq.buffer[0] == CHARSET_0 ? &fsm->opts.charset_options.g0 : &fsm->opts.charset_options.g1;
   logmsg("TODO: Handle charsets");
   fsm->state = fsm_ground;
@@ -266,6 +269,21 @@ static void grid_set_visual_cursor(struct grid *g, int x, int y) {
   g->cursor.x = CLAMP(x, grid_start(g), grid_end(g));
   int vis = CLAMP(y, grid_top(g), grid_bottom(g));
   grid_set_visual_line(g, vis);
+}
+
+static void grid_set_cursor_y(struct grid *g, int y) {
+  struct cell *line = grid_current_line(g);
+  line->end_of_line = false;
+
+  // This is a bit more convoluted because we need to translate physical / visual coordinates
+  y = CLAMP(y, grid_top(g), grid_bottom(g));
+  grid_set_visual_line(g, y);
+}
+
+static void grid_set_cursor_x(struct grid *g, int x) {
+  struct cell *line = grid_current_line(g);
+  line->end_of_line = false;
+  g->cursor.x = CLAMP(x, grid_start(g), grid_end(g));
 }
 
 static void grid_move_cursor_x(struct grid *g, int x) {
@@ -466,7 +484,7 @@ static void grid_newline(struct grid *g, bool carriage) {
 
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_newline(fsm->active_grid, !fsm->opts.no_auto_return);
+  grid_newline(fsm->active_grid, fsm->opts.auto_return);
 }
 
 static void ground_accept(struct fsm *fsm) {
@@ -604,10 +622,12 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
       case '7': {
         fsm->state = fsm_ground;
         fsm->active_grid->saved_cursor = fsm->active_grid->cursor;
+        logmsg("Save Cursor");
       } break;
       case '8': {
         fsm->state = fsm_ground;
         fsm->active_grid->cursor = fsm->active_grid->saved_cursor;
+        logmsg("Restore Cursor");
       } break;
       case 'M': { /* Cursor up one line, scroll if at top */
         logmsg("scroll reverse");
@@ -704,9 +724,13 @@ static void csi_toggle_mode(struct fsm *fsm, int n, int params[n]) {
   case 4: { /* Set insert/replace mode */
   } break;
   case 7: { /* Set automatic line wrapping mode */
+    logmsg("Set wrapping: %s", on ? "on" : "off");
     fsm->opts.nowrap = off;
   } break;
   case 12: { /* Set local echo mode -- This is safe to ignore. */
+  } break;
+  case 20: { /* Set carriage return mode */
+    fsm->opts.auto_return = on;
   } break;
   case 25: { /* Set cursor visible mode */
     fsm->opts.cursor_hidden = off;
@@ -742,6 +766,7 @@ static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
 }
 
 static void csi_set_modifiers(struct fsm *fsm, int n, int params[n]) {
+  (void)fsm, (void)n, (void)params;
   logmsg("TODO: Implement set modifiers");
 }
 
@@ -756,7 +781,7 @@ static void apply_buffered_csi(struct fsm *fsm) {
     return;
   }
 
-  // logmsg("CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+  logmsg("CSI: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
   int params[10] = {0};
   int count = 0;
   parse_csi_params(buffer + 2, len - 3, params, 10, &count);
@@ -868,10 +893,13 @@ static void apply_buffered_csi(struct fsm *fsm) {
   case 'n': { /* report cursor position */
     if (fsm->on_report_cursor_position) fsm->on_report_cursor_position(fsm->context, g->cursor.y + 1, g->cursor.x + 1);
   } break;
-  case 'G':
-  case 'd': { /* move to absolute column */
+  case 'd': { /* move to absolute row */
+    int row = params[0] ? params[0] : 1;
+    grid_set_cursor_y(g, row - 1);
+  } break;
+  case 'G': { /* move to absolute column */
     int col = params[0] ? params[0] : 1;
-    grid_move_cursor_x(g, col - 1);
+    grid_set_cursor_x(g, col - 1);
   } break;
   case 'b': { /* repeat last character */
     int count = params[0] ? params[0] : 1;
@@ -901,6 +929,7 @@ static void apply_buffered_csi(struct fsm *fsm) {
     }
   } break;
   case 'r': { /* scroll region */
+    logmsg("TODO: Implement scroll region");
     int top = count > 0 ? params[0] : 1;
     int bottom = count > 1 ? params[1] : g->h;
     top = MAX(top, 1);

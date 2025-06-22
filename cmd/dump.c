@@ -6,19 +6,6 @@
 #include <stdio.h>
 #include <utils.h>
 
-static inline uint8_t utf8_expected_length(uint8_t ch) {
-  if ((ch & 0x80) == 0x00)
-    return 1; /* 0xxxxxxx */
-  else if ((ch & 0xE0) == 0xC0)
-    return 2; /* 110xxxxx */
-  else if ((ch & 0xF0) == 0xE0)
-    return 3; /* 1110xxxx */
-  else if ((ch & 0xF8) == 0xF0)
-    return 4; /* 11110xxx */
-  else
-    return 0; /* invalid leading byte or continuation byte */
-}
-
 struct string symbuf = {0};
 static void flush_symbuf(void) {
   if (symbuf.len) {

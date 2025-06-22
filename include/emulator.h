@@ -152,7 +152,7 @@ struct pane_options {
    * inserting a character which would cause an overflow. Otherwise, the cursor
    * should stay at the last column. */
   bool nowrap;
-  bool no_auto_return;
+  bool auto_return;
   bool alternate_screen;
   /* if enabled, pasted content should be wrapped with ESC[200~ and ESC[201~ */
   bool bracketed_paste;
