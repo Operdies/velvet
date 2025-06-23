@@ -159,11 +159,11 @@ static void process_pnd(struct fsm *fsm, unsigned char ch) {
     struct grid *g = fsm->active_grid;
     for (int row = 0; row < g->h; row++) {
       struct cell *line = &g->cells[row * g->w];
-      *line = E;
-      line->n_significant = g->w;
-      for (int col = 1; col < g->w; col++) {
+      for (int col = 0; col < g->w; col++) {
         line[col] = E;
       }
+      line->n_significant = g->w;
+      line->dirty = true;
     }
   } break;
   default: {
