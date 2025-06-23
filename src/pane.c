@@ -44,8 +44,8 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 
   {
     // Ensure the grid content is in sync with the pane just-in-time
-    pane->fsm.w = pane->w;
-    pane->fsm.h = pane->h;
+    pane->fsm.w = pane->rect.inner.w;
+    pane->fsm.h = pane->rect.inner.h;
     fsm_grid_resize(&pane->fsm);
   }
 
@@ -56,8 +56,8 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     struct cell *line = &g->cells[row * g->w];
     if (!redraw && !line->dirty) continue;
     line->dirty = false;
-    int lineno = 1 + pane->y + i0;
-    int columnno = 1 + pane->x;
+    int columnno = 1 + pane->rect.inner.x;
+    int lineno = 1 + pane->rect.inner.y + i0;
     int line_length = MIN(line->n_significant, g->w);
     // TODO: Get rid of snprintf since it's really slow
     int n = snprintf(fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
@@ -85,6 +85,46 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   }
 }
 
+void draw_frame(struct pane *p, struct string *b, uint8_t fg) {
+  char buf[100];
+  int left = p->rect.outer.x + 1;
+  int top = p->rect.outer.y + 1;
+  int bottom = top + p->rect.outer.h;
+  int n = snprintf(buf, 100, "\x1b[%d;%dH", top, left);
+  string_push(b, buf, n);
+  string_push_char(b, '+');
+  for (int i = 0; i < p->rect.outer.h - 2; i++) {
+    // Move down, move left, insert pipe
+    char payload[] = "\n\x1b[D|";
+    string_push(b, payload, sizeof(payload) - 1);
+  }
+  {
+    // Insert lower left corner
+    char payload[] = "\n\x1b[D+";
+    string_push(b, payload, sizeof(payload) - 1);
+  }
+
+  n = snprintf(buf, 100, "\x1b[%d;%dH", top, left + 1);
+  string_push(b, buf, n);
+  for (int i = 0; i < p->rect.outer.w - 2; i++) string_push_char(b, '-');
+  string_push_char(b, '+');
+
+  for (int i = 0; i < p->rect.outer.h - 2; i++) {
+    // Move down, move left, insert pipe
+    char payload[] = "\n\x1b[D|";
+    string_push(b, payload, sizeof(payload) - 1);
+  }
+  {
+    // Insert lower left corner
+    char payload[] = "\n\x1b[D+";
+    string_push(b, payload, sizeof(payload) - 1);
+  }
+
+  n = snprintf(buf, 100, "\x1b[%d;%dH", bottom, left + 1);
+  string_push(b, buf, n);
+  for (int i = 0; i < p->rect.outer.w - 2; i++) string_push_char(b, '-');
+}
+
 static void on_report_mouse_position(void *context, int row, int col) {
   struct pane *p = context;
   if (p->pty) {
@@ -97,27 +137,27 @@ static void on_report_mouse_position(void *context, int row, int col) {
 void pane_write(struct pane *pane, uint8_t *buf, int n) {
   // Pass current size information to fsm so it can determine if grids should
   // be resized
-  pane->fsm.w = pane->w;
-  pane->fsm.h = pane->h;
+  pane->fsm.w = pane->rect.inner.w;
+  pane->fsm.h = pane->rect.inner.h;
   pane->fsm.on_report_cursor_position = on_report_mouse_position;
   pane->fsm.context = pane;
-  if (pane->logfile > 0)
-    write(pane->logfile, buf, n);
+  if (pane->logfile > 0) write(pane->logfile, buf, n);
   fsm_process(&pane->fsm, buf, n);
 }
 
-void pane_resize(struct pane *pane, int w, int h) {
-  if (pane->w != w || pane->h != h) {
-    struct winsize ws = {.ws_col = w, .ws_row = h};
+void pane_resize(struct pane *pane, struct bounds outer) {
+  struct bounds inner = (struct bounds){.x = outer.x + 1, .y = outer.y + 1, .w = outer.w - 2, .h = outer.h - 2};
+  if (pane->rect.outer.w != outer.w || pane->rect.outer.h != outer.h) {
+    struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h};
     if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);
     if (pane->pid) kill(pane->pid, SIGWINCH);
-    pane->w = w;
-    pane->h = h;
   }
+  pane->rect.outer = outer;
+  pane->rect.inner = inner;
 }
 
 void pane_start(struct pane *pane) {
-  struct winsize panesize = {.ws_col = pane->w, .ws_row = pane->h};
+  struct winsize panesize = {.ws_col = pane->rect.inner.w, .ws_row = pane->rect.inner.h};
   pid_t pid = forkpty(&pane->pty, NULL, NULL, &panesize);
   if (pid < 0) die("forkpty:");
 

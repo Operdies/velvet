@@ -1,6 +1,5 @@
 #include "collections.h"
 #include "pane.h"
-#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +22,9 @@ struct chargrid {
   int cols;
   char cells[];
 };
+
+struct bounds bsmall = { .w = 7, .h = 7 };
+struct bounds blarge = { .w = 10, .h = 7 };
 
 struct chargrid *make_chargrid(int rows, int cols, char g[rows][cols]) {
   // char *cells = calloc(rows * cols, 1);
@@ -153,7 +155,8 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   const char *reset = "\x1b[2J\x1b[1;1H";
   struct chargrid *expected = make_chargrid(5, 8, expected1);
 
-  struct pane p = {.w = 8, .h = 5};
+  struct pane p = { 0 };
+  pane_resize(&p, blarge);
   struct string output = {0};
   {
     string_clear(&output);
@@ -215,7 +218,8 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = {.w = 5, .h = 5};
+  struct pane p = {0};
+  pane_resize(&p, bsmall);
   pane_write(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
   {
@@ -225,13 +229,13 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
   }
   {
     string_clear(&output);
-    pane_resize(&p, 8, 5);
+    pane_resize(&p, blarge);
     pane_draw(&p, false, &output);
     assert_grid_equals(large, p.fsm.active_grid, test_name);
   }
   {
     string_clear(&output);
-    pane_resize(&p, 5, 5);
+    pane_resize(&p, bsmall);
     pane_draw(&p, false, &output);
     // It is always possibly to losslessly convert back to the initial grid, so let's verify that
     assert_grid_equals(small, p.fsm.active_grid, test_name);
@@ -246,7 +250,8 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = {.w = 8, .h = 5};
+  struct pane p = { 0 };
+  pane_resize(&p, blarge);
   pane_write(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
   {
@@ -256,7 +261,7 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   }
   {
     string_clear(&output);
-    pane_resize(&p, 5, 5);
+    pane_resize(&p, bsmall);
     pane_draw(&p, false, &output);
     assert_grid_equals(small, p.fsm.active_grid, test_name);
   }

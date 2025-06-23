@@ -91,19 +91,17 @@ static void arrange(struct winsize ws, struct pane *p) {
   }
 
   for (; i < nmaster && i < n; i++) {
-    p->x = mx;
-    p->y = my;
-    my += mh;
-    pane_resize(p, mw, mh);
+    struct bounds b = { .x = mx, .y = my, .w = mw, .h = mh };
+    pane_resize(p, b);
     p = p->next;
+    my += mh;
   }
 
   for (; i < n; i++) {
-    p->x = mw;
-    p->y = sy;
-    sy += sh;
-    pane_resize(p, sw, sh);
+    struct bounds b = { .x = mw, .y = sy, .w = sw, .h = sh };
+    pane_resize(p, b);
     p = p->next;
+    sy += sh;
   }
 }
 
@@ -114,8 +112,8 @@ static void pane_focus(struct pane *pane, struct string *str) {
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
     struct raw_cursor *c = &g->cursor;
-    int lineno = 1 + pane->y + (c->y - g->offset + g->h) % g->h;
-    int columnno = 1 + pane->x + c->x;
+    int lineno = 1 + pane->rect.inner.y + (c->y - g->offset + g->h) % g->h;
+    int columnno = 1 + pane->rect.inner.x + c->x;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     // write(STDOUT_FILENO, fmt, n);
     string_push(str, fmt, n);
@@ -169,14 +167,6 @@ static void handle_stdin(const char *const buf, int n) {
       } break;
       case CTRL('J'): {
         focusnext();
-      } break;
-      case CTRL('L'): {
-        logmsg("Grow");
-        pane_resize(focused, focused->w + 1, focused->h);
-      } break;
-      case CTRL('H'): {
-        logmsg("Shrink");
-        pane_resize(focused, focused->w - 1, focused->h);
       } break;
       default: {
         string_push_char(&writebuffer, ch);
@@ -339,6 +329,10 @@ int main(int argc, char **argv) {
     size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = lst; p; p = p->next) {
       pane_draw(p, false, &draw_buffer);
+    }
+
+    for (struct pane *p = lst; p; p = p->next) {
+      draw_frame(p, &draw_buffer, 0);
     }
 
     if (!focused) focused = lst;
