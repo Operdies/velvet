@@ -73,6 +73,7 @@ static struct pane *lst = NULL;
 static void arrange(struct winsize ws, struct pane *p) {
   if (!p) return;
   int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
+  for (struct pane *c = p; c; c = c->next) c->border = 1;
 
   n = pane_count(p);
 

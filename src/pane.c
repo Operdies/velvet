@@ -179,7 +179,10 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
 }
 
 void pane_resize(struct pane *pane, struct bounds outer) {
-  struct bounds inner = (struct bounds){.x = outer.x + 1, .y = outer.y + 1, .w = outer.w - 1, .h = outer.h - 1};
+  struct bounds inner = (struct bounds){.x = outer.x + pane->border,
+                                        .y = outer.y + pane->border,
+                                        .w = outer.w - pane->border,
+                                        .h = outer.h - pane->border};
   if (pane->rect.window.w != outer.w || pane->rect.window.h != outer.h) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h};
     if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);

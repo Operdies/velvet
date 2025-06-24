@@ -23,8 +23,8 @@ struct chargrid {
   char cells[];
 };
 
-struct bounds bsmall = { .w = 7, .h = 7 };
-struct bounds blarge = { .w = 10, .h = 7 };
+struct bounds bsmall = { .w = 5, .h = 5 };
+struct bounds blarge = { .w = 8, .h = 5 };
 
 struct chargrid *make_chargrid(int rows, int cols, char g[rows][cols]) {
   // char *cells = calloc(rows * cols, 1);
