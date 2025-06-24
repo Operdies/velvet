@@ -14,8 +14,8 @@ struct pane {
   int pty, pid;
   int logfile;
   struct {
-    struct bounds outer;
-    struct bounds inner;
+    struct bounds window;
+    struct bounds client;
   } rect;
   struct pane *next;
   struct fsm fsm;
@@ -29,6 +29,6 @@ void pane_write(struct pane *pane, uint8_t *buf, int n);
 int pane_count(struct pane *pane);
 void pane_remove(struct pane **lst, struct pane *rem);
 void pane_draw(struct pane *pane, bool redraw, struct string *buffer);
-void draw_frame(struct pane *p, struct string *b, uint8_t fg);
+void pane_draw_border(struct pane *p, struct string *b);
 
 #endif /*  PANE_H */

@@ -210,13 +210,12 @@ static void grid_initialize(struct grid *g, int w, int h) {
   g->scroll_top = 0;
   g->scroll_bottom = h;
 
-  grid_invalidate(g);
-
   for (int i = 0; i < h; i++) {
     for (int j = 0; j < w; j++) {
       g->cells[i * w + j] = empty_cell;
     }
   }
+  grid_invalidate(g);
 }
 
 /* Ensure the grid is able contain the specified number of cells, potentially realloacting it and copying the previous

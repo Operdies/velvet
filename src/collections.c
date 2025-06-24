@@ -22,15 +22,19 @@ static void ensure_capacity(struct string *str, size_t required) {
   }
 }
 
-void string_push(struct string *str, char *src, size_t len) {
+void string_push_slice(struct string *str, const char *const src, size_t len) {
   size_t required = str->len + len;
   ensure_capacity(str, required);
   memcpy(str->content + str->len, src, len);
   str->len += len;
 }
+void string_push(struct string *str, const char *const src) {
+  size_t len = strlen(src);
+  string_push_slice(str, src, len);
+}
 
 void string_push_char(struct string *str, char ch) {
-  string_push(str, &ch, 1);
+  string_push_slice(str, &ch, 1);
 }
 
 void string_memset(struct string *str, uint8_t ch, size_t len) {

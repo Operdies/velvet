@@ -20,7 +20,13 @@ struct string {
   size_t len, cap;
 };
 
-void string_push(struct string *str, char *src, size_t len);
+struct string_slice {
+  size_t len;
+  const char *const str;
+};
+
+void string_push_slice(struct string *str, const char *const src, size_t len);
+void string_push(struct string *str, const char * const src);
 void string_push_char(struct string *str, char ch);
 void string_memset(struct string *str, uint8_t ch, size_t len);
 void string_clear(struct string *str);

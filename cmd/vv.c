@@ -91,17 +91,23 @@ static void arrange(struct winsize ws, struct pane *p) {
   }
 
   for (; i < nmaster && i < n; i++) {
-    struct bounds b = { .x = mx, .y = my, .w = mw, .h = mh };
+    struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
     pane_resize(p, b);
     p = p->next;
     my += mh;
   }
 
+  int stack_height_left = (float)ws.ws_row;
+  int stack_items_left = ns;
+
   for (; i < n; i++) {
-    struct bounds b = { .x = mw, .y = sy, .w = sw, .h = sh };
+    int height = (float)stack_height_left / stack_items_left;
+    struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
     pane_resize(p, b);
     p = p->next;
-    sy += sh;
+    sy += height;
+    stack_items_left--;
+    stack_height_left -= height;
   }
 }
 
@@ -112,11 +118,11 @@ static void pane_focus(struct pane *pane, struct string *str) {
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
     struct raw_cursor *c = &g->cursor;
-    int lineno = 1 + pane->rect.inner.y + (c->y - g->offset + g->h) % g->h;
-    int columnno = 1 + pane->rect.inner.x + c->x;
+    int lineno = 1 + pane->rect.client.y + (c->y - g->offset + g->h) % g->h;
+    int columnno = 1 + pane->rect.client.x + c->x;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     // write(STDOUT_FILENO, fmt, n);
-    string_push(str, fmt, n);
+    string_push_slice(str, fmt, n);
   }
 }
 
@@ -132,6 +138,17 @@ static void focus_pane(struct pane *p) {
   }
 }
 
+static void focusprev(void) {
+  struct pane *c;
+  if (focused == lst) {
+    for (c = lst; c && c->next; c = c->next);
+    focus_pane(c);
+  } else {
+    for (c = lst; c && c->next != focused; c = c->next);
+    if (c && c->next == focused) focus_pane(c);
+  }
+}
+
 static void focusnext(void) {
   if (focused && focused->next) {
     focus_pane(focused->next);
@@ -141,7 +158,7 @@ static void focusnext(void) {
 }
 
 static bool running = true;
-static void handle_stdin(const char *const buf, int n) {
+static void handle_stdin(const char *const buf, int n, struct string *draw_buffer) {
   enum stdin_state {
     normal,
     esc,
@@ -161,9 +178,41 @@ static void handle_stdin(const char *const buf, int n) {
       case 0x1b: {
         s = esc;
       } break;
+      case CTRL('X'): {
+        nmaster = MAX(0, nmaster - 1);
+      } break;
+      case CTRL('N'): {
+        if (pane_count(lst) < 6) {
+          struct pane *new = calloc(1, sizeof(*new));
+          new->process = strdup("bash");
+          new->next = lst;
+          lst = new;
+          arrange(ws, lst);
+          pane_start(new);
+          set_nonblocking(new->pty);
+          focused = new;
+          string_push(draw_buffer, "\x1b[2J");
+        } else {
+          logmsg("Too many panes. Spawn request ignored.");
+        }
+      } break;
+      case CTRL('G'): {
+        if (lst != focused) {
+          pane_remove(&lst, focused);
+          focused->next = lst;
+          lst = focused;
+          arrange(ws, lst);
+        }
+      } break;
+      case CTRL('A'): {
+        nmaster = MIN(5, nmaster + 1);
+      } break;
       case CTRL('W'): {
         logmsg("Exit by ^W");
         running = false;
+      } break;
+      case CTRL('K'): {
+        focusprev();
       } break;
       case CTRL('J'): {
         focusnext();
@@ -197,7 +246,7 @@ static void handle_stdin(const char *const buf, int n) {
         bool did_focus = ch == 'I';
         if (focused->fsm.opts.focus_reporting) {
           char *s = did_focus ? focus_in : focus_out;
-          string_push(&writebuffer, s, strlen(s));
+          string_push_slice(&writebuffer, s, strlen(s));
         }
         // If the pane does not have the feature enabled, ignore it.
       } else {
@@ -239,7 +288,7 @@ int main(int argc, char **argv) {
   arrange(ws, lst);
   focused = lst;
 
-  struct pollfd *fds = calloc(1 + pane_count(lst), sizeof(struct pollfd));
+  struct pollfd *fds = calloc(100, sizeof(struct pollfd));
   fds[0].fd = fileno(stdin);
   fds[0].events = POLL_IN;
   int nfds = 1;
@@ -275,6 +324,8 @@ int main(int argc, char **argv) {
               grid_invalidate(p->fsm.active_grid);
             }
             arrange(ws, lst);
+            char clear[] = "\x1b[2J";
+            string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
             break;
           default:
             running = false;
@@ -300,7 +351,7 @@ int main(int argc, char **argv) {
       if (n == 0) {
         break;
       }
-      handle_stdin(readbuffer, n);
+      handle_stdin(readbuffer, n, &draw_buffer);
     }
 
     for (int i = 1; polled > 0 && i < nfds; i++) {
@@ -321,24 +372,32 @@ int main(int argc, char **argv) {
       }
     }
 
-    string_clear(&draw_buffer);
     // TODO: Don't write cursor if panes didn't draw
     char hide_cursor[] = "\x1b[?25l";
     char show_cursor[] = "\x1b[?25h";
-    string_push(&draw_buffer, hide_cursor, sizeof(hide_cursor));
+    string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = lst; p; p = p->next) {
       pane_draw(p, false, &draw_buffer);
     }
 
+    string_push(&draw_buffer, "\x1b[0m");
     for (struct pane *p = lst; p; p = p->next) {
-      draw_frame(p, &draw_buffer, 0);
+      if (p == focused) {
+        string_push(&draw_buffer, "\x1b[31m");
+        string_push(&draw_buffer, "\x1b[1m");
+      } else {
+        string_push(&draw_buffer, "\x1b[0m");
+        string_push(&draw_buffer, "\x1b[34m");
+      }
+      pane_draw_border(p, &draw_buffer);
     }
+    string_push(&draw_buffer, "\x1b[0m");
 
     if (!focused) focused = lst;
     if (focused) pane_focus(focused, &draw_buffer);
     if (focused && focused->fsm.opts.cursor_hidden == false)
-      string_push(&draw_buffer, show_cursor, sizeof(show_cursor));
+      string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
 
     if (draw_buffer.len != initial_bytes) {
       string_flush(&draw_buffer, STDOUT_FILENO, NULL);
