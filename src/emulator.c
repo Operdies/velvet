@@ -665,8 +665,9 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
       }
     } break;
     case fsm_osc: {
+      char prev = fsm->seq.n > 1 ? fsm->seq.buffer[fsm->seq.n - 1] : 0;
       fsm->seq.buffer[fsm->seq.n++] = ch;
-      if (ch == BELL) {
+      if (ch == BELL || (ch == '\\' && prev == ESC)) {
         logmsg("TODO: OSC sequence: %.*s", fsm->seq.n - 1, fsm->seq.buffer);
         fsm->state = fsm_ground;
       } else if (fsm->seq.n >= MAX_ESC_SEQ_LEN) {
