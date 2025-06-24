@@ -17,6 +17,10 @@
 #include "utils.h"
 #include <sys/wait.h>
 
+#ifndef CTRL
+#define CTRL(x) ((x)&037)
+#endif
+
 static struct {
   union {
     int pipes[2];
