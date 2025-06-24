@@ -55,7 +55,7 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
 
 void flogmsg(FILE *f, char *fmt, ...) {
   va_list ap;
-  va_start(ap);
+  va_start(ap, fmt);
   vflogmsg(f, fmt, ap);
   va_end(ap);
 }
@@ -69,7 +69,7 @@ void *ecalloc(size_t sz, size_t count) {
 _Noreturn void die(char *fmt, ...) {
   exit_raw_mode();
   va_list ap;
-  va_start(ap);
+  va_start(ap, fmt);
   vflogmsg(stderr, fmt, ap);
   va_end(ap);
   exit(1);
@@ -88,7 +88,7 @@ static void vlogmsg(char *fmt, va_list ap) {
 
 void logmsg(char *fmt, ...) {
   va_list ap;
-  va_start(ap);
+  va_start(ap, fmt);
   vlogmsg(fmt, ap);
   va_end(ap);
 }
