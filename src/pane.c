@@ -126,6 +126,8 @@ void pane_draw_border(struct pane *p, struct string *b) {
   }
 
   // char *bottomleftcorner = "\n\b├";
+  char *disable_line_wrapping = "\x1b[?7l";
+  char *enable_line_wrapping = "\x1b[?7h";
   char *bottomleftcorner = "\n\b│";
   char *pipe = "\n\b│";
   char *dash = "─";
@@ -136,6 +138,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
   int bottom = p->rect.window.h + top;
   int right = p->rect.window.w + left;
 
+  string_push(b, disable_line_wrapping);
   // top left corner
   string_push(b, move(top, left));
   string_push(b, corner);
@@ -156,6 +159,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
     string_push(b, pipe);
   }
   string_push(b, bottomleftcorner);
+  string_push(b, disable_line_wrapping);
 }
 
 static void on_report_mouse_position(void *context, int row, int col) {
@@ -179,6 +183,10 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
 }
 
 void pane_resize(struct pane *pane, struct bounds outer) {
+  // Refuse to go below a minimum size
+  if (outer.w < 2) outer.w = 2;
+  if (outer.h < 2) outer.h = 2;
+
   struct bounds inner = (struct bounds){.x = outer.x + pane->border,
                                         .y = outer.y + pane->border,
                                         .w = outer.w - pane->border,
@@ -204,7 +212,8 @@ void pane_start(struct pane *pane) {
   if (pid < 0) die("forkpty:");
 
   if (pid == 0) {
-    execlp(pane->process, pane->process, NULL);
+    char *argv[] = { "sh", "-c", pane->process, NULL };
+    execvp("sh", argv);
     die("execlp:");
   }
   pane->pid = pid;

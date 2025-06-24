@@ -59,8 +59,14 @@ static void fsm_update_active_grid(struct fsm *fsm) {
     fsm->active_grid = g;
     for (int i = 0; i < g->h; i++) g->cells[i * g->w].dirty = true;
   }
-  bool reflow = fsm->active_grid == &fsm->primary;
-  ensure_grid(fsm->active_grid, fsm->w, fsm->h, reflow);
+  // If the primary display is used, this is likely not a tui application,
+  // so it is not expected to handle resizes. In that case, we want to re-wrap 
+  // the currently displayed lines.
+  //
+  // If it is using the alternate screen, we just want to preserve the current window content 
+  // in the existing layout until the application redraws its content.
+  bool reflow_content = fsm->active_grid == &fsm->primary;
+  ensure_grid(fsm->active_grid, fsm->w, fsm->h, reflow_content);
 }
 
 static void parse_csi_params(uint8_t *buffer, int len, int *params, int nparams, int *count) {
@@ -183,7 +189,7 @@ static void process_csi(struct fsm *fsm, unsigned char ch) {
 
 /* copy to content from one grid to another. This is a naive resizing implementation which just re-inserts everything
  * and counts on the final grid to be accurate */
-static void grid_copy(struct grid *restrict dst, const struct grid *const restrict src) {
+static void grid_copy(struct grid *restrict dst, const struct grid *const restrict src, bool wrap) {
   for (int i0 = 0; i0 < src->h; i0++) {
     int row = (i0 + src->offset) % src->h;
 
@@ -194,7 +200,7 @@ static void grid_copy(struct grid *restrict dst, const struct grid *const restri
       struct cell c = src->cells[index];
       c.newline = false;
       c.end_of_line = false;
-      grid_insert(dst, c, true);
+      grid_insert(dst, c, wrap);
     }
     if (line->newline) {
       grid_newline(dst, true);
@@ -220,15 +226,13 @@ static void grid_initialize(struct grid *g, int w, int h) {
 
 /* Ensure the grid is able contain the specified number of cells, potentially realloacting it and copying the previous
  * content */
-static void ensure_grid(struct grid *g, int w, int h, bool reflow) {
+static void ensure_grid(struct grid *g, int w, int h, bool wrap) {
   if (!g->cells) {
     grid_initialize(g, w, h);
   } else if (g->h != h || g->w != w) {
     struct grid new = {.w = w, .h = h};
     ensure_grid(&new, w, h, false);
-    if (reflow) {
-      grid_copy(&new, g);
-    }
+    grid_copy(&new, g, wrap);
     grid_destroy(g);
     *g = new;
   }

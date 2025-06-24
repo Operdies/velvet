@@ -7,7 +7,22 @@ Tasks that need doing in no particular order of priority:
 * CSI: Configurable scroll region (needed for vim)
 * Color / style CSIs
 * Bracketed paste
+* Floating panes
 * Mouse support
+* Command buffer so stdin/out requests can be processed outside of the state
+machine 
+
+Some applications request the current mouse position which must be
+provided on stdin. Other applications request information about terminal
+features which velvet must request from the host emulator before it can
+respond. Handling this inside the state machine complicates testing and adds
+unnecessary IO latency.
+
+In addition, reading stdin from the terminal is not really safe inside the
+state machine since it could contain STDIN which must be processed in the main
+loop. The main loop should always detect responses and dispatch them to the
+appropriate pane.
+
 * Performance testing 
 
 perf binary which spawns vv / tmux in a pty and sends a bunch of commands vv
