@@ -79,16 +79,16 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   struct grid *g = pane->fsm.active_grid;
   for (int i0 = 0; i0 < g->h; i0++) {
     int row = (i0 + g->offset) % g->h;
-    struct cell *line = &g->cells[row * g->w];
-    if (!redraw && !line->dirty) continue;
-    line->dirty = false;
+    struct grid_row *grid_row = &g->rows[row];
+    if (!redraw && !grid_row->dirty) continue;
+    grid_row->dirty = false;
     int columnno = 1 + pane->rect.client.x;
     int lineno = 1 + pane->rect.client.y + i0;
-    int line_length = MIN(line->n_significant, g->w);
+    int line_length = MIN(grid_row->n_significant, g->w);
     string_push(outbuffer, move(lineno, columnno));
 
     for (int col = 0; col < line_length; col++) {
-      struct cell *c = &line[col];
+      struct grid_cell *c = &grid_row->cells[col];
       if (c->fg != fg) {
         // TODO: apply fg
         fg = c->fg;

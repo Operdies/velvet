@@ -58,7 +58,7 @@ enum cell_attributes {
 void utf8_push(struct utf8 *u, uint8_t byte);
 bool utf8_valid(struct utf8 *u);
 
-struct cell {
+struct grid_cell {
   // TODO: utf8 (multi-byte characters)
   // Right now, utf8 will probably render correctly, but not if utf8 characters
   // are split across a line barrier
@@ -67,8 +67,13 @@ struct cell {
   enum cell_attributes attr;
   uint8_t fg, bg;
 
-  // If enabled, the renderer should switch rendering mode when rendering this cell
+  // If enabled, the renderer should switch rendering mode when rendering this
+  // cell
   bool charset_dec_special;
+};
+
+struct grid_row {
+  struct grid_cell *cells;
   // Track newline locations to support rewrapping
   bool newline;
   // Indicates that this line is wrapped and should be cleared when written
@@ -83,7 +88,7 @@ struct cell {
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
 static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
-static const struct cell empty_cell = {.symbol = utf8_blank};
+static const struct grid_cell empty_cell = {.symbol = utf8_blank};
 
 // 0-indexed grid coordinates. This cursor points at a raw cell
 struct raw_cursor {
@@ -98,7 +103,8 @@ struct grid {
   /* scroll region is local to the grid and is not persisted when the window /
    * pane is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
-  struct cell *cells; // cells[w*h]
+  struct grid_cell *cells;    // cells[w*h]
+  struct grid_row *rows; // lines[h]
   // The cursor can be considered as an exact pointer into the grid, ignoring
   // all offsets.
   struct raw_cursor cursor;
@@ -179,7 +185,7 @@ struct fsm {
   enum fsm_state state;
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
    * Used whenever a new character is emitted */
-  struct cell cell;
+  struct grid_cell cell;
   struct escape_sequence seq;
   struct pane_options opts;
   struct grid primary;

@@ -45,9 +45,9 @@ static struct chargrid *grid_to_chargrid(const struct grid *const restrict src) 
   grid->rows = src->h;
   for (int i0 = 0; i0 < src->h; i0++) {
     int row = (i0 + src->offset) % src->h;
-    struct cell *line = &src->cells[row * src->w];
+    struct grid_row *grid_row = &src->rows[row];
     for (int col = 0; col < src->w; col++) {
-      grid->cells[i0 * src->w + col] = line[col].symbol.utf8[0];
+      grid->cells[i0 * src->w + col] = grid_row->cells[col].symbol.utf8[0];
     }
   }
   return grid;
