@@ -183,9 +183,6 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       case 0x1b: {
         s = esc;
       } break;
-      case CTRL('X'): {
-        nmaster = MAX(0, nmaster - 1);
-      } break;
       case CTRL('N'): {
         if (pane_count(lst) < 6) {
           struct pane *new = calloc(1, sizeof(*new));
@@ -210,7 +207,12 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         }
       } break;
       case CTRL('A'): {
-        nmaster = MIN(5, nmaster + 1);
+        nmaster = MIN(pane_count(lst), nmaster + 1);
+        arrange(ws, lst);
+      } break;
+      case CTRL('X'): {
+        nmaster = MAX(0, nmaster - 1);
+        arrange(ws, lst);
       } break;
       case CTRL('W'): {
         logmsg("Exit by ^W");
