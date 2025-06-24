@@ -18,7 +18,7 @@
 #include <sys/wait.h>
 
 #ifndef CTRL
-#define CTRL(x) ((x)&037)
+#define CTRL(x) ((x) & 037)
 #endif
 
 static struct {
@@ -116,7 +116,7 @@ static void arrange(struct winsize ws, struct pane *p) {
   }
 }
 
-static void pane_focus(struct pane *pane, struct string *str) {
+static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
   if (pane && pane->fsm.active_grid) {
     focused = pane;
     char fmt[40];
@@ -127,7 +127,7 @@ static void pane_focus(struct pane *pane, struct string *str) {
     int columnno = 1 + pane->rect.client.x + c->x;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     // write(STDOUT_FILENO, fmt, n);
-    string_push_slice(str, fmt, n);
+    string_push_slice(drawbuffer, fmt, n);
   }
 }
 
@@ -139,8 +139,8 @@ static void focus_pane(struct pane *p) {
     if (p && p->pty && p->fsm.opts.focus_reporting) {
       write(p->pty, focus_in, strlen(focus_in));
     }
-    focused = p;
   }
+  focused = p;
 }
 
 static void focusprev(void) {
@@ -195,7 +195,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
           arrange(ws, lst);
           pane_start(new);
           set_nonblocking(new->pty);
-          focused = new;
+          focus_pane(new);
           string_push(draw_buffer, "\x1b[2J");
         } else {
           logmsg("Too many panes. Spawn request ignored.");
@@ -291,7 +291,7 @@ int main(int argc, char **argv) {
   }
 
   arrange(ws, lst);
-  focused = lst;
+  focus_pane(lst);
 
   struct pollfd *fds = calloc(100, sizeof(struct pollfd));
   fds[0].fd = fileno(stdin);
@@ -399,8 +399,8 @@ int main(int argc, char **argv) {
     }
     string_push(&draw_buffer, "\x1b[0m");
 
-    if (!focused) focused = lst;
-    if (focused) pane_focus(focused, &draw_buffer);
+    if (!focused) focus_pane(lst);
+    if (focused) move_cursor_to_pane(focused, &draw_buffer);
     if (focused && focused->fsm.opts.cursor_hidden == false)
       string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
 
@@ -416,12 +416,12 @@ int main(int argc, char **argv) {
           struct pane *next = p->next;
           p->pid = 0;
           if (p == focused) {
-            focused = p->next;
+            focus_pane(p->next);
           }
           pane_remove(&lst, p);
           pane_destroy(p);
           free(p);
-          if (!focused) focused = lst;
+          if (!focused) focus_pane(lst);
           p = next;
         } else {
           p = p->next;
