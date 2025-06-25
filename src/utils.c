@@ -138,14 +138,12 @@ void enable_raw_mode(void) {
 static void disable_focus_reporting(void) {
   char buf[] = "\x1b[?1004l";
   write(STDOUT_FILENO, buf, sizeof(buf));
-  logmsg("Focus reporting disabled");
 }
 
 static void enable_focus_reporting(void) {
   // dprintf(STDOUT_FILENO, "\x1b[1004h");
   char buf[] = "\x1b[?1004h";
   write(STDOUT_FILENO, buf, sizeof(buf));
-  logmsg("Focus reporting enabled");
 }
 
 void enable_raw_mode_etc(void) {

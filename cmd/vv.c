@@ -133,10 +133,10 @@ static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
 
 static void focus_pane(struct pane *p) {
   if (p != focused) {
-    if (focused && focused->pty && focused->fsm.opts.focus_reporting) {
+    if (focused && focused->pty && focused->fsm.features.focus_reporting) {
       write(focused->pty, focus_out, strlen(focus_out));
     }
-    if (p && p->pty && p->fsm.opts.focus_reporting) {
+    if (p && p->pty && p->fsm.features.focus_reporting) {
       write(p->pty, focus_in, strlen(focus_in));
     }
   }
@@ -244,14 +244,14 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     } break;
     case csi: {
       // TODO: Bracketed paste
-      if (ch >= 'A' && ch <= 'D' && focused->fsm.opts.application_mode) {
+      if (ch >= 'A' && ch <= 'D' && focused->fsm.features.application_mode) {
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, 'O');
         string_push_char(&writebuffer, ch);
       } else if (ch == 'O' || ch == 'I') {
         // Focus event. Forward it if the focused pane has the feature enabled
         bool did_focus = ch == 'I';
-        if (focused->fsm.opts.focus_reporting) {
+        if (focused->fsm.features.focus_reporting) {
           char *s = did_focus ? focus_in : focus_out;
           string_push_slice(&writebuffer, s, strlen(s));
         }
@@ -334,9 +334,7 @@ int main(int argc, char **argv) {
             char clear[] = "\x1b[2J";
             string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
             break;
-          default:
-            running = false;
-            break;
+          default: running = false; break;
           }
         }
       } else {
@@ -390,6 +388,9 @@ int main(int argc, char **argv) {
 
     string_push(&draw_buffer, "\x1b[0m");
     for (struct pane *p = lst; p; p = p->next) {
+      /* TODO: Move styling logic into draw function
+       * Then apply style changes using the appropriate apply_style function
+       */
       if (p == focused) {
         string_push(&draw_buffer, "\x1b[31m");
         string_push(&draw_buffer, "\x1b[1m");
@@ -403,7 +404,7 @@ int main(int argc, char **argv) {
 
     if (!focused) focus_pane(lst);
     if (focused) move_cursor_to_pane(focused, &draw_buffer);
-    if (focused && focused->fsm.opts.cursor_hidden == false)
+    if (focused && focused->fsm.features.cursor_hidden == false)
       string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
 
     if (draw_buffer.len != initial_bytes) {

@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#define LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+
 void logmsg(char *fmt, ...);
 void flogmsg(FILE *f, char *fmt, ...);
 _Noreturn void die(char *fmt, ...);

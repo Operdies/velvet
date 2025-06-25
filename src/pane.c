@@ -65,9 +65,61 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
   return nullptr;
 }
 
-void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
-  static uint8_t fg, bg;
+/* Write the specified style attributes to the outbuffer, but only if they are different from what is currently stored.
+ * Note that the use of statics means that this function is not thread safe or re-entrant. It should only be used for
+ * streaming content to the screen. */
+static inline void apply_style(uint32_t new_attr, struct color new_fg, struct color new_bg, struct string *outbuffer) {
+  static struct color fg = color_default;
+  static struct color bg = color_default;
+
   static uint32_t attr;
+  (void)fg, (void)bg, (void)attr, (void)new_attr, (void)new_fg, (void)new_bg, (void)outbuffer;
+
+  // 1. Handle attributes
+  if (attr != new_attr) {
+    if (new_attr == 0) {
+      // Unfortunately this also resets colors, so we need to set those again
+      fg = bg = color_default;
+      string_push(outbuffer, "\x1b[0m");
+    } else {
+      uint32_t features[] = {
+          [0] = ATTR_NONE,
+          [1] = ATTR_BOLD,
+          [2] = ATTR_FAINT,
+          [3] = ATTR_ITALIC,
+          [4] = ATTR_UNDERLINE,
+          [5] = ATTR_BLINK_SLOW,
+          [6] = ATTR_BLINK_RAPID,
+          [7] = ATTR_REVERSE,
+          [8] = ATTR_CONCEAL,
+          [9] = ATTR_CROSSED_OUT,
+      };
+      for (size_t i = 1; i < LENGTH(features); i++) {
+        uint32_t is_on = features[i] & attr;
+        uint32_t should_be_on = features[i] & new_attr;
+        if (is_on && !should_be_on) {
+          if (i == 1) {
+            // annoying special case for bold
+            char *disable = "\x1b[22m";
+            string_push(outbuffer, disable);
+          } else {
+            char disable[] = {0x1b, '[', '2', '0' + i, 'm', 0};
+            string_push(outbuffer, disable);
+          }
+        } else if (!is_on && should_be_on) {
+          char enable[] = {0x1b, '[', '0' + i, 'm', 0};
+          string_push(outbuffer, enable);
+        }
+      }
+    }
+  }
+
+  attr = new_attr;
+  fg = new_fg;
+  bg = new_bg;
+}
+
+void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 
   {
     // Ensure the grid content is in sync with the pane just-in-time
@@ -89,23 +141,15 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 
     for (int col = 0; col < line_length; col++) {
       struct grid_cell *c = &grid_row->cells[col];
-      if (c->fg != fg) {
-        // TODO: apply fg
-        fg = c->fg;
-      }
-      if (c->bg != bg) {
-        // TODO: apply bg
-        bg = c->bg;
-      }
-      if (c->attr != attr) {
-        // TODO: apply attributes
-        attr = c->attr;
-      }
+      apply_style(c->attr, c->fg, c->bg, outbuffer);
       string_push_slice(outbuffer, (char *)c->symbol.utf8, c->symbol.len);
     }
 
     int num_blanks = g->w - line_length;
-    if (num_blanks > 0) string_memset(outbuffer, ' ', num_blanks);
+    if (num_blanks > 0) {
+      apply_style(0, color_default, color_default, outbuffer);
+      string_memset(outbuffer, ' ', num_blanks);
+    }
   }
 }
 
@@ -212,7 +256,7 @@ void pane_start(struct pane *pane) {
   if (pid < 0) die("forkpty:");
 
   if (pid == 0) {
-    char *argv[] = { "sh", "-c", pane->process, NULL };
+    char *argv[] = {"sh", "-c", pane->process, NULL};
     execvp("sh", argv);
     die("execlp:");
   }

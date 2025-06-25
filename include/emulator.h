@@ -50,13 +50,21 @@ enum cell_attributes {
                        ATTR_UNDERLINE_DASHED,
 
   ATTR_BLINK_ANY = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
-
-  ATTR_ALL = 0x0007FFFF, // Update if you add more flags
-
 };
 
-void utf8_push(struct utf8 *u, uint8_t byte);
-bool utf8_valid(struct utf8 *u);
+struct color {
+  union {
+    uint32_t rgb;
+    struct {
+      uint8_t r, g, b, basic;
+    };
+  };
+};
+
+/* Technically the 'default' color is ]39m / ]49m for fg/bg, but zero
+ initialization simplifies things. The renderer should get the color by doing (9 + .basic) % 9
+ */
+static const struct color color_default = {.basic = 0};
 
 struct grid_cell {
   // TODO: utf8 (multi-byte characters)
@@ -65,7 +73,7 @@ struct grid_cell {
   // TODO: variable width cells (e.g. double width emojis)
   struct utf8 symbol;
   enum cell_attributes attr;
-  uint8_t fg, bg;
+  struct color fg, bg;
 
   // If enabled, the renderer should switch rendering mode when rendering this
   // cell
@@ -103,10 +111,8 @@ struct grid {
   /* scroll region is local to the grid and is not persisted when the window /
    * pane is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
-  struct grid_cell *cells;    // cells[w*h]
-  struct grid_row *rows; // lines[h]
-  // The cursor can be considered as an exact pointer into the grid, ignoring
-  // all offsets.
+  struct grid_cell *cells; // cells[w*h]
+  struct grid_row *rows;   // rows[h]
   struct raw_cursor cursor;
   struct raw_cursor saved_cursor;
 };
@@ -150,14 +156,14 @@ struct charset_options {
   bool g1_active;
 };
 
-struct pane_options {
+struct features {
   /* if enabled, we should translate mouse events and forward them to the
    * appropriate pane */
   bool mouse_reporting;
   /* if wrapping, we should return the cursor to the beginning of the line when
    * inserting a character which would cause an overflow. Otherwise, the cursor
    * should stay at the last column. */
-  bool nowrap;
+  bool wrapping_disabled;
   bool auto_return;
   bool alternate_screen;
   /* if enabled, pasted content should be wrapped with ESC[200~ and ESC[201~ */
@@ -186,8 +192,8 @@ struct fsm {
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
    * Used whenever a new character is emitted */
   struct grid_cell cell;
-  struct escape_sequence seq;
-  struct pane_options opts;
+  struct escape_sequence escape_buffer;
+  struct features features;
   struct grid primary;
   struct grid alternate;
   /* pointer to either primary or alternate */
