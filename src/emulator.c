@@ -752,10 +752,14 @@ static void csi_set_modifiers(struct fsm *fsm, int n, int params[n]) {
 
 static void apply_csi_format(struct grid_cell *c, int n, int params[n]) {
   if (n == 0 || params[0] == 0) {
+    // If the first parameter is 0, we should clear all attributes
     c->attr = 0;
-    c->bg = c->fg = (struct color){0};
-    return;
+    c->bg = c->fg = color_default;
+    n--;
+    params++;
   }
+
+  if (n <= 0) return;
 
   int attribute = params[0];
   if (attribute <= 9) {
