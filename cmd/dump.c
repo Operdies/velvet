@@ -19,7 +19,7 @@ static void disassemble(FILE *f) {
   int buf_idx = 0;
   char ch;
   unsigned char uch;
-  enum state { normal, escape, csi, osc, dcs, pnd };
+  enum state { normal, escape, csi, osc, dcs, pnd, charset };
   enum state s = normal;
   while ((ch = fgetc(f)) != EOF) {
     uch = (unsigned char)ch;
@@ -70,14 +70,21 @@ static void disassemble(FILE *f) {
       case 'P': {
         s = dcs;
       } break;
+      case '(': {
+        s = charset;
+      } break;
       default: {
         if (isgraph(ch))
-          flogmsg(stdout, "CSI %c", ch);
+          flogmsg(stdout, "ESC %c", ch);
         else
-          flogmsg(stdout, "CSI 0x%x", uch);
+          flogmsg(stdout, "ESC 0x%x", uch);
         s = normal;
       } break;
       }
+    } break;
+    case charset: {
+      logmsg("CHARSET %c", ch);
+      s = normal;
     } break;
     case dcs: {
       if (ch == '\\' && buf[buf_idx - 1] == 0x1b) {
