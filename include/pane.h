@@ -14,7 +14,7 @@ struct pane {
   int pty, pid;
   int logfile;
   int border_width;
-  bool border_dirty;
+  bool border_dirty, has_focus;
   struct {
     struct bounds window;
     struct bounds client;

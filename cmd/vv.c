@@ -72,7 +72,7 @@ static struct pane *lst = NULL;
 
 static void arrange(struct winsize ws, struct pane *p) {
   if (!p) return;
-  int mh, sh, mx, mw, my, sy, sw, nm, ns, i, n;
+  int mh, mx, mw, my, sy, sw, nm, ns, i, n;
   for (struct pane *c = p; c; c = c->next) c->border_width = 1;
 
   n = pane_count(p);
@@ -82,7 +82,6 @@ static void arrange(struct winsize ws, struct pane *p) {
   ns = n > nmaster ? n - nmaster : 0;
 
   mh = (int)((float)ws.ws_row / (float)nm);
-  sh = (int)((float)ws.ws_row / (float)ns);
 
   if (nmaster <= 0) {
     mw = 0;
@@ -134,6 +133,7 @@ static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
 static void pane_notify_focus(struct pane *p, bool focused) {
   if (p) {
     p->border_dirty = true;
+    p->has_focus = focused;
     if (p->pty && p->fsm.features.focus_reporting) {
       if (focused) {
         write(p->pty, focus_in, strlen(focus_in));
@@ -261,7 +261,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         // Focus event. Forward it if the focused pane has the feature enabled
         bool did_focus = ch == 'I';
         if (focused->fsm.features.focus_reporting) {
-          char *s = did_focus ? focus_in : focus_out;
+          const char *s = did_focus ? focus_in : focus_out;
           string_push_slice(&writebuffer, s, strlen(s));
         }
         // If the pane does not have the feature enabled, ignore it.
