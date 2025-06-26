@@ -825,9 +825,11 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
         *target = (struct color){.table = attribute % 10, .cmd = COLOR_TABLE};
       }
     } else if (attribute >= 90 && attribute <= 97) {
-      c->fg = (struct color){.table = (attribute - 90) + 8, .cmd = COLOR_TABLE};
+      int bright = 8 + attribute - 90;
+      c->fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
     } else if (attribute >= 100 && attribute <= 107) {
-      c->bg = (struct color){.table = (attribute - 100) + 8, .cmd = COLOR_TABLE};
+      int bright = 8 + attribute - 100;
+      c->bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
     }
   }
   return NULL;

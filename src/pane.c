@@ -66,28 +66,28 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
 }
 
 static void apply_color(struct color *col, bool fg, struct string *outbuffer) {
+  char buf[50];
   char index = fg ? '3' : '4';
+  char *brightindex = fg ? "9" : "10";
   if (col->cmd == COLOR_RESET) {
     char cmd[] = {'\x1b', '[', index, '9', 'm', 0};
     string_push(outbuffer, cmd);
   } else if (col->cmd == COLOR_TABLE) {
-    if (col->table < 10) {
+    if (col->table <= 7) {
       char cmd[] = {'\x1b', '[', index, '0' + col->table, 'm', 0};
       string_push(outbuffer, cmd);
     } else if (col->table <= 15) {
-      char cmd[] = {'\x1b', '[', index, '8', ';', '5', ';', '1', '0' + col->table % 10, 'm', 0};
-      string_push(outbuffer, cmd);
+      // char cmd[] = {'\x1b', '[', index, '8', ';', '5', ';', '1', '0' + col->table % 10, 'm', 0};
+      int n = snprintf(buf, 50, "\x1b[%s%dm", brightindex, col->table - 8);
+      logmsg("Bright color: %.*s", n - 1, buf + 1);
+      string_push_slice(outbuffer, buf, n);
     } else {
-      char buf[30];
-      int n = snprintf(buf, 30, "\x1b[%c8;5;%dm", index, col->table);
+      int n = snprintf(buf, 50, "\x1b[%c8;5;%dm", index, col->table);
       string_push_slice(outbuffer, buf, n);
     }
   } else if (col->cmd == COLOR_RGB) {
-    char buf[50];
     int n = snprintf(buf, 50, "\x1b[%c8;2;%d;%d;%dm", index, col->r, col->g, col->b);
-    logmsg("Set rgb: %s", buf + 1);
     string_push_slice(outbuffer, buf, n);
-    // logmsg("TODO: RGB #%2x%2x%2x", col->r, col->g, col->b);
   }
 }
 

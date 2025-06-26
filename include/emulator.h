@@ -59,7 +59,12 @@ enum color_command {
 };
 struct color {
   enum color_command cmd;
-  uint8_t r, g, b, table;
+  union {
+    struct {
+      uint8_t r, g, b;
+    };
+    uint8_t table;
+  };
 };
 
 static const struct color color_default = {.cmd = COLOR_RESET};
