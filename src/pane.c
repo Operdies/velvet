@@ -68,29 +68,37 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
   return nullptr;
 }
 
-static void apply_color(struct color *col, bool fg, struct string *outbuffer) {
-  char buf[50];
-  char index = fg ? '3' : '4';
-  char *brightindex = fg ? "9" : "10";
+struct sgr_buffer {
+  int params[100];
+  int n;
+};
+
+static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
+  // TODO: Is this possible?
+  assert(b->n < 100);
+  b->params[b->n] = n;
+  b->n++;
+}
+
+static void apply_color(const struct color *const col, bool fg, struct sgr_buffer *sgr) {
   if (col->cmd == COLOR_RESET) {
-    char cmd[] = {'\x1b', '[', index, '9', 'm', 0};
-    string_push(outbuffer, cmd);
+    sgr_buffer_push(sgr, fg ? 39 : 49);
   } else if (col->cmd == COLOR_TABLE) {
     if (col->table <= 7) {
-      char cmd[] = {'\x1b', '[', index, '0' + col->table, 'm', 0};
-      string_push(outbuffer, cmd);
+      sgr_buffer_push(sgr, (fg ? 30 : 40) + col->table);
     } else if (col->table <= 15) {
-      // char cmd[] = {'\x1b', '[', index, '8', ';', '5', ';', '1', '0' + col->table % 10, 'm', 0};
-      int n = snprintf(buf, 50, "\x1b[%s%dm", brightindex, col->table - 8);
-      logmsg("Bright color: %.*s", n - 1, buf + 1);
-      string_push_slice(outbuffer, buf, n);
+      sgr_buffer_push(sgr, (fg ? 90 : 100) + col->table - 8);
     } else {
-      int n = snprintf(buf, 50, "\x1b[%c8;5;%dm", index, col->table);
-      string_push_slice(outbuffer, buf, n);
+      sgr_buffer_push(sgr, fg ? 38 : 48);
+      sgr_buffer_push(sgr, 5);
+      sgr_buffer_push(sgr, col->table);
     }
   } else if (col->cmd == COLOR_RGB) {
-    int n = snprintf(buf, 50, "\x1b[%c8;2;%d;%d;%dm", index, col->r, col->g, col->b);
-    string_push_slice(outbuffer, buf, n);
+    sgr_buffer_push(sgr, fg ? 38 : 48);
+    sgr_buffer_push(sgr, 2);
+    sgr_buffer_push(sgr, col->r);
+    sgr_buffer_push(sgr, col->g);
+    sgr_buffer_push(sgr, col->b);
   }
 }
 
@@ -100,14 +108,17 @@ static void apply_color(struct color *col, bool fg, struct string *outbuffer) {
 static inline void apply_style(const struct grid_cell_style *const style, struct string *outbuffer) {
   static struct color fg = color_default;
   static struct color bg = color_default;
+  struct sgr_buffer sgr = {.n = 0};
 
   static uint32_t attr;
   // 1. Handle attributes
   if (attr != style->attr) {
     if (style->attr == 0) {
       // Unfortunately this also resets colors, so we need to set those again
+      // Technically we could track what styles are active here and disable those specifically,
+      // but it is much simpler to just eat the color reset.
       fg = bg = color_default;
-      string_push(outbuffer, "\x1b[0m");
+      sgr_buffer_push(&sgr, 0);
     } else {
       uint32_t features[] = {
           [0] = ATTR_NONE,
@@ -127,30 +138,36 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
         if (is_on && !should_be_on) {
           if (i == 1) {
             // annoying special case for bold
-            char *disable = "\x1b[22m";
-            string_push(outbuffer, disable);
+            sgr_buffer_push(&sgr, 22);
           } else {
-            char disable[] = {0x1b, '[', '2', '0' + i, 'm', 0};
-            string_push(outbuffer, disable);
+            sgr_buffer_push(&sgr, 20 + i);
           }
         } else if (!is_on && should_be_on) {
-          char enable[] = {0x1b, '[', '0' + i, 'm', 0};
-          string_push(outbuffer, enable);
+          sgr_buffer_push(&sgr, i);
         }
       }
     }
   }
 
   if (memcmp(&fg, &style->fg, sizeof(fg)) != 0) {
-    apply_color(&style->fg, true, outbuffer);
+    apply_color(&style->fg, true, &sgr);
   }
   if (memcmp(&bg, &style->bg, sizeof(bg)) != 0) {
-    apply_color(&style->bg, false, outbuffer);
+    apply_color(&style->bg, false, &sgr);
   }
 
   attr = style->attr;
   fg = style->fg;
   bg = style->bg;
+
+  if (sgr.n) {
+    string_push(outbuffer, "\x1b[");
+    for (int i = 0; i < sgr.n; i++) {
+      string_push_int(outbuffer, sgr.params[i]);
+      string_push_char(outbuffer, ';');
+    }
+    outbuffer->content[outbuffer->len - 1] = 'm';
+  }
 }
 
 void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
@@ -246,8 +263,12 @@ void pane_draw_border(struct pane *p, struct string *b) {
 static void on_report_mouse_position(void *context, int row, int col) {
   struct pane *p = context;
   if (p->pty) {
-    char buf[30];
-    int n = snprintf(buf, sizeof(buf), "\x1b[%d;%dR", row, col);
+    char buf[30] = "\x1b[";
+    int n = 2;
+    n = write_int(buf + n, row);
+    buf[++n] = ';';
+    n += write_int(buf + n, col);
+    buf[++n] = 'R';
     write(p->pty, buf, n);
   }
 }

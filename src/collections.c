@@ -22,6 +22,21 @@ static void ensure_capacity(struct string *str, size_t required) {
   }
 }
 
+void string_push_int(struct string *str, int n) {
+  const int max = 11;
+  char buf[max];
+  int idx = max;
+  bool sign = n < 0;
+
+  do {
+    buf[--idx] = '0' + n % 10;
+    n /= 10;
+  } while (n);
+
+  if (sign) buf[--idx] = '-';
+  string_push_slice(str, buf + idx, max - idx);
+}
+
 void string_push_slice(struct string *str, const char *const src, size_t len) {
   size_t required = str->len + len;
   ensure_capacity(str, required);
