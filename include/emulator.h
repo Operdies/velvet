@@ -69,14 +69,20 @@ struct color {
 
 static const struct color color_default = {.cmd = COLOR_RESET};
 
+struct grid_cell_style {
+  enum cell_attributes attr;
+  struct color fg, bg;
+};
+
+static const struct grid_cell_style style_default = { 0 };
+
 struct grid_cell {
   // TODO: utf8 (multi-byte characters)
   // Right now, utf8 will probably render correctly, but not if utf8 characters
   // are split across a line barrier
   // TODO: variable width cells (e.g. double width emojis)
   struct utf8 symbol;
-  enum cell_attributes attr;
-  struct color fg, bg;
+  struct grid_cell_style style;
 
   // If enabled, the renderer should switch rendering mode when rendering this
   // cell
@@ -99,8 +105,7 @@ struct grid_row {
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
 static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
-static const struct grid_cell empty_cell = {
-    .symbol = utf8_blank, .fg = color_default, .bg = color_default};
+static const struct grid_cell empty_cell = {.symbol = utf8_blank};
 
 // 0-indexed grid coordinates. This cursor points at a raw cell
 struct raw_cursor {

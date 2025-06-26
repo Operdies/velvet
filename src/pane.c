@@ -15,32 +15,35 @@
 #include "emulator.h"
 #include "utils.h"
 
-// forkpty from 'util.h' on mac, pty.h on linux
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 
 // sprintf is extremely slow because it needs to deal with format strings. We can do better
+// when we know we just want to write a small positive integer
+static inline int write_int(char *dst, int n) {
+  assert(n >= 0);
+  const int max = 11;
+  char buf[max];
+  int idx = max;
+
+  do {
+    buf[--idx] = '0' + n % 10;
+    n /= 10;
+  } while (n);
+
+  for (int i = idx; i < max; i++, dst++) *dst = buf[i];
+  return max - idx;
+#undef INT_MAX_CHAR
+}
+
 static const char *move(int row, int col) {
   static char buf[20] = "\x1b[";
-  int i_buf = 1;
-  char numbuf[12];
-  int i_numbuf = 11;
-  numbuf[i_numbuf] = 0;
-  while (row) {
-    i_numbuf--;
-    numbuf[i_numbuf] = '0' + row % 10;
-    row /= 10;
-  }
-  for (; numbuf[i_numbuf]; buf[++i_buf] = numbuf[i_numbuf++]);
-  buf[++i_buf] = ';';
-  while (col) {
-    i_numbuf--;
-    numbuf[i_numbuf] = '0' + col % 10;
-    col /= 10;
-  }
-  for (; numbuf[i_numbuf]; buf[++i_buf] = numbuf[i_numbuf++]);
-  buf[++i_buf] = 'H';
-  buf[++i_buf] = 0;
-
+  int i_buf = 2;
+  i_buf += write_int(buf + i_buf, row);
+  buf[i_buf++] = ';';
+  i_buf += write_int(buf + i_buf, col);
+  buf[i_buf++] = 'H';
+  buf[i_buf++] = 0;
+  logmsg("Move: %s", buf + 1);
   return buf;
 }
 
@@ -94,16 +97,14 @@ static void apply_color(struct color *col, bool fg, struct string *outbuffer) {
 /* Write the specified style attributes to the outbuffer, but only if they are different from what is currently stored.
  * Note that the use of statics means that this function is not thread safe or re-entrant. It should only be used for
  * streaming content to the screen. */
-static inline void apply_style(uint32_t new_attr, struct color new_fg, struct color new_bg, struct string *outbuffer) {
+static inline void apply_style(const struct grid_cell_style *const style, struct string *outbuffer) {
   static struct color fg = color_default;
   static struct color bg = color_default;
 
   static uint32_t attr;
-  (void)fg, (void)bg, (void)attr, (void)new_attr, (void)new_fg, (void)new_bg, (void)outbuffer;
-
   // 1. Handle attributes
-  if (attr != new_attr) {
-    if (new_attr == 0) {
+  if (attr != style->attr) {
+    if (style->attr == 0) {
       // Unfortunately this also resets colors, so we need to set those again
       fg = bg = color_default;
       string_push(outbuffer, "\x1b[0m");
@@ -122,7 +123,7 @@ static inline void apply_style(uint32_t new_attr, struct color new_fg, struct co
       };
       for (size_t i = 1; i < LENGTH(features); i++) {
         uint32_t is_on = features[i] & attr;
-        uint32_t should_be_on = features[i] & new_attr;
+        uint32_t should_be_on = features[i] & style->attr;
         if (is_on && !should_be_on) {
           if (i == 1) {
             // annoying special case for bold
@@ -140,16 +141,16 @@ static inline void apply_style(uint32_t new_attr, struct color new_fg, struct co
     }
   }
 
-  if (memcmp(&fg, &new_fg, sizeof(fg)) != 0) {
-    apply_color(&new_fg, true, outbuffer);
+  if (memcmp(&fg, &style->fg, sizeof(fg)) != 0) {
+    apply_color(&style->fg, true, outbuffer);
   }
-  if (memcmp(&bg, &new_bg, sizeof(bg)) != 0) {
-    apply_color(&new_bg, false, outbuffer);
+  if (memcmp(&bg, &style->bg, sizeof(bg)) != 0) {
+    apply_color(&style->bg, false, outbuffer);
   }
 
-  attr = new_attr;
-  fg = new_fg;
-  bg = new_bg;
+  attr = style->attr;
+  fg = style->fg;
+  bg = style->bg;
 }
 
 void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
@@ -174,13 +175,13 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 
     for (int col = 0; col < line_length; col++) {
       struct grid_cell *c = &grid_row->cells[col];
-      apply_style(c->attr, c->fg, c->bg, outbuffer);
+      apply_style(&c->style, outbuffer);
       string_push_slice(outbuffer, (char *)c->symbol.utf8, c->symbol.len);
     }
 
     int num_blanks = g->w - line_length;
     if (num_blanks > 0) {
-      apply_style(0, color_default, color_default, outbuffer);
+      apply_style(&style_default, outbuffer);
       string_memset(outbuffer, ' ', num_blanks);
     }
   }

@@ -757,8 +757,8 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
   int consumed = 0;
   // Special case when the 0 is omitted
   if (n == 0) {
-    c->attr = 0;
-    c->bg = c->fg = color_default;
+    c->style.attr = 0;
+    c->style.bg = c->style.fg = color_default;
     return NULL;
   }
 
@@ -766,8 +766,8 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
     int attribute = params[consumed++];
 
     if (attribute == 0) {
-      c->attr = 0;
-      c->bg = c->fg = color_default;
+      c->style.attr = 0;
+      c->style.bg = c->style.fg = color_default;
     } else if (attribute <= 9) {
       uint32_t enable[] = {
           0,
@@ -781,9 +781,9 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
           ATTR_CONCEAL,
           ATTR_CROSSED_OUT,
       };
-      c->attr |= enable[attribute];
+      c->style.attr |= enable[attribute];
     } else if (attribute == 21) {
-      c->attr |= ATTR_UNDERLINE_DOUBLE;
+      c->style.attr |= ATTR_UNDERLINE_DOUBLE;
     } else if (attribute >= 22 && attribute <= 28) {
       uint32_t disable[] = {
           [2] = (ATTR_BOLD | ATTR_FAINT),
@@ -795,9 +795,9 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
           [8] = ATTR_CONCEAL,
           [9] = ATTR_CROSSED_OUT,
       };
-      c->attr &= ~disable[attribute % 10];
+      c->style.attr &= ~disable[attribute % 10];
     } else if (attribute >= 30 && attribute <= 49) {
-      struct color *target = attribute >= 40 ? &c->bg : &c->fg;
+      struct color *target = attribute >= 40 ? &c->style.bg : &c->style.fg;
       int color = attribute % 10;
       if (color == 8) {
         if (consumed >= n) {
@@ -826,10 +826,10 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
       }
     } else if (attribute >= 90 && attribute <= 97) {
       int bright = 8 + attribute - 90;
-      c->fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+      c->style.fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
     } else if (attribute >= 100 && attribute <= 107) {
       int bright = 8 + attribute - 100;
-      c->bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+      c->style.bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
     }
   }
   return NULL;
