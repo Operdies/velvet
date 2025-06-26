@@ -28,8 +28,6 @@
 #define SI 0x0F
 #define SO 0x0E
 
-#define debugthis logmsg("Function: %s, File: %s, Line: %d\n", __func__, __FILE__, __LINE__)
-
 #define grid_start(g) (0)
 #define grid_end(g) (g->w - 1)
 #define grid_top(g) (0)
@@ -40,6 +38,8 @@
 #define grid_virtual_top(g) (g->offset)
 #define grid_virtual_bottom(g) ((g->h + g->offset - 1) % g->h)
 
+#define SMART_REDRAW
+
 static inline void utf8_push(struct utf8 *u, uint8_t byte);
 static void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
 static void grid_destroy(struct grid *grid);
@@ -47,7 +47,6 @@ static void grid_move_cursor_x(struct grid *g, int x);
 static void grid_move_cursor_y(struct grid *g, int y);
 static void grid_move_cursor(struct grid *g, int x, int y);
 static void grid_set_visual_cursor(struct grid *g, int x, int y);
-static inline struct grid_cell *grid_current_cell(struct grid *g);
 static void grid_newline(struct grid *g, bool carriage);
 static void grid_advance_cursor_y_reverse(struct grid *g);
 static void grid_advance_cursor_y(struct grid *g);
@@ -381,6 +380,29 @@ static void grid_advance_cursor_y(struct grid *g) {
   assert(c->y < g->h);
 }
 
+bool color_equals(const struct color *const restrict a, const struct color *const restrict b) {
+  if (a->cmd != b->cmd) return false;
+  switch (a->cmd) {
+  case COLOR_RESET: return true;
+  case COLOR_RGB: return a->color == b->color;
+  case COLOR_TABLE: return a->table == b->table;
+  }
+  return false;
+}
+
+bool cell_style_equals(const struct grid_cell_style *const restrict a, const struct grid_cell_style *const restrict b) {
+  return a->attr == b->attr && color_equals(&a->fg, &b->fg) && color_equals(&a->bg, &b->bg);
+}
+
+bool symbol_equals(const struct utf8 *const restrict a, const struct utf8 *const restrict b) {
+  return a->len == b->len && memcmp(a->utf8, b->utf8, a->len) == 0;
+}
+
+bool cell_equals(const struct grid_cell *const restrict a, const struct grid_cell *const restrict b) {
+  return a->charset_dec_special == b->charset_dec_special && symbol_equals(&a->symbol, &b->symbol) &&
+         cell_style_equals(&a->style, &b->style);
+}
+
 static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
   /* Implementation notes:
    * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
@@ -407,7 +429,20 @@ static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
     }
   }
 
+#ifdef SMART_REDRAW
+  if (!row->dirty) {
+    // Avoid dirtying this row if the cell content didn't actually change
+    if (!cell_equals(&c, &row->cells[cur->x])) {
+      row->cells[cur->x] = c;
+      row->dirty = true;
+    }
+  } else {
+    row->cells[cur->x] = c;
+  }
+#else
   row->cells[cur->x] = c;
+  row->dirty = true;
+#endif
   cur->x++;
   row->n_significant = MAX(row->n_significant, cur->x);
 
@@ -415,7 +450,6 @@ static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
     row->end_of_line = true;
     cur->x = grid_end(g);
   }
-  row->dirty = true;
 }
 
 static void ground_esc(struct fsm *fsm, uint8_t ch) {
@@ -489,7 +523,6 @@ static void ground_accept(struct fsm *fsm) {
   fsm->cell.symbol = clear;
 }
 static void ground_reject(struct fsm *fsm) {
-  debugthis;
   struct utf8 clear = {0};
   struct utf8 copy = fsm->cell.symbol;
   fsm->cell.symbol = clear;
@@ -687,14 +720,6 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
     }
     }
   }
-}
-
-struct grid_cell *grid_current_cell(struct grid *g) {
-  int idx = g->cursor.y * g->w + g->cursor.x;
-  assert(idx >= 0 && idx < g->w * g->h);
-  struct grid_cell *c = &g->cells[idx];
-  assert(c);
-  return c;
 }
 
 void grid_destroy(struct grid *grid) {

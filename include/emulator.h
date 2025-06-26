@@ -60,6 +60,7 @@ enum color_command {
 struct color {
   enum color_command cmd;
   union {
+    uint32_t color;
     struct {
       uint8_t r, g, b;
     };
@@ -217,5 +218,9 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n);
 void fsm_destroy(struct fsm *fsm);
 void grid_invalidate(struct grid *g);
 void fsm_grid_resize(struct fsm *fsm);
+bool cell_equals(const struct grid_cell *const restrict a, const struct grid_cell *const restrict b);
+bool symbol_equals(const struct utf8 *const restrict a, const struct utf8 *const restrict b);
+bool cell_style_equals(const struct grid_cell_style *const restrict a, const struct grid_cell_style *const restrict b);
+bool color_equals(const struct color *const restrict a, const struct color *const restrict b);
 
 #endif /*  EMULATOR_H */

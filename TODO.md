@@ -7,6 +7,9 @@ Tasks that need doing in no particular order of priority:
 * CSI: Configurable scroll region (needed for vim)
 * Bracketed paste
 * Floating panes
+
+Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled panes and then naively fully redraw floating panes on every frame
+
 * Mouse support
 * Change all char to typedef utf8_t (unsigned char) to avoid confusing ascii and utf8 strings
 * Command buffer so stdin/out requests can be processed outside of the state

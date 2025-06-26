@@ -151,10 +151,10 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
     }
   }
 
-  if (memcmp(&fg, &style->fg, sizeof(fg)) != 0) {
+  if (!color_equals(&fg, &style->fg)) {
     apply_color(&style->fg, true, &sgr);
   }
-  if (memcmp(&bg, &style->bg, sizeof(bg)) != 0) {
+  if (!color_equals(&bg, &style->bg)) {
     apply_color(&style->bg, false, &sgr);
   }
 
