@@ -16,6 +16,8 @@
 #include "utils.h"
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
+struct pane *clients = NULL;
+struct pane *focused = NULL;
 
 // sprintf is extremely slow because it needs to deal with format strings. We can do better
 // when we know we just want to write a small positive integer
@@ -204,6 +206,9 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   }
 }
 
+// TODO: This sucks
+// Alternative implementation: Walk pane list and termine where all the borders are 
+// Then draw the borders, and style the borders touching the focused pane
 void pane_draw_border(struct pane *p, struct string *b) {
   if (p->border_width == 0 || !p->border_dirty) return;
   static const struct grid_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
@@ -211,25 +216,52 @@ void pane_draw_border(struct pane *p, struct string *b) {
   p->border_dirty = false;
   bool topmost = p->rect.window.y == 0;
   bool leftmost = p->rect.window.x == 0;
+  bool has_right_neighbor = p->rect.window.x + p->rect.window.w < ws_current.ws_col;
 
-  char *corner = NULL;
-  char *rightcorner = "─";
+  char *topleft_corner = NULL;
+  char *topright_corner = "─";
   if (topmost && leftmost) {
-    corner = "╭";
+    // corner = "╭";
+    topleft_corner = "─";
+    if (p->rect.window.w < ws_current.ws_col)
+      topright_corner = "┬";
   } else if (topmost) {
-    corner = "┬";
+    topleft_corner = "┬";
   } else if (leftmost) {
-    corner = "├";
+    topleft_corner = "─";
+    topright_corner = "┤";
   } else {
-    corner = "├";
+    topleft_corner = "├";
+  }
+  if (!leftmost && !topmost) {
+    topleft_corner = "│";
+  }
+
+  if (!topmost)
+  {
+    bool before = true;
+    for (struct pane *c = clients; c; c = c->next) {
+      if (c == p) {
+        before = false;
+        continue;
+      }
+      if (c->rect.window.y == p->rect.window.y) {
+        if (before) {
+          topleft_corner = "┼";
+        } else {
+          topright_corner = "┼";
+        }
+        break;
+      }
+    }
   }
 
   // char *bottomleftcorner = "\n\b├";
   char *bottomleftcorner = "\n\b│";
   char *pipe = "\n\b│";
   char *dash = "─";
-  char *beforetitle = "┤";
-  char *aftertitle = "├";
+  char *beforetitle = " ";//"┤";
+  char *aftertitle = " ";//"├";
   int left = p->rect.window.x + 1;
   int top = p->rect.window.y + 1;
   int bottom = p->rect.window.h + top;
@@ -239,24 +271,33 @@ void pane_draw_border(struct pane *p, struct string *b) {
 
   // top left corner
   string_push(b, move(top, left));
-  string_push(b, corner);
+  string_push(b, topleft_corner);
   // top line
   {
     int i = left + 1;
+    // TODO: Technically process can contain utf8 which could be problematic with strlen
     int n = strlen(p->process);
     i += n + 3;
     string_push(b, dash);
     string_push(b, beforetitle);
     string_push_slice(b, p->process, n);
     string_push(b, aftertitle);
-    for (; i < right - 1; i++) string_push(b, dash);
-    string_push(b, rightcorner);
+    for (; i < right; i++) string_push(b, dash);
+    string_push(b, topright_corner);
   }
-  string_push(b, move(top, left + 1));
-  for (int row = top + 1; row < bottom - 1; row++) {
-    string_push(b, pipe);
+  if (!leftmost) {
+    string_push(b, move(top, left + 1));
+    for (int row = top + 1; row < bottom - 1; row++) {
+      string_push(b, pipe);
+    }
+    string_push(b, bottomleftcorner);
   }
-  string_push(b, bottomleftcorner);
+  if (has_right_neighbor) {
+    string_push(b, move(top, right + 1));
+    for (int row = top + 1; row < bottom; row++) {
+      string_push(b, pipe);
+    }
+  }
   apply_style(&style_default, b);
 }
 
@@ -289,9 +330,11 @@ void pane_resize(struct pane *pane, struct bounds outer) {
   if (outer.w < 2) outer.w = 2;
   if (outer.h < 2) outer.h = 2;
 
-  struct bounds inner = (struct bounds){.x = outer.x + pane->border_width,
+  bool leftmost = outer.x == 0;
+
+  struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : pane->border_width),
                                         .y = outer.y + pane->border_width,
-                                        .w = outer.w - pane->border_width,
+                                        .w = outer.w - (leftmost ? 0 : pane->border_width),
                                         .h = outer.h - pane->border_width};
   if (pane->rect.window.w != outer.w || pane->rect.window.h != outer.h) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h};
@@ -304,6 +347,7 @@ void pane_resize(struct pane *pane, struct bounds outer) {
   if (pane->rect.window.w != outer.w || pane->rect.window.h != outer.h || pane->rect.window.x != outer.x ||
       pane->rect.window.y != outer.y) {
     grid_invalidate(pane->fsm.active_grid);
+    pane->border_dirty = true;
   }
   pane->rect.window = outer;
   pane->rect.client = inner;

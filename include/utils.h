@@ -13,7 +13,8 @@ void *ecalloc(size_t sz, size_t count);
 
 void enable_raw_mode_etc(void);
 void disable_raw_mode_etc(void);
+void set_nonblocking(int fd);
 
-extern struct winsize ws;
+extern struct winsize ws_current;
 
 #endif /*  UTILS_H */

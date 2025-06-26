@@ -5,14 +5,14 @@ Tasks that need doing in no particular order of priority:
 * Support multi-width characters (emojis, characters in other scripts?)
 * Scrollback buffer (unless?)
 * CSI: Configurable scroll region (needed for vim)
-* Color / style CSIs
 * Bracketed paste
 * Floating panes
 * Mouse support
+* Change all char to typedef utf8_t (unsigned char) to avoid confusing ascii and utf8 strings
 * Command buffer so stdin/out requests can be processed outside of the state
 machine 
 
-Some applications request the current mouse position which must be
+Some applications request the current cursor position which must be
 provided on stdin. Other applications request information about terminal
 features which velvet must request from the host emulator before it can
 respond. Handling this inside the state machine complicates testing and adds

@@ -39,13 +39,6 @@ static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   write(sigpipe.write, &sig, sizeof(sig));
 }
 
-static void set_nonblocking(int fd) {
-  int flags = fcntl(fd, F_GETFL);
-  if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    die("fcntl:");
-  }
-}
-
 static void install_signal_handlers(void) {
   struct sigaction sa = {0};
   sa.sa_sigaction = &signal_handler;
@@ -66,9 +59,6 @@ static void install_signal_handlers(void) {
 
 static int nmaster = 1;
 static float factor = 0.5;
-
-static struct pane *focused = NULL;
-static struct pane *lst = NULL;
 
 static void arrange(struct winsize ws, struct pane *p) {
   if (!p) return;
@@ -154,11 +144,11 @@ static void focus_pane(struct pane *p) {
 
 static void focusprev(void) {
   struct pane *c;
-  if (focused == lst) {
-    for (c = lst; c && c->next; c = c->next);
+  if (focused == clients) {
+    for (c = clients; c && c->next; c = c->next);
     focus_pane(c);
   } else {
-    for (c = lst; c && c->next != focused; c = c->next);
+    for (c = clients; c && c->next != focused; c = c->next);
     if (c && c->next == focused) focus_pane(c);
   }
 }
@@ -167,27 +157,27 @@ static void focusnext(void) {
   if (focused && focused->next) {
     focus_pane(focused->next);
   } else {
-    focus_pane(lst);
+    focus_pane(clients);
   }
 }
 
 static void detachstack(struct pane *p) {
-  pane_remove(&lst, p);
+  pane_remove(&clients, p);
 }
 static void attachstack(struct pane *p) {
-  p->next = lst;
-  lst = p;
+  p->next = clients;
+  clients = p;
 }
 
 static void zoom(void) {
-  struct pane *current_main = lst;
+  struct pane *current_main = clients;
   struct pane *new_main = focused;
   if (current_main == new_main) new_main = current_main->next;
   if (!new_main) return;
   detachstack(new_main);
   attachstack(new_main);
   focus_pane(new_main);
-  arrange(ws, lst);
+  arrange(ws_current, clients);
 }
 
 static bool running = true;
@@ -212,12 +202,12 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         s = esc;
       } break;
       case CTRL('N'): {
-        if (pane_count(lst) < 6) {
+        if (pane_count(clients) < 6) {
           struct pane *new = calloc(1, sizeof(*new));
           new->process = strdup("bash");
-          new->next = lst;
-          lst = new;
-          arrange(ws, lst);
+          new->next = clients;
+          clients = new;
+          arrange(ws_current, clients);
           pane_start(new);
           set_nonblocking(new->pty);
           focus_pane(new);
@@ -230,12 +220,12 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         zoom();
       } break;
       case CTRL('A'): {
-        nmaster = MIN(pane_count(lst), nmaster + 1);
-        arrange(ws, lst);
+        nmaster = MIN(pane_count(clients), nmaster + 1);
+        arrange(ws_current, clients);
       } break;
       case CTRL('X'): {
         nmaster = MAX(0, nmaster - 1);
-        arrange(ws, lst);
+        arrange(ws_current, clients);
       } break;
       case CTRL('W'): {
         logmsg("Exit by ^W");
@@ -310,10 +300,10 @@ int main(int argc, char **argv) {
       struct pane *p = calloc(1, sizeof(*p));
       p->process = strdup(argv[i]);
       logmsg("Create %s", p->process);
-      if (!lst) {
+      if (!clients) {
         // first element -- asign head
-        lst = p;
-        prev = lst;
+        clients = p;
+        prev = clients;
       } else {
         // Otherwise append to previous element
         prev->next = p;
@@ -322,8 +312,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  arrange(ws, lst);
-  focus_pane(lst);
+  arrange(ws_current, clients);
+  focus_pane(clients);
 
   struct pollfd *fds = calloc(100, sizeof(struct pollfd));
   fds[0].fd = fileno(stdin);
@@ -332,7 +322,7 @@ int main(int argc, char **argv) {
 
   {
     int i = 0;
-    for (struct pane *p = lst; p; p = p->next) {
+    for (struct pane *p = clients; p; p = p->next) {
       pane_start(p);
       set_nonblocking(p->pty);
       fds[i + 1].fd = p->pty;
@@ -345,7 +335,7 @@ int main(int argc, char **argv) {
   static struct string draw_buffer = {0};
 
   char readbuffer[4096];
-  for (; running && pane_count(lst);) {
+  for (; running && pane_count(clients);) {
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
       if (errno == EAGAIN) continue;
@@ -354,14 +344,14 @@ int main(int argc, char **argv) {
         if (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
           switch (signal) {
           case SIGWINCH:
-            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
+            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
               die("ioctl TIOCGWINSZ:");
             }
-            for (struct pane *p = lst; p; p = p->next) {
+            for (struct pane *p = clients; p; p = p->next) {
               grid_invalidate(p->fsm.active_grid);
               p->border_dirty = true;
             }
-            arrange(ws, lst);
+            arrange(ws_current, clients);
             char clear[] = "\x1b[2J";
             string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
             break;
@@ -393,7 +383,7 @@ int main(int argc, char **argv) {
     for (int i = 1; polled > 0 && i < nfds; i++) {
       if (fds[i].revents & POLL_IN) {
         polled--;
-        struct pane *p = pane_from_pty(lst, fds[i].fd);
+        struct pane *p = pane_from_pty(clients, fds[i].fd);
         if (p) {
           uint8_t buf[1 << 16];
           int n = read(p->pty, buf, sizeof(buf));
@@ -412,15 +402,17 @@ int main(int argc, char **argv) {
     char show_cursor[] = "\x1b[?25h";
     string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     size_t initial_bytes = draw_buffer.len;
-    for (struct pane *p = lst; p; p = p->next) {
+    for (struct pane *p = clients; p; p = p->next) {
       pane_draw(p, false, &draw_buffer);
     }
 
-    for (struct pane *p = lst; p; p = p->next) {
+    for (struct pane *p = clients; p; p = p->next) {
+      if (p == focused) continue;
       pane_draw_border(p, &draw_buffer);
     }
+    pane_draw_border(focused, &draw_buffer);
 
-    if (!focused) focus_pane(lst);
+    if (!focused) focus_pane(clients);
     if (focused) move_cursor_to_pane(focused, &draw_buffer);
     if (focused && focused->fsm.features.cursor_hidden == false)
       string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
@@ -430,7 +422,7 @@ int main(int argc, char **argv) {
     }
 
     {
-      for (struct pane *p = lst; p;) {
+      for (struct pane *p = clients; p;) {
         int status;
         pid_t result = waitpid(p->pid, &status, WNOHANG);
         if (result == p->pid && WIFEXITED(status)) {
@@ -439,10 +431,10 @@ int main(int argc, char **argv) {
           if (p == focused) {
             focusprev();
           }
-          pane_remove(&lst, p);
+          pane_remove(&clients, p);
           pane_destroy(p);
           free(p);
-          if (!focused) focus_pane(lst);
+          if (!focused) focus_pane(clients);
           p = next;
         } else {
           p = p->next;
@@ -452,14 +444,14 @@ int main(int argc, char **argv) {
 
     { // update fd set
       int i = 0;
-      for (struct pane *p = lst; p; p = p->next) {
+      for (struct pane *p = clients; p; p = p->next) {
         fds[i + 1].fd = p->pty;
         fds[i + 1].events = POLL_IN;
         i++;
       }
       nfds = 1 + i;
     }
-    arrange(ws, lst);
+    arrange(ws_current, clients);
   }
 
   string_destroy(&draw_buffer);

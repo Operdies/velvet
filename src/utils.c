@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -28,8 +29,7 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   char last = n > 0 ? fmt[n - 1] : 0;
 
   int n_buf = vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
-  if (n_buf > BUFSIZE)
-    n_buf = BUFSIZE;
+  if (n_buf > BUFSIZE) n_buf = BUFSIZE;
 
   // Ensure at least one space
   if (last == ':') {
@@ -100,7 +100,7 @@ void logmsg(char *fmt, ...) {
 
 struct termios original_terminfo;
 struct termios raw_term;
-struct winsize ws;
+struct winsize ws_current;
 
 void leave_alternate_screen(void) {
   char buf[] = "\x1b[2J\x1b[H\x1b[?1049l";
@@ -119,7 +119,7 @@ void exit_raw_mode(void) {
 }
 
 void enable_raw_mode(void) {
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
     die("ioctl TIOCGWINSZ:");
   }
 
@@ -134,7 +134,6 @@ void enable_raw_mode(void) {
     die("tcsetattr:");
   }
 }
-
 
 static void disable_line_wrapping(void) {
   char *disable = "\x1b[?7l";
@@ -167,4 +166,10 @@ void disable_raw_mode_etc(void) {
   enable_line_wrapping();
   exit_raw_mode();
   leave_alternate_screen();
+}
+void set_nonblocking(int fd) {
+  int flags = fcntl(fd, F_GETFL);
+  if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    die("fcntl:");
+  }
 }

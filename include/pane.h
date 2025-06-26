@@ -23,6 +23,9 @@ struct pane {
   struct fsm fsm;
 };
 
+extern struct pane *clients;
+extern struct pane *focused;
+
 void pane_destroy(struct pane *pane);
 void pane_resize(struct pane *pane, struct bounds outer);
 void pane_start(struct pane *pane);
