@@ -171,6 +171,25 @@ static void focusnext(void) {
   }
 }
 
+static void detachstack(struct pane *p) {
+  pane_remove(&lst, p);
+}
+static void attachstack(struct pane *p) {
+  p->next = lst;
+  lst = p;
+}
+
+static void zoom(void) {
+  struct pane *current_main = lst;
+  struct pane *new_main = focused;
+  if (current_main == new_main) new_main = current_main->next;
+  if (!new_main) return;
+  detachstack(new_main);
+  attachstack(new_main);
+  focus_pane(new_main);
+  arrange(ws, lst);
+}
+
 static bool running = true;
 static void handle_stdin(const char *const buf, int n, struct string *draw_buffer) {
   enum stdin_state {
@@ -208,12 +227,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         }
       } break;
       case CTRL('G'): {
-        if (lst != focused) {
-          pane_remove(&lst, focused);
-          focused->next = lst;
-          lst = focused;
-          arrange(ws, lst);
-        }
+        zoom();
       } break;
       case CTRL('A'): {
         nmaster = MIN(pane_count(lst), nmaster + 1);
