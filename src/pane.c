@@ -65,6 +65,32 @@ struct pane *pane_from_pty(struct pane *p, int pty) {
   return nullptr;
 }
 
+static void apply_color(struct color *col, bool fg, struct string *outbuffer) {
+  char index = fg ? '3' : '4';
+  if (col->cmd == COLOR_RESET) {
+    char cmd[] = {'\x1b', '[', index, '9', 'm', 0};
+    string_push(outbuffer, cmd);
+  } else if (col->cmd == COLOR_TABLE) {
+    if (col->table < 10) {
+      char cmd[] = {'\x1b', '[', index, '0' + col->table, 'm', 0};
+      string_push(outbuffer, cmd);
+    } else if (col->table <= 15) {
+      char cmd[] = {'\x1b', '[', index, '8', ';', '5', ';', '1', '0' + col->table % 10, 'm', 0};
+      string_push(outbuffer, cmd);
+    } else {
+      char buf[30];
+      int n = snprintf(buf, 30, "\x1b[%c8;5;%dm", index, col->table);
+      string_push_slice(outbuffer, buf, n);
+    }
+  } else if (col->cmd == COLOR_RGB) {
+    char buf[50];
+    int n = snprintf(buf, 50, "\x1b[%c8;2;%d;%d;%dm", index, col->r, col->g, col->b);
+    logmsg("Set rgb: %s", buf + 1);
+    string_push_slice(outbuffer, buf, n);
+    // logmsg("TODO: RGB #%2x%2x%2x", col->r, col->g, col->b);
+  }
+}
+
 /* Write the specified style attributes to the outbuffer, but only if they are different from what is currently stored.
  * Note that the use of statics means that this function is not thread safe or re-entrant. It should only be used for
  * streaming content to the screen. */
@@ -112,6 +138,13 @@ static inline void apply_style(uint32_t new_attr, struct color new_fg, struct co
         }
       }
     }
+  }
+
+  if (memcmp(&fg, &new_fg, sizeof(fg)) != 0) {
+    apply_color(&new_fg, true, outbuffer);
+  }
+  if (memcmp(&bg, &new_bg, sizeof(bg)) != 0) {
+    apply_color(&new_bg, false, outbuffer);
   }
 
   attr = new_attr;

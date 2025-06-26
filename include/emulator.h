@@ -52,19 +52,17 @@ enum cell_attributes {
   ATTR_BLINK_ANY = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
 };
 
+enum color_command {
+  COLOR_RESET,
+  COLOR_RGB,
+  COLOR_TABLE,
+};
 struct color {
-  union {
-    uint32_t rgb;
-    struct {
-      uint8_t r, g, b, basic;
-    };
-  };
+  enum color_command cmd;
+  uint8_t r, g, b, table;
 };
 
-/* Technically the 'default' color is ]39m / ]49m for fg/bg, but zero
- initialization simplifies things. The renderer should get the color by doing (9 + .basic) % 9
- */
-static const struct color color_default = {.basic = 0};
+static const struct color color_default = {.cmd = COLOR_RESET};
 
 struct grid_cell {
   // TODO: utf8 (multi-byte characters)
@@ -96,7 +94,8 @@ struct grid_row {
 
 static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
 static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
-static const struct grid_cell empty_cell = {.symbol = utf8_blank};
+static const struct grid_cell empty_cell = {
+    .symbol = utf8_blank, .fg = color_default, .bg = color_default};
 
 // 0-indexed grid coordinates. This cursor points at a raw cell
 struct raw_cursor {

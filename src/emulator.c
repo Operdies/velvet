@@ -786,10 +786,26 @@ static void apply_csi_format(struct grid_cell *c, int n, int params[n]) {
         [9] = ATTR_CROSSED_OUT,
     };
     c->attr &= ~disable[attribute % 10];
-  } else if (attribute >= 30 && attribute <= 37) {
-    // foreground
-  } else if (attribute == 38) {
-  } else if (attribute == 39) {
+  } else if (attribute >= 30 && attribute <= 49) {
+    struct color *target = attribute >= 40 ? &c->bg : &c->fg;
+    int color = attribute % 10;
+    if (color == 8) {
+      int type = params[1];
+      if (type == 5) { /* color from 256 color table */
+        int color = params[2];
+        *target = (struct color){.table = color, .cmd = COLOR_TABLE};
+      } else if (type == 2) {
+        *target = (struct color){.r = params[2], .g = params[3], .b = params[4], .cmd = COLOR_RGB};
+      }
+    } else if (color == 9) { /* reset */
+      *target = color_default;
+    } else { /* This is a normal indexed color from 0-8 in the table */
+      *target = (struct color){.table = attribute % 10, .cmd = COLOR_TABLE};
+    }
+  } else if (attribute >= 90 && attribute <= 97) {
+    c->fg = (struct color){.table = (attribute - 90) + 8, .cmd = COLOR_TABLE};
+  } else if (attribute >= 100 && attribute <= 107) {
+    c->bg = (struct color){.table = (attribute - 100) + 8, .cmd = COLOR_TABLE};
   }
 }
 
