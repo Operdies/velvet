@@ -103,12 +103,12 @@ struct termios raw_term;
 struct winsize ws;
 
 void leave_alternate_screen(void) {
-  char buf[] = "\0330x1b[2J\033[H\033[?1049l";
+  char buf[] = "\x1b[2J\x1b[H\x1b[?1049l";
   write(STDOUT_FILENO, buf, sizeof(buf));
 }
 
 void enter_alternate_screen(void) {
-  char buf[] = "\033[?1049h\033[2J\033[H";
+  char buf[] = "\x1b[?1049h\x1b[2J\x1b[H";
   write(STDOUT_FILENO, buf, sizeof(buf));
 }
 
@@ -135,6 +135,16 @@ void enable_raw_mode(void) {
   }
 }
 
+
+static void disable_line_wrapping(void) {
+  char *disable = "\x1b[?7l";
+  write(STDOUT_FILENO, disable, strlen(disable));
+}
+static void enable_line_wrapping(void) {
+  char *disable = "\x1b[?7h";
+  write(STDOUT_FILENO, disable, strlen(disable));
+}
+
 static void disable_focus_reporting(void) {
   char buf[] = "\x1b[?1004l";
   write(STDOUT_FILENO, buf, sizeof(buf));
@@ -149,10 +159,12 @@ static void enable_focus_reporting(void) {
 void enable_raw_mode_etc(void) {
   enter_alternate_screen();
   enable_raw_mode();
+  disable_line_wrapping();
   enable_focus_reporting();
 }
 void disable_raw_mode_etc(void) {
   disable_focus_reporting();
+  enable_line_wrapping();
   exit_raw_mode();
   leave_alternate_screen();
 }

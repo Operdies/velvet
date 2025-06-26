@@ -187,6 +187,8 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 }
 
 void pane_draw_border(struct pane *p, struct string *b) {
+  if (p->border_width == 0 || !p->border_dirty) return;
+  p->border_dirty = false;
   bool topmost = p->rect.window.y == 0;
   bool leftmost = p->rect.window.x == 0;
 
@@ -203,8 +205,6 @@ void pane_draw_border(struct pane *p, struct string *b) {
   }
 
   // char *bottomleftcorner = "\n\b├";
-  char *disable_line_wrapping = "\x1b[?7l";
-  char *enable_line_wrapping = "\x1b[?7h";
   char *bottomleftcorner = "\n\b│";
   char *pipe = "\n\b│";
   char *dash = "─";
@@ -215,7 +215,6 @@ void pane_draw_border(struct pane *p, struct string *b) {
   int bottom = p->rect.window.h + top;
   int right = p->rect.window.w + left;
 
-  string_push(b, disable_line_wrapping);
   // top left corner
   string_push(b, move(top, left));
   string_push(b, corner);
@@ -236,7 +235,6 @@ void pane_draw_border(struct pane *p, struct string *b) {
     string_push(b, pipe);
   }
   string_push(b, bottomleftcorner);
-  string_push(b, disable_line_wrapping);
 }
 
 static void on_report_mouse_position(void *context, int row, int col) {
@@ -264,14 +262,15 @@ void pane_resize(struct pane *pane, struct bounds outer) {
   if (outer.w < 2) outer.w = 2;
   if (outer.h < 2) outer.h = 2;
 
-  struct bounds inner = (struct bounds){.x = outer.x + pane->border,
-                                        .y = outer.y + pane->border,
-                                        .w = outer.w - pane->border,
-                                        .h = outer.h - pane->border};
+  struct bounds inner = (struct bounds){.x = outer.x + pane->border_width,
+                                        .y = outer.y + pane->border_width,
+                                        .w = outer.w - pane->border_width,
+                                        .h = outer.h - pane->border_width};
   if (pane->rect.window.w != outer.w || pane->rect.window.h != outer.h) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h};
     if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);
     if (pane->pid) kill(pane->pid, SIGWINCH);
+    if (pane->border_width) pane->border_dirty = true;
   }
 
   // If anything changed about the window position / dimensions, do a full redraw

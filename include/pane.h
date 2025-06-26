@@ -13,7 +13,8 @@ struct pane {
   char *process;
   int pty, pid;
   int logfile;
-  int border;
+  int border_width;
+  bool border_dirty;
   struct {
     struct bounds window;
     struct bounds client;
