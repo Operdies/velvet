@@ -275,6 +275,13 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     }
   }
 
+  // TODO: Implement timing mechanism for escaping escape.
+  // For now, flush it immediately if we would leave the state machine in the escape state.
+  if (s == esc) {
+    string_push_char(&writebuffer, 0x1b);
+    s = normal;
+  }
+
   write(focused->pty, writebuffer.content, writebuffer.len);
 }
 
@@ -387,7 +394,6 @@ int main(int argc, char **argv) {
       }
     }
 
-    // TODO: Don't write cursor if panes didn't draw
     char hide_cursor[] = "\x1b[?25l";
     char show_cursor[] = "\x1b[?25h";
     string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
