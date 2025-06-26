@@ -402,21 +402,9 @@ int main(int argc, char **argv) {
       pane_draw(p, false, &draw_buffer);
     }
 
-    string_push(&draw_buffer, "\x1b[0m");
     for (struct pane *p = lst; p; p = p->next) {
-      /* TODO: Move styling logic into draw function
-       * Then apply style changes using the appropriate apply_style function
-       */
-      if (p == focused) {
-        string_push(&draw_buffer, "\x1b[31m");
-        string_push(&draw_buffer, "\x1b[1m");
-      } else {
-        string_push(&draw_buffer, "\x1b[0m");
-        string_push(&draw_buffer, "\x1b[34m");
-      }
       pane_draw_border(p, &draw_buffer);
     }
-    string_push(&draw_buffer, "\x1b[0m");
 
     if (!focused) focus_pane(lst);
     if (focused) move_cursor_to_pane(focused, &draw_buffer);
@@ -435,7 +423,7 @@ int main(int argc, char **argv) {
           struct pane *next = p->next;
           p->pid = 0;
           if (p == focused) {
-            focus_pane(p->next);
+            focusprev();
           }
           pane_remove(&lst, p);
           pane_destroy(p);

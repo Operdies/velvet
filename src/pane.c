@@ -189,6 +189,8 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 
 void pane_draw_border(struct pane *p, struct string *b) {
   if (p->border_width == 0 || !p->border_dirty) return;
+  static const struct grid_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
+  static const struct grid_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
   p->border_dirty = false;
   bool topmost = p->rect.window.y == 0;
   bool leftmost = p->rect.window.x == 0;
@@ -216,6 +218,8 @@ void pane_draw_border(struct pane *p, struct string *b) {
   int bottom = p->rect.window.h + top;
   int right = p->rect.window.w + left;
 
+  apply_style(p->has_focus ? &focused_style : &normal_style, b);
+
   // top left corner
   string_push(b, move(top, left));
   string_push(b, corner);
@@ -236,6 +240,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
     string_push(b, pipe);
   }
   string_push(b, bottomleftcorner);
+  apply_style(&style_default, b);
 }
 
 static void on_report_mouse_position(void *context, int row, int col) {
