@@ -97,7 +97,7 @@ static void disassemble(FILE *f) {
       }
     } break;
     case osc: {
-      if (ch == '\a') {
+      if (ch == '\a' || (ch == '\\' && buf[buf_idx - 1] == 0x1b)) {
         flogmsg(stdout, "OSC %.*s", buf_idx, buf);
         buf_idx = 0;
         s = normal;

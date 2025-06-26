@@ -87,6 +87,9 @@ static void parse_csi_params(uint8_t *buffer, int len, int *params, int nparams,
     for (; i < len && buffer[i] != ';'; i++);
     i++;
   }
+  if (*count >= nparams && i < len) {
+    logmsg("Error: Max params exceeded in CSI command: %.*s", len, buffer);
+  }
 }
 
 /* inclusive erase between two cursor positions */
@@ -750,69 +753,87 @@ static void csi_set_modifiers(struct fsm *fsm, int n, int params[n]) {
   logmsg("TODO: Implement set modifiers");
 }
 
-static void apply_csi_format(struct grid_cell *c, int n, int params[n]) {
-  if (n == 0 || params[0] == 0) {
-    // If the first parameter is 0, we should clear all attributes
+static char *apply_sgr(struct grid_cell *c, int n, int *params) {
+  int consumed = 0;
+  // Special case when the 0 is omitted
+  if (n == 0) {
     c->attr = 0;
     c->bg = c->fg = color_default;
-    n--;
-    params++;
+    return NULL;
   }
 
-  if (n <= 0) return;
+  while (consumed < n) {
+    int attribute = params[consumed++];
 
-  int attribute = params[0];
-  if (attribute <= 9) {
-    uint32_t enable[] = {
-        0,
-        ATTR_BOLD,
-        ATTR_FAINT,
-        ATTR_ITALIC,
-        ATTR_UNDERLINE,
-        ATTR_BLINK_SLOW,
-        ATTR_BLINK_RAPID,
-        ATTR_REVERSE,
-        ATTR_CONCEAL,
-        ATTR_CROSSED_OUT,
-    };
-    c->attr |= enable[attribute];
-  } else if (attribute == 21) {
-    c->attr |= ATTR_UNDERLINE_DOUBLE;
-  } else if (attribute >= 22 && attribute <= 28) {
-    uint32_t disable[] = {
-        [2] = (ATTR_BOLD | ATTR_FAINT),
-        [3] = ATTR_ITALIC,
-        [4] = ATTR_UNDERLINE,
-        [5] = ATTR_BLINK_ANY,
-        /* [6] = proportional spacing */
-        [7] = ATTR_REVERSE,
-        [8] = ATTR_CONCEAL,
-        [9] = ATTR_CROSSED_OUT,
-    };
-    c->attr &= ~disable[attribute % 10];
-  } else if (attribute >= 30 && attribute <= 49) {
-    struct color *target = attribute >= 40 ? &c->bg : &c->fg;
-    int color = attribute % 10;
-    if (color == 8) {
-      int type = params[1];
-      if (type == 5) { /* color from 256 color table */
-        int color = params[2];
-        *target = (struct color){.table = color, .cmd = COLOR_TABLE};
-      } else if (type == 2) {
-        *target = (struct color){.r = params[2], .g = params[3], .b = params[4], .cmd = COLOR_RGB};
+    if (attribute == 0) {
+      c->attr = 0;
+      c->bg = c->fg = color_default;
+    } else if (attribute <= 9) {
+      uint32_t enable[] = {
+          0,
+          ATTR_BOLD,
+          ATTR_FAINT,
+          ATTR_ITALIC,
+          ATTR_UNDERLINE,
+          ATTR_BLINK_SLOW,
+          ATTR_BLINK_RAPID,
+          ATTR_REVERSE,
+          ATTR_CONCEAL,
+          ATTR_CROSSED_OUT,
+      };
+      c->attr |= enable[attribute];
+    } else if (attribute == 21) {
+      c->attr |= ATTR_UNDERLINE_DOUBLE;
+    } else if (attribute >= 22 && attribute <= 28) {
+      uint32_t disable[] = {
+          [2] = (ATTR_BOLD | ATTR_FAINT),
+          [3] = ATTR_ITALIC,
+          [4] = ATTR_UNDERLINE,
+          [5] = ATTR_BLINK_ANY,
+          /* [6] = proportional spacing */
+          [7] = ATTR_REVERSE,
+          [8] = ATTR_CONCEAL,
+          [9] = ATTR_CROSSED_OUT,
+      };
+      c->attr &= ~disable[attribute % 10];
+    } else if (attribute >= 30 && attribute <= 49) {
+      struct color *target = attribute >= 40 ? &c->bg : &c->fg;
+      int color = attribute % 10;
+      if (color == 8) {
+        if (consumed >= n) {
+          return "Expected color type parameter";
+        }
+        int type = params[consumed++];
+        if (type == 5) { /* color from 256 color table */
+          if (consumed >= n) {
+            return "Expected color number";
+          }
+          int color = params[consumed++];
+          *target = (struct color){.table = color, .cmd = COLOR_TABLE};
+        } else if (type == 2) {
+          if ((consumed + 2) >= n) {
+            return "Expected RGB triplet";
+          }
+          int red = params[consumed++];
+          int green = params[consumed++];
+          int blue = params[consumed++];
+          *target = (struct color){.r = red, .g = green, .b = blue, .cmd = COLOR_RGB};
+        }
+      } else if (color == 9) { /* reset */
+        *target = color_default;
+      } else { /* This is a normal indexed color from 0-8 in the table */
+        *target = (struct color){.table = attribute % 10, .cmd = COLOR_TABLE};
       }
-    } else if (color == 9) { /* reset */
-      *target = color_default;
-    } else { /* This is a normal indexed color from 0-8 in the table */
-      *target = (struct color){.table = attribute % 10, .cmd = COLOR_TABLE};
+    } else if (attribute >= 90 && attribute <= 97) {
+      c->fg = (struct color){.table = (attribute - 90) + 8, .cmd = COLOR_TABLE};
+    } else if (attribute >= 100 && attribute <= 107) {
+      c->bg = (struct color){.table = (attribute - 100) + 8, .cmd = COLOR_TABLE};
     }
-  } else if (attribute >= 90 && attribute <= 97) {
-    c->fg = (struct color){.table = (attribute - 90) + 8, .cmd = COLOR_TABLE};
-  } else if (attribute >= 100 && attribute <= 107) {
-    c->bg = (struct color){.table = (attribute - 100) + 8, .cmd = COLOR_TABLE};
   }
+  return NULL;
 }
 
+#define SGR_MAX_PARAMS 32
 static void apply_buffered_csi(struct fsm *fsm) {
   uint8_t *buffer = fsm->escape_buffer.buffer;
   size_t len = fsm->escape_buffer.n;
@@ -825,9 +846,9 @@ static void apply_buffered_csi(struct fsm *fsm) {
   }
 
   logmsg("CSI: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1);
-  int params[10] = {0};
+  int params[SGR_MAX_PARAMS] = {0};
   int count = 0;
-  parse_csi_params(buffer + 2, len - 3, params, 10, &count);
+  parse_csi_params(buffer + 2, len - 3, params, SGR_MAX_PARAMS, &count);
   int param1 = count > 0 ? params[0] : 1;
 
   if (buffer[2] == '?' && (final_byte == 'h' || final_byte == 'l')) {
@@ -939,8 +960,10 @@ static void apply_buffered_csi(struct fsm *fsm) {
   case 'M': { /* shift next Pn up */ int count = params[0] ? params[0] : 1; grid_shift_lines(g, count);
   } break;
   case 'm': { /* color */
-    apply_csi_format(&fsm->cell, count, params);
-    // logmsg("TODO: SGR: %.*s", fsm->seq.n - 1, fsm->seq.buffer + 1);
+    char *error = apply_sgr(&fsm->cell, count, params);
+    if (error) {
+      logmsg("Error parsing SGR: %.*s: %s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1, error);
+    }
   } break;
   case 'r': { /* scroll region */
     logmsg("TODO: Implement scroll region");
