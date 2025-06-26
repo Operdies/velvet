@@ -31,8 +31,8 @@ static struct {
   };
 } sigpipe;
 
-static char *focus_out = "\x1b[O";
-static char *focus_in = "\x1b[I";
+static const char *const focus_out = "\x1b[O";
+static const char *const focus_in = "\x1b[I";
 
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
@@ -131,14 +131,23 @@ static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
   }
 }
 
+static void pane_notify_focus(struct pane *p, bool focused) {
+  if (p) {
+    p->border_dirty = true;
+    if (p->pty && p->fsm.features.focus_reporting) {
+      if (focused) {
+        write(p->pty, focus_in, strlen(focus_in));
+      } else {
+        write(p->pty, focus_out, strlen(focus_out));
+      }
+    }
+  }
+}
+
 static void focus_pane(struct pane *p) {
   if (p != focused) {
-    if (focused && focused->pty && focused->fsm.features.focus_reporting) {
-      write(focused->pty, focus_out, strlen(focus_out));
-    }
-    if (p && p->pty && p->fsm.features.focus_reporting) {
-      write(p->pty, focus_in, strlen(focus_in));
-    }
+    pane_notify_focus(focused, false);
+    pane_notify_focus(p, true);
   }
   focused = p;
 }
@@ -329,6 +338,7 @@ int main(int argc, char **argv) {
             }
             for (struct pane *p = lst; p; p = p->next) {
               grid_invalidate(p->fsm.active_grid);
+              p->border_dirty = true;
             }
             arrange(ws, lst);
             char clear[] = "\x1b[2J";
