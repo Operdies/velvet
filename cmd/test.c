@@ -39,7 +39,7 @@ struct chargrid *make_chargrid(int rows, int cols, char g[rows][cols]) {
   return grid;
 }
 
-static struct chargrid *grid_to_chargrid(const struct grid *const restrict src) {
+static struct chargrid *grid_to_chargrid(const struct grid *const src) {
   struct chargrid *grid = calloc(sizeof(*grid) + src->w * src->h, 1);
   grid->cols = src->w;
   grid->rows = src->h;

@@ -380,7 +380,7 @@ static void grid_advance_cursor_y(struct grid *g) {
   assert(c->y < g->h);
 }
 
-bool color_equals(const struct color *const restrict a, const struct color *const restrict b) {
+bool color_equals(const struct color *const a, const struct color *const b) {
   if (a->cmd != b->cmd) return false;
   switch (a->cmd) {
   case COLOR_RESET: return true;
@@ -390,15 +390,15 @@ bool color_equals(const struct color *const restrict a, const struct color *cons
   return false;
 }
 
-bool cell_style_equals(const struct grid_cell_style *const restrict a, const struct grid_cell_style *const restrict b) {
+bool cell_style_equals(const struct grid_cell_style *const a, const struct grid_cell_style *const b) {
   return a->attr == b->attr && color_equals(&a->fg, &b->fg) && color_equals(&a->bg, &b->bg);
 }
 
-bool symbol_equals(const struct utf8 *const restrict a, const struct utf8 *const restrict b) {
+bool symbol_equals(const struct utf8 *const a, const struct utf8 *const b) {
   return a->len == b->len && memcmp(a->utf8, b->utf8, a->len) == 0;
 }
 
-bool cell_equals(const struct grid_cell *const restrict a, const struct grid_cell *const restrict b) {
+bool cell_equals(const struct grid_cell *const a, const struct grid_cell *const b) {
   return a->charset_dec_special == b->charset_dec_special && symbol_equals(&a->symbol, &b->symbol) &&
          cell_style_equals(&a->style, &b->style);
 }
