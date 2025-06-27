@@ -36,7 +36,8 @@ static const char *const focus_in = "\x1b[I";
 
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
-  write(sigpipe.write, &sig, sizeof(sig));
+  size_t written = write(sigpipe.write, &sig, sizeof(sig));
+  if (written < sizeof(sig)) die("signal write:");
 }
 
 static void install_signal_handlers(void) {
@@ -49,12 +50,14 @@ static void install_signal_handlers(void) {
   if (sigaction(SIGINT, &sa, NULL) == -1) {
     die("sigaction:");
   }
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+    die("sigaction:");
+  }
 
   if (pipe(sigpipe.pipes) < 0) {
     die("pipe:");
   }
   set_nonblocking(sigpipe.read);
-  set_nonblocking(sigpipe.write);
 }
 
 static int nmaster = 1;
@@ -65,8 +68,10 @@ static void arrange(struct winsize ws, struct pane *p) {
   int mh, mx, mw, my, sy, sw, nm, ns, i, n;
 
   n = pane_count(p);
-  if (n == 1) p->border_width = 0;
-  else for (struct pane *c = p; c; c = c->next) c->border_width = 1;
+  if (n == 1)
+    p->border_width = 0;
+  else
+    for (struct pane *c = p; c; c = c->next) c->border_width = 1;
 
   i = my = sy = sw = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -245,12 +250,18 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       break;
     } break;
     case esc: {
+      s = normal;
       switch (ch) {
       case '[': {
         s = csi;
       } break;
+      case 'k': {
+        focusprev();
+      } break;
+      case 'j': {
+        focusnext();
+      } break;
       default: {
-        s = normal;
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, ch);
       } break;
@@ -290,6 +301,27 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
   write(focused->pty, writebuffer.content, writebuffer.len);
 }
 
+void remove_exited_processes(void) {
+  int status;
+  pid_t pid;
+
+  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    if (WIFEXITED(status)) {
+      struct pane *p = pane_from_pid(clients, pid);
+      if (p) {
+        p->pid = 0;
+        if (p == focused) {
+          focusprev();
+        }
+        pane_remove(&clients, p);
+        pane_destroy(p);
+        free(p);
+        if (!focused) focus_pane(clients);
+      }
+    }
+  }
+}
+
 int main(int argc, char **argv) {
   enable_raw_mode_etc();
 
@@ -310,6 +342,12 @@ int main(int argc, char **argv) {
         prev->next = p;
       }
       prev = p;
+    }
+
+    if (argc < 2) {
+      clients = calloc(1, sizeof(*clients));
+      clients->process = strdup("zsh");
+      logmsg("Fallback: zsh");
     }
   }
 
@@ -339,28 +377,41 @@ int main(int argc, char **argv) {
   for (; running && pane_count(clients);) {
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
-      if (errno == EAGAIN) continue;
-      if (errno == EINTR) {
-        int signal = 0;
-        if (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
-          switch (signal) {
-          case SIGWINCH:
-            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
-              die("ioctl TIOCGWINSZ:");
-            }
-            for (struct pane *p = clients; p; p = p->next) {
-              grid_invalidate(p->fsm.active_grid);
-              p->border_dirty = true;
-            }
-            arrange(ws_current, clients);
-            char clear[] = "\x1b[2J";
-            string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
-            break;
-          default: running = false; break;
-          }
-        }
-      } else {
+      if (errno != EAGAIN && errno != EINTR) {
         die("poll %d:", errno);
+      }
+      if (errno == EAGAIN) continue;
+    }
+    {
+      int signal = 0;
+      while (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
+        switch (signal) {
+        case SIGWINCH: {
+          if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
+            die("ioctl TIOCGWINSZ:");
+          }
+          for (struct pane *p = clients; p; p = p->next) {
+            grid_invalidate(p->fsm.active_grid);
+            p->border_dirty = true;
+          }
+          arrange(ws_current, clients);
+          char clear[] = "\x1b[2J";
+          string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
+        } break;
+        case SIGCHLD: {
+          remove_exited_processes();
+        } break;
+        default: {
+          running = false;
+          logmsg("Unhandled signal: %d", signal);
+        } break;
+        }
+      }
+
+      // This happens if SIGCHLD was raised and all clients exited
+      if (clients == nullptr) {
+        running = false;
+        continue;
       }
     }
 
@@ -420,27 +471,6 @@ int main(int argc, char **argv) {
 
     if (draw_buffer.len != initial_bytes) {
       string_flush(&draw_buffer, STDOUT_FILENO, NULL);
-    }
-
-    {
-      for (struct pane *p = clients; p;) {
-        int status;
-        pid_t result = waitpid(p->pid, &status, WNOHANG);
-        if (result == p->pid && WIFEXITED(status)) {
-          struct pane *next = p->next;
-          p->pid = 0;
-          if (p == focused) {
-            focusprev();
-          }
-          pane_remove(&clients, p);
-          pane_destroy(p);
-          free(p);
-          if (!focused) focus_pane(clients);
-          p = next;
-        } else {
-          p = p->next;
-        }
-      }
     }
 
     { // update fd set

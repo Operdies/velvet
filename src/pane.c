@@ -44,7 +44,6 @@ static const char *move(int row, int col) {
   i_buf += write_int(buf + i_buf, col);
   buf[i_buf++] = 'H';
   buf[i_buf++] = 0;
-  logmsg("Move: %s", buf + 1);
   return buf;
 }
 
@@ -66,6 +65,12 @@ void pane_destroy(struct pane *pane) {
 struct pane *pane_from_pty(struct pane *p, int pty) {
   for (; p; p = p->next)
     if (p->pty == pty) return p;
+  return nullptr;
+}
+
+struct pane *pane_from_pid(struct pane *p, int pid) {
+  for (; p; p = p->next)
+    if (p->pid == pid) return p;
   return nullptr;
 }
 
