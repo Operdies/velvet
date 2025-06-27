@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <errno.h>
 #include <pane.h>
 #include <signal.h>
 #include <stdio.h>
@@ -325,6 +324,10 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
   fsm_process(&pane->fsm, buf, n);
 }
 
+static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
+  return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h;
+}
+
 void pane_resize(struct pane *pane, struct bounds outer) {
   // Refuse to go below a minimum size
   if (outer.w < 2) outer.w = 2;
@@ -344,8 +347,7 @@ void pane_resize(struct pane *pane, struct bounds outer) {
   }
 
   // If anything changed about the window position / dimensions, do a full redraw
-  if (pane->rect.window.w != outer.w || pane->rect.window.h != outer.h || pane->rect.window.x != outer.x ||
-      pane->rect.window.y != outer.y) {
+  if (!bounds_equal(&outer, &pane->rect.window) || !bounds_equal(&inner, &pane->rect.client)) {
     grid_invalidate(pane->fsm.active_grid);
     pane->border_dirty = true;
   }

@@ -63,9 +63,10 @@ static float factor = 0.5;
 static void arrange(struct winsize ws, struct pane *p) {
   if (!p) return;
   int mh, mx, mw, my, sy, sw, nm, ns, i, n;
-  for (struct pane *c = p; c; c = c->next) c->border_width = 1;
 
   n = pane_count(p);
+  if (n == 1) p->border_width = 0;
+  else for (struct pane *c = p; c; c = c->next) c->border_width = 1;
 
   i = my = sy = sw = mx = 0;
   nm = n > nmaster ? nmaster : n;
