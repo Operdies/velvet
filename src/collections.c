@@ -9,7 +9,7 @@ static size_t next_size(size_t min) {
   return MAX(min * 2, 1024);
 }
 
-static void ensure_capacity(struct string *str, size_t required) {
+static void string_ensure_capacity(struct string *str, size_t required) {
   if (str->content == nullptr || str->cap < required) {
     uint8_t *prev = str->content;
     size_t newsize = next_size(required);
@@ -39,7 +39,7 @@ void string_push_int(struct string *str, int n) {
 
 void string_push_slice(struct string *str, const char *const src, size_t len) {
   size_t required = str->len + len;
-  ensure_capacity(str, required);
+  string_ensure_capacity(str, required);
   memcpy(str->content + str->len, src, len);
   str->len += len;
 }
@@ -54,7 +54,7 @@ void string_push_char(struct string *str, char ch) {
 
 void string_memset(struct string *str, uint8_t ch, size_t len) {
   size_t required = str->len + len;
-  ensure_capacity(str, required);
+  string_ensure_capacity(str, required);
   memset(str->content + str->len, ch, len);
   str->len += len;
 }
@@ -88,4 +88,45 @@ bool string_flush(struct string *str, int fd, int *total_written) {
   if (total_written) *total_written = written;
   string_clear(str);
   return true;
+}
+
+void vec_ensure_capacity(struct vec *v, size_t c) {
+  assert(v->element_size && "Element size cannot be 0");
+  if (v->capacity >= c) return;
+  if (v->capacity <= 0) v->capacity = 100;
+  while (v->capacity < c) {
+    v->capacity *= 2;
+    if (v->capacity <= 0) {
+      die("Extremely large vector: 0x%x", c);
+      v->capacity = c;
+      break;
+    }
+  }
+  if (v->content) {
+    v->content = erealloc(v->content, v->capacity, v->element_size);
+  } else {
+    v->content = ecalloc(v->capacity, v->element_size);
+  }
+}
+
+void vec_push(struct vec *v, const void *elem) {
+  assert(v->element_size && "Element size cannot be 0");
+  vec_ensure_capacity(v, v->length + 1);
+  char *addr = (char *)v->content + v->length * v->element_size;
+  if (elem)
+    memcpy(addr, elem, v->element_size);
+  else
+    memset(addr, 0, v->element_size);
+  v->length++;
+}
+
+void vec_clear(struct vec *v) {
+  v->length = 0;
+}
+
+void vec_destroy(struct vec *v) {
+  v->length = 0;
+  v->capacity = 0;
+  free(v->content);
+  v->content = nullptr;
 }
