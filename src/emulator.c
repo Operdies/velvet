@@ -38,8 +38,6 @@
 #define grid_virtual_top(g) (g->offset)
 #define grid_virtual_bottom(g) ((g->h + g->offset - 1) % g->h)
 
-#define SMART_REDRAW
-
 static inline void utf8_push(struct utf8 *u, uint8_t byte);
 static void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
 static void grid_destroy(struct grid *grid);
@@ -429,22 +427,14 @@ static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
     }
   }
 
-#ifdef SMART_REDRAW
-  if (!row->dirty) {
-    // Avoid dirtying this row if the cell content didn't actually change
-    if (!cell_equals(&c, &row->cells[cur->x])) {
-      row->cells[cur->x] = c;
-      row->dirty = true;
-    }
-  } else {
-    row->cells[cur->x] = c;
-  }
-#else
-  row->cells[cur->x] = c;
+  /* TODO:
+   * Rethink conditional redraws. This solution still redraws if a cell is reassigned A -> B -> A
+   * Maybe a double buffering strategy is more appropriate.
+   */
+  row->cells[cur->col] = c;
   row->dirty = true;
-#endif
-  cur->x++;
-  row->n_significant = MAX(row->n_significant, cur->x);
+  cur->col++;
+  row->n_significant = MAX(row->n_significant, cur->col);
 
   if (cur->x > grid_end(g)) {
     row->end_of_line = true;

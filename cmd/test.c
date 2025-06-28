@@ -27,7 +27,6 @@ struct bounds bsmall = { .w = 5, .h = 5 };
 struct bounds blarge = { .w = 8, .h = 5 };
 
 struct chargrid *make_chargrid(int rows, int cols, char g[rows][cols]) {
-  // char *cells = calloc(rows * cols, 1);
   struct chargrid *grid = calloc(sizeof(*grid) + rows * cols, 1);
   grid->rows = rows;
   grid->cols = cols;
@@ -94,8 +93,6 @@ static void chargrid_print_diff(struct chargrid *left, struct chargrid *right, c
     printf("│%*s│\r\n│", align - 2, "");
   }
 
-  // printf("\r└────────┘ └────────┘\r\n");
-  // printf("\r└%.*s┴%.*s┘\r\n", swidth * (boxwidth - 1), separator, swidth * (boxwidth - 1), separator);
   printf("\r└%.*s┴%.*s┴%.*s┴%.*s┘\r\n",
          swidth * left->cols,
          separator,
@@ -183,8 +180,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
     assert_grid_equals(cleared, p.fsm.active_grid, testname2);
 
-    // clear tests no longer work because of smarter diff rendering
-    // assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
+    assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
     // See 1.b
     pane_write(&p, output.content, output.len);
@@ -193,8 +189,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
     assert_grid_equals(cleared, p.fsm.active_grid, outer_test_name);
 
-    // clear tests no longer work because of smarter diff rendering
-    // assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
+    assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
   }
   {
     // 3. Redraw the screen and verify output
@@ -503,24 +498,6 @@ static void test_reflow(void) {
                           });
 }
 
-static void test_scroll_regions(void) {
-  test_grid_input_output("scroll region",
-                         REGION(3, 3) "Hello\r\n Hi!",
-                         (grid_5x8){
-                             {"     "},
-                             {"     "},
-                             {" Hi! "},
-                             {"     "},
-                             {"     "},
-                         });
-  test_grid_input_output("scroll region",
-                         REGION(2, 4) "Hello",
-                         (grid_5x8){
-                             {"     "},
-                             {"Hello"},
-                         });
-}
-
 static void test_erase(void) {
   /*
    * Test:
@@ -604,6 +581,5 @@ int main(void) {
   test_input_output();
   test_reflow();
   test_erase();
-  // test_scroll_regions();
   return n_failures;
 }
