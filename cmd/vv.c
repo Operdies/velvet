@@ -12,8 +12,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "collections.h"
 #include "emulator.h"
 #include "pane.h"
+#include "queries.h"
 #include "utils.h"
 #include <sys/wait.h>
 
@@ -68,10 +70,10 @@ static void arrange(struct winsize ws, struct pane *p) {
   int mh, mx, mw, my, sy, sw, nm, ns, i, n;
 
   n = pane_count(p);
-  if (n == 1)
-    p->border_width = 0;
-  else
-    for (struct pane *c = p; c; c = c->next) c->border_width = 1;
+  // if (n == 1)
+  //   p->border_width = 0;
+  // else
+  for (struct pane *c = p; c; c = c->next) c->border_width = 1;
 
   i = my = sy = sw = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -118,8 +120,8 @@ static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
     struct raw_cursor *c = &g->cursor;
-    int lineno = 1 + pane->rect.client.y + (c->y - g->offset + g->h) % g->h;
-    int columnno = 1 + pane->rect.client.x + c->x;
+    int lineno = 1 + pane->rect.client.y + (c->row - g->offset + g->h) % g->h;
+    int columnno = 1 + pane->rect.client.x + c->col;
     int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
     // write(STDOUT_FILENO, fmt, n);
     string_push_slice(drawbuffer, fmt, n);
@@ -233,10 +235,6 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         nmaster = MAX(0, nmaster - 1);
         arrange(ws_current, clients);
       } break;
-      case CTRL('W'): {
-        logmsg("Exit by ^W");
-        running = false;
-      } break;
       case CTRL('K'): {
         focusprev();
       } break;
@@ -320,6 +318,49 @@ void remove_exited_processes(void) {
       }
     }
   }
+}
+
+static void string_write_arg_list(struct string *str, char *escape, int n, int *args, char terminator) {
+  string_push(str, escape);
+  for (int i = 0; i < n; i++) {
+    string_push_int(str, args[i]);
+    string_push_char(str, ';');
+  }
+  if (n) str->len--;
+  string_push_char(str, terminator);
+}
+
+static void handle_queries(struct pane *p) {
+  static struct string response = {0};
+  struct vec response_buffer = vec(struct emulator_query_response);
+  struct emulator_query *req;
+  vec_foreach(req, p->fsm.pending_requests) {
+    switch (req->type) {
+    case REQUEST_PRIMARY_DEVICE_ATTRIBUTES: break;
+    case REQUEST_SECONDARY_DEVICE_ATTRIBUTES: break;
+    case REQUEST_TERTIARY_DEVICE_ATTRIBUTES: break;
+    case REQUEST_STATUS_OK: break;
+    case REQUEST_CURSOR_POSITION:
+      int args[] = {p->fsm.active_grid->cursor.row, p->fsm.active_grid->cursor.col};
+      string_write_arg_list(&response, "\x1b[", 2, args, 'R');
+      break;
+    case REQUEST_DEFAULT_FG: string_push(&response, "\x1b]10;rgb:ffffff\a"); break;
+    case REQUEST_DEFAULT_BG: string_push(&response, "\x1b]11;rgb:000000\a"); break;
+    case REQUEST_DEFAULT_CURSOR_COLOR: string_push(&response, "\x1b]10;rgb:ffffff\a"); break;
+    case REQUEST_WINDOW_TITLE: break;
+    case REQUEST_WINDOW_ICON: break;
+    case REQUEST_BRACKETED_PASTE_STATUS: break;
+    case REQUEST_FOCUS_REPORTING_STATUS: break;
+    case REQUEST_EXTENDED_FEATURES: break;
+    case REQUEST_TRUECOLOR_STATUS: break;
+    default: logmsg("Handle query type: %s", emulator_query_type_names[req->type]); break;
+    }
+  }
+  vec_clear(&p->fsm.pending_requests);
+  if (response.len) {
+    write(p->pty, response.content, response.len);
+  }
+  string_clear(&response);
 }
 
 int main(int argc, char **argv) {
@@ -445,6 +486,7 @@ int main(int argc, char **argv) {
           }
           if (n > 0) {
             pane_write(p, buf, n);
+            handle_queries(p);
           }
         }
       }
@@ -455,7 +497,7 @@ int main(int argc, char **argv) {
     string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = clients; p; p = p->next) {
-      pane_draw(p, false, &draw_buffer);
+      pane_draw(p, true, &draw_buffer);
     }
 
     for (struct pane *p = clients; p; p = p->next) {

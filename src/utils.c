@@ -60,6 +60,15 @@ void flogmsg(FILE *f, char *fmt, ...) {
   va_end(ap);
 }
 
+void *erealloc(void *array, size_t nmemb, size_t size) {
+  void *p;
+
+  if (!(p = realloc(array, nmemb * size)))
+    die("realloc:");
+
+  return p;
+}
+
 void *ecalloc(size_t sz, size_t count) {
   void *ptr = calloc(sz, count);
   if (!ptr) die("calloc:");

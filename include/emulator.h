@@ -2,7 +2,10 @@
 #define EMULATOR_H
 
 #include <stdint.h>
+#include "queries.h"
+
 #define MAX_ESC_SEQ_LEN 4096
+
 
 struct utf8 {
   /* the current byte sequence */
@@ -75,7 +78,7 @@ struct grid_cell_style {
   struct color fg, bg;
 };
 
-static const struct grid_cell_style style_default = { 0 };
+static const struct grid_cell_style style_default = {0};
 
 struct grid_cell {
   // TODO: utf8 (multi-byte characters)
@@ -110,7 +113,7 @@ static const struct grid_cell empty_cell = {.symbol = utf8_blank};
 
 // 0-indexed grid coordinates. This cursor points at a raw cell
 struct raw_cursor {
-  int x, y;
+  int col, row;
 };
 
 struct grid {
@@ -208,19 +211,18 @@ struct fsm {
   struct grid alternate;
   /* pointer to either primary or alternate */
   struct grid *active_grid;
-  /* callback invoked when cursor position is requested */
-  void (*on_report_cursor_position)(void *context, int row, int column);
-  /* user-defined context provided to callbacks */
-  void *context;
+  request_buffer pending_requests;
 };
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);
 void fsm_destroy(struct fsm *fsm);
 void grid_invalidate(struct grid *g);
 void fsm_grid_resize(struct fsm *fsm);
-bool cell_equals(const struct grid_cell *const a, const struct grid_cell *const b);
+bool cell_equals(const struct grid_cell *const a,
+                 const struct grid_cell *const b);
 bool symbol_equals(const struct utf8 *const a, const struct utf8 *const b);
-bool cell_style_equals(const struct grid_cell_style *const a, const struct grid_cell_style *const b);
+bool cell_style_equals(const struct grid_cell_style *const a,
+                       const struct grid_cell_style *const b);
 bool color_equals(const struct color *const a, const struct color *const b);
 
 #endif /*  EMULATOR_H */

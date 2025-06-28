@@ -32,9 +32,9 @@
 #define grid_end(g) (g->w - 1)
 #define grid_top(g) (0)
 #define grid_bottom(g) (g->h - 1)
-#define grid_column(g) (g->cursor.x)
-#define grid_line(g) (g->cursor.y)
-#define grid_row(g) (&g->rows[g->cursor.y])
+#define grid_column(g) (g->cursor.col)
+#define grid_line(g) (g->cursor.row)
+#define grid_row(g) (&g->rows[g->cursor.row])
 #define grid_virtual_top(g) (g->offset)
 #define grid_virtual_bottom(g) ((g->h + g->offset - 1) % g->h)
 
@@ -91,15 +91,15 @@ static void parse_csi_params(uint8_t *buffer, int len, int *params, int nparams,
 
 /* inclusive erase between two cursor positions */
 static void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct raw_cursor to) {
-  int virtual_start = (from.y - g->offset + g->h) % g->h;
-  int virtual_end = (to.y - g->offset + g->h) % g->h;
+  int virtual_start = (from.row - g->offset + g->h) % g->h;
+  int virtual_end = (to.row - g->offset + g->h) % g->h;
 
-  from.y = virtual_start;
-  to.y = virtual_end;
+  from.row = virtual_start;
+  to.row = virtual_end;
 
-  for (int virtual_y = from.y; virtual_y <= to.y; virtual_y++) {
-    int x = virtual_y == from.y ? from.x : 0;
-    int end = virtual_y == to.y ? to.x : grid_end(g);
+  for (int virtual_y = from.row; virtual_y <= to.row; virtual_y++) {
+    int x = virtual_y == from.row ? from.col : 0;
+    int end = virtual_y == to.row ? to.col : grid_end(g);
 
     int raw_y = (virtual_y + g->offset + g->h) % g->h;
     struct grid_row *line = &g->rows[raw_y];
@@ -140,7 +140,7 @@ static void grid_shift_from_cursor(struct grid *g, int n) {
   }
   row->dirty = true;
   row->end_of_line = false;
-  if (row->n_significant > g->cursor.x) row->n_significant = MAX(0, row->n_significant - n);
+  if (row->n_significant > g->cursor.col) row->n_significant = MAX(0, row->n_significant - n);
 }
 
 static void grid_set_scroll_region(struct grid *g, int top, int bottom) {
@@ -176,6 +176,11 @@ static void process_pnd(struct fsm *fsm, unsigned char ch) {
   } break;
   }
 }
+
+static void process_osc(struct fsm *fsm) {
+  logmsg("TODO: OSC sequence: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer);
+}
+
 static void process_csi(struct fsm *fsm, unsigned char ch) {
   fsm->escape_buffer.buffer[fsm->escape_buffer.n++] = ch;
   if (ch >= 0x40 && ch <= 0x7E) {
@@ -263,13 +268,13 @@ static inline void grid_set_visual_line(struct grid *g, int visual) {
   assert(visual >= 0 && visual < g->h);
   int physical = (g->h + visual + g->offset) % g->h;
   assert(physical >= 0 && physical < g->h);
-  g->cursor.y = physical;
+  g->cursor.row = physical;
 }
 
 static void grid_set_visual_cursor(struct grid *g, int x, int y) {
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
-  g->cursor.x = CLAMP(x, grid_start(g), grid_end(g));
+  g->cursor.col = CLAMP(x, grid_start(g), grid_end(g));
   int vis = CLAMP(y, grid_top(g), grid_bottom(g));
   grid_set_visual_line(g, vis);
 }
@@ -286,7 +291,7 @@ static inline void grid_set_cursor_y(struct grid *g, int y) {
 static inline void grid_set_cursor_x(struct grid *g, int x) {
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
-  g->cursor.x = CLAMP(x, grid_start(g), grid_end(g));
+  g->cursor.col = CLAMP(x, grid_start(g), grid_end(g));
 }
 
 static void grid_move_cursor_x(struct grid *g, int x) {
@@ -294,7 +299,7 @@ static void grid_move_cursor_x(struct grid *g, int x) {
   row->end_of_line = false;
 
   // For the 'x' coordinate, the visual and physical coordinates are always synced
-  g->cursor.x = CLAMP(g->cursor.x + x, grid_start(g), grid_end(g));
+  g->cursor.col = CLAMP(g->cursor.col + x, grid_start(g), grid_end(g));
 }
 
 static void grid_move_cursor_y(struct grid *g, int y) {
@@ -325,7 +330,7 @@ static void grid_shift_lines(struct grid *g, int n) {
   n = MIN(n, rows_after_point);
 
   int shift = n * g->w;
-  int point = g->cursor.y * g->w;
+  int point = g->cursor.row * g->w;
   int total_cells_in_grid = g->w * g->h;
   int cells_after_point = rows_after_point * g->w;
 
@@ -345,7 +350,7 @@ static void grid_shift_lines(struct grid *g, int n) {
 
   // Dirty all lines affected by the shift
   for (int row = 0; row < rows_after_point; row++) {
-    int row_offset = (row + g->cursor.y) % g->h;
+    int row_offset = (row + g->cursor.row) % g->h;
     g->rows[row_offset].dirty = true;
   }
 }
@@ -369,13 +374,13 @@ static void grid_advance_cursor_y(struct grid *g) {
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
   struct raw_cursor *c = &g->cursor;
-  c->y = (c->y + 1) % g->h;
-  if (c->y == g->offset) {
+  c->row = (c->row + 1) % g->h;
+  if (c->row == g->offset) {
     grid_clear_line(g, g->offset);
     g->offset = (g->offset + 1) % g->h;
     grid_invalidate(g);
   }
-  assert(c->y < g->h);
+  assert(c->row < g->h);
 }
 
 bool color_equals(const struct color *const a, const struct color *const b) {
@@ -411,11 +416,11 @@ static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
 
   if (row->end_of_line) {
     row->end_of_line = false;
-    assert(cur->x == grid_end(g));
+    assert(cur->col == grid_end(g));
     if (wrap) {
-      cur->x = 0;
-      cur->y = (cur->y + 1) % g->h;
-      if (cur->y == g->offset) {
+      cur->col = 0;
+      cur->row = (cur->row + 1) % g->h;
+      if (cur->row == g->offset) {
         grid_clear_line(g, g->offset);
         g->offset = (g->offset + 1) % g->h;
         grid_invalidate(g);
@@ -423,7 +428,7 @@ static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
       row = grid_row(g);
     } else {
       // Overwrite last character
-      cur->x = grid_end(g);
+      cur->col = grid_end(g);
     }
   }
 
@@ -436,9 +441,9 @@ static void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
   cur->col++;
   row->n_significant = MAX(row->n_significant, cur->col);
 
-  if (cur->x > grid_end(g)) {
+  if (cur->col > grid_end(g)) {
     row->end_of_line = true;
-    cur->x = grid_end(g);
+    cur->col = grid_end(g);
   }
 }
 
@@ -463,7 +468,7 @@ static void ground_carriage_return(struct fsm *fsm, uint8_t ch) {
 }
 
 static void grid_backspace(struct grid *g) {
-  grid_set_cursor_x(g, g->cursor.x - 1);
+  grid_set_cursor_x(g, g->cursor.col - 1);
 }
 
 static void ground_backspace(struct fsm *fsm, uint8_t ch) {
@@ -478,7 +483,7 @@ static void ground_vtab(struct fsm *fsm, uint8_t ch) {
 static void ground_tab(struct fsm *fsm, uint8_t ch) {
   (void)ch;
   const int tabwidth = 8;
-  int x = fsm->active_grid->cursor.x;
+  int x = fsm->active_grid->cursor.col;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
   struct grid_cell c = fsm->cell;
@@ -679,7 +684,7 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
       fsm->escape_buffer.buffer[fsm->escape_buffer.n++] = ch;
       if (ch == '\\' && prev == ESC) {
         fsm->state = fsm_ground;
-        logmsg("TODO: DCS sequence: '%.*s'", fsm->escape_buffer.n - 2, fsm->escape_buffer.buffer);
+        logmsg("TODO: DCS sequence: '%.*s'", fsm->escape_buffer.n - 2, fsm->escape_buffer.buffer + 1);
       } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
         fsm->state = fsm_ground;
         logmsg("Abort DCS: max length exceeded");
@@ -689,7 +694,7 @@ void fsm_process(struct fsm *fsm, unsigned char *buf, int n) {
       char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
       fsm->escape_buffer.buffer[fsm->escape_buffer.n++] = ch;
       if (ch == BELL || (ch == '\\' && prev == ESC)) {
-        logmsg("TODO: OSC sequence: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer);
+        process_osc(fsm);
         fsm->state = fsm_ground;
       } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
         fsm->state = fsm_ground;
@@ -722,6 +727,11 @@ void grid_destroy(struct grid *grid) {
 void fsm_destroy(struct fsm *fsm) {
   grid_destroy(&fsm->primary);
   grid_destroy(&fsm->alternate);
+  vec_destroy(&fsm->pending_requests);
+}
+
+static void csi_handle_query(struct fsm *fsm, int n, int params[n]) {
+  logmsg("TODO: Implement CSI queries");
 }
 
 static void csi_toggle_mode(struct fsm *fsm, int n, int params[n]) {
@@ -854,13 +864,16 @@ static char *apply_sgr(struct grid_cell *c, int n, int *params) {
 static void apply_buffered_csi(struct fsm *fsm) {
   uint8_t *buffer = fsm->escape_buffer.buffer;
   size_t len = fsm->escape_buffer.n;
-  uint8_t final_byte = buffer[len - 1];
-  struct grid *g = fsm->active_grid;
 
   if (len < 3) {
     logmsg("CSI sequence shorter than 3 bytes!!");
     return;
   }
+
+  uint8_t ultimate_byte = buffer[len - 1];
+  uint8_t penultimate_byte = buffer[len - 2];
+  struct grid *g = fsm->active_grid;
+
 
   logmsg("CSI: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1);
   int params[SGR_MAX_PARAMS] = {0};
@@ -868,37 +881,42 @@ static void apply_buffered_csi(struct fsm *fsm) {
   parse_csi_params(buffer + 2, len - 3, params, SGR_MAX_PARAMS, &count);
   int param1 = count > 0 ? params[0] : 1;
 
-  if (buffer[2] == '?' && (final_byte == 'h' || final_byte == 'l')) {
+  if (buffer[2] == '?' && (ultimate_byte == 'h' || ultimate_byte == 'l')) {
     csi_toggle_mode(fsm, count, params);
     return;
   }
-  if (buffer[2] == '>' && final_byte == 'm') {
+  if (buffer[2] == '>' && ultimate_byte == 'm') {
     csi_set_modifiers(fsm, count, params);
     return;
   }
-  if (buffer[2] == '?' && final_byte == 'm') {
+  if (buffer[2] == '?' && ultimate_byte == 'm') {
     csi_query_modifiers(fsm, count, params);
     return;
   }
+  if (ultimate_byte == 'p' && penultimate_byte == '$') {
+    csi_handle_query(fsm, count, params);
+    return;
+  }
 
-  switch (final_byte) {
+
+  switch (ultimate_byte) {
   case 'J': { /* Erase in display */
     int mode = params[0];
     struct raw_cursor start = g->cursor;
     struct raw_cursor end = g->cursor;
     switch (mode) {
-    case 1: { /* Erase from start of screen to cursor */ start.x = grid_start(g); start.y = grid_virtual_top(g);
+    case 1: { /* Erase from start of screen to cursor */ start.col = grid_start(g); start.row = grid_virtual_top(g);
     } break;
     case 2: { /* Erase entire screen */
-      start.x = grid_start(g);
-      start.y = grid_virtual_top(g);
-      end.x = grid_end(g);
-      end.y = grid_virtual_bottom(g);
+      start.col = grid_start(g);
+      start.row = grid_virtual_top(g);
+      end.col = grid_end(g);
+      end.row = grid_virtual_bottom(g);
     } break;
     case 3: { /* erase scrollback */ return;
     } break;
     case 0:
-    default: { /* erase from cursor to end of screen */ end.x = grid_end(g); end.y = grid_virtual_bottom(g);
+    default: { /* erase from cursor to end of screen */ end.col = grid_end(g); end.row = grid_virtual_bottom(g);
     } break;
     }
     grid_erase_between_cursors(g, start, end);
@@ -927,42 +945,61 @@ static void apply_buffered_csi(struct fsm *fsm) {
     struct raw_cursor start = g->cursor;
     struct raw_cursor end = g->cursor;
     switch (mode) {
-    case 1: { /* erase from start to cursor */ start.x = grid_start(g);
+    case 1: { /* erase from start to cursor */ start.col = grid_start(g);
     } break;
-    case 2: { /* erase entire line */ start.x = grid_start(g); end.x = grid_end(g);
+    case 2: { /* erase entire line */ start.col = grid_start(g); end.col = grid_end(g);
     } break;
     case 0:
     default: {
       // erase from cursor to end
-      end.x = grid_end(g);
+      end.col = grid_end(g);
     } break;
     }
     grid_erase_between_cursors(g, start, end);
   } break;
-    /* cursor movement */
-  case 'A': { /* move up */ grid_move_cursor(g, 0, -param1);
+  case 'A': { // up
+    grid_move_cursor(g, 0, -param1);
   } break;
-  case 'B': { /* move down */ grid_move_cursor(g, 0, param1);
+  case 'B': { // down
+    grid_move_cursor(g, 0, param1);
   } break;
-  case 'C': { /* move right */ grid_move_cursor(g, param1, 0);
+  case 'C': { // right
+    grid_move_cursor(g, param1, 0);
   } break;
-  case 'D': { /* move left */ grid_move_cursor(g, -param1, 0);
+  case 'D': { // left
+    grid_move_cursor(g, -param1, 0);
   } break;
   case 'H': { /* cursor move to coordinate */
     int col = params[1] ? params[1] : 1;
     int row = params[0] ? params[0] : 1;
     grid_set_visual_cursor(g, col - 1, row - 1);
   } break;
-  case 'P': { /* delete characters */ grid_shift_from_cursor(g, param1);
+  case 'P': grid_shift_from_cursor(g, param1); break;       /* delete characters */
+  case '@': grid_insert_blanks_at_cursor(g, param1); break; /* Insert blank characters */
+  case 'c': {
+    char which = buffer[len - 2];
+    enum emulator_query_type e = which == '>'   ? REQUEST_SECONDARY_DEVICE_ATTRIBUTES
+                              : which == '=' ? REQUEST_TERTIARY_DEVICE_ATTRIBUTES
+                                             : REQUEST_PRIMARY_DEVICE_ATTRIBUTES;
+    struct emulator_query req = {.type = e};
+    vec_push(&fsm->pending_requests, &req);
   } break;
-  case '@': { /* Insert blank characters */ grid_insert_blanks_at_cursor(g, param1);
+  case 'n': {
+    enum emulator_query_type e = params[0];
+    if (e == REQUEST_CURSOR_POSITION || e == REQUEST_STATUS_OK) {
+      struct emulator_query req = {.type = e};
+      vec_push(&fsm->pending_requests, &req);
+    } else {
+      logmsg("TODO: CSI[%dn", e);
+    }
   } break;
-  case 'n': { /* report cursor position */
-    if (fsm->on_report_cursor_position) fsm->on_report_cursor_position(fsm->context, g->cursor.y + 1, g->cursor.x + 1);
+  case 'd': {
+    int row = params[0] ? params[0] : 1;
+    grid_set_cursor_y(g, row - 1);
   } break;
-  case 'd': { /* move to absolute row */ int row = params[0] ? params[0] : 1; grid_set_cursor_y(g, row - 1);
-  } break;
-  case 'G': { /* move to absolute column */ int col = params[0] ? params[0] : 1; grid_set_cursor_x(g, col - 1);
+  case 'G': {
+    int col = params[0] ? params[0] : 1;
+    grid_set_cursor_x(g, col - 1);
   } break;
   case 'b': { /* repeat last character */
     int count = params[0] ? params[0] : 1;
