@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
@@ -15,7 +14,6 @@
 #include "collections.h"
 #include "emulator.h"
 #include "pane.h"
-#include "queries.h"
 #include "utils.h"
 #include <sys/wait.h>
 
@@ -189,84 +187,104 @@ static void zoom(void) {
 }
 
 static bool running = true;
+
+bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
+  switch (ch) {
+  case CTRL('N'):
+    if (pane_count(clients) < 6) {
+      struct pane *new = calloc(1, sizeof(*new));
+      new->process = strdup("bash");
+      new->next = clients;
+      clients = new;
+      arrange(ws_current, clients);
+      pane_start(new);
+      set_nonblocking(new->pty);
+      focus_pane(new);
+      string_push(draw_buffer, "\x1b[2J");
+    } else {
+      logmsg("Too many panes. Spawn request ignored.");
+    }
+    return true;
+  case CTRL('G'): zoom(); return true;
+  case CTRL('A'):
+    nmaster = MIN(pane_count(clients), nmaster + 1);
+    arrange(ws_current, clients);
+    return true;
+  case CTRL('X'):
+    nmaster = MAX(0, nmaster - 1);
+    arrange(ws_current, clients);
+    return true;
+  case CTRL('K'): focusprev(); return true;
+  case CTRL('J'): focusnext(); return true;
+  }
+  return false;
+}
+
+static inline uint64_t dumbest_hash(uint8_t *str) {
+  uint64_t hash = 0;
+  for (; *str; str++) hash = (hash << 8) | *str;
+  return hash;
+}
+
+// Who needs to paste more than 1mb lol
+#define PASTEBUFFER_MAX (1 << 20)
 static void handle_stdin(const char *const buf, int n, struct string *draw_buffer) {
-  enum stdin_state {
+  static struct string writebuffer = {0};
+  static struct string pastebuffer = {0};
+  static enum stdin_state {
     normal,
     esc,
     csi,
-  };
-  static enum stdin_state s = normal;
+    bracketed_paste,
+  } s;
 
-  static struct string writebuffer = {0};
+  uint64_t paste_start = dumbest_hash((uint8_t *)"\x1b[200~");
+  uint64_t paste_end = dumbest_hash((uint8_t *)"\x1b[201~");
+  uint64_t pastebuf = 0;
+
   string_clear(&writebuffer);
 
   for (int i = 0; i < n; i++) {
-    char ch = buf[i];
-
-    switch (s) {
-    case normal: {
-      switch (ch) {
-      case 0x1b: {
-        s = esc;
-      } break;
-      case CTRL('N'): {
-        if (pane_count(clients) < 6) {
-          struct pane *new = calloc(1, sizeof(*new));
-          new->process = strdup("bash");
-          new->next = clients;
-          clients = new;
-          arrange(ws_current, clients);
-          pane_start(new);
-          set_nonblocking(new->pty);
-          focus_pane(new);
-          string_push(draw_buffer, "\x1b[2J");
-        } else {
-          logmsg("Too many panes. Spawn request ignored.");
-        }
-      } break;
-      case CTRL('G'): {
-        zoom();
-      } break;
-      case CTRL('A'): {
-        nmaster = MIN(pane_count(clients), nmaster + 1);
-        arrange(ws_current, clients);
-      } break;
-      case CTRL('X'): {
-        nmaster = MAX(0, nmaster - 1);
-        arrange(ws_current, clients);
-      } break;
-      case CTRL('K'): {
-        focusprev();
-      } break;
-      case CTRL('J'): {
-        focusnext();
-      } break;
-      default: {
-        string_push_char(&writebuffer, ch);
-      } break;
+    uint8_t ch = buf[i];
+    pastebuf = ((pastebuf << 8) | ch) & 0x00ffffffffffff;
+    if (s == normal && pastebuf == paste_start) {
+      writebuffer.len -= 5;
+      s = bracketed_paste;
+      continue;
+    } else if (s == bracketed_paste && pastebuf == paste_end) {
+      pastebuffer.len -= 5;
+      s = normal;
+      if (focused && focused->fsm.features.bracketed_paste) {
+        string_push(&writebuffer, "\x1b[200~");
+        string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
+        string_push(&writebuffer, "\x1b[201~");
+      } else {
+        string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
       }
-      break;
+      continue;
+    }
+    switch (s) {
+    case bracketed_paste: string_push_char(&pastebuffer, ch); break;
+    case normal: {
+      if (ch == 0x1b) {
+        s = esc;
+      } else if (handle_keybinds(ch, draw_buffer)) {
+        continue;
+      } else {
+        string_push_char(&writebuffer, ch);
+      }
     } break;
     case esc: {
-      s = normal;
-      switch (ch) {
-      case '[': {
+      if (ch == '[') {
         s = csi;
-      } break;
-      case 'k': {
-        focusprev();
-      } break;
-      case 'j': {
-        focusnext();
-      } break;
-      default: {
+      } else {
+        // escape next char
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, ch);
-      } break;
+        s = normal;
       }
     } break;
     case csi: {
-      // TODO: Bracketed paste
       if (ch >= 'A' && ch <= 'D' && focused->fsm.features.application_mode) {
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, 'O');
@@ -276,7 +294,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         bool did_focus = ch == 'I';
         if (focused->fsm.features.focus_reporting) {
           const char *s = did_focus ? focus_in : focus_out;
-          string_push_slice(&writebuffer, s, strlen(s));
+          string_push_slice(&writebuffer, (uint8_t *)s, strlen(s));
         }
         // If the pane does not have the feature enabled, ignore it.
       } else {
@@ -289,9 +307,13 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     }
   }
 
-  // TODO: Implement timing mechanism for escaping escape.
-  // For now, flush it immediately if we would leave the state machine in the escape state.
-  if (s == esc) {
+  // TODO: Implement timing mechanism for escapes.
+  // For now, flush flush before return to restore state machine to normal input mode
+  if (s == csi) {
+    string_push_char(&writebuffer, 0x1b);
+    string_push_char(&writebuffer, '[');
+    s = normal;
+  } else if (s == esc) {
     string_push_char(&writebuffer, 0x1b);
     s = normal;
   }
@@ -495,9 +517,8 @@ int main(int argc, char **argv) {
     char hide_cursor[] = "\x1b[?25l";
     char show_cursor[] = "\x1b[?25h";
     string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
-    size_t initial_bytes = draw_buffer.len;
     for (struct pane *p = clients; p; p = p->next) {
-      pane_draw(p, true, &draw_buffer);
+      pane_draw(p, false, &draw_buffer);
     }
 
     for (struct pane *p = clients; p; p = p->next) {
@@ -511,9 +532,7 @@ int main(int argc, char **argv) {
     if (focused && focused->fsm.features.cursor_hidden == false)
       string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
 
-    if (draw_buffer.len != initial_bytes) {
-      string_flush(&draw_buffer, STDOUT_FILENO, NULL);
-    }
+    string_flush(&draw_buffer, STDOUT_FILENO, NULL);
 
     { // update fd set
       int i = 0;

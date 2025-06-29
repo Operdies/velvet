@@ -1,6 +1,5 @@
 #include "collections.h"
 #include "utils.h"
-#include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +36,7 @@ void string_push_int(struct string *str, int n) {
   string_push_slice(str, buf + idx, max - idx);
 }
 
-void string_push_slice(struct string *str, const char *const src, size_t len) {
+void string_push_slice(struct string *str, const uint8_t *const src, size_t len) {
   size_t required = str->len + len;
   string_ensure_capacity(str, required);
   memcpy(str->content + str->len, src, len);

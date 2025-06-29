@@ -56,3 +56,8 @@ If the status bar is a regular binary, how does it know about vv internals it
 should display? (selected tag, what windows are on what tags, etc.) Feed this
 information on stdin? And then the bar should interpret whether stdin is user
 input based on whether it is focused or not?
+
+* Bugs
+ - nvim + vim broken (scrolling, scroll region, missing queries)
+ - MANPAGER=nvim +Man! hangs on startup
+ - nvim shutdown slow (likely waiting for query response)

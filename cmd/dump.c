@@ -1,6 +1,5 @@
 // Disassemble CSI escape sequences
 #include "collections.h"
-#include <assert.h>
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>

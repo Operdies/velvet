@@ -1,5 +1,4 @@
 #include "utils.h"
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -159,8 +158,17 @@ static void disable_focus_reporting(void) {
 }
 
 static void enable_focus_reporting(void) {
-  // dprintf(STDOUT_FILENO, "\x1b[1004h");
   char buf[] = "\x1b[?1004h";
+  write(STDOUT_FILENO, buf, sizeof(buf));
+}
+
+static void enable_bracketed_paste(void) {
+  char buf[] = "\x1b[?2004h";
+  write(STDOUT_FILENO, buf, sizeof(buf));
+}
+
+static void disable_bracketed_paste(void) {
+  char buf[] = "\x1b[?2004l";
   write(STDOUT_FILENO, buf, sizeof(buf));
 }
 
@@ -169,8 +177,10 @@ void enable_raw_mode_etc(void) {
   enable_raw_mode();
   disable_line_wrapping();
   enable_focus_reporting();
+  enable_bracketed_paste();
 }
 void disable_raw_mode_etc(void) {
+  disable_bracketed_paste();
   disable_focus_reporting();
   enable_line_wrapping();
   exit_raw_mode();

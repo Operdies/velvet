@@ -3,143 +3,23 @@
 
 #include <stdint.h>
 #include "queries.h"
-
-#define MAX_ESC_SEQ_LEN 4096
-
-
-struct utf8 {
-  /* the current byte sequence */
-  uint8_t utf8[8];
-  /* the length of the current sequence */
-  uint8_t len;
-  /* the expected total length based on the leading byte */
-  uint8_t expected;
-};
-
-enum cell_attributes {
-  ATTR_NONE = 0,
-
-  ATTR_BOLD = 1u << 0,      // SGR 1
-  ATTR_FAINT = 1u << 1,     // SGR 2
-  ATTR_ITALIC = 1u << 2,    // SGR 3
-  ATTR_UNDERLINE = 1u << 3, // SGR 4
-
-  ATTR_BLINK_SLOW = 1u << 4,  // SGR 5
-  ATTR_BLINK_RAPID = 1u << 5, // SGR 6
-  ATTR_REVERSE = 1u << 6,     // SGR 7
-  ATTR_CONCEAL = 1u << 7,     // SGR 8
-  ATTR_CROSSED_OUT = 1u << 8, // SGR 9
-
-  ATTR_UNDERLINE_DOUBLE = 1u << 9,  // SGR 21 or CSI 4:2m
-  ATTR_UNDERLINE_CURLY = 1u << 10,  // CSI 4:3m
-  ATTR_UNDERLINE_DOTTED = 1u << 11, // CSI 4:4m
-  ATTR_UNDERLINE_DASHED = 1u << 12, // CSI 4:5m
-
-  ATTR_FRAMED = 1u << 13,    // SGR 51
-  ATTR_ENCIRCLED = 1u << 14, // SGR 52
-  ATTR_OVERLINED = 1u << 15, // SGR 53
-
-  // Font (SGR 10–19): store in separate field if needed.
-  // Optionally: 3 bits reserved for font ID (bits 16–18)
-
-  // Reserve for future use
-  ATTR_RESERVED_1 = 1u << 16,
-  ATTR_RESERVED_2 = 1u << 17,
-  ATTR_RESERVED_3 = 1u << 18,
-
-  // Masks for groups
-  ATTR_UNDERLINE_ANY = ATTR_UNDERLINE | ATTR_UNDERLINE_DOUBLE |
-                       ATTR_UNDERLINE_CURLY | ATTR_UNDERLINE_DOTTED |
-                       ATTR_UNDERLINE_DASHED,
-
-  ATTR_BLINK_ANY = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
-};
-
-enum color_command {
-  COLOR_RESET,
-  COLOR_RGB,
-  COLOR_TABLE,
-};
-struct color {
-  enum color_command cmd;
-  union {
-    uint32_t color;
-    struct {
-      uint8_t r, g, b;
-    };
-    uint8_t table;
-  };
-};
-
-static const struct color color_default = {.cmd = COLOR_RESET};
-
-struct grid_cell_style {
-  enum cell_attributes attr;
-  struct color fg, bg;
-};
-
-static const struct grid_cell_style style_default = {0};
-
-struct grid_cell {
-  // TODO: utf8 (multi-byte characters)
-  // Right now, utf8 will probably render correctly, but not if utf8 characters
-  // are split across a line barrier
-  // TODO: variable width cells (e.g. double width emojis)
-  struct utf8 symbol;
-  struct grid_cell_style style;
-
-  // If enabled, the renderer should switch rendering mode when rendering this
-  // cell
-  bool charset_dec_special;
-};
-
-struct grid_row {
-  struct grid_cell *cells;
-  // Track newline locations to support rewrapping
-  bool newline;
-  // Indicates that this line is wrapped and should be cleared when written
-  bool end_of_line;
-  // Track how many characters are significant on this line. This is needed for
-  // reflowing when resizing grids.
-  int n_significant;
-  // Track whether or not the line starting with this cell is dirty (should be
-  // re-rendered)
-  bool dirty;
-};
-
-static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
-static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
-static const struct grid_cell empty_cell = {.symbol = utf8_blank};
-
-// 0-indexed grid coordinates. This cursor points at a raw cell
-struct raw_cursor {
-  int col, row;
-};
-
-struct grid {
-  int w, h;
-  // line offset to the first line of the cell (e.g. cells[offset * w] is the
-  // first cell in the grid)
-  int offset;
-  /* scroll region is local to the grid and is not persisted when the window /
-   * pane is resized or alternate screen is entered */
-  int scroll_top, scroll_bottom;
-  struct grid_cell *cells; // cells[w*h]
-  struct grid_row *rows;   // rows[h]
-  struct raw_cursor cursor;
-  struct raw_cursor saved_cursor;
-};
+#include "text.h"
+#include "grid.h"
 
 enum fsm_state {
   fsm_ground,
+  fsm_utf8,
   fsm_escape,
   fsm_csi,
   fsm_osc,
   fsm_dcs,
   fsm_pnd,
+  fsm_spc,
+  fsm_pct,
   fsm_charset,
 };
 
+#define MAX_ESC_SEQ_LEN 4096
 struct escape_sequence {
   uint8_t buffer[MAX_ESC_SEQ_LEN];
   int n;
@@ -163,10 +43,74 @@ struct modifier_options {
   };
 };
 
+enum charset_map {
+  CHARSET_G0,
+  CHARSET_G1,
+  CHARSET_G2,
+  CHARSET_G3,
+  CHARSET_LAST,
+};
+
+enum charset {
+  CHARSET_ASCII,                     // B
+  CHARSET_UNITED_KINGDOM,            // A
+  CHARSET_FINNISH,                   // C or 5
+  CHARSET_SWEDISH,                   // H
+  CHARSET_GERMAN,                    // K
+  CHARSET_FRENCH_CANADIAN,           // Q
+  CHARSET_FRENCH,                    // R or f
+  CHARSET_ITALIAN,                   // Y
+  CHARSET_SPANISH,                   // Z
+  CHARSET_DUTCH,                     // 4
+  CHARSET_GREEK,                     // " >
+  CHARSET_TURKISH,                   // % 2
+  CHARSET_PORTUGUESE,                // % 6
+  CHARSET_HEBREW,                    // % =
+  CHARSET_SWISS,                     // =
+  CHARSET_NORDIC,                    // `, E, or 6
+  CHARSET_DEC_SPECIAL,               // 0
+  CHARSET_DEC_SUPPLEMENTAL,          // <
+  CHARSET_USER_PREFERRED,            // <
+  CHARSET_DEC_TECHNICAL,             // >
+  CHARSET_DEC_HEBREW,                // " 4
+  CHARSET_DEC_GREEK,                 // " ?
+  CHARSET_DEC_TURKISH,               // % 0
+  CHARSET_DEC_SUPPLEMENTAL_GRAPHICS, // % 5
+  CHARSET_DEC_CYRILLIC,              // & 4
+  CHARSET_JIS_KATAKANA,              // I
+  CHARSET_JIS_ROMAN,                 // J
+  CHARSET_SCS_NRCS,                  // % 3
+  CHARSET_DEC_RUSSIAN,               // & 5
+};
+
+// Commented charsets are not supported and will be treated as ASCII (0)
+static enum charset charset_lookup[] = {
+    ['0'] = CHARSET_DEC_SPECIAL, ['B'] = CHARSET_ASCII,
+    // ['2'] = CHARSET_TURKISH,
+    // ['4'] = CHARSET_DUTCH,
+    // ['5'] = CHARSET_FINNISH,
+    // ['6'] = CHARSET_NORDIC,
+    // ['<'] = CHARSET_USER_PREFERRED,
+    // ['='] = CHARSET_SWISS,
+    // ['>'] = CHARSET_DEC_TECHNICAL,
+    // ['A'] = CHARSET_UNITED_KINGDOM,
+    // ['C'] = CHARSET_FINNISH,
+    // ['E'] = CHARSET_NORDIC,
+    // ['H'] = CHARSET_SWEDISH,
+    // ['I'] = CHARSET_JIS_KATAKANA,
+    // ['J'] = CHARSET_JIS_ROMAN,
+    // ['K'] = CHARSET_GERMAN,
+    // ['Q'] = CHARSET_FRENCH_CANADIAN,
+    // ['R'] = CHARSET_FRENCH,
+    // ['Y'] = CHARSET_ITALIAN,
+    // ['Z'] = CHARSET_SPANISH,
+    // ['`'] = CHARSET_NORDIC,
+    // ['f'] = CHARSET_FRENCH,
+};
+
 struct charset_options {
-  char g0;
-  char g1;
-  bool g1_active;
+  enum charset_map active_charset;
+  uint8_t charsets[CHARSET_LAST];
 };
 
 struct features {
@@ -217,12 +161,12 @@ struct fsm {
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);
 void fsm_destroy(struct fsm *fsm);
 void grid_invalidate(struct grid *g);
-void fsm_grid_resize(struct fsm *fsm);
+void fsm_ensure_grid_initialized(struct fsm *fsm);
 bool cell_equals(const struct grid_cell *const a,
                  const struct grid_cell *const b);
-bool symbol_equals(const struct utf8 *const a, const struct utf8 *const b);
 bool cell_style_equals(const struct grid_cell_style *const a,
                        const struct grid_cell_style *const b);
 bool color_equals(const struct color *const a, const struct color *const b);
+void fsm_set_active_grid(struct fsm *fsm, struct grid *grid);
 
 #endif /*  EMULATOR_H */

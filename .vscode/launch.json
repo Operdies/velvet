@@ -2,43 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug disassembler",
-            "type": "codelldb",
-            "request": "launch",
-            "program": "bin/dump",
-            "args": ["../top_log.ansi"],
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "lldb"
-        },
-        {
-            "name": "Debug top",
-            "type": "codelldb",
-            "request": "launch",
-            "program": "bin/vv",
-            "args": ["vim"],
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "lldb"
-        },
-        {
-            "name": "Debug vim",
-            "type": "codelldb",
-            "request": "launch",
-            "program": "bin/vv",
-            "args": ["vim"],
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "lldb"
-        },
-        {
-            "name": "Debug vv",
+            "name": "Debug zsh",
             "type": "codelldb",
             "request": "launch",
             "program": "bin/vv",
@@ -50,11 +14,11 @@
             "MIMode": "lldb"
         },
         {
-            "name": "Debug double",
+            "name": "Debug vv",
             "type": "codelldb",
             "request": "launch",
             "program": "bin/vv",
-            "args": ["bash", "zsh"],
+            "args": ["nvim"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

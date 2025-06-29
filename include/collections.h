@@ -3,7 +3,6 @@
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
-#define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
 
 #include <stddef.h>
 #include <stdint.h>
@@ -45,7 +44,7 @@ struct vec {
   size_t capacity;
 };
 
-void string_push_slice(struct string *str, const char *const src, size_t len);
+void string_push_slice(struct string *str, const uint8_t *const src, size_t len);
 void string_push(struct string *str, const char *const src);
 void string_push_char(struct string *str, char ch);
 void string_push_int(struct string *str, int value);

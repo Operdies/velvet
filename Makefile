@@ -16,7 +16,7 @@ CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_D
 CMD_OUT = $(patsubst %.c.o, %, $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
-OBJECTS = pane utils collections emulator queries term_parser
+OBJECTS = pane utils collections emulator queries text csi grid
 OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
@@ -27,7 +27,6 @@ DEFINES +=
 # CFLAGS += -std=c23 -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR) -MMD -MP
 CFLAGS += -std=c23 $(DEFINES) -fsanitize=address -O0 -g $(OPT) -Wall -Wextra -I$(INCLUDE_DIR)  -MMD -MP
 LDFLAGS += $(LIBS)
-
 
 .PHONY: all
 all: $(CMD_OUT) $(OUT_DIR)

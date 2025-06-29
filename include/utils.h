@@ -2,9 +2,29 @@
 #define UTILS_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #define LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define LINE_STR TOSTRING(__LINE__)
+
+#define TODO(...)                                                              \
+  logmsg("[" __FILE__ ":" LINE_STR "] "                                        \
+         "TODO: " __VA_ARGS__)
+
+#ifdef NDEBUG
+#define assert(cond) ((void)0)
+#else
+#define assert(cond)                                                           \
+  ((cond) ? (void)0                                                            \
+          : (disable_raw_mode_etc(),                                           \
+             logmsg("Assertion failed: %s, file %s, line %d\n", #cond,         \
+                    __FILE__, __LINE__),                                       \
+             exit(EXIT_FAILURE), (void)0))
+#endif
 
 void logmsg(char *fmt, ...);
 void flogmsg(FILE *f, char *fmt, ...);

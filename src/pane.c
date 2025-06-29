@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <pane.h>
 #include <signal.h>
 #include <stdio.h>
@@ -182,7 +181,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     // Ensure the grid content is in sync with the pane just-in-time
     pane->fsm.w = pane->rect.client.w;
     pane->fsm.h = pane->rect.client.h;
-    fsm_grid_resize(&pane->fsm);
+    fsm_ensure_grid_initialized(&pane->fsm);
   }
 
   struct grid *g = pane->fsm.active_grid;
@@ -203,7 +202,14 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     }
 
     int num_blanks = g->w - line_length;
-    if (num_blanks > 0) {
+    if (num_blanks > 3) {
+      // CSI Pn X -- Erase Pn characters after cursor
+      apply_style(&style_default, outbuffer);
+      string_push(outbuffer, "\x1b[");
+      string_push_int(outbuffer, num_blanks);
+      string_push_char(outbuffer, 'X');
+    } else {
+      // Micro optimization. Insert spaces if the number of blanks is very small
       apply_style(&style_default, outbuffer);
       string_memset(outbuffer, ' ', num_blanks);
     }
@@ -211,7 +217,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 }
 
 // TODO: This sucks
-// Alternative implementation: Walk pane list and termine where all the borders are 
+// Alternative implementation: Walk pane list and termine where all the borders are
 // Then draw the borders, and style the borders touching the focused pane
 void pane_draw_border(struct pane *p, struct string *b) {
   if (p->border_width == 0 || !p->border_dirty) return;
@@ -227,8 +233,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
   if (topmost && leftmost) {
     // corner = "╭";
     topleft_corner = "─";
-    if (p->rect.window.w < ws_current.ws_col)
-      topright_corner = "┬";
+    if (p->rect.window.w < ws_current.ws_col) topright_corner = "┬";
   } else if (topmost) {
     topleft_corner = "┬";
   } else if (leftmost) {
@@ -241,8 +246,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
     topleft_corner = "│";
   }
 
-  if (!topmost)
-  {
+  if (!topmost) {
     bool before = true;
     for (struct pane *c = clients; c; c = c->next) {
       if (c == p) {
@@ -264,8 +268,8 @@ void pane_draw_border(struct pane *p, struct string *b) {
   char *bottomleftcorner = "\n\b│";
   char *pipe = "\n\b│";
   char *dash = "─";
-  char *beforetitle = " ";//"┤";
-  char *aftertitle = " ";//"├";
+  char *beforetitle = " "; //"┤";
+  char *aftertitle = " ";  //"├";
   int left = p->rect.window.x + 1;
   int top = p->rect.window.y + 1;
   int bottom = p->rect.window.h + top;
@@ -303,19 +307,6 @@ void pane_draw_border(struct pane *p, struct string *b) {
     }
   }
   apply_style(&style_default, b);
-}
-
-static void on_report_mouse_position(void *context, int row, int col) {
-  struct pane *p = context;
-  if (p->pty) {
-    char buf[30] = "\x1b[";
-    int n = 2;
-    n = write_int(buf + n, row);
-    buf[++n] = ';';
-    n += write_int(buf + n, col);
-    buf[++n] = 'R';
-    write(p->pty, buf, n);
-  }
 }
 
 void pane_write(struct pane *pane, uint8_t *buf, int n) {

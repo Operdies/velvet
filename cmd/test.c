@@ -1,5 +1,6 @@
 #include "collections.h"
 #include "pane.h"
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,8 @@
 #define CSI "\x1b["
 #define UP(x) CSI #x "A"
 #define DOWN(x) CSI #x "B"
+#define DOWN1 CSI "B"
+#define RIGHT1 CSI "C"
 #define RIGHT(x) CSI #x "C"
 #define LEFT(x) CSI #x "D"
 #define ABS(x, y) CSI #x ";" #y "H"
@@ -23,8 +26,8 @@ struct chargrid {
   char cells[];
 };
 
-struct bounds bsmall = { .w = 5, .h = 5 };
-struct bounds blarge = { .w = 8, .h = 5 };
+struct bounds bsmall = {.w = 5, .h = 5};
+struct bounds blarge = {.w = 8, .h = 5};
 
 struct chargrid *make_chargrid(int rows, int cols, char g[rows][cols]) {
   struct chargrid *grid = calloc(sizeof(*grid) + rows * cols, 1);
@@ -153,7 +156,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   const char *reset = "\x1b[2J\x1b[1;1H";
   struct chargrid *expected = make_chargrid(5, 8, expected1);
 
-  struct pane p = { 0 };
+  struct pane p = {0};
   pane_resize(&p, blarge);
   struct string output = {0};
   {
@@ -248,7 +251,7 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = { 0 };
+  struct pane p = {0};
   pane_resize(&p, blarge);
   pane_write(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
@@ -282,7 +285,20 @@ static void test_input_output(void) {
                          });
   // move cursor to extremes and type
   test_grid_input_output("cursor movement",
-                         UP(123) LEFT(123) RIGHT(1) DOWN(1) "12" RIGHT(99) DOWN(99) UP(1) LEFT(1) "3",
+                         UP(123) LEFT(123) RIGHT1 DOWN1 "12" RIGHT(99) DOWN(99) UP(1) LEFT(1) "3",
+                         (grid_5x8){
+                             {"        "},
+                             {" 12     "},
+                             {"        "},
+                             {"      3 "},
+                             {"        "},
+                         });
+  test_grid_input_output("cursor movement virutal scroll",
+                         "                 "
+                         "                 "
+                         "                 "
+                         "                 " // keep
+                         UP(123) LEFT(123) RIGHT1 DOWN1 "12" RIGHT(99) DOWN(99) UP(1) LEFT(1) "3",
                          (grid_5x8){
                              {"     "},
                              {" 12 "},
@@ -372,7 +388,27 @@ static void test_input_output(void) {
                              {"world!!"},
                          });
 
-  test_grid_input_output("Delete Lines",
+  test_grid_input_output("Shift Lines Down",
+                         CSI "?20h"
+                             "Line1\nLine2\nLine3\nLine4\nLine5" ABS(2, 1) CSI "2L",
+                         (grid_5x8){
+                             {"Line1"},
+                             {"     "},
+                             {"     "},
+                             {"Line2"},
+                             {"Line3"},
+                         });
+  test_grid_input_output("Shift Lines Down Virtual",
+                         CSI "?20h"
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" ABS(2, 1) CSI "2L",
+                         (grid_5x8){
+                             {"Line3"},
+                             {"     "},
+                             {"     "},
+                             {"Line4"},
+                             {"Line5"},
+                         });
+  test_grid_input_output("Shift Lines Up",
                          CSI "?20h"
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M",
                          (grid_5x8){
@@ -380,13 +416,13 @@ static void test_input_output(void) {
                              {"Line5"},
                              {"Line6"},
                          });
-  test_grid_input_output("Delete Too Many Lines",
+  test_grid_input_output("Shift Many Lines Up",
                          CSI "?20h" /* enable auto-return */
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "10M",
                          (grid_5x8){
                              {"Line2"},
                          });
-  test_grid_input_output("Delete Too Many Lines 2",
+  test_grid_input_output("Shift Many Lines Up 2",
                          CSI "?20h" /* enable auto-return */
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(9, 1) CSI "10M",
                          (grid_5x8){
@@ -396,11 +432,29 @@ static void test_input_output(void) {
                              {"Line5"},
                              {"     "},
                          });
-  test_grid_input_output("Delete All But Last",
+  test_grid_input_output("Shift Up All But Last",
                          CSI "?20h" /* enable auto-return */
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(1, 2) CSI "4M",
                          (grid_5x8){
                              {"Line6"},
+                         });
+  test_grid_input_output("Shift Lines Down Then Up",
+                         CSI "?20h"
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M" CSI "L",
+                         (grid_5x8){
+                             {"Line2"},
+                             {"     "},
+                             {"Line5"},
+                             {"Line6"},
+                         });
+  test_grid_input_output("Shift Lines Up Then Down",
+                         CSI "?20h"
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2L" CSI "M",
+                         (grid_5x8){
+                             {"Line2"},
+                             {"     "},
+                             {"Line3"},
+                             {"Line4"},
                          });
   test_grid_input_output("Overflow Grid",
                          "AAAAAAAA"
@@ -577,9 +631,23 @@ static void test_erase(void) {
                          });
 }
 
+void test_scrolling(void) {
+  test_grid_input_output("Line Truncated",
+                         "abcd\r" CSI "2@",
+                         (grid_5x8){
+                             {"  abcd  "},
+                         });
+}
+
+void done() {
+  logmsg("[Test Exit]");
+}
+
 int main(void) {
+  atexit(done);
   test_input_output();
   test_reflow();
   test_erase();
+  test_scrolling();
   return n_failures;
 }
