@@ -46,7 +46,7 @@ void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
   grid_resize_if_needed(fsm->active_grid, fsm->w, fsm->h, reflow_content);
 }
 
-static void process_charset(struct fsm *fsm, uint8_t ch) {
+static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
   assert(fsm->escape_buffer.n > 1);
   escape_buffer_append(fsm, ch);
 
@@ -94,7 +94,7 @@ static void process_charset(struct fsm *fsm, uint8_t ch) {
   }
 }
 
-static void process_pnd(struct fsm *fsm, unsigned char ch) {
+static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
   // All pnd commands are single character commands
   // and can be applied immediately
   fsm->state = fsm_ground;
@@ -121,7 +121,7 @@ static void process_pnd(struct fsm *fsm, unsigned char ch) {
   }
 }
 
-static void process_osc(struct fsm *fsm) {
+static void handle_osc(struct fsm *fsm, const char *st) {
   TODO("OSC sequence: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer);
 }
 
@@ -225,7 +225,7 @@ static void ground_process_shift_in_out(struct fsm *fsm, uint8_t ch) {
     fsm->features.charset_options.active_charset = CHARSET_G1;
 }
 
-static void process_ground(struct fsm *fsm, uint8_t ch) {
+static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
   // These symbols have special behavior in terms of how they affect layout
   static void (*const dispatch[UINT8_MAX])(struct fsm *, uint8_t) = {
       [NUL] = ground_noop,
@@ -298,34 +298,17 @@ static void fsm_full_reset(struct fsm *fsm) {
   grid_full_reset(&fsm->primary);
 }
 
-static void process_escape(struct fsm *fsm, uint8_t ch) {
+static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
+  escape_buffer_append(fsm, ch);
   fsm->state = fsm_ground;
   struct grid *g = fsm->active_grid;
   switch (ch) {
-  case CSI:
-    fsm->state = fsm_csi;
-    escape_buffer_append(fsm, ch);
-    break;
-  case OSC:
-    fsm->state = fsm_osc;
-    escape_buffer_append(fsm, ch);
-    break;
-  case PCT:
-    fsm->state = fsm_pct;
-    escape_buffer_append(fsm, ch);
-    break;
-  case SPC:
-    fsm->state = fsm_spc;
-    escape_buffer_append(fsm, ch);
-    break;
-  case PND:
-    fsm->state = fsm_pnd;
-    escape_buffer_append(fsm, ch);
-    break;
-  case DCS:
-    fsm->state = fsm_dcs;
-    escape_buffer_append(fsm, ch);
-    break;
+  case CSI: fsm->state = fsm_csi; break;
+  case OSC: fsm->state = fsm_osc; break;
+  case PCT: fsm->state = fsm_pct; break;
+  case SPC: fsm->state = fsm_spc; break;
+  case PND: fsm->state = fsm_pnd; break;
+  case DCS: fsm->state = fsm_dcs; break;
   case '6': TODO("Back Index"); break;
   case '7': fsm->active_grid->saved_cursor = fsm->active_grid->cursor; break;
   case '8': fsm->active_grid->cursor = fsm->active_grid->saved_cursor; break;
@@ -363,7 +346,6 @@ static void process_escape(struct fsm *fsm, uint8_t ch) {
   case '.': // designate G2, VT300
   case '/': // designate G3, VT300
     fsm->state = fsm_charset;
-    escape_buffer_append(fsm, ch);
     break;
   case 'n':
   case 'o':
@@ -378,7 +360,7 @@ static void process_escape(struct fsm *fsm, uint8_t ch) {
   }
 }
 
-void process_dcs(struct fsm *fsm, uint8_t ch) {
+void fsm_dispatch_dcs(struct fsm *fsm, uint8_t ch) {
   char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
   escape_buffer_append(fsm, ch);
   if (ch == '\\' && prev == ESC) {
@@ -390,7 +372,7 @@ void process_dcs(struct fsm *fsm, uint8_t ch) {
   }
 }
 
-static void fsm_process_csi(struct fsm *fsm, unsigned char ch) {
+static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
   escape_buffer_append(fsm, ch);
   if (ch >= 0x40 && ch <= 0x7E) {
     fsm->escape_buffer.buffer[fsm->escape_buffer.n] = 0;
@@ -401,60 +383,55 @@ static void fsm_process_csi(struct fsm *fsm, unsigned char ch) {
   }
 }
 
+static void fsm_dispatch_osc(struct fsm *fsm, uint8_t ch) {
+  // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands
+  // OSC commands can be terminated with either BEL or ST. Although ST is preferred, we respond to the query with the
+  // same terminator as the one we received for maximum compatibility
+  static const char *BEL = "\a";
+  static const char *ST = "\x1b\\";
+  char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
+  escape_buffer_append(fsm, ch);
+  if (ch == BELL || (ch == '\\' && prev == ESC)) {
+    handle_osc(fsm, ch == BELL ? BEL : ST);
+    fsm->state = fsm_ground;
+  } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
+    fsm->state = fsm_ground;
+    logmsg("Abort OSC: max length exceeded");
+  }
+}
+static void fsm_dispatch_pct(struct fsm *fsm, uint8_t ch) {
+  (void)ch;
+  fsm->state = fsm_ground;
+  TODO("Select Character Set");
+}
+static void fsm_dispatch_spc(struct fsm *fsm, uint8_t ch) {
+  fsm->state = fsm_ground;
+  switch (ch) {
+  case 'F': TODO("7-bit controls"); break;
+  case 'G': TODO("8-bit controls"); break;
+  case 'L':
+  case 'M':
+  case 'N': TODO("ANSI Conformance Level"); break;
+  default: logmsg("Unknown ESC SP command: %x", ch); break;
+  }
+}
+
 void fsm_process(struct fsm *fsm, uint8_t *buf, int n) {
   fsm_ensure_grid_initialized(fsm);
   for (int i = 0; i < n; i++) {
     uint8_t ch = buf[i];
     switch (fsm->state) {
-    case fsm_ground: {
-      process_ground(fsm, ch);
-    } break;
+    case fsm_ground: fsm_dispatch_ground(fsm, ch); break;
     case fsm_utf8: process_utf8(fsm, ch); break;
-    case fsm_escape: {
-      process_escape(fsm, ch);
-      assert(fsm->state != fsm_escape);
-    } break;
-    case fsm_dcs: {
-      process_dcs(fsm, ch);
-    } break;
-    case fsm_osc: {
-      char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
-      escape_buffer_append(fsm, ch);
-      if (ch == BELL || (ch == '\\' && prev == ESC)) {
-        process_osc(fsm);
-        fsm->state = fsm_ground;
-      } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
-        fsm->state = fsm_ground;
-        logmsg("Abort OSC: max length exceeded");
-      }
-    } break;
-    case fsm_csi: {
-      fsm_process_csi(fsm, ch);
-    } break;
-    case fsm_pnd: {
-      process_pnd(fsm, ch);
-    } break;
-    case fsm_spc: {
-      switch (ch) {
-      case 'F': TODO("7-bit controls"); break;
-      case 'G': TODO("8-bit controls"); break;
-      case 'L':
-      case 'M':
-      case 'N': TODO("ANSI Conformance Level"); break;
-      default: logmsg("Unknown ESC SP command: %x", ch); break;
-      }
-      fsm->state = fsm_ground;
-    } break;
-    case fsm_pct: {
-      TODO("Select Character Set");
-      fsm->state = fsm_ground;
-    } break;
-    case fsm_charset: {
-      process_charset(fsm, ch);
-    } break;
-    default: {
-      assert(!"Unreachable");
-    }
+    case fsm_escape: fsm_dispatch_escape(fsm, ch); break;
+    case fsm_dcs: fsm_dispatch_dcs(fsm, ch); break;
+    case fsm_osc: fsm_dispatch_osc(fsm, ch); break;
+    case fsm_csi: fsm_dispatch_csi(fsm, ch); break;
+    case fsm_pnd: fsm_dispatch_pnd(fsm, ch); break;
+    case fsm_spc: fsm_dispatch_spc(fsm, ch); break;
+    case fsm_pct: fsm_dispatch_pct(fsm, ch); break;
+    case fsm_charset: fsm_dispatch_charset(fsm, ch); break;
+    default: assert(!"Unreachable");
     }
   }
 }
