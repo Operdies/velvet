@@ -23,7 +23,7 @@ static void string_ensure_capacity(struct string *str, size_t required) {
 
 void string_push_int(struct string *str, int n) {
   const int max = 11;
-  char buf[max];
+  uint8_t buf[max];
   int idx = max;
   bool sign = n < 0;
 
@@ -42,8 +42,8 @@ void string_push_slice(struct string *str, const uint8_t *const src, size_t len)
   memcpy(str->content + str->len, src, len);
   str->len += len;
 }
-void string_push(struct string *str, const uint8_t *const src) {
-  size_t len = strlen(src);
+void string_push(struct string *str, const uint8_t *src) {
+  size_t len = strlen((char*)src);
   string_push_slice(str, src, len);
 }
 
