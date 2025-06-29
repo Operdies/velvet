@@ -42,12 +42,12 @@ void string_push_slice(struct string *str, const uint8_t *const src, size_t len)
   memcpy(str->content + str->len, src, len);
   str->len += len;
 }
-void string_push(struct string *str, const char *const src) {
+void string_push(struct string *str, const uint8_t *const src) {
   size_t len = strlen(src);
   string_push_slice(str, src, len);
 }
 
-void string_push_char(struct string *str, char ch) {
+void string_push_char(struct string *str, uint8_t ch) {
   string_push_slice(str, &ch, 1);
 }
 

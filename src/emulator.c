@@ -309,10 +309,10 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case SPC: fsm->state = fsm_spc; break;
   case PND: fsm->state = fsm_pnd; break;
   case DCS: fsm->state = fsm_dcs; break;
-  case '6': TODO("Back Index"); break;
+  case '6': OMITTED("Back Index"); break;
   case '7': fsm->active_grid->saved_cursor = fsm->active_grid->cursor; break;
   case '8': fsm->active_grid->cursor = fsm->active_grid->saved_cursor; break;
-  case '9': TODO("Forward Index"); break;
+  case '9': OMITTED("Forward Index"); break;
   case 'D': grid_advance_cursor_y(g); break;                        // Index
   case 'M': grid_advance_cursor_y_reverse(fsm->active_grid); break; // Reverse Index
   case 'E':                                                         // Next Line
@@ -322,12 +322,12 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case 'H': TODO("Horizontal Tab Set"); break;
   case 'N': TODO("Single Shift to G2"); break;
   case 'O': TODO("Single Shift to G3"); break;
-  case 'V': TODO("Start Guarded Area"); break;
-  case 'W': TODO("End Guarded Area"); break;
+  case 'V': OMITTED("Start Guarded Area"); break;
+  case 'W': OMITTED("End Guarded Area"); break;
   case 'X': TODO("Start of String"); break;
-  case 'Z': TODO("Return Terminal ID"); break;
-  case '^': TODO("Privacy Message"); break;
-  case '_': TODO("Application Program Command"); break;
+  case 'Z': OMITTED("Return Terminal ID"); break;
+  case '^': OMITTED("Privacy Message"); break;
+  case '_': OMITTED("Application Program Command"); break;
   case '=': fsm->features.application_keypad_mode = true; break;
   case '>': fsm->features.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
@@ -336,8 +336,8 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
     break;
   case 'F': grid_move_cursor(g, 0, g->h); break;
   case 'c': fsm_full_reset(fsm); break;
-  case 'l': TODO("Memory lock"); break;
-  case 'm': TODO("Memory unlock"); break;
+  case 'l': OMITTED("Memory lock"); break;
+  case 'm': OMITTED("Memory unlock"); break;
   case '(': // designate G0, VT100
   case ')': // designate G1, VT100
   case '*': // designate G2, VT220
@@ -354,7 +354,7 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case '~': TODO("Invoke Character Set"); break;
   default: {
     // Unrecognized escape. Treat this char as escaped and continue parsing normally.
-    logmsg("Unrecognized basic escape: 0x%x", ch);
+    TODO("Unhandled sequence ESC 0x%x", ch);
     break;
   }
   }

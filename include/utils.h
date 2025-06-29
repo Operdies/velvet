@@ -11,12 +11,10 @@
 #define TOSTRING(x) STRINGIFY(x)
 #define LINE_STR TOSTRING(__LINE__)
 
-#define TODO(...)                                                              \
-  logmsg("[" __FILE__ ":" LINE_STR "] "                                        \
-         "TODO: " __VA_ARGS__)
-
 #ifdef NDEBUG
 #define assert(cond) ((void)0)
+#define TODO(...) ((void)0)
+#define OMITTED(...) ((void)0)
 #else
 #define assert(cond)                                                           \
   ((cond) ? (void)0                                                            \
@@ -24,6 +22,13 @@
              logmsg("Assertion failed: %s, file %s, line %d\n", #cond,         \
                     __FILE__, __LINE__),                                       \
              exit(EXIT_FAILURE), (void)0))
+#define TODO(...)                                                              \
+  logmsg("[" __FILE__ ":" LINE_STR "] "                                        \
+         "TODO: " __VA_ARGS__)
+
+#define OMITTED(...)                                                           \
+  logmsg("[" __FILE__ ":" LINE_STR "] "                                        \
+         "OMITTED: " __VA_ARGS__)
 #endif
 
 void logmsg(char *fmt, ...);

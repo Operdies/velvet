@@ -281,6 +281,12 @@ static bool csi_dispatch_todo(struct fsm *fsm, struct csi *csi) {
   return false;
 }
 
+static bool csi_dispatch_omitted(struct fsm *fsm, struct csi *csi) {
+  (void)fsm, (void)csi;
+  OMITTED("CSI %c %c %c ", csi->leading, csi->intermediate, csi->final);
+  return false;
+}
+
 static bool csi_dispatch_decset(struct fsm *fsm, struct csi *csi) {
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
@@ -443,6 +449,10 @@ static bool csi_dispatch_decstbm(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_todo(fsm, csi);
 }
 
+static bool csi_dispatch_xtwinops(struct fsm *fsm, struct csi *csi) {
+  return csi_dispatch_omitted(fsm, csi);
+}
+
 static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   assert(csi->leading == 0);
   assert(csi->intermediate == 0);
@@ -464,6 +474,7 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   case 'd': return csi_dispatch_vpa(fsm, csi);
   case 'm': return csi_dispatch_sgr(fsm, csi);
   case 'r': return csi_dispatch_decstbm(fsm, csi);
+  case 't': return csi_dispatch_xtwinops(fsm, csi);
   default: return csi_dispatch_todo(fsm, csi);
   }
 }
@@ -492,6 +503,9 @@ static bool csi_dispatch_leading(struct fsm *fsm, struct csi *csi) {
   default: return csi_dispatch_todo(fsm, csi);
   }
 }
+static bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
+  return csi_dispatch_leading(fsm, csi);
+}
 
 void csi_apply(struct fsm *fsm, const uint8_t *buffer, int len) {
   if (len < 3) {
@@ -511,7 +525,7 @@ void csi_apply(struct fsm *fsm, const uint8_t *buffer, int len) {
   }
   assert(processed == len);
 
-  if (csi_dispatch_leading(fsm, &csi)) return;
+  if (csi_dispatch(fsm, &csi)) return;
 
   uint8_t first = csi.leading;
   uint8_t final = csi.final;

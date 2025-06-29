@@ -45,8 +45,8 @@ struct vec {
 };
 
 void string_push_slice(struct string *str, const uint8_t *const src, size_t len);
-void string_push(struct string *str, const char *const src);
-void string_push_char(struct string *str, char ch);
+void string_push(struct string *str, const uint8_t *const src);
+void string_push_char(struct string *str, uint8_t ch);
 void string_push_int(struct string *str, int value);
 void string_memset(struct string *str, uint8_t ch, size_t len);
 void string_clear(struct string *str);
