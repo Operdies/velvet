@@ -158,7 +158,7 @@ static bool csi_read_subparameter(const uint8_t *buffer, uint8_t separator, int 
   return false;
 }
 
-static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, int *read) {
+static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, int *read, bool is_sgr) {
   int i = 0;
   if (buffer[i] == ';') i++;
   int num = 0;
@@ -171,7 +171,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
   int n_subparameters = 0;
   int value, length, color_type;
   value = length = color_type = 0;
-  bool is_custom_color = num == 38 || num == 48;
+  bool is_custom_color = is_sgr && (num == 38 || num == 48);
   uint8_t separator = ':';
   int subparameter_max = LENGTH(param->sub);
   if (is_custom_color && buffer[i] == ';') {
@@ -204,6 +204,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
 }
 
 static int csi_process(struct csi *c, const uint8_t *buffer, int len) {
+  bool is_sgr = buffer[len - 1] == 'm';
   int i = 0;
   for (; i < len;) {
     char ch = buffer[i];
@@ -221,7 +222,7 @@ static int csi_process(struct csi *c, const uint8_t *buffer, int len) {
       struct csi_param *param = &c->params[c->n_params];
       c->n_params++;
       int read;
-      if (!csi_read_parameter(param, buffer + i, &read)) {
+      if (!csi_read_parameter(param, buffer + i, &read, is_sgr)) {
         logmsg("Reject CSI: Error parsing parameter");
         c->state = CSI_REJECT;
         return i + read;
@@ -272,15 +273,37 @@ static int csi_process(struct csi *c, const uint8_t *buffer, int len) {
 #undef ACCEPT
 #undef INTERMEDIATE
 
+char *byte_names[UINT8_MAX] = {
+    [' '] = "SP",
+    ['\a'] = "BEL",
+    ['\r'] = "CR",
+    ['\b'] = "BS",
+    ['\f'] = "FF",
+    ['\n'] = "LF",
+};
+
 static bool csi_dispatch_todo(struct fsm *fsm, struct csi *csi) {
   (void)fsm, (void)csi;
-  TODO("CSI %c %c %c ", csi->leading, csi->intermediate, csi->final);
+  char leading[] = {csi->leading, 0};
+  char intermediate[] = {csi->intermediate, 0};
+  char final[] = {csi->final, 0};
+  TODO("CSI %2s %2s %2s",
+       byte_names[csi->leading] ?: leading,
+       byte_names[csi->intermediate] ?: intermediate,
+       byte_names[csi->final] ?: final);
   return false;
 }
 
 static bool csi_dispatch_omitted(struct fsm *fsm, struct csi *csi) {
   (void)fsm, (void)csi;
-  OMITTED("CSI %c %c %c ", csi->leading, csi->intermediate, csi->final);
+  // Display these characters in a more friendly way
+  char leading[] = {csi->leading, 0};
+  char intermediate[] = {csi->intermediate, 0};
+  char final[] = {csi->final, 0};
+  OMITTED("CSI %2s %2s %2s",
+          byte_names[csi->leading] ?: leading,
+          byte_names[csi->intermediate] ?: intermediate,
+          byte_names[csi->final] ?: final);
   return false;
 }
 
@@ -293,7 +316,7 @@ static bool csi_dispatch_decset(struct fsm *fsm, struct csi *csi) {
   case 7: fsm->features.wrapping_disabled = off; break;
   case 12: break; /* Set local echo mode -- This is safe to ignore. */
   case 20: fsm->features.auto_return = on; break;
-  case 25: fsm->features.cursor_hidden = off; break;
+  case 25: fsm->features.cursor.hidden = off; break;
   case 1004: fsm->features.focus_reporting = on; break;
   case 1049:
     fsm->features.alternate_screen = on;
@@ -349,6 +372,7 @@ static bool csi_dispatch_ed(struct fsm *fsm, struct csi *csi) {
   int mode = csi->params[0].primary;
   struct raw_cursor start = g->cursor;
   struct raw_cursor end = g->cursor;
+
   switch (mode) {
   case 1: // Erase from start of screen to cursor
     start.col = grid_start(g);
@@ -492,9 +516,30 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   }
 }
 
+static bool csi_dispatch_decscusr(struct fsm *fsm, struct csi *csi) {
+  int cursor = csi->params[0].primary;
+  if (cursor >= CURSOR_STYLE_BLINKING_BLOCK && cursor < CURSOR_STYLE_LAST) {
+    fsm->features.cursor.style = cursor;
+  } else {
+    OMITTED("Unknown cursor style %d", cursor);
+  }
+  return true;
+}
+
+static bool csi_dispatch_sp_final(struct fsm *fsm, struct csi *csi) {
+  switch (csi->final) {
+  case '@': TODO("Shift Left");
+  case 'A': TODO("Shift Right");
+  case 'q': return csi_dispatch_decscusr(fsm, csi);
+  default: return csi_dispatch_todo(fsm, csi);
+  }
+  return true;
+}
+
 static bool csi_dispatch_intermediate(struct fsm *fsm, struct csi *csi) {
   switch (csi->intermediate) {
   case 0: return csi_dispatch_final(fsm, csi);
+  case ' ': return csi_dispatch_sp_final(fsm, csi);
   default: return csi_dispatch_todo(fsm, csi);
   }
 }

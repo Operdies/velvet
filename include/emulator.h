@@ -1,10 +1,10 @@
 #ifndef EMULATOR_H
 #define EMULATOR_H
 
-#include <stdint.h>
+#include "grid.h"
 #include "queries.h"
 #include "text.h"
-#include "grid.h"
+#include <stdint.h>
 
 enum fsm_state {
   fsm_ground,
@@ -113,6 +113,22 @@ struct charset_options {
   uint8_t charsets[CHARSET_LAST];
 };
 
+enum cursor_style {
+  CURSOR_STYLE_BLINKING_BLOCK,
+  CURSOR_STYLE_DEFAULT, // blinking block
+  CURSOR_STYLE_STEADY_BLOCK,
+  CURSOR_STYLE_BLINKING_UNDERLINE,
+  CURSOR_STYLE_STEADY_UNDERLINE,
+  CURSOR_STYLE_BLINKING_BAR,
+  CURSOR_STYLE_STEADY_BAR,
+  CURSOR_STYLE_LAST,
+};
+struct cursor_options {
+  /* turned on / off by CSI ?25h/l */
+  bool hidden;
+  enum cursor_style style;
+};
+
 struct features {
   /* if enabled, we should translate mouse events and forward them to the
    * appropriate pane */
@@ -125,8 +141,6 @@ struct features {
   bool alternate_screen;
   /* if enabled, pasted content should be wrapped with ESC[200~ and ESC[201~ */
   bool bracketed_paste;
-  /* turned on / off by CSI ?25h/l */
-  bool cursor_hidden;
   /* in application mode, arrow keys should be translated from ESC [ A-D to ESC
    * O A-D */
   bool application_mode;
@@ -137,6 +151,7 @@ struct features {
   struct modifier_options modifier_options;
   bool application_keypad_mode;
   struct charset_options charset_options;
+  struct cursor_options cursor;
 };
 
 /* finite state machine for parsing ansi escape codes */

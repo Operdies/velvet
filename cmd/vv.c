@@ -114,7 +114,7 @@ static void arrange(struct winsize ws, struct pane *p) {
 static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
   if (pane && pane->fsm.active_grid) {
     focused = pane;
-    char fmt[40];
+    uint8_t fmt[40];
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
     struct raw_cursor *c = &g->cursor;
@@ -200,7 +200,7 @@ bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
       pane_start(new);
       set_nonblocking(new->pty);
       focus_pane(new);
-      string_push(draw_buffer, "\x1b[2J");
+      string_push(draw_buffer, u8"\x1b[2J");
     } else {
       logmsg("Too many panes. Spawn request ignored.");
     }
@@ -255,9 +255,9 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       pastebuffer.len -= 5;
       s = normal;
       if (focused && focused->fsm.features.bracketed_paste) {
-        string_push(&writebuffer, "\x1b[200~");
+        string_push(&writebuffer, u8"\x1b[200~");
         string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
-        string_push(&writebuffer, "\x1b[201~");
+        string_push(&writebuffer, u8"\x1b[201~");
       } else {
         string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
       }
@@ -342,7 +342,7 @@ void remove_exited_processes(void) {
   }
 }
 
-static void string_write_arg_list(struct string *str, char *escape, int n, int *args, char terminator) {
+static void string_write_arg_list(struct string *str, uint8_t *escape, int n, int *args, char terminator) {
   string_push(str, escape);
   for (int i = 0; i < n; i++) {
     string_push_int(str, args[i]);
@@ -364,11 +364,11 @@ static void handle_queries(struct pane *p) {
     case REQUEST_STATUS_OK: break;
     case REQUEST_CURSOR_POSITION:
       int args[] = {p->fsm.active_grid->cursor.row, p->fsm.active_grid->cursor.col};
-      string_write_arg_list(&response, "\x1b[", 2, args, 'R');
+      string_write_arg_list(&response, u8"\x1b[", 2, args, 'R');
       break;
-    case REQUEST_DEFAULT_FG: string_push(&response, "\x1b]10;rgb:ffffff\a"); break;
-    case REQUEST_DEFAULT_BG: string_push(&response, "\x1b]11;rgb:000000\a"); break;
-    case REQUEST_DEFAULT_CURSOR_COLOR: string_push(&response, "\x1b]10;rgb:ffffff\a"); break;
+    case REQUEST_DEFAULT_FG: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
+    case REQUEST_DEFAULT_BG: string_push(&response, u8"\x1b]11;rgb:000000\a"); break;
+    case REQUEST_DEFAULT_CURSOR_COLOR: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
     case REQUEST_WINDOW_TITLE: break;
     case REQUEST_WINDOW_ICON: break;
     case REQUEST_BRACKETED_PASTE_STATUS: break;
@@ -435,6 +435,7 @@ int main(int argc, char **argv) {
   }
 
   static struct string draw_buffer = {0};
+  enum cursor_style current_cursor_style = 0;
 
   char readbuffer[4096];
   for (; running && pane_count(clients);) {
@@ -458,7 +459,7 @@ int main(int argc, char **argv) {
             p->border_dirty = true;
           }
           arrange(ws_current, clients);
-          char clear[] = "\x1b[2J";
+          uint8_t clear[] = "\x1b[2J";
           string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
         } break;
         case SIGCHLD: {
@@ -514,8 +515,8 @@ int main(int argc, char **argv) {
       }
     }
 
-    char hide_cursor[] = "\x1b[?25l";
-    char show_cursor[] = "\x1b[?25h";
+    uint8_t hide_cursor[] = "\x1b[?25l";
+    uint8_t show_cursor[] = "\x1b[?25h";
     string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
     for (struct pane *p = clients; p; p = p->next) {
       pane_draw(p, false, &draw_buffer);
@@ -529,8 +530,14 @@ int main(int argc, char **argv) {
 
     if (!focused) focus_pane(clients);
     if (focused) move_cursor_to_pane(focused, &draw_buffer);
-    if (focused && focused->fsm.features.cursor_hidden == false)
+    if (focused && focused->fsm.features.cursor.hidden == false)
       string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
+    if (focused && focused->fsm.features.cursor.style != current_cursor_style) {
+      current_cursor_style = focused->fsm.features.cursor.style;
+      string_push(&draw_buffer, u8"\x1b[");
+      string_push_int(&draw_buffer, current_cursor_style);
+      string_push(&draw_buffer, u8" q");
+    }
 
     string_flush(&draw_buffer, STDOUT_FILENO, NULL);
 
