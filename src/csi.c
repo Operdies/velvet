@@ -52,7 +52,7 @@ static void csi_set_modifiers(struct fsm *fsm, int n, int params[n]) {
   TODO("Implement set modifiers");
 }
 
-static char *apply_sgr(struct grid_cell *c, int n, struct csi_param *params) {
+static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params) {
   // Special case when the 0 is omitted
   if (n == 0) {
     c->style.attr = 0;
@@ -199,8 +199,6 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
     return false;
   }
 
-  char *debug2 = buffer + i - 3;
-  char *debug = buffer + i;
   *read = i;
   return true;
 }
@@ -223,7 +221,6 @@ static int csi_process(struct csi *c, const uint8_t *buffer, int len) {
       struct csi_param *param = &c->params[c->n_params];
       c->n_params++;
       int read;
-      const char *debug = buffer + i;
       if (!csi_read_parameter(param, buffer + i, &read)) {
         logmsg("Reject CSI: Error parsing parameter");
         c->state = CSI_REJECT;
@@ -303,7 +300,7 @@ static bool csi_dispatch_decset(struct fsm *fsm, struct csi *csi) {
     fsm_ensure_grid_initialized(fsm);
     break;
   case 2004: fsm->features.bracketed_paste = on; break;
-  default: TODO("CSI DEC: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1); break;
+  default: return csi_dispatch_todo(fsm, csi);
   }
 
   return true;
@@ -324,7 +321,7 @@ static bool csi_dispatch_dec_intermediate(struct fsm *fsm, struct csi *csi) {
 }
 
 static bool csi_dispatch_sgr(struct fsm *fsm, struct csi *csi) {
-  char *error = apply_sgr(&fsm->cell, csi->n_params, csi->params);
+  char *error = csi_apply_sgr_from_params(&fsm->cell, csi->n_params, csi->params);
   if (error) {
     logmsg("Error parsing SGR: %.*s: %s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1, error);
     return false;
@@ -437,6 +434,21 @@ static bool csi_dispatch_cha(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
+static bool csi_dispatch_pda(struct fsm *fsm, struct csi *csi) {
+  TODO("Primary Display Attributes");
+  return csi_dispatch_todo(fsm, csi);
+}
+
+static bool csi_dispatch_rep(struct fsm *fsm, struct csi *csi) {
+  struct grid *g = fsm->active_grid;
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  struct grid_cell repeat = fsm->cell;
+  if (repeat.symbol.len == 0) repeat.symbol = utf8_blank;
+  for (int i = 0; i < count; i++) {
+    grid_insert(g, repeat, !fsm->features.wrapping_disabled);
+  }
+  return true;
+}
 static bool csi_dispatch_vpa(struct fsm *fsm, struct csi *csi) {
   int row = csi->params[0].primary ? csi->params[0].primary : 1;
   grid_position_cursor_row(fsm->active_grid, row - 1);
@@ -445,7 +457,6 @@ static bool csi_dispatch_vpa(struct fsm *fsm, struct csi *csi) {
 
 // Scroll Region
 static bool csi_dispatch_decstbm(struct fsm *fsm, struct csi *csi) {
-  TODO("[dispatch] Scroll Region");
   return csi_dispatch_todo(fsm, csi);
 }
 
@@ -464,14 +475,16 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   case 'D': return csi_dispatch_cux(fsm, csi);
   case 'G': return csi_dispatch_cha(fsm, csi);
   case 'H': return csi_dispatch_cup(fsm, csi);
-  case 'f': return csi_dispatch_cup(fsm, csi);
   case 'J': return csi_dispatch_ed(fsm, csi);
   case 'K': return csi_dispatch_el(fsm, csi);
   case 'L': return csi_dispatch_il(fsm, csi);
   case 'M': return csi_dispatch_dl(fsm, csi);
   case 'P': return csi_dispatch_dch(fsm, csi);
   case 'X': return csi_dispatch_ech(fsm, csi);
+  case 'b': return csi_dispatch_rep(fsm, csi);
+  case 'c': return csi_dispatch_pda(fsm, csi);
   case 'd': return csi_dispatch_vpa(fsm, csi);
+  case 'f': return csi_dispatch_cup(fsm, csi);
   case 'm': return csi_dispatch_sgr(fsm, csi);
   case 'r': return csi_dispatch_decstbm(fsm, csi);
   case 't': return csi_dispatch_xtwinops(fsm, csi);
@@ -503,11 +516,12 @@ static bool csi_dispatch_leading(struct fsm *fsm, struct csi *csi) {
   default: return csi_dispatch_todo(fsm, csi);
   }
 }
+
 static bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_leading(fsm, csi);
 }
 
-void csi_apply(struct fsm *fsm, const uint8_t *buffer, int len) {
+void csi_parse_and_execute_buffer(struct fsm *fsm, const uint8_t *buffer, int len) {
   if (len < 3) {
     logmsg("CSI sequence shorter than 3 bytes!!");
     return;
@@ -524,189 +538,5 @@ void csi_apply(struct fsm *fsm, const uint8_t *buffer, int len) {
     return;
   }
   assert(processed == len);
-
-  if (csi_dispatch(fsm, &csi)) return;
-
-  uint8_t first = csi.leading;
-  uint8_t final = csi.final;
-  uint8_t penultimate = csi.intermediate;
-  struct grid *g = fsm->active_grid;
-
-  int params[CSI_MAX_PARAMS] = {0};
-
-  // Temporary fallback to previous integer list until we get rid of the rest of this method
-  for (int i = 0; i < csi.n_params; i++) {
-    params[i] = csi.params[i].primary;
-  }
-
-  int count = csi.n_params;
-  int param1 = count > 0 ? params[0] : 1;
-
-  logmsg("CSI: %.*s", len, buffer);
-
-  if (first == '>' && final == 'm') {
-    csi_set_modifiers(fsm, count, params);
-    return;
-  }
-  if (first == '?' && final == 'm') {
-    csi_query_modifiers(fsm, count, params);
-    return;
-  }
-  if (final == 'p' && penultimate == '$') {
-    csi_handle_query(fsm, count, params);
-    return;
-  }
-
-  switch (final) {
-  case 'J': { /* Erase in display */
-    int mode = params[0];
-    struct raw_cursor start = g->cursor;
-    struct raw_cursor end = g->cursor;
-    switch (mode) {
-    case 1: { /* Erase from start of screen to cursor */ start.col = grid_start(g); start.row = grid_virtual_top(g);
-    } break;
-    case 2: { /* Erase entire screen */
-      start.col = grid_start(g);
-      start.row = grid_virtual_top(g);
-      end.col = grid_end(g);
-      end.row = grid_virtual_bottom(g);
-    } break;
-    case 3: { /* erase scrollback */ return;
-    } break;
-    case 0:
-    default: { /* erase from cursor to end of screen */ end.col = grid_end(g); end.row = grid_virtual_bottom(g);
-    } break;
-    }
-    grid_erase_between_cursors(g, start, end);
-  } break;
-  case 't': {
-    /* xterm extensions for saving / restoring icon / window title
-     * These are used by vim so we should probably support them.
-     */
-    if (params[0] == 22) {
-      if (params[1] == 1) { /* Save Screen Icon */
-        TODO("Save Icon");
-      } else if (params[1] == 2) { /* Cursor Save Title */
-        TODO("Save Title");
-      }
-    } else if (params[0] == 23) {
-      if (params[1] == 1) { /* Restore Screen Icon */
-        TODO("Restore Icon");
-      } else if (params[1] == 2) { /* Cursor Restore Title */
-        TODO("Restore Title");
-      }
-    }
-    TODO("extension: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1);
-  } break;
-  case 'K': { /* delete operations */
-    int mode = params[0];
-    struct raw_cursor start = g->cursor;
-    struct raw_cursor end = g->cursor;
-    switch (mode) {
-    case 1: { /* erase from start to cursor */ start.col = grid_start(g);
-    } break;
-    case 2: { /* erase entire line */ start.col = grid_start(g); end.col = grid_end(g);
-    } break;
-    case 0:
-    default: {
-      // erase from cursor to end
-      end.col = grid_end(g);
-    } break;
-    }
-    grid_erase_between_cursors(g, start, end);
-  } break;
-  case 'X': {
-    int clear = params[0] ? params[0] : 1;
-    struct raw_cursor start = g->cursor;
-    struct raw_cursor end = {.row = start.row, .col = start.col + clear};
-    grid_erase_between_cursors(g, start, end);
-  } break;
-  case 'A': { // up
-    grid_move_cursor(g, 0, -param1);
-  } break;
-  case 'B': { // down
-    grid_move_cursor(g, 0, param1);
-  } break;
-  case 'C': { // right
-    grid_move_cursor(g, param1, 0);
-  } break;
-  case 'D': { // left
-    grid_move_cursor(g, -param1, 0);
-  } break;
-  case 'H': { /* cursor move to coordinate */
-    int col = params[1] ? params[1] : 1;
-    int row = params[0] ? params[0] : 1;
-    grid_position_visual_cursor(g, col - 1, row - 1);
-  } break;
-  case 'P': grid_shift_from_cursor(g, param1); break;       /* delete characters */
-  case '@': grid_insert_blanks_at_cursor(g, param1); break; /* Insert blank characters */
-  case 'c': {
-    char which = buffer[len - 2];
-    enum emulator_query_type e = which == '>'   ? REQUEST_SECONDARY_DEVICE_ATTRIBUTES
-                                 : which == '=' ? REQUEST_TERTIARY_DEVICE_ATTRIBUTES
-                                                : REQUEST_PRIMARY_DEVICE_ATTRIBUTES;
-    struct emulator_query req = {.type = e};
-    vec_push(&fsm->pending_requests, &req);
-  } break;
-  case 'n': {
-    enum emulator_query_type e = params[0];
-    if (e == REQUEST_CURSOR_POSITION || e == REQUEST_STATUS_OK) {
-      struct emulator_query req = {.type = e};
-      vec_push(&fsm->pending_requests, &req);
-    } else {
-      TODO("CSI[%dn", e);
-    }
-  } break;
-  case 'd': {
-    int row = params[0] ? params[0] : 1;
-    grid_position_cursor_row(g, row - 1);
-  } break;
-  case 'G': {
-    int col = params[0] ? params[0] : 1;
-    grid_position_cursor_column(g, col - 1);
-  } break;
-  case 'b': { /* repeat last character */
-    int count = params[0] ? params[0] : 1;
-    struct grid_cell repeat = fsm->cell;
-    if (repeat.symbol.len == 0) repeat.symbol = utf8_blank;
-    for (int i = 0; i < count; i++) {
-      grid_insert(g, repeat, !fsm->features.wrapping_disabled);
-    }
-  } break;
-  case 'L': { // shift Pn lines down
-    int count = params[0] ? params[0] : 1;
-    grid_shift_lines(g, -count);
-  } break;
-  case 'M': { // shift Pn lines up
-    int count = params[0] ? params[0] : 1;
-    grid_shift_lines(g, count);
-  } break;
-  case 'm': { /* color */
-    char *error = apply_sgr(&fsm->cell, count, params);
-    if (error) {
-      logmsg("Error parsing SGR: %.*s: %s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1, error);
-    }
-  } break;
-  case 'r': { /* scroll region */
-    TODO("Scroll Region");
-    int top = count > 0 ? params[0] : 1;
-    int bottom = count > 1 ? params[1] : g->h;
-    top = MAX(top, 1);
-    bottom = MIN(bottom, g->h);
-    if (top <= bottom) {
-      grid_set_scroll_region(g, top, bottom);
-    }
-  } break;
-  default: {
-    TODO("CSI: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1);
-  } break;
-  }
+  csi_dispatch(fsm, &csi);
 }
-
-/** CSI Command Reference
- * CSI Ps @
- * CSI Ps SP @
- * CSI Ps A
- * CSI Ps SP A
- * CSI Ps B
- */

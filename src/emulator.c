@@ -122,6 +122,7 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
 }
 
 static void handle_osc(struct fsm *fsm, const char *st) {
+  (void)st;
   TODO("OSC sequence: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer);
 }
 
@@ -376,7 +377,7 @@ static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
   escape_buffer_append(fsm, ch);
   if (ch >= 0x40 && ch <= 0x7E) {
     fsm->escape_buffer.buffer[fsm->escape_buffer.n] = 0;
-    csi_apply(fsm, fsm->escape_buffer.buffer, fsm->escape_buffer.n);
+    csi_parse_and_execute_buffer(fsm, fsm->escape_buffer.buffer, fsm->escape_buffer.n);
     fsm->state = fsm_ground;
   } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
     fsm->state = fsm_ground;
