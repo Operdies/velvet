@@ -366,6 +366,7 @@ void pane_start(struct pane *pane) {
   buf[n] = 0;
   int fd = open(buf, O_CREAT | O_CLOEXEC | O_RDWR | O_TRUNC, 0644);
   pane->logfile = fd;
+  set_nonblocking(pane->pty);
 }
 
 void pane_remove(struct pane **lst, struct pane *rem) {

@@ -139,4 +139,6 @@ void grid_set_scroll_region(struct grid *g, int top, int bottom);
 void grid_position_visual_cursor(struct grid *g, int x, int y);
 void grid_shift_from_cursor(struct grid *g, int n);
 void grid_shift_lines(struct grid *g, int n);
+void grid_restore_cursor(struct grid *g);
+void grid_save_cursor(struct grid *g);
 #endif /*  GRID_H */

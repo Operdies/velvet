@@ -82,7 +82,6 @@ static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
   if (len == 3 && ch < LENGTH(charset_lookup)) {
     enum charset new_charset = charset_lookup[ch];
     fsm->features.charset_options.charsets[index] = new_charset;
-    logmsg("Set charset %d to: %c", index, ch);
     if (new_charset != CHARSET_ASCII) {
       TODO("Implement charset %c", ch);
     }
@@ -228,40 +227,36 @@ static void ground_process_shift_in_out(struct fsm *fsm, uint8_t ch) {
 
 static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
   // These symbols have special behavior in terms of how they affect layout
-  static void (*const dispatch[UINT8_MAX])(struct fsm *, uint8_t) = {
-      [NUL] = ground_noop,
-      [ESC] = ground_esc,
-      [RET] = ground_carriage_return,
-      [BSP] = ground_backspace,
-      [BELL] = ground_bell,
-      [SI] = ground_process_shift_in_out,
-      [SO] = ground_process_shift_in_out,
-      [DEL] = ground_noop,
-      [TAB] = ground_tab,
-      [VTAB] = ground_vtab,
-      [FORMFEED] = ground_newline,
-      [NEWLINE] = ground_newline,
-      [ENQ] = ground_enquiry,
-  };
-
-  // logmsg("process: %d", ch);
-
-  if (dispatch[ch]) {
-    dispatch[ch](fsm, ch);
-    return;
+  switch (ch) {
+  case NUL: ground_noop(fsm, ch); break;
+  case ESC: ground_esc(fsm, ch); break;
+  case RET: ground_carriage_return(fsm, ch); break;
+  case BSP: ground_backspace(fsm, ch); break;
+  case BELL: ground_bell(fsm, ch); break;
+  case SI: ground_process_shift_in_out(fsm, ch); break;
+  case SO: ground_process_shift_in_out(fsm, ch); break;
+  case DEL: ground_noop(fsm, ch); break;
+  case TAB: ground_tab(fsm, ch); break;
+  case VTAB: ground_vtab(fsm, ch); break;
+  case FORMFEED: ground_newline(fsm, ch); break;
+  case NEWLINE: ground_newline(fsm, ch); break;
+  case ENQ: ground_enquiry(fsm, ch); break;
+  default: {
+    if (ch >= 0xC2 && ch <= 0xF4) { // UTF8 leading byte range
+      utf8_push(&fsm->cell.symbol, ch);
+      fsm->state = fsm_utf8;
+    } else if (ch <= 0x7F) { // ASCII range
+      utf8_push(&fsm->cell.symbol, ch);
+      ground_accept(fsm);
+    } else { // Outside of ascii range, and not part of a valid utf8 sequence -- error symbol
+      fsm->cell.symbol = utf8_fffd;
+      ground_accept(fsm);
+    }
+  } break;
   }
-
-  utf8_push(&fsm->cell.symbol, ch);
-  if (ch >= 0xC2) {
-    fsm->state = fsm_utf8;
-    return;
-  }
-
-  // Accept the sequence
-  ground_accept(fsm);
 }
 
-static void process_utf8(struct fsm *fsm, uint8_t ch) {
+static void fsm_dispatch_utf8(struct fsm *fsm, uint8_t ch) {
   utf8_push(&fsm->cell.symbol, ch);
   uint8_t len = fsm->cell.symbol.len;
   uint8_t exp = fsm->cell.symbol.expected;
@@ -311,8 +306,8 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case PND: fsm->state = fsm_pnd; break;
   case DCS: fsm->state = fsm_dcs; break;
   case '6': OMITTED("Back Index"); break;
-  case '7': fsm->active_grid->saved_cursor = fsm->active_grid->cursor; break;
-  case '8': fsm->active_grid->cursor = fsm->active_grid->saved_cursor; break;
+  case '7': grid_save_cursor(fsm->active_grid); break;
+  case '8': grid_restore_cursor(fsm->active_grid); break;
   case '9': OMITTED("Forward Index"); break;
   case 'D': grid_advance_cursor_y(g); break;                        // Index
   case 'M': grid_advance_cursor_y_reverse(fsm->active_grid); break; // Reverse Index
@@ -413,7 +408,7 @@ static void fsm_dispatch_spc(struct fsm *fsm, uint8_t ch) {
   case 'L':
   case 'M':
   case 'N': TODO("ANSI Conformance Level"); break;
-  default: logmsg("Unknown ESC SP command: %x", ch); break;
+  default: TODO("Unknown ESC SP command: %x", ch); break;
   }
 }
 
@@ -423,7 +418,7 @@ void fsm_process(struct fsm *fsm, uint8_t *buf, int n) {
     uint8_t ch = buf[i];
     switch (fsm->state) {
     case fsm_ground: fsm_dispatch_ground(fsm, ch); break;
-    case fsm_utf8: process_utf8(fsm, ch); break;
+    case fsm_utf8: fsm_dispatch_utf8(fsm, ch); break;
     case fsm_escape: fsm_dispatch_escape(fsm, ch); break;
     case fsm_dcs: fsm_dispatch_dcs(fsm, ch); break;
     case fsm_osc: fsm_dispatch_osc(fsm, ch); break;

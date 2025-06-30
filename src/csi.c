@@ -48,7 +48,7 @@ static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
   }
 }
 
-static char *byte_names[UINT8_MAX] = {
+static char *byte_names[UINT8_MAX+1] = {
     [' '] = "SP",
     ['\a'] = "BEL",
     ['\r'] = "CR",

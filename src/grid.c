@@ -174,6 +174,18 @@ void grid_advance_cursor_y_reverse(struct grid *g) {
   grid_move_cursor(g, 0, -1);
 }
 
+void grid_restore_cursor(struct grid *g) {
+  struct grid_row *row = grid_row(g);
+  row->end_of_line = false;
+  g->cursor = g->saved_cursor;
+}
+
+void grid_save_cursor(struct grid *g) {
+  struct grid_row *row = grid_row(g);
+  row->end_of_line = false;
+  g->saved_cursor = g->cursor;
+}
+
 void grid_advance_cursor_y(struct grid *g) {
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
@@ -352,6 +364,8 @@ void grid_backspace(struct grid *g) {
 }
 
 void grid_full_reset(struct grid *g) {
+  struct grid_row *row = grid_row(g);
+  row->end_of_line = false;
   struct raw_cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
   struct raw_cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
   grid_erase_between_cursors(g, start, end);

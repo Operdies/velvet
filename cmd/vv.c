@@ -199,7 +199,6 @@ bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
       clients = new;
       arrange(ws_current, clients);
       pane_start(new);
-      set_nonblocking(new->pty);
       focus_pane(new);
       string_push(draw_buffer, u8"\x1b[2J");
     } else {
@@ -322,6 +321,18 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
   write(focused->pty, writebuffer.content, writebuffer.len);
 }
 
+static void pane_remove_and_destroy(struct pane *p) {
+  if (p) {
+    p->pid = 0;
+    if (p == focused) focusnext();
+    // Special case when `p` was the last pane
+    if (p == focused) focused = nullptr;
+    pane_remove(&clients, p);
+    pane_destroy(p);
+    free(p);
+  }
+}
+
 void remove_exited_processes(void) {
   int status;
   pid_t pid;
@@ -329,16 +340,7 @@ void remove_exited_processes(void) {
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     if (WIFEXITED(status)) {
       struct pane *p = pane_from_pid(clients, pid);
-      if (p) {
-        p->pid = 0;
-        if (p == focused) {
-          focusprev();
-        }
-        pane_remove(&clients, p);
-        pane_destroy(p);
-        free(p);
-        if (!focused) focus_pane(clients);
-      }
+      pane_remove_and_destroy(p);
     }
   }
 }
@@ -386,6 +388,38 @@ static void handle_queries(struct pane *p) {
   string_clear(&response);
 }
 
+static void pane_draw_borders(struct string *draw_buffer) {
+  for (struct pane *p = clients; p; p = p->next) {
+    if (p == focused) continue;
+    pane_draw_border(p, draw_buffer);
+  }
+  if (focused) pane_draw_border(focused, draw_buffer);
+}
+
+static void render_frame(struct string *draw_buffer) {
+  static enum cursor_style current_cursor_style = 0;
+  static const uint8_t *hide_cursor = u8"\x1b[?25l";
+  static const uint8_t *show_cursor = u8"\x1b[?25h";
+
+  string_push(draw_buffer, hide_cursor);
+  for (struct pane *p = clients; p; p = p->next) {
+    pane_draw(p, false, draw_buffer);
+  }
+  pane_draw_borders(draw_buffer);
+
+  if (!focused) focus_pane(clients);
+  if (focused) move_cursor_to_pane(focused, draw_buffer);
+  if (focused && focused->fsm.features.cursor.hidden == false) string_push(draw_buffer, show_cursor);
+  if (focused && focused->fsm.features.cursor.style != current_cursor_style) {
+    current_cursor_style = focused->fsm.features.cursor.style;
+    string_push(draw_buffer, u8"\x1b[");
+    string_push_int(draw_buffer, current_cursor_style);
+    string_push(draw_buffer, u8" q");
+  }
+
+  string_flush(draw_buffer, STDOUT_FILENO, NULL);
+}
+
 int main(int argc, char **argv) {
   enable_raw_mode_etc();
 
@@ -396,7 +430,6 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
       struct pane *p = calloc(1, sizeof(*p));
       p->process = strdup(argv[i]);
-      logmsg("Create %s", p->process);
       if (!clients) {
         // first element -- asign head
         clients = p;
@@ -411,7 +444,6 @@ int main(int argc, char **argv) {
     if (argc < 2) {
       clients = calloc(1, sizeof(*clients));
       clients->process = strdup("zsh");
-      logmsg("Fallback: zsh");
     }
   }
 
@@ -427,7 +459,6 @@ int main(int argc, char **argv) {
     int i = 0;
     for (struct pane *p = clients; p; p = p->next) {
       pane_start(p);
-      set_nonblocking(p->pty);
       fds[i + 1].fd = p->pty;
       fds[i + 1].events = POLL_IN;
       i++;
@@ -436,7 +467,7 @@ int main(int argc, char **argv) {
   }
 
   static struct string draw_buffer = {0};
-  enum cursor_style current_cursor_style = 0;
+  render_frame(&draw_buffer);
 
   char readbuffer[4096];
   for (; running && pane_count(clients);) {
@@ -525,42 +556,20 @@ int main(int argc, char **argv) {
           while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
             pane_write(p, buf, n);
             iterations++;
-            logmsg("Read %d bytes", n);
           }
           handle_queries(p);
           if (n == -1) {
             if (errno == EAGAIN || errno == EINTR) continue;
             die("read %s:", p->process);
+          } else if (n == 0) {
+            // pipe closed -- destroy pane
+            pane_remove_and_destroy(p);
           }
         }
       }
     }
 
-    uint8_t hide_cursor[] = "\x1b[?25l";
-    uint8_t show_cursor[] = "\x1b[?25h";
-    string_push_slice(&draw_buffer, hide_cursor, sizeof(hide_cursor));
-    for (struct pane *p = clients; p; p = p->next) {
-      pane_draw(p, false, &draw_buffer);
-    }
-
-    for (struct pane *p = clients; p; p = p->next) {
-      if (p == focused) continue;
-      pane_draw_border(p, &draw_buffer);
-    }
-    pane_draw_border(focused, &draw_buffer);
-
-    if (!focused) focus_pane(clients);
-    if (focused) move_cursor_to_pane(focused, &draw_buffer);
-    if (focused && focused->fsm.features.cursor.hidden == false)
-      string_push_slice(&draw_buffer, show_cursor, sizeof(show_cursor));
-    if (focused && focused->fsm.features.cursor.style != current_cursor_style) {
-      current_cursor_style = focused->fsm.features.cursor.style;
-      string_push(&draw_buffer, u8"\x1b[");
-      string_push_int(&draw_buffer, current_cursor_style);
-      string_push(&draw_buffer, u8" q");
-    }
-
-    string_flush(&draw_buffer, STDOUT_FILENO, NULL);
+    render_frame(&draw_buffer);
 
     { // update fd set
       int i = 0;
@@ -572,6 +581,8 @@ int main(int argc, char **argv) {
       nfds = 1 + i;
     }
     arrange(ws_current, clients);
+
+    assert(polled == 0 && "Every polled client should have been handled");
   }
 
   string_destroy(&draw_buffer);
