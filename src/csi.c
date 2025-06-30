@@ -1,40 +1,11 @@
-#include "emulator.h"
+#include "csi.h"
 #include "grid.h"
 #include "utils.h"
 #include <ctype.h>
 
-#define CSI_MAX_PARAMS 16
-
-enum csi_fsm_state {
-  CSI_GROUND,
-  CSI_ACCEPT,
-  CSI_PARAMETER,
-  CSI_LEADING,
-  CSI_INTERMEDIATE,
-  CSI_REJECT,
-};
-
-struct csi_param {
-  uint32_t primary;
-  uint8_t sub[4];
-};
-
-struct csi {
-  enum csi_fsm_state state;
-  struct {
-    struct csi_param params[CSI_MAX_PARAMS];
-    int n_params;
-    uint8_t leading;
-    uint8_t intermediate;
-    uint8_t final;
-  };
-};
-
 static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params);
 static bool csi_read_subparameter(const uint8_t *buffer, uint8_t separator, int *value, int *read);
 static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, int *read, bool is_sgr);
-static int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len);
-
 
 static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
   TODO("Implement query modifiers");
@@ -48,7 +19,7 @@ static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
   }
 }
 
-static char *byte_names[UINT8_MAX+1] = {
+static char *byte_names[UINT8_MAX + 1] = {
     [' '] = "SP",
     ['\a'] = "BEL",
     ['\r'] = "CR",
@@ -336,7 +307,7 @@ static bool csi_dispatch_leading(struct fsm *fsm, struct csi *csi) {
   }
 }
 
-static bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
+bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_leading(fsm, csi);
 }
 
@@ -515,7 +486,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
   return true;
 }
 
-static int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
+int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
   bool is_sgr = buffer[len - 1] == 'm';
   int i = 0;
   for (; i < len;) {
@@ -584,4 +555,3 @@ static int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
 #undef PARAMETER
 #undef ACCEPT
 #undef INTERMEDIATE
-

@@ -372,7 +372,15 @@ static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
   escape_buffer_append(fsm, ch);
   if (ch >= 0x40 && ch <= 0x7E) {
     fsm->escape_buffer.buffer[fsm->escape_buffer.n] = 0;
-    csi_parse_and_execute_buffer(fsm, fsm->escape_buffer.buffer, fsm->escape_buffer.n);
+    struct csi csi = {0};
+    // Strip the leading escape sequence
+    uint8_t *buffer = fsm->escape_buffer.buffer + 2;
+    int len = fsm->escape_buffer.n - 2;
+    int parsed = csi_parse_parameters(&csi, buffer, len);
+    assert(len == parsed);
+    if (csi.state == CSI_ACCEPT) {
+      csi_dispatch(fsm, &csi);
+    }
     fsm->state = fsm_ground;
   } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
     fsm->state = fsm_ground;

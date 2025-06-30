@@ -1,4 +1,5 @@
 #include "collections.h"
+#include "csi.h"
 #include "pane.h"
 #include "utils.h"
 #include <stdio.h>
@@ -124,6 +125,12 @@ static void fail() {
 static void assert_ge(int actual, int expected, const char *test_name, const char *msg) {
   if (actual > expected) return;
   printf("Assertion failed: %d > %d (%s: %s)\n", actual, expected, test_name, msg);
+  fail();
+}
+
+static void assert_eq(int actual, int expected, const char *test_name, const char *msg) {
+  if (actual == expected) return;
+  printf("Assertion failed: %d == %d (%s: %s)\n", actual, expected, test_name, msg);
   fail();
 }
 
@@ -639,6 +646,58 @@ void test_scrolling(void) {
                          });
 }
 
+void assert_csi_param_equals(const char *testname, struct csi_param *expected, struct csi_param *actual, int index) {
+  char indexbuf[50];
+  snprintf(indexbuf, 30, "Primary %d", index);
+  assert_eq(expected->primary, actual->primary, testname, indexbuf);
+  for (int i = 0; i < (int)LENGTH(expected->sub); i++) {
+    snprintf(indexbuf, 30, "Primary %d sub %d", index, i);
+    assert_eq(expected->sub[i], actual->sub[i], testname, indexbuf);
+  }
+}
+
+void assert_csi_equals(const char *testname, struct csi *expected, struct csi *actual) {
+  assert_eq(expected->state, actual->state, testname, "states differ");
+  assert_eq(expected->final, actual->final, testname, "final byte differs");
+  assert_eq(expected->intermediate, actual->intermediate, testname, "intermediate byte differs");
+  assert_eq(expected->leading, actual->leading, testname, "leading byte differs");
+  assert_eq(expected->n_params, actual->n_params, testname, "n_params differs");
+
+  for (int i = 0; i < expected->n_params; i++) {
+    struct csi_param *exp = &expected->params[i];
+    struct csi_param *act = &actual->params[i];
+    assert_csi_param_equals(testname, exp, act, i);
+  }
+}
+void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected) {
+  int n = strlen((char *)input);
+  struct csi actual = {0};
+  int count = csi_parse_parameters(&actual, input, n);
+  if (expected.state == CSI_ACCEPT) assert(count = n);
+  assert_csi_equals(testname, &expected, &actual);
+}
+
+void test_csi_parsing(void) {
+  test_csi_testcase("Basic Parameter List",
+                    u8"1;2;33;444m",
+                    (struct csi){
+                        .final = 'm',
+                        .n_params = 4,
+                        .state = CSI_ACCEPT,
+                        .params = {{.primary = 1}, {.primary = 2}, {.primary = 33}, {.primary = 444}},
+                    });
+  test_csi_testcase(
+      "RGB Modern Syntax",
+      u8"38:2:100:100:100m",
+      (struct csi){
+          .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
+  test_csi_testcase(
+      "RGB Legacy Syntax",
+      u8"38;2;100;100;100m",
+      (struct csi){
+          .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
+}
+
 void done() {
   logmsg("[Test Exit]");
 }
@@ -649,5 +708,6 @@ int main(void) {
   test_reflow();
   test_erase();
   test_scrolling();
+  test_csi_parsing();
   return n_failures;
 }
