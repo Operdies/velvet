@@ -30,10 +30,11 @@ struct csi {
   };
 };
 
-static void csi_handle_query(struct fsm *fsm, int n, int *params) {
-  (void)fsm, (void)n, (void)params;
-  TODO("Implement CSI queries");
-}
+static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params);
+static bool csi_read_subparameter(const uint8_t *buffer, uint8_t separator, int *value, int *read);
+static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, int *read, bool is_sgr);
+static int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len);
+
 
 static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
   TODO("Implement query modifiers");
@@ -47,233 +48,7 @@ static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
   }
 }
 
-static void csi_set_modifiers(struct fsm *fsm, int n, int params[n]) {
-  (void)fsm, (void)n, (void)params;
-  TODO("Implement set modifiers");
-}
-
-static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params) {
-  // Special case when the 0 is omitted
-  if (n == 0) {
-    c->style.attr = 0;
-    c->style.bg = c->style.fg = color_default;
-    return NULL;
-  }
-
-  for (int i = 0; i < n; i++) {
-    struct csi_param *attribute = &params[i];
-
-    if (attribute->primary == 0) {
-      c->style.attr = 0;
-      c->style.bg = c->style.fg = color_default;
-    } else if (attribute->primary <= 9) {
-      uint32_t enable[] = {
-          0,
-          ATTR_BOLD,
-          ATTR_FAINT,
-          ATTR_ITALIC,
-          ATTR_UNDERLINE,
-          ATTR_BLINK_SLOW,
-          ATTR_BLINK_RAPID,
-          ATTR_REVERSE,
-          ATTR_CONCEAL,
-          ATTR_CROSSED_OUT,
-      };
-      c->style.attr |= enable[attribute->primary];
-    } else if (attribute->primary == 21) {
-      c->style.attr |= ATTR_UNDERLINE_DOUBLE;
-    } else if (attribute->primary >= 22 && attribute->primary <= 28) {
-      uint32_t disable[] = {
-          [2] = (ATTR_BOLD | ATTR_FAINT),
-          [3] = ATTR_ITALIC,
-          [4] = ATTR_UNDERLINE,
-          [5] = ATTR_BLINK_ANY,
-          /* [6] = proportional spacing */
-          [7] = ATTR_REVERSE,
-          [8] = ATTR_CONCEAL,
-          [9] = ATTR_CROSSED_OUT,
-      };
-      c->style.attr &= ~disable[attribute->primary % 10];
-    } else if (attribute->primary >= 30 && attribute->primary <= 49) {
-      struct color *target = attribute->primary >= 40 ? &c->style.bg : &c->style.fg;
-      int color = attribute->primary % 10;
-      if (color == 8) {
-        int type = attribute->sub[0];
-        if (type == 5) { /* color from 256 color table */
-          int color = attribute->sub[1];
-          *target = (struct color){.table = color, .cmd = COLOR_TABLE};
-        } else if (type == 2) {
-          int red = attribute->sub[1];
-          int green = attribute->sub[2];
-          int blue = attribute->sub[3];
-          *target = (struct color){.r = red, .g = green, .b = blue, .cmd = COLOR_RGB};
-        }
-      } else if (color == 9) { /* reset */
-        *target = color_default;
-      } else { /* This is a normal indexed color from 0-8 in the table */
-        *target = (struct color){.table = attribute->primary % 10, .cmd = COLOR_TABLE};
-      }
-    } else if (attribute->primary >= 90 && attribute->primary <= 97) {
-      int bright = 8 + attribute->primary - 90;
-      c->style.fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
-    } else if (attribute->primary >= 100 && attribute->primary <= 107) {
-      int bright = 8 + attribute->primary - 100;
-      c->style.bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
-    }
-  }
-  return NULL;
-}
-
-#define PARAMETER(X) (isdigit((X)) || (X) == ';')
-#define INTERMEDIATE(X) (((X) >= 0x20 && (X) <= 0x2F) || ((X) >= 0x3C && (X) <= 0x3F) || ((X) >= 0x5E && (X) <= 0x60))
-#define ACCEPT(X) ((X) >= 0x40 && (X) <= 0x7E)
-
-/** State machine:
- * Ground       --> Parameter
- *              --> Leading
- *              --> Accept
- * Parameter    --> Parameter
- *              --> Intermediate
- *              --> Accept
- * Leading      --> Parameter
- *              --> Intermediate
- *              --> Accept
- * Intermediate --> Accept
- */
-
-static bool csi_read_subparameter(const uint8_t *buffer, uint8_t separator, int *value, int *read) {
-  int i = 0;
-  if (buffer[0] == separator) {
-    i++;
-    int v = 0;
-    while (isdigit(buffer[i])) {
-      v *= 10;
-      v += buffer[i] - '0';
-      i++;
-    }
-    *value = v;
-    *read = i;
-    return true;
-  }
-  return false;
-}
-
-static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, int *read, bool is_sgr) {
-  int i = 0;
-  if (buffer[i] == ';') i++;
-  int num = 0;
-  while (isdigit(buffer[i])) {
-    num *= 10;
-    num += buffer[i] - '0';
-    i++;
-  }
-  param->primary = num;
-  int n_subparameters = 0;
-  int value, length, color_type;
-  value = length = color_type = 0;
-  bool is_custom_color = is_sgr && (num == 38 || num == 48);
-  uint8_t separator = ':';
-  int subparameter_max = LENGTH(param->sub);
-  if (is_custom_color && buffer[i] == ';') {
-    separator = ';';
-    bool did_read = csi_read_subparameter(buffer + i, separator, &color_type, &length);
-    i += length;
-    if (!did_read || (color_type != 2 && color_type != 5)) {
-      logmsg("Reject SGR %d: Missing color parameter", num);
-      *read = i;
-      return false;
-    }
-    param->sub[0] = color_type;
-    n_subparameters++;
-    subparameter_max = color_type == 2 ? 4 : 2;
-  }
-
-  while (n_subparameters < subparameter_max && csi_read_subparameter(buffer + i, separator, &value, &length)) {
-    i += length;
-    param->sub[n_subparameters] = value;
-    n_subparameters++;
-  }
-  if (csi_read_subparameter(buffer + i, ':', &value, &length)) {
-    logmsg("Reject CSI: Too many subparameters");
-    *read = i;
-    return false;
-  }
-
-  *read = i;
-  return true;
-}
-
-static int csi_process(struct csi *c, const uint8_t *buffer, int len) {
-  bool is_sgr = buffer[len - 1] == 'm';
-  int i = 0;
-  for (; i < len;) {
-    char ch = buffer[i];
-    switch (c->state) {
-    case CSI_GROUND: {
-      c->state = PARAMETER(ch) ? CSI_PARAMETER : INTERMEDIATE(ch) ? CSI_LEADING : ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
-    } break;
-    case CSI_PARAMETER: {
-      if (c->n_params >= CSI_MAX_PARAMS) {
-        c->state = CSI_REJECT;
-        logmsg("Reject CSI: Too many numeric parameters");
-        return i;
-      }
-
-      struct csi_param *param = &c->params[c->n_params];
-      c->n_params++;
-      int read;
-      if (!csi_read_parameter(param, buffer + i, &read, is_sgr)) {
-        logmsg("Reject CSI: Error parsing parameter");
-        c->state = CSI_REJECT;
-        return i + read;
-      }
-      i += read;
-
-      ch = buffer[i];
-      c->state = PARAMETER(ch)      ? CSI_PARAMETER
-                 : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
-                 : ACCEPT(ch)       ? CSI_ACCEPT
-                                    : CSI_REJECT;
-    } break;
-    case CSI_LEADING: {
-      char intermediate = ch;
-      ch = buffer[++i];
-      c->state = PARAMETER(ch)      ? CSI_PARAMETER
-                 : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
-                 : ACCEPT(ch)       ? CSI_ACCEPT
-                                    : CSI_REJECT;
-      if (c->state == CSI_ACCEPT) {
-        c->intermediate = intermediate;
-      } else {
-        c->leading = intermediate;
-      }
-    } break;
-    case CSI_INTERMEDIATE: {
-      c->intermediate = ch;
-      ch = buffer[++i];
-      c->state = ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
-    } break;
-    case CSI_ACCEPT: {
-      c->final = ch;
-      return i + 1;
-    } break;
-    case CSI_REJECT: {
-      logmsg("Reject CSI");
-      return i + 1;
-    } break;
-    default: assert(!"Unreachable");
-    }
-  }
-  logmsg("Reject CSI: No accept character");
-  c->state = CSI_REJECT;
-  return i;
-}
-
-#undef PARAMETER
-#undef ACCEPT
-#undef INTERMEDIATE
-
-char *byte_names[UINT8_MAX] = {
+static char *byte_names[UINT8_MAX] = {
     [' '] = "SP",
     ['\a'] = "BEL",
     ['\r'] = "CR",
@@ -459,7 +234,6 @@ static bool csi_dispatch_cha(struct fsm *fsm, struct csi *csi) {
 }
 
 static bool csi_dispatch_pda(struct fsm *fsm, struct csi *csi) {
-  TODO("Primary Display Attributes");
   return csi_dispatch_todo(fsm, csi);
 }
 
@@ -577,7 +351,7 @@ void csi_parse_and_execute_buffer(struct fsm *fsm, const uint8_t *buffer, int le
   len -= 2;
 
   struct csi csi = {0};
-  int processed = csi_process(&csi, buffer, len);
+  int processed = csi_parse_parameters(&csi, buffer, len);
   if (csi.state != CSI_ACCEPT) {
     logmsg("Error parsing CSI: %.*s", len, buffer);
     return;
@@ -585,3 +359,229 @@ void csi_parse_and_execute_buffer(struct fsm *fsm, const uint8_t *buffer, int le
   assert(processed == len);
   csi_dispatch(fsm, &csi);
 }
+
+static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params) {
+  // Special case when the 0 is omitted
+  if (n == 0) {
+    c->style.attr = 0;
+    c->style.bg = c->style.fg = color_default;
+    return NULL;
+  }
+
+  for (int i = 0; i < n; i++) {
+    struct csi_param *attribute = &params[i];
+
+    if (attribute->primary == 0) {
+      c->style.attr = 0;
+      c->style.bg = c->style.fg = color_default;
+    } else if (attribute->primary <= 9) {
+      uint32_t enable[] = {
+          0,
+          ATTR_BOLD,
+          ATTR_FAINT,
+          ATTR_ITALIC,
+          ATTR_UNDERLINE,
+          ATTR_BLINK_SLOW,
+          ATTR_BLINK_RAPID,
+          ATTR_REVERSE,
+          ATTR_CONCEAL,
+          ATTR_CROSSED_OUT,
+      };
+      c->style.attr |= enable[attribute->primary];
+    } else if (attribute->primary == 21) {
+      c->style.attr |= ATTR_UNDERLINE_DOUBLE;
+    } else if (attribute->primary >= 22 && attribute->primary <= 28) {
+      uint32_t disable[] = {
+          [2] = (ATTR_BOLD | ATTR_FAINT),
+          [3] = ATTR_ITALIC,
+          [4] = ATTR_UNDERLINE,
+          [5] = ATTR_BLINK_ANY,
+          /* [6] = proportional spacing */
+          [7] = ATTR_REVERSE,
+          [8] = ATTR_CONCEAL,
+          [9] = ATTR_CROSSED_OUT,
+      };
+      c->style.attr &= ~disable[attribute->primary % 10];
+    } else if (attribute->primary >= 30 && attribute->primary <= 49) {
+      struct color *target = attribute->primary >= 40 ? &c->style.bg : &c->style.fg;
+      int color = attribute->primary % 10;
+      if (color == 8) {
+        int type = attribute->sub[0];
+        if (type == 5) { /* color from 256 color table */
+          int color = attribute->sub[1];
+          *target = (struct color){.table = color, .cmd = COLOR_TABLE};
+        } else if (type == 2) {
+          int red = attribute->sub[1];
+          int green = attribute->sub[2];
+          int blue = attribute->sub[3];
+          *target = (struct color){.r = red, .g = green, .b = blue, .cmd = COLOR_RGB};
+        }
+      } else if (color == 9) { /* reset */
+        *target = color_default;
+      } else { /* This is a normal indexed color from 0-8 in the table */
+        *target = (struct color){.table = attribute->primary % 10, .cmd = COLOR_TABLE};
+      }
+    } else if (attribute->primary >= 90 && attribute->primary <= 97) {
+      int bright = 8 + attribute->primary - 90;
+      c->style.fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+    } else if (attribute->primary >= 100 && attribute->primary <= 107) {
+      int bright = 8 + attribute->primary - 100;
+      c->style.bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+    }
+  }
+  return NULL;
+}
+
+#define PARAMETER(X) (isdigit((X)) || (X) == ';')
+#define INTERMEDIATE(X) (((X) >= 0x20 && (X) <= 0x2F) || ((X) >= 0x3C && (X) <= 0x3F) || ((X) >= 0x5E && (X) <= 0x60))
+#define ACCEPT(X) ((X) >= 0x40 && (X) <= 0x7E)
+
+/** State machine:
+ * Ground       --> Parameter
+ *              --> Leading
+ *              --> Accept
+ * Parameter    --> Parameter
+ *              --> Intermediate
+ *              --> Accept
+ * Leading      --> Parameter
+ *              --> Intermediate
+ *              --> Accept
+ * Intermediate --> Accept
+ */
+
+static bool csi_read_subparameter(const uint8_t *buffer, uint8_t separator, int *value, int *read) {
+  int i = 0;
+  if (buffer[0] == separator) {
+    i++;
+    int v = 0;
+    while (isdigit(buffer[i])) {
+      v *= 10;
+      v += buffer[i] - '0';
+      i++;
+    }
+    *value = v;
+    *read = i;
+    return true;
+  }
+  return false;
+}
+
+static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, int *read, bool is_sgr) {
+  int i = 0;
+  if (buffer[i] == ';') i++;
+  int num = 0;
+  while (isdigit(buffer[i])) {
+    num *= 10;
+    num += buffer[i] - '0';
+    i++;
+  }
+  param->primary = num;
+
+  // Only parse subparameters in SGR sequences
+  if (is_sgr) {
+    int n_subparameters = 0;
+    int value, length, color_type;
+    value = length = color_type = 0;
+    bool is_custom_color = is_sgr && (num == 38 || num == 48);
+    uint8_t separator = ':';
+    int subparameter_max = LENGTH(param->sub);
+    if (is_custom_color && buffer[i] == ';') {
+      separator = ';';
+      bool did_read = csi_read_subparameter(buffer + i, separator, &color_type, &length);
+      i += length;
+      if (!did_read || (color_type != 2 && color_type != 5)) {
+        logmsg("Reject SGR %d: Missing color parameter", num);
+        *read = i;
+        return false;
+      }
+      param->sub[0] = color_type;
+      n_subparameters++;
+      subparameter_max = color_type == 2 ? 4 : 2;
+    }
+
+    while (n_subparameters < subparameter_max && csi_read_subparameter(buffer + i, separator, &value, &length)) {
+      i += length;
+      param->sub[n_subparameters] = value;
+      n_subparameters++;
+    }
+    if (csi_read_subparameter(buffer + i, ':', &value, &length)) {
+      logmsg("Reject CSI: Too many subparameters");
+      *read = i;
+      return false;
+    }
+  }
+
+  *read = i;
+  return true;
+}
+
+static int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
+  bool is_sgr = buffer[len - 1] == 'm';
+  int i = 0;
+  for (; i < len;) {
+    char ch = buffer[i];
+    switch (c->state) {
+    case CSI_GROUND: {
+      c->state = PARAMETER(ch) ? CSI_PARAMETER : INTERMEDIATE(ch) ? CSI_LEADING : ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
+    } break;
+    case CSI_PARAMETER: {
+      if (c->n_params >= CSI_MAX_PARAMS) {
+        c->state = CSI_REJECT;
+        logmsg("Reject CSI: Too many numeric parameters");
+        return i;
+      }
+
+      struct csi_param *param = &c->params[c->n_params];
+      c->n_params++;
+      int read;
+      if (!csi_read_parameter(param, buffer + i, &read, is_sgr)) {
+        logmsg("Reject CSI: Error parsing parameter");
+        c->state = CSI_REJECT;
+        return i + read;
+      }
+      i += read;
+
+      ch = buffer[i];
+      c->state = PARAMETER(ch)      ? CSI_PARAMETER
+                 : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
+                 : ACCEPT(ch)       ? CSI_ACCEPT
+                                    : CSI_REJECT;
+    } break;
+    case CSI_LEADING: {
+      char intermediate = ch;
+      ch = buffer[++i];
+      c->state = PARAMETER(ch)      ? CSI_PARAMETER
+                 : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
+                 : ACCEPT(ch)       ? CSI_ACCEPT
+                                    : CSI_REJECT;
+      if (c->state == CSI_ACCEPT) {
+        c->intermediate = intermediate;
+      } else {
+        c->leading = intermediate;
+      }
+    } break;
+    case CSI_INTERMEDIATE: {
+      c->intermediate = ch;
+      ch = buffer[++i];
+      c->state = ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
+    } break;
+    case CSI_ACCEPT: {
+      c->final = ch;
+      return i + 1;
+    } break;
+    case CSI_REJECT: {
+      logmsg("Reject CSI");
+      return i + 1;
+    } break;
+    default: assert(!"Unreachable");
+    }
+  }
+  logmsg("Reject CSI: No accept character");
+  c->state = CSI_REJECT;
+  return i;
+}
+
+#undef PARAMETER
+#undef ACCEPT
+#undef INTERMEDIATE
+
