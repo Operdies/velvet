@@ -678,6 +678,11 @@ void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected
 }
 
 void test_csi_parsing(void) {
+  test_csi_testcase("Reject Empty", u8"", (struct csi){.state = CSI_REJECT});
+  test_csi_testcase(
+      "Reset 1", u8"0m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
+  test_csi_testcase(
+      "Reset 0", u8"m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
   test_csi_testcase("Basic Parameter List",
                     u8"1;2;33;444m",
                     (struct csi){

@@ -487,6 +487,10 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
 }
 
 int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
+  if (len < 1) {
+    c->state = CSI_REJECT;
+    return 0;
+  }
   bool is_sgr = buffer[len - 1] == 'm';
   int i = 0;
   for (; i < len;) {
@@ -537,6 +541,11 @@ int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
       c->state = ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
     } break;
     case CSI_ACCEPT: {
+      // Special case for empty parameter lists
+      if (c->n_params == 0) {
+        c->n_params = 1;
+        c->params[0].primary = 0;
+      }
       c->final = ch;
       return i + 1;
     } break;
