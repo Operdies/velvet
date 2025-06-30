@@ -193,7 +193,8 @@ bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
   case CTRL('N'):
     if (pane_count(clients) < 6) {
       struct pane *new = calloc(1, sizeof(*new));
-      new->process = strdup("bash");
+      // TODO: Start user's preferred shell
+      new->process = strdup("zsh");
       new->next = clients;
       clients = new;
       arrange(ws_current, clients);
@@ -501,15 +502,35 @@ int main(int argc, char **argv) {
         polled--;
         struct pane *p = pane_from_pty(clients, fds[i].fd);
         if (p) {
-          uint8_t buf[1 << 16];
-          int n = read(p->pty, buf, sizeof(buf));
+/* These parameters greatly affect throughput when an application is writing in a busy loop.
+ * Observations from brief testing on Mac in Alacritty:
+ * Raw ascii output was generated with dd if=/dev/urandom | base64
+ * Increasing BUFSIZE above 4k only hurts performance
+ * Responsiveness of other panes depends on the MAX_IT variable. From my testing,
+ * vv is completely responsive even when 4 panes are generating garbage full throttle.
+ * In a similar scenario in tmux, I observed a lot of flickering, but that is not the case in vv.
+ * Raising MAX_IT greatly increases throughput, but past 512kb the gains are marginal (Unbounded is ~5% faster), so
+ * responsiveness is a more important metric.
+ *
+ * On MacOS, I observed the maximum read from the PTY to be 1024, but it could be different on other platforms, and the
+ * gains of decreasing the buffer size are also very marginal (~3%)
+ *
+ * TODO: Benchmark performance with ansi escapes instead of just ascii
+ */
+#define BUFSIZE (4096)      // 4kb
+#define MAX_BYTES (1 << 19) // 512kb
+#define MAX_IT (MAX_BYTES / BUFSIZE)
+          uint8_t buf[BUFSIZE];
+          int n = 0, iterations = 0;
+          while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
+            pane_write(p, buf, n);
+            iterations++;
+            logmsg("Read %d bytes", n);
+          }
+          handle_queries(p);
           if (n == -1) {
             if (errno == EAGAIN || errno == EINTR) continue;
             die("read %s:", p->process);
-          }
-          if (n > 0) {
-            pane_write(p, buf, n);
-            handle_queries(p);
           }
         }
       }
