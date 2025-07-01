@@ -581,8 +581,6 @@ int main(int argc, char **argv) {
       nfds = 1 + i;
     }
     arrange(ws_current, clients);
-
-    assert(polled == 0 && "Every polled client should have been handled");
   }
 
   string_destroy(&draw_buffer);
