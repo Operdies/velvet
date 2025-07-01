@@ -345,6 +345,19 @@ void remove_exited_processes(void) {
   }
 }
 
+void handle_sigwinch(struct string *draw_buffer) {
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
+    die("ioctl TIOCGWINSZ:");
+  }
+  for (struct pane *p = clients; p; p = p->next) {
+    grid_invalidate(p->fsm.active_grid);
+    p->border_dirty = true;
+  }
+  arrange(ws_current, clients);
+  uint8_t clear[] = "\x1b[2J";
+  string_push_slice(draw_buffer, clear, sizeof(clear) - 1);
+}
+
 static void string_write_arg_list(struct string *str, uint8_t *escape, int n, int *args, char terminator) {
   string_push(str, escape);
   for (int i = 0; i < n; i++) {
@@ -480,35 +493,28 @@ int main(int argc, char **argv) {
     }
     {
       int signal = 0;
+      bool did_sigwinch = false;
+      bool did_sigchild = false;
       while (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
         switch (signal) {
-        case SIGWINCH: {
-          if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
-            die("ioctl TIOCGWINSZ:");
-          }
-          for (struct pane *p = clients; p; p = p->next) {
-            grid_invalidate(p->fsm.active_grid);
-            p->border_dirty = true;
-          }
-          arrange(ws_current, clients);
-          uint8_t clear[] = "\x1b[2J";
-          string_push_slice(&draw_buffer, clear, sizeof(clear) - 1);
-        } break;
-        case SIGCHLD: {
-          remove_exited_processes();
-        } break;
-        default: {
+        case SIGWINCH: did_sigwinch = true; break;
+        case SIGCHLD: did_sigchild = true; break;
+        default:
           running = false;
           logmsg("Unhandled signal: %d", signal);
-        } break;
+          break;
         }
       }
+
+      if (did_sigchild) remove_exited_processes();
 
       // This happens if SIGCHLD was raised and all clients exited
       if (clients == nullptr) {
         running = false;
         continue;
       }
+
+      if (did_sigwinch) handle_sigwinch(&draw_buffer);
     }
 
     if (fds[0].revents & POLL_IN) {
