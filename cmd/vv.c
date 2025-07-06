@@ -417,6 +417,7 @@ static void render_frame(struct string *draw_buffer) {
 
   string_push(draw_buffer, hide_cursor);
   for (struct pane *p = clients; p; p = p->next) {
+    pane_update_cwd(p);
     pane_draw(p, false, draw_buffer);
   }
   pane_draw_borders(draw_buffer);

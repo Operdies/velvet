@@ -1,3 +1,4 @@
+#include "platform.h"
 #include <pane.h>
 #include <signal.h>
 #include <stdio.h>
@@ -19,7 +20,7 @@ struct pane *focused = NULL;
 
 // sprintf is extremely slow because it needs to deal with format strings. We can do better
 // when we know we just want to write a small positive integer
-static inline int write_int(char *dst, int n) {
+static inline int write_int(uint8_t *dst, int n) {
   assert(n >= 0);
   const int max = 11;
   char buf[max];
@@ -35,8 +36,8 @@ static inline int write_int(char *dst, int n) {
 #undef INT_MAX_CHAR
 }
 
-static const char *move(int row, int col) {
-  static char buf[20] = "\x1b[";
+static const uint8_t *move(int row, int col) {
+  static uint8_t buf[20] = "\x1b[";
   int i_buf = 2;
   i_buf += write_int(buf + i_buf, row);
   buf[i_buf++] = ';';
@@ -47,18 +48,24 @@ static const char *move(int row, int col) {
 }
 
 void pane_destroy(struct pane *pane) {
-  if (pane->pty) close(pane->pty);
-  if (pane->pid) {
+  if (pane->pty > 0) {
+    close(pane->pty);
+    pane->pty = 0;
+  }
+  if (pane->pid > 0) {
     int status;
     kill(pane->pid, SIGTERM);
     pid_t result = waitpid(pane->pid, &status, WNOHANG);
     if (result == -1) die("waitpid:");
   }
-  pane->pty = 0;
-  pane->pid = 0;
+  if (pane->logfile > 0) {
+    close(pane->logfile);
+    pane->logfile = 0;
+  }
   fsm_destroy(&pane->fsm);
-  if (pane->logfile > 0) close(pane->logfile);
   free(pane->process);
+  pane->pty = pane->pid = pane->logfile = 0;
+  pane->process = nullptr;
 }
 
 struct pane *pane_from_pty(struct pane *p, int pty) {
@@ -77,6 +84,18 @@ struct sgr_buffer {
   int params[100];
   int n;
 };
+
+void pane_update_cwd(struct pane *p) {
+  if (platform.get_cwd_from_pty) {
+    char buf[256];
+    if (platform.get_cwd_from_pty(p->pty, buf, sizeof(buf))) {
+      if (strncmp(buf, p->cwd, MIN(sizeof(buf), sizeof(p->cwd)))) {
+        p->border_dirty = true;
+        strncpy(p->cwd, buf, MIN(sizeof(buf), sizeof(p->cwd)));
+      }
+    }
+  }
+}
 
 static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
   // TODO: Is this possible?
@@ -166,7 +185,7 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
   bg = style->bg;
 
   if (sgr.n) {
-    string_push(outbuffer, "\x1b[");
+    string_push(outbuffer, u8"\x1b[");
     for (int i = 0; i < sgr.n; i++) {
       string_push_int(outbuffer, sgr.params[i]);
       string_push_char(outbuffer, ';');
@@ -198,14 +217,14 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     for (int col = 0; col < line_length; col++) {
       struct grid_cell *c = &grid_row->cells[col];
       apply_style(&c->style, outbuffer);
-      string_push_slice(outbuffer, (char *)c->symbol.utf8, c->symbol.len);
+      string_push_slice(outbuffer, (uint8_t *)c->symbol.utf8, c->symbol.len);
     }
 
     int num_blanks = g->w - line_length;
     if (num_blanks > 3) {
       // CSI Pn X -- Erase Pn characters after cursor
       apply_style(&style_default, outbuffer);
-      string_push(outbuffer, "\x1b[");
+      string_push(outbuffer, u8"\x1b[");
       string_push_int(outbuffer, num_blanks);
       string_push_char(outbuffer, 'X');
     } else {
@@ -228,22 +247,22 @@ void pane_draw_border(struct pane *p, struct string *b) {
   bool leftmost = p->rect.window.x == 0;
   bool has_right_neighbor = p->rect.window.x + p->rect.window.w < ws_current.ws_col;
 
-  char *topleft_corner = NULL;
-  char *topright_corner = "─";
+  uint8_t *topleft_corner = NULL;
+  uint8_t *topright_corner = u8"─";
   if (topmost && leftmost) {
     // corner = "╭";
-    topleft_corner = "─";
-    if (p->rect.window.w < ws_current.ws_col) topright_corner = "┬";
+    topleft_corner = u8"─";
+    if (p->rect.window.w < ws_current.ws_col) topright_corner = u8"┬";
   } else if (topmost) {
-    topleft_corner = "┬";
+    topleft_corner = u8"┬";
   } else if (leftmost) {
-    topleft_corner = "─";
-    topright_corner = "┤";
+    topleft_corner = u8"─";
+    topright_corner = u8"┤";
   } else {
-    topleft_corner = "├";
+    topleft_corner = u8"├";
   }
   if (!leftmost && !topmost) {
-    topleft_corner = "│";
+    topleft_corner = u8"│";
   }
 
   if (!topmost) {
@@ -255,9 +274,9 @@ void pane_draw_border(struct pane *p, struct string *b) {
       }
       if (c->rect.window.y == p->rect.window.y) {
         if (before) {
-          topleft_corner = "┼";
+          topleft_corner = u8"┼";
         } else {
-          topright_corner = "┼";
+          topright_corner = u8"┼";
         }
         break;
       }
@@ -265,11 +284,11 @@ void pane_draw_border(struct pane *p, struct string *b) {
   }
 
   // char *bottomleftcorner = "\n\b├";
-  char *bottomleftcorner = "\n\b│";
-  char *pipe = "\n\b│";
-  char *dash = "─";
-  char *beforetitle = " "; //"┤";
-  char *aftertitle = " ";  //"├";
+  uint8_t *bottomleftcorner = u8"\n\b│";
+  uint8_t *pipe = u8"\n\b│";
+  uint8_t *dash = u8"─";
+  uint8_t *beforetitle = u8" "; //"┤";
+  uint8_t *aftertitle = u8" ";  //"├";
   int left = p->rect.window.x + 1;
   int top = p->rect.window.y + 1;
   int bottom = p->rect.window.h + top;
@@ -284,12 +303,13 @@ void pane_draw_border(struct pane *p, struct string *b) {
   {
     int i = left + 1;
     // TODO: Technically process can contain utf8 which could be problematic with strlen
-    int n = strlen(p->process);
+    int n = strlen(p->process) + strlen(p->cwd);
     i += n + 3;
     string_push(b, dash);
     string_push(b, beforetitle);
-    string_push_slice(b, p->process, n);
+    string_push(b, (uint8_t *)p->process);
     string_push(b, aftertitle);
+    string_push(b, (uint8_t *)p->cwd);
     for (; i < right; i++) string_push(b, dash);
     string_push(b, topright_corner);
   }

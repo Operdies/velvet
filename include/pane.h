@@ -11,6 +11,8 @@ struct bounds {
 struct pane {
   // TODO: scrollback
   char *process;
+  char startwd[256];
+  char cwd[256];
   int pty, pid;
   int logfile;
   int border_width;
@@ -36,5 +38,6 @@ int pane_count(struct pane *pane);
 void pane_remove(struct pane **lst, struct pane *rem);
 void pane_draw(struct pane *pane, bool redraw, struct string *buffer);
 void pane_draw_border(struct pane *p, struct string *b);
+void pane_update_cwd(struct pane *p);
 
 #endif /*  PANE_H */

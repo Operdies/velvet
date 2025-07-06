@@ -4,7 +4,12 @@ MAKEFLAGS += --no-builtin-rules
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
-    DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
+	DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
+	OBJECTS += platform_linux
+endif
+
+ifeq ($(UNAME_S),Darwin)
+	OBJECTS += platform_macos
 endif
 
 INCLUDE_DIR = $(abspath .)/include

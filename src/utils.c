@@ -49,7 +49,7 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   } else {
     repeat_count = 1;
     fprintf(f, "\n%.*s", n_buf, buf);
-    memcpy(prevbuf, buf, n_buf);
+    memcpy(prevbuf, buf, n_buf + 1);
   }
   fflush(f);
 }
