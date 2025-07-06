@@ -61,7 +61,7 @@ UNITY_SRC = $(RELEASE_DIR)/unity.c
 $(RELEASE_DIR):
 	mkdir -p $@
 
-$(UNITY_SRC): $(OBJECT_DIR)/*.c $(CMD_DIR)/vv.c | $(RELEASE_DIR)
+$(UNITY_SRC): $(OBJECTS:%=$(OBJECT_DIR)/%.c) $(CMD_DIR)/vv.c | $(RELEASE_DIR)
 	cat $^ > $@
 
 $(RELEASE_DIR)/vv: $(UNITY_SRC) | $(RELEASE_DIR)
