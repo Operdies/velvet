@@ -46,7 +46,6 @@ enum PACK cell_attributes {
   ATTR_BLINK_ANY = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
 };
 
-
 enum PACK color_command {
   COLOR_RESET,
   COLOR_RGB,
@@ -55,10 +54,10 @@ enum PACK color_command {
 struct color {
   enum color_command cmd;
   union {
+    uint8_t table;
     struct {
       uint8_t r, g, b;
     };
-    uint8_t table;
   };
 };
 
@@ -77,17 +76,17 @@ struct grid_cell {
 };
 
 struct grid_row {
-  struct grid_cell *cells;
   // Track newline locations to support rewrapping
   bool newline;
   // Indicates that this line is wrapped and should be cleared when written
   bool end_of_line;
-  // Track how many characters are significant on this line. This is needed for
-  // reflowing when resizing grids.
-  int n_significant;
   // Track whether or not the line starting with this cell is dirty (should be
   // re-rendered)
   bool dirty;
+  // Track how many characters are significant on this line. This is needed for
+  // reflowing when resizing grids.
+  int n_significant;
+  struct grid_cell *cells;
 };
 
 static const struct grid_cell empty_cell = {.symbol = utf8_blank};
@@ -111,18 +110,20 @@ struct grid {
   struct raw_cursor saved_cursor;
 };
 
-
 void grid_advance_cursor_y(struct grid *g);
 void grid_advance_cursor_y_reverse(struct grid *g);
 void grid_backspace(struct grid *g);
 void grid_carriage_return(struct grid *g);
-void grid_copy(struct grid *restrict dst, const struct grid *const restrict src, bool wrap);
+void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,
+               bool wrap);
 void grid_destroy(struct grid *grid);
-void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct raw_cursor to);
+void grid_erase_between_cursors(struct grid *g, struct raw_cursor from,
+                                struct raw_cursor to);
 void grid_full_reset(struct grid *g);
 void grid_initialize(struct grid *g, int w, int h);
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
-void grid_insert_blanks_at_cursor(struct grid *g, int n, struct grid_cell template);
+void grid_insert_blanks_at_cursor(struct grid *g, int n,
+                                  struct grid_cell template);
 void grid_move_cursor(struct grid *g, int x, int y);
 void grid_newline(struct grid *g, bool carriage);
 void grid_resize_if_needed(struct grid *g, int w, int h, bool reflow);

@@ -2,6 +2,7 @@
 #include "collections.h"
 #include "csi.h"
 #include "osc.h"
+#include "text.h"
 #include "utils.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -104,7 +105,7 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
   case '5': TODO("DEC single-width line"); break;
   case '6': TODO("DEC double-width line"); break;
   case '8': {
-    struct grid_cell E = {.symbol = {.len = 1, .utf8 = {'E'}}};
+    struct grid_cell E = {.symbol = {.utf8 = {'E'}}};
     struct grid *g = fsm->active_grid;
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
       struct grid_row *row = &g->rows[rowidx];
@@ -211,7 +212,8 @@ static void ground_reject(struct fsm *fsm) {
   struct grid_cell replacement = {.symbol = utf8_fffd};
   struct grid *g = fsm->active_grid;
   grid_insert(g, replacement, fsm->options.auto_wrap_mode);
-  if (copy.len > 1) fsm_process(fsm, &copy.utf8[1], copy.len - 1);
+  uint8_t n = utf8_length(copy);
+  if (n > 1) fsm_process(fsm, &copy.utf8[1], n - 1);
 }
 
 static void ground_process_shift_in_out(struct fsm *fsm, uint8_t ch) {
@@ -254,11 +256,11 @@ static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
 
 static void fsm_dispatch_utf8(struct fsm *fsm, uint8_t ch) {
   utf8_push(&fsm->cell.symbol, ch);
-  uint8_t len = fsm->cell.symbol.len;
-  uint8_t exp = fsm->cell.symbol.expected;
+  uint8_t len = utf8_length(fsm->cell.symbol);
+  uint8_t exp = utf8_expected_length(fsm->cell.symbol.utf8[0]);
   assert(exp <= 4);
 
-  if (exp == 0) {
+  if (exp <= 1) {
     // Invalid sequence
     ground_reject(fsm);
     return;

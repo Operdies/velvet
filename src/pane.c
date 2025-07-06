@@ -217,7 +217,8 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     for (int col = 0; col < line_length; col++) {
       struct grid_cell *c = &grid_row->cells[col];
       apply_style(&c->style, outbuffer);
-      string_push_slice(outbuffer, (uint8_t *)c->symbol.utf8, c->symbol.len);
+      uint8_t n = 0;
+      for (; n < 4 && c->symbol.utf8[n]; n++) string_push_char(outbuffer, c->symbol.utf8[n]);
     }
 
     int num_blanks = g->w - line_length;

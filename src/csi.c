@@ -243,7 +243,7 @@ static bool csi_dispatch_rep(struct fsm *fsm, struct csi *csi) {
   struct grid *g = fsm->active_grid;
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   struct grid_cell repeat = fsm->cell;
-  if (repeat.symbol.len == 0) repeat.symbol = utf8_blank;
+  if (utf8_equals(&repeat.symbol, &utf8_zero)) repeat.symbol = utf8_blank;
   for (int i = 0; i < count; i++) {
     grid_insert(g, repeat, fsm->options.auto_wrap_mode);
   }

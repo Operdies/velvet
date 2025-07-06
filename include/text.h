@@ -4,19 +4,20 @@
 #include <stdint.h>
 
 struct utf8 {
-  /* the current byte sequence */
-  uint8_t utf8[8];
-  /* the length of the current sequence */
-  uint8_t len;
-  /* the expected total length based on the leading byte */
-  uint8_t expected;
-  /* TODO: the width of this character */
-  uint8_t width;
+  union {
+    /* byte sequence */
+    uint8_t utf8[4];
+    /* Used for equality -- NOT a unicode codepoint */
+    uint32_t numeric;
+  };
 };
 
-static const struct utf8 utf8_fffd = {.len = 3, .utf8 = {0xEF, 0xBF, 0xBD}};
-static const struct utf8 utf8_blank = {.len = 1, .utf8 = {' '}};
+static const struct utf8 utf8_fffd = {.utf8 = {0xEF, 0xBF, 0xBD}};
+static const struct utf8 utf8_blank = {.utf8 = {' '}};
+static const struct utf8 utf8_zero = {0};
 
+uint8_t utf8_expected_length(uint8_t ch);
+uint8_t utf8_length(struct utf8 u);
 void utf8_push(struct utf8 *u, uint8_t byte);
 bool utf8_equals(const struct utf8 *const a, const struct utf8 *const b);
 
