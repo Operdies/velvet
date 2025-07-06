@@ -170,7 +170,7 @@ static void ground_backspace(struct fsm *fsm, uint8_t ch) {
 }
 static void ground_vtab(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_advance_cursor_y(fsm->active_grid);
+  grid_advance_cursor_y(fsm->active_grid, fsm->cell.style);
 }
 
 static void ground_tab(struct fsm *fsm, uint8_t ch) {
@@ -194,7 +194,7 @@ static void ground_bell(struct fsm *fsm, uint8_t ch) {
 
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_newline(fsm->active_grid, fsm->options.auto_return);
+  grid_newline(fsm->active_grid, fsm->options.auto_return, fsm->cell.style);
 }
 
 static void ground_accept(struct fsm *fsm) {
@@ -305,10 +305,10 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case DCS: fsm->state = fsm_dcs; break;
   case '7': grid_save_cursor(fsm->active_grid); break;
   case '8': grid_restore_cursor(fsm->active_grid); break;
-  case 'D': grid_advance_cursor_y(g); break;                        // Index
-  case 'M': grid_advance_cursor_y_reverse(fsm->active_grid); break; // Reverse Index
+  case 'D': grid_advance_cursor_y(g, fsm->cell.style); break;                        // Index
+  case 'M': grid_advance_cursor_y_reverse(fsm->active_grid, fsm->cell.style); break; // Reverse Index
   case 'E':                                                         // Next Line
-    grid_advance_cursor_y(g);
+    grid_advance_cursor_y(g, fsm->cell.style);
     grid_carriage_return(g);
     break;
   case 'H': TODO("Horizontal Tab Set"); break;
@@ -399,7 +399,7 @@ static void fsm_dispatch_osc(struct fsm *fsm, uint8_t ch) {
     uint8_t *buffer = fsm->escape_buffer.buffer + 2;
     int len = fsm->escape_buffer.n - strlen(st) - 2;
     struct osc osc = {0};
-    osc_parse(&osc, buffer, len, st);
+    osc_parse(&osc, buffer, len, (uint8_t*)st);
     if (osc.state == OSC_ACCEPT) {
       osc_dispatch(fsm, &osc);
     }

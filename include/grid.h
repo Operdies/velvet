@@ -89,8 +89,6 @@ struct grid_row {
   struct grid_cell *cells;
 };
 
-static const struct grid_cell empty_cell = {.symbol = utf8_blank};
-
 // 0-indexed grid coordinates. This cursor points at a raw cell
 struct raw_cursor {
   int col, row;
@@ -110,30 +108,32 @@ struct grid {
   struct raw_cursor saved_cursor;
 };
 
-void grid_advance_cursor_y(struct grid *g);
-void grid_advance_cursor_y_reverse(struct grid *g);
+void grid_advance_cursor_y(struct grid *g, struct grid_cell_style style);
+void grid_advance_cursor_y_reverse(struct grid *g,
+                                   struct grid_cell_style style);
 void grid_backspace(struct grid *g);
 void grid_carriage_return(struct grid *g);
 void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,
                bool wrap);
 void grid_destroy(struct grid *grid);
 void grid_erase_between_cursors(struct grid *g, struct raw_cursor from,
-                                struct raw_cursor to);
+                                struct raw_cursor to,
+                                struct grid_cell_style style);
 void grid_full_reset(struct grid *g);
 void grid_initialize(struct grid *g, int w, int h);
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
 void grid_insert_blanks_at_cursor(struct grid *g, int n,
-                                  struct grid_cell template);
+                                  struct grid_cell_style style);
 void grid_move_cursor(struct grid *g, int x, int y);
-void grid_newline(struct grid *g, bool carriage);
+void grid_newline(struct grid *g, bool carriage, struct grid_cell_style style);
 void grid_resize_if_needed(struct grid *g, int w, int h, bool reflow);
 void grid_cursor_position(struct grid *g, int x);
 void grid_position_cursor_row(struct grid *g, int y);
 void grid_position_cursor_column(struct grid *g, int x);
 void grid_set_scroll_region(struct grid *g, int top, int bottom);
 void grid_position_visual_cursor(struct grid *g, int x, int y);
-void grid_shift_from_cursor(struct grid *g, int n);
-void grid_shift_lines(struct grid *g, int n);
+void grid_shift_from_cursor(struct grid *g, int n, struct grid_cell_style style);
+void grid_shift_lines(struct grid *g, int n, struct grid_cell_style style);
 void grid_restore_cursor(struct grid *g);
 void grid_save_cursor(struct grid *g);
 #endif /*  GRID_H */

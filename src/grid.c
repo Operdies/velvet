@@ -1,5 +1,6 @@
 #include "grid.h"
 #include "collections.h"
+#include "text.h"
 #include "utils.h"
 #include <stdlib.h>
 
@@ -10,10 +11,11 @@
  * Better dirty tracking (maybe that should happen entirely in the renderer)
  */
 
-void grid_clear_line(struct grid *g, int n) {
+void grid_clear_line(struct grid *g, int n, struct grid_cell_style style) {
+  struct grid_cell template = { .symbol = utf8_blank, .style = style };
   struct grid_row *row = &g->rows[n];
   for (int i = 0; i < g->w; i++) {
-    row->cells[i] = empty_cell;
+    row->cells[i] = template;
   }
   row->dirty = true;
   row->end_of_line = false;
@@ -89,9 +91,10 @@ void grid_invalidate(struct grid *g) {
   }
 }
 
-static void grid_shift_lines_reverse(struct grid *g, int n) {
+static void grid_shift_lines_reverse(struct grid *g, int n, struct grid_cell_style style) {
   // Make n rows of empty space
   // Then shift everything
+  struct grid_cell template = { .style = style, .symbol = utf8_blank };
 
   int rows_after_point = g->h - grid_get_visual_line(g);
   n = MIN(n, rows_after_point);
@@ -111,7 +114,7 @@ static void grid_shift_lines_reverse(struct grid *g, int n) {
   // Now clear the first n lines
   for (cell = 0; cell < shift; cell++) {
     struct grid_cell *dst = &g->cells[(cell + point) % total_cells_in_grid];
-    *dst = empty_cell;
+    *dst = template;
   }
 
   // Dirty all lines affected by the shift
@@ -121,11 +124,12 @@ static void grid_shift_lines_reverse(struct grid *g, int n) {
   }
 }
 
-void grid_shift_lines(struct grid *g, int n) {
+void grid_shift_lines(struct grid *g, int n, struct grid_cell_style style) {
   if (n < 0) {
-    grid_shift_lines_reverse(g, -n);
+    grid_shift_lines_reverse(g, -n, style);
     return;
   }
+  struct grid_cell template = { .style = style, .symbol = utf8_blank };
   int rows_after_point = g->h - grid_get_visual_line(g);
   n = MIN(n, rows_after_point);
 
@@ -145,7 +149,7 @@ void grid_shift_lines(struct grid *g, int n) {
   // If cell + shift is out of range of the grid, clear the cell
   for (; cell < cells_after_point; cell++) {
     struct grid_cell *dst = &g->cells[(cell + point) % total_cells_in_grid];
-    *dst = empty_cell;
+    *dst = template;
   }
 
   // Dirty all lines affected by the shift
@@ -155,20 +159,20 @@ void grid_shift_lines(struct grid *g, int n) {
   }
 }
 
-void grid_newline(struct grid *g, bool carriage) {
+void grid_newline(struct grid *g, bool carriage, struct grid_cell_style style) {
   if (carriage) grid_carriage_return(g);
   struct grid_row *row = grid_row(g);
   row->newline = true;
-  grid_advance_cursor_y(g);
+  grid_advance_cursor_y(g, style);
 }
 
-void grid_advance_cursor_y_reverse(struct grid *g) {
+void grid_advance_cursor_y_reverse(struct grid *g, struct grid_cell_style style) {
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
   int ly = grid_get_visual_line(g);
   if (ly == 0) {
     g->offset = (g->h + g->offset - 1) % g->h;
-    grid_clear_line(g, g->offset);
+    grid_clear_line(g, g->offset, style);
     grid_invalidate(g);
   }
   grid_move_cursor(g, 0, -1);
@@ -186,13 +190,13 @@ void grid_save_cursor(struct grid *g) {
   g->saved_cursor = g->cursor;
 }
 
-void grid_advance_cursor_y(struct grid *g) {
+void grid_advance_cursor_y(struct grid *g, struct grid_cell_style style) {
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
   struct raw_cursor *c = &g->cursor;
   c->row = (c->row + 1) % g->h;
   if (c->row == g->offset) {
-    grid_clear_line(g, g->offset);
+    grid_clear_line(g, g->offset, style);
     g->offset = (g->offset + 1) % g->h;
     grid_invalidate(g);
   }
@@ -214,7 +218,7 @@ void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
       cur->col = 0;
       cur->row = (cur->row + 1) % g->h;
       if (cur->row == g->offset) {
-        grid_clear_line(g, g->offset);
+        grid_clear_line(g, g->offset, c.style);
         g->offset = (g->offset + 1) % g->h;
         grid_invalidate(g);
       }
@@ -262,6 +266,7 @@ void grid_initialize(struct grid *g, int w, int h) {
   g->scroll_top = 0;
   g->scroll_bottom = h;
 
+  struct grid_cell empty_cell = { .style = style_default, .symbol = utf8_blank };
   for (int i = 0; i < h; i++) {
     g->rows[i] = (struct grid_row){.cells = &g->cells[i * w], .dirty = true};
     for (int j = 0; j < w; j++) {
@@ -276,9 +281,10 @@ void grid_set_scroll_region(struct grid *g, int top, int bottom) {
 }
 
 /* inclusive erase between two cursor positions */
-void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct raw_cursor to) {
+void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct raw_cursor to, struct grid_cell_style style) {
   int virtual_start = (from.row - g->offset + g->h) % g->h;
   int virtual_end = (to.row - g->offset + g->h) % g->h;
+  struct grid_cell template = { .symbol = utf8_blank, .style = style };
 
   from.row = virtual_start;
   to.row = virtual_end;
@@ -292,7 +298,7 @@ void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct r
     struct grid_row *line = &g->rows[row];
 
     for (; col_start <= col_end; col_start++) {
-      line->cells[col_start] = empty_cell;
+      line->cells[col_start] = template;
     }
 
     line->dirty = true;
@@ -306,8 +312,8 @@ void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct r
   }
 }
 
-void grid_insert_blanks_at_cursor(struct grid *g, int n, struct grid_cell template) {
-  template.symbol = utf8_blank;
+void grid_insert_blanks_at_cursor(struct grid *g, int n, struct grid_cell_style style) {
+  struct grid_cell template = { .symbol = utf8_blank, .style = style };
   struct grid_row *row = grid_row(g);
   int lcol = grid_column(g);
   for (int col = grid_end(g); col >= lcol; col--) {
@@ -318,12 +324,13 @@ void grid_insert_blanks_at_cursor(struct grid *g, int n, struct grid_cell templa
   row->n_significant = MIN(row->n_significant + n, g->w);
 }
 
-void grid_shift_from_cursor(struct grid *g, int n) {
+void grid_shift_from_cursor(struct grid *g, int n, struct grid_cell_style style) {
   if (n == 0) return;
+  struct grid_cell template = { .symbol = utf8_blank, .style = style };
   struct grid_row *row = grid_row(g);
   for (int col = grid_column(g); col < grid_end(g); col++) {
     int rcol = col + n;
-    struct grid_cell replacement = rcol > grid_end(g) ? empty_cell : row->cells[rcol];
+    struct grid_cell replacement = rcol > grid_end(g) ? template : row->cells[rcol];
     row->cells[col] = replacement;
   }
   row->dirty = true;
@@ -354,7 +361,7 @@ void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,
       grid_insert(dst, c, wrap);
     }
     if (grid_row->newline) {
-      grid_newline(dst, true);
+      grid_newline(dst, true, style_default);
     }
   }
   grid_invalidate(dst);
@@ -369,7 +376,7 @@ void grid_full_reset(struct grid *g) {
   row->end_of_line = false;
   struct raw_cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
   struct raw_cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
-  grid_erase_between_cursors(g, start, end);
+  grid_erase_between_cursors(g, start, end, style_default);
   g->cursor.col = 0;
   g->cursor.row = 0;
 }

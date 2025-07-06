@@ -48,8 +48,9 @@ static bool csi_dispatch_omitted(struct fsm *fsm, struct csi *csi) {
   char leading[] = {csi->leading, 0};
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
-  OMITTED("CSI %2s %2s %2s",
+  OMITTED("CSI %2s %d %2s %2s",
           byte_names[csi->leading] ?: leading,
+          csi->params[0].primary,
           byte_names[csi->intermediate] ?: intermediate,
           byte_names[csi->final] ?: final);
   return false;
@@ -139,7 +140,7 @@ static bool csi_dispatch_ech(struct fsm *fsm, struct csi *csi) {
   int clear = csi->params[0].primary ? csi->params[0].primary : 1;
   struct raw_cursor start = fsm->active_grid->cursor;
   struct raw_cursor end = {.row = start.row, .col = start.col + clear};
-  grid_erase_between_cursors(fsm->active_grid, start, end);
+  grid_erase_between_cursors(fsm->active_grid, start, end, fsm->cell.style);
   return true;
 }
 
@@ -170,7 +171,7 @@ static bool csi_dispatch_ed(struct fsm *fsm, struct csi *csi) {
     break;
   }
 
-  grid_erase_between_cursors(g, start, end);
+  grid_erase_between_cursors(g, start, end, fsm->cell.style);
 
   return true;
 }
@@ -203,30 +204,30 @@ static bool csi_dispatch_el(struct fsm *fsm, struct csi *csi) {
     break;
   default: return csi_dispatch_todo(fsm, csi);
   }
-  grid_erase_between_cursors(g, start, end);
+  grid_erase_between_cursors(g, start, end, fsm->cell.style);
   return true;
 }
 static bool csi_dispatch_il(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_lines(fsm->active_grid, -count);
+  grid_shift_lines(fsm->active_grid, -count, fsm->cell.style);
   return true;
 }
 
 static bool csi_dispatch_dl(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_lines(fsm->active_grid, count);
+  grid_shift_lines(fsm->active_grid, count, fsm->cell.style);
   return true;
 }
 
 static bool csi_dispatch_dch(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_from_cursor(fsm->active_grid, count);
+  grid_shift_from_cursor(fsm->active_grid, count, fsm->cell.style);
   return true;
 }
 
 static bool csi_dispatch_ich(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_insert_blanks_at_cursor(fsm->active_grid, count, fsm->cell);
+  grid_insert_blanks_at_cursor(fsm->active_grid, count, fsm->cell.style);
   return true;
 }
 static bool csi_dispatch_cha(struct fsm *fsm, struct csi *csi) {

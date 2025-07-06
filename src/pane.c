@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "collections.h"
+#include "csi.h"
 #include "emulator.h"
 #include "utils.h"
 
@@ -80,9 +81,19 @@ struct pane *pane_from_pid(struct pane *p, int pid) {
   return nullptr;
 }
 
+struct sgr_param {
+  uint8_t primary;
+  uint8_t sub[4];
+  int n_sub;
+};
+
+// Terminal emulators may not have infinite sapce set aside for SGR sequences,
+// so let's split our sequences at this threshold. Such sequences should be unusual anyway.
+#define MAX_LOAD 10
+#define SGR_PARAMS_MAX 12
 struct sgr_buffer {
-  int params[100];
-  int n;
+  struct sgr_param params[SGR_PARAMS_MAX];
+  uint8_t n;
 };
 
 void pane_update_cwd(struct pane *p) {
@@ -99,9 +110,16 @@ void pane_update_cwd(struct pane *p) {
 
 static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
   // TODO: Is this possible?
-  assert(b->n < 100);
-  b->params[b->n] = n;
+  assert(b->n < SGR_PARAMS_MAX);
+  b->params[b->n] = (struct sgr_param){.primary = n};
   b->n++;
+}
+static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
+  assert(b->n);
+  int k = b->n - 1;
+  struct sgr_param *p = &b->params[k];
+  p->sub[p->n_sub] = sub;
+  p->n_sub++;
 }
 
 static void apply_color(const struct color *const col, bool fg, struct sgr_buffer *sgr) {
@@ -114,15 +132,15 @@ static void apply_color(const struct color *const col, bool fg, struct sgr_buffe
       sgr_buffer_push(sgr, (fg ? 90 : 100) + col->table - 8);
     } else {
       sgr_buffer_push(sgr, fg ? 38 : 48);
-      sgr_buffer_push(sgr, 5);
-      sgr_buffer_push(sgr, col->table);
+      sgr_buffer_add_param(sgr, 5);
+      sgr_buffer_add_param(sgr, col->table);
     }
   } else if (col->cmd == COLOR_RGB) {
     sgr_buffer_push(sgr, fg ? 38 : 48);
-    sgr_buffer_push(sgr, 2);
-    sgr_buffer_push(sgr, col->r);
-    sgr_buffer_push(sgr, col->g);
-    sgr_buffer_push(sgr, col->b);
+    sgr_buffer_add_param(sgr, 2);
+    sgr_buffer_add_param(sgr, col->r);
+    sgr_buffer_add_param(sgr, col->g);
+    sgr_buffer_add_param(sgr, col->b);
   }
 }
 
@@ -185,9 +203,23 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
   bg = style->bg;
 
   if (sgr.n) {
+    int start = outbuffer->len;
     string_push(outbuffer, u8"\x1b[");
+    int current_load = 0;
     for (int i = 0; i < sgr.n; i++) {
-      string_push_int(outbuffer, sgr.params[i]);
+      struct sgr_param *p = &sgr.params[i];
+      int this_load = 1 + p->n_sub;
+      if (current_load + this_load > MAX_LOAD) {
+        outbuffer->content[outbuffer->len - 1] = 'm';
+        string_push(outbuffer, u8"\x1b[");
+        current_load = 0;
+      }
+      current_load += this_load;
+      string_push_int(outbuffer, p->primary);
+      for (int j = 0; j < p->n_sub; j++) {
+        string_push_char(outbuffer, ':');
+        string_push_int(outbuffer, p->sub[j]);
+      }
       string_push_char(outbuffer, ';');
     }
     outbuffer->content[outbuffer->len - 1] = 'm';

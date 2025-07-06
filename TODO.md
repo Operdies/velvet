@@ -48,6 +48,16 @@ Run it through the dispatcher?
 Currently, dispatcher returns true / false. Would also need to be able to know
 if something changed. Update dispatcher to return 0/1/2 ?
 
+* Improve query dispatch 
+
+I initially assumed query responses would require communicating with the host
+emulator, so I bubbled it up to the main event loop, but on further inspection
+it looks like all output is known by the state machine, and the information
+which is not known is static enough that it can be hardcoded or read once and
+reused. It would be a great simplification to queue the response directly
+rather than bubbling it up
+
+
 * Status bar
 
 Something similar to the stock dwm bar. Make focusable (probably make it
