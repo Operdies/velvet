@@ -195,7 +195,7 @@ static bool csi_dispatch_dch(struct fsm *fsm, struct csi *csi) {
 
 static bool csi_dispatch_ich(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_insert_blanks_at_cursor(fsm->active_grid, count);
+  grid_insert_blanks_at_cursor(fsm->active_grid, count, fsm->cell);
   return true;
 }
 static bool csi_dispatch_cha(struct fsm *fsm, struct csi *csi) {

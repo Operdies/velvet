@@ -128,7 +128,7 @@ void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct r
 void grid_full_reset(struct grid *g);
 void grid_initialize(struct grid *g, int w, int h);
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
-void grid_insert_blanks_at_cursor(struct grid *g, int n);
+void grid_insert_blanks_at_cursor(struct grid *g, int n, struct grid_cell template);
 void grid_move_cursor(struct grid *g, int x, int y);
 void grid_newline(struct grid *g, bool carriage);
 void grid_resize_if_needed(struct grid *g, int w, int h, bool reflow);

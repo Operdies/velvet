@@ -306,12 +306,13 @@ void grid_erase_between_cursors(struct grid *g, struct raw_cursor from, struct r
   }
 }
 
-void grid_insert_blanks_at_cursor(struct grid *g, int n) {
+void grid_insert_blanks_at_cursor(struct grid *g, int n, struct grid_cell template) {
+  template.symbol = utf8_blank;
   struct grid_row *row = grid_row(g);
   int lcol = grid_column(g);
   for (int col = grid_end(g); col >= lcol; col--) {
     int rcol = col - n;
-    struct grid_cell replacement = rcol < lcol ? empty_cell : row->cells[rcol];
+    struct grid_cell replacement = rcol < lcol ? template : row->cells[rcol];
     row->cells[col] = replacement;
   }
   row->n_significant = MIN(row->n_significant + n, g->w);
