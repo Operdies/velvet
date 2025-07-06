@@ -139,7 +139,7 @@ struct features {
   /* if wrapping, we should return the cursor to the beginning of the line when
    * inserting a character which would cause an overflow. Otherwise, the cursor
    * should stay at the last column. */
-  bool wrapping_disabled;
+  bool auto_wrap_mode;
   bool auto_return;
   bool alternate_screen;
   /* if enabled, pasted content should be wrapped with ESC[200~ and ESC[201~ */
@@ -174,6 +174,11 @@ struct fsm {
   /* pointer to either primary or alternate */
   struct grid *active_grid;
   request_buffer pending_requests;
+};
+
+static const struct fsm fsm_default = {
+    .features = {.auto_wrap_mode = true},
+    .pending_requests = {.element_size = sizeof(struct emulator_query)},
 };
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);

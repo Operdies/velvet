@@ -163,7 +163,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   const char *reset = "\x1b[2J\x1b[1;1H";
   struct chargrid *expected = make_chargrid(5, 8, expected1);
 
-  struct pane p = {0};
+  struct pane p = {.fsm = fsm_default};
   pane_resize(&p, blarge);
   struct string output = {0};
   {
@@ -226,7 +226,7 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = {0};
+  struct pane p = {.fsm = fsm_default};
   pane_resize(&p, bsmall);
   pane_write(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
@@ -258,7 +258,7 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = {0};
+  struct pane p = {.fsm = fsm_default};
   pane_resize(&p, blarge);
   pane_write(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
@@ -396,7 +396,7 @@ static void test_input_output(void) {
                          });
 
   test_grid_input_output("Shift Lines Down",
-                         CSI "?20h"
+                         CSI "20h"
                              "Line1\nLine2\nLine3\nLine4\nLine5" ABS(2, 1) CSI "2L",
                          (grid_5x8){
                              {"Line1"},
@@ -406,7 +406,7 @@ static void test_input_output(void) {
                              {"Line3"},
                          });
   test_grid_input_output("Shift Lines Down Virtual",
-                         CSI "?20h"
+                         CSI "20h"
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" ABS(2, 1) CSI "2L",
                          (grid_5x8){
                              {"Line3"},
@@ -416,7 +416,7 @@ static void test_input_output(void) {
                              {"Line5"},
                          });
   test_grid_input_output("Shift Lines Up",
-                         CSI "?20h"
+                         CSI "20h"
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M",
                          (grid_5x8){
                              {"Line2"},
@@ -424,13 +424,13 @@ static void test_input_output(void) {
                              {"Line6"},
                          });
   test_grid_input_output("Shift Many Lines Up",
-                         CSI "?20h" /* enable auto-return */
+                         CSI "20h" /* enable auto-return */
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "10M",
                          (grid_5x8){
                              {"Line2"},
                          });
   test_grid_input_output("Shift Many Lines Up 2",
-                         CSI "?20h" /* enable auto-return */
+                         CSI "20h" /* enable auto-return */
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(9, 1) CSI "10M",
                          (grid_5x8){
                              {"Line2"},
@@ -440,13 +440,13 @@ static void test_input_output(void) {
                              {"     "},
                          });
   test_grid_input_output("Shift Up All But Last",
-                         CSI "?20h" /* enable auto-return */
+                         CSI "20h" /* enable auto-return */
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(1, 2) CSI "4M",
                          (grid_5x8){
                              {"Line6"},
                          });
   test_grid_input_output("Shift Lines Down Then Up",
-                         CSI "?20h"
+                         CSI "20h"
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M" CSI "L",
                          (grid_5x8){
                              {"Line2"},
@@ -455,7 +455,7 @@ static void test_input_output(void) {
                              {"Line6"},
                          });
   test_grid_input_output("Shift Lines Up Then Down",
-                         CSI "?20h"
+                         CSI "20h"
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2L" CSI "M",
                          (grid_5x8){
                              {"Line2"},

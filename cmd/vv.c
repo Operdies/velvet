@@ -196,6 +196,7 @@ bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
       // TODO: Start user's preferred shell
       new->process = strdup("zsh");
       new->next = clients;
+      memcpy(&new->fsm, &fsm_default, sizeof(fsm_default));
       clients = new;
       arrange(ws_current, clients);
       pane_start(new);
@@ -379,7 +380,10 @@ static void handle_queries(struct pane *p) {
       string_write_arg_list(&response, u8"\x1b[", 2, args, 'R');
     } break;
     case REQUEST_DEFAULT_FG: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
-    case REQUEST_DEFAULT_BG: string_push(&response, u8"\x1b]11;rgb:1e1e/1e1e/2e2e"); string_push(&response, req->st); break;
+    case REQUEST_DEFAULT_BG:
+      string_push(&response, u8"\x1b]11;rgb:1e1e/1e1e/2e2e");
+      string_push(&response, req->st);
+      break;
     case REQUEST_DEFAULT_CURSOR_COLOR: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
     case REQUEST_PRIMARY_DEVICE_ATTRIBUTES:
     case REQUEST_SECONDARY_DEVICE_ATTRIBUTES:
@@ -444,6 +448,7 @@ int main(int argc, char **argv) {
     struct pane *prev = NULL;
     for (int i = 1; i < argc; i++) {
       struct pane *p = calloc(1, sizeof(*p));
+      memcpy(&p->fsm, &fsm_default, sizeof(fsm_default));
       p->process = strdup(argv[i]);
       if (!clients) {
         // first element -- asign head
@@ -459,6 +464,7 @@ int main(int argc, char **argv) {
     if (argc < 2) {
       clients = calloc(1, sizeof(*clients));
       clients->process = strdup("zsh");
+      memcpy(&clients->fsm, &fsm_default, sizeof(fsm_default));
     }
   }
 

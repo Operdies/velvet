@@ -180,7 +180,7 @@ static void ground_tab(struct fsm *fsm, uint8_t ch) {
   int numSpaces = x2 - x;
   struct grid_cell c = fsm->cell;
   c.symbol = utf8_blank;
-  grid_insert(fsm->active_grid, c, !fsm->features.wrapping_disabled);
+  grid_insert(fsm->active_grid, c, fsm->features.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
     grid_insert(fsm->active_grid, c, false);
   }
@@ -199,7 +199,7 @@ static void ground_newline(struct fsm *fsm, uint8_t ch) {
 static void ground_accept(struct fsm *fsm) {
   struct utf8 clear = {0};
   struct grid *g = fsm->active_grid;
-  grid_insert(g, fsm->cell, !fsm->features.wrapping_disabled);
+  grid_insert(g, fsm->cell, fsm->features.auto_wrap_mode);
   fsm->cell.symbol = clear;
 }
 static void ground_reject(struct fsm *fsm) {
@@ -210,7 +210,7 @@ static void ground_reject(struct fsm *fsm) {
   // Render a replacement char for this sequence (U+FFFD)
   struct grid_cell replacement = {.symbol = utf8_fffd};
   struct grid *g = fsm->active_grid;
-  grid_insert(g, replacement, !fsm->features.wrapping_disabled);
+  grid_insert(g, replacement, fsm->features.auto_wrap_mode);
   if (copy.len > 1) fsm_process(fsm, &copy.utf8[1], copy.len - 1);
 }
 
@@ -301,10 +301,8 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case SPC: fsm->state = fsm_spc; break;
   case PND: fsm->state = fsm_pnd; break;
   case DCS: fsm->state = fsm_dcs; break;
-  case '6': OMITTED("Back Index"); break;
   case '7': grid_save_cursor(fsm->active_grid); break;
   case '8': grid_restore_cursor(fsm->active_grid); break;
-  case '9': OMITTED("Forward Index"); break;
   case 'D': grid_advance_cursor_y(g); break;                        // Index
   case 'M': grid_advance_cursor_y_reverse(fsm->active_grid); break; // Reverse Index
   case 'E':                                                         // Next Line
@@ -314,12 +312,7 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case 'H': TODO("Horizontal Tab Set"); break;
   case 'N': TODO("Single Shift to G2"); break;
   case 'O': TODO("Single Shift to G3"); break;
-  case 'V': OMITTED("Start Guarded Area"); break;
-  case 'W': OMITTED("End Guarded Area"); break;
   case 'X': TODO("Start of String"); break;
-  case 'Z': OMITTED("Return Terminal ID"); break;
-  case '^': OMITTED("Privacy Message"); break;
-  case '_': OMITTED("Application Program Command"); break;
   case '=': fsm->features.application_keypad_mode = true; break;
   case '>': fsm->features.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
@@ -328,8 +321,6 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
     break;
   case 'F': grid_move_cursor(g, 0, g->h); break;
   case 'c': fsm_full_reset(fsm); break;
-  case 'l': OMITTED("Memory lock"); break;
-  case 'm': OMITTED("Memory unlock"); break;
   case '(': // designate G0, VT100
   case ')': // designate G1, VT100
   case '*': // designate G2, VT220
@@ -344,6 +335,15 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case '|':
   case '}':
   case '~': TODO("Invoke Character Set"); break;
+  case '6': OMITTED("Back Index"); break;
+  case '9': OMITTED("Forward Index"); break;
+  case 'V': OMITTED("Start Guarded Area"); break;
+  case 'W': OMITTED("End Guarded Area"); break;
+  case 'Z': OMITTED("Return Terminal ID"); break;
+  case '^': OMITTED("Privacy Message"); break;
+  case '_': OMITTED("Application Program Command"); break;
+  case 'l': OMITTED("Memory lock"); break;
+  case 'm': OMITTED("Memory unlock"); break;
   default: {
     // Unrecognized escape. Treat this char as escaped and continue parsing normally.
     TODO("Unhandled sequence ESC 0x%x", ch);
@@ -425,11 +425,9 @@ static void fsm_dispatch_spc(struct fsm *fsm, uint8_t ch) {
 }
 
 void fsm_process(struct fsm *fsm, uint8_t *buf, int n) {
-  char *whole = buf;
   fsm_ensure_grid_initialized(fsm);
   for (int i = 0; i < n; i++) {
     uint8_t ch = buf[i];
-    char *debug = &buf[i];
     switch (fsm->state) {
     case fsm_ground: fsm_dispatch_ground(fsm, ch); break;
     case fsm_utf8: fsm_dispatch_utf8(fsm, ch); break;

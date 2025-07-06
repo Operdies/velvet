@@ -334,7 +334,6 @@ void pane_write(struct pane *pane, uint8_t *buf, int n) {
   // be resized
   pane->fsm.w = pane->rect.client.w;
   pane->fsm.h = pane->rect.client.h;
-  pane->fsm.pending_requests.element_size = sizeof(struct emulator_query);
   if (pane->logfile > 0) write(pane->logfile, buf, n);
   fsm_process(&pane->fsm, buf, n);
 }

@@ -53,15 +53,28 @@ static bool csi_dispatch_omitted(struct fsm *fsm, struct csi *csi) {
   return false;
 }
 
+/* CSI Pm h/l */
+static bool csi_dispatch_set_mode(struct fsm *fsm, struct csi *csi) {
+  bool on = csi->final == 'h';
+  bool off = csi->final == 'l';
+  assert(on || off);
+  switch (csi->params[0].primary) {
+  case 2: TODO("Keyboard Action Mode (KAM)"); return false;
+  case 4: TODO("Insert Mode (IRM)"); return false;
+  case 12: TODO("Send/receive (SRM)"); return false;
+  case 20: fsm->features.auto_return = on;
+  default: return csi_dispatch_todo(fsm, csi);
+  }
+}
+
+/* CSI ? Pm h/l */
 static bool csi_dispatch_decset(struct fsm *fsm, struct csi *csi) {
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
   switch (csi->params[0].primary) {
   case 1: fsm->features.application_mode = on; break;
-  case 4: TODO("Implement insert / replace mode"); break;
-  case 7: fsm->features.wrapping_disabled = off; break;
-  case 12: break; /* Set local echo mode -- This is safe to ignore. */
-  case 20: fsm->features.auto_return = on; break;
+  case 7: fsm->features.auto_wrap_mode = on; break;
+  case 12: TODO("Set Blinking Cursor"); break;
   case 25: fsm->features.cursor.hidden = off; break;
   case 1004: fsm->features.focus_reporting = on; break;
   case 1049:
@@ -82,13 +95,16 @@ static bool csi_dispatch_dec_final(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_todo(fsm, csi);
 }
 
+/* CSI ? ... */
 static bool csi_dispatch_dec_intermediate(struct fsm *fsm, struct csi *csi) {
   switch (csi->intermediate) {
   case 0: return csi_dispatch_dec_final(fsm, csi);
+  case '$':
   }
   return csi_dispatch_todo(fsm, csi);
 }
 
+/* CSI ... m */
 static bool csi_dispatch_sgr(struct fsm *fsm, struct csi *csi) {
   char *error = csi_apply_sgr_from_params(&fsm->cell, csi->n_params, csi->params);
   if (error) {
@@ -105,6 +121,8 @@ static bool csi_dispatch_cup(struct fsm *fsm, struct csi *csi) {
   grid_position_visual_cursor(fsm->active_grid, col - 1, row - 1);
   return true;
 }
+
+// CSI Ps X
 static bool csi_dispatch_ech(struct fsm *fsm, struct csi *csi) {
   int clear = csi->params[0].primary ? csi->params[0].primary : 1;
   struct raw_cursor start = fsm->active_grid->cursor;
@@ -113,6 +131,7 @@ static bool csi_dispatch_ech(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
+// CSI Ps J
 static bool csi_dispatch_ed(struct fsm *fsm, struct csi *csi) {
   struct grid *g = fsm->active_grid;
   int mode = csi->params[0].primary;
@@ -214,7 +233,7 @@ static bool csi_dispatch_rep(struct fsm *fsm, struct csi *csi) {
   struct grid_cell repeat = fsm->cell;
   if (repeat.symbol.len == 0) repeat.symbol = utf8_blank;
   for (int i = 0; i < count; i++) {
-    grid_insert(g, repeat, !fsm->features.wrapping_disabled);
+    grid_insert(g, repeat, fsm->features.auto_wrap_mode);
   }
   return true;
 }
@@ -229,6 +248,8 @@ static bool csi_dispatch_decstbm(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_todo(fsm, csi);
 }
 
+/* xtwinops deals with commands specific to Xterm and the X windowing system. I don't see any reason to implement this
+ */
 static bool csi_dispatch_xtwinops(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_omitted(fsm, csi);
 }
@@ -257,6 +278,8 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   case 'm': return csi_dispatch_sgr(fsm, csi);
   case 'r': return csi_dispatch_decstbm(fsm, csi);
   case 't': return csi_dispatch_xtwinops(fsm, csi);
+  case 'h':
+  case 'l': return csi_dispatch_set_mode(fsm, csi);
   default: return csi_dispatch_todo(fsm, csi);
   }
 }
