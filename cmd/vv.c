@@ -371,30 +371,30 @@ static void string_write_arg_list(struct string *str, uint8_t *escape, int n, in
 
 static void handle_queries(struct pane *p) {
   static struct string response = {0};
-  struct vec response_buffer = vec(struct emulator_query_response);
   struct emulator_query *req;
   vec_foreach(req, p->fsm.pending_requests) {
     switch (req->type) {
-    case REQUEST_PRIMARY_DEVICE_ATTRIBUTES: break;
-    case REQUEST_SECONDARY_DEVICE_ATTRIBUTES: break;
-    case REQUEST_TERTIARY_DEVICE_ATTRIBUTES: break;
-    case REQUEST_STATUS_OK: break;
-    case REQUEST_CURSOR_POSITION:
+    case REQUEST_CURSOR_POSITION: {
       int args[] = {p->fsm.active_grid->cursor.row, p->fsm.active_grid->cursor.col};
       string_write_arg_list(&response, u8"\x1b[", 2, args, 'R');
-      break;
+    } break;
     case REQUEST_DEFAULT_FG: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
-    case REQUEST_DEFAULT_BG: string_push(&response, u8"\x1b]11;rgb:000000\a"); break;
+    case REQUEST_DEFAULT_BG: string_push(&response, u8"\x1b]11;rgb:1e1e/1e1e/2e2e"); string_push(&response, req->st); break;
     case REQUEST_DEFAULT_CURSOR_COLOR: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
-    case REQUEST_WINDOW_TITLE: break;
-    case REQUEST_WINDOW_ICON: break;
-    case REQUEST_BRACKETED_PASTE_STATUS: break;
-    case REQUEST_FOCUS_REPORTING_STATUS: break;
-    case REQUEST_EXTENDED_FEATURES: break;
-    case REQUEST_TRUECOLOR_STATUS: break;
+    case REQUEST_PRIMARY_DEVICE_ATTRIBUTES:
+    case REQUEST_SECONDARY_DEVICE_ATTRIBUTES:
+    case REQUEST_TERTIARY_DEVICE_ATTRIBUTES:
+    case REQUEST_STATUS_OK:
+    case REQUEST_WINDOW_TITLE:
+    case REQUEST_WINDOW_ICON:
+    case REQUEST_BRACKETED_PASTE_STATUS:
+    case REQUEST_FOCUS_REPORTING_STATUS:
+    case REQUEST_EXTENDED_FEATURES:
+    case REQUEST_TRUECOLOR_STATUS:
     default: logmsg("Handle query type: %s", emulator_query_type_names[req->type]); break;
     }
   }
+
   vec_clear(&p->fsm.pending_requests);
   if (response.len) {
     write(p->pty, response.content, response.len);

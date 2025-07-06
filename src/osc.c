@@ -1,6 +1,9 @@
 #include "osc.h"
+#include "queries.h"
 #include "utils.h"
+
 #include <ctype.h>
+#include <string.h>
 
 static bool osc_dispatch_todo(struct fsm *fsm, struct osc *osc) {
   (void)fsm;
@@ -8,6 +11,16 @@ static bool osc_dispatch_todo(struct fsm *fsm, struct osc *osc) {
   return false;
 }
 
+static bool osc_dispatch_background_color(struct fsm *fsm, struct osc *osc) {
+  if (osc->pt.len == 1 && osc->pt.text[0] == '?') {
+    struct emulator_query q = {.type = REQUEST_DEFAULT_BG};
+    memcpy(q.st, osc->st, sizeof(osc->st));
+    logmsg("push reqest");
+    vec_push(&fsm->pending_requests, &q);
+    return true;
+  }
+  return osc_dispatch_todo(fsm, osc);
+}
 static bool osc_dispatch_hyperlink(struct fsm *fsm, struct osc *osc) {
   return osc_dispatch_todo(fsm, osc);
 }
@@ -16,6 +29,7 @@ bool osc_dispatch(struct fsm *fsm, struct osc *osc) {
   assert(osc->state == OSC_ACCEPT);
   switch (osc->ps) {
   case OSC_HYPERLINK: return osc_dispatch_hyperlink(fsm, osc);
+  case OSC_BACKGROUND_COLOR: return osc_dispatch_background_color(fsm, osc);
   default: return osc_dispatch_todo(fsm, osc);
   };
 }
@@ -71,8 +85,12 @@ static int osc_parse_parameters(struct osc *o, const uint8_t *buffer, int len) {
 // The terminator does not affect semantics of the command,
 // but should be stored for queries so the response can use the same terminator used by the query as this is likely what
 // the client expects.
-int osc_parse(struct osc *o, const uint8_t *buffer, int len) {
+int osc_parse(struct osc *o, const uint8_t *buffer, int len, const uint8_t *st) {
   int ps = 0;
+  {
+    int n_st = 0;
+    for (; st[n_st]; n_st++) o->st[n_st] = st[n_st];
+  }
 
   int i = 0;
   for (; i < len && isdigit(buffer[i]); i++) {

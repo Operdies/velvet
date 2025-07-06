@@ -397,7 +397,7 @@ static void fsm_dispatch_osc(struct fsm *fsm, uint8_t ch) {
     uint8_t *buffer = fsm->escape_buffer.buffer + 2;
     int len = fsm->escape_buffer.n - strlen(st) - 2;
     struct osc osc = {0};
-    osc_parse(&osc, buffer, len);
+    osc_parse(&osc, buffer, len, st);
     if (osc.state == OSC_ACCEPT) {
       osc_dispatch(fsm, &osc);
     }

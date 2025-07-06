@@ -40,6 +40,7 @@ static char *emulator_query_type_names[] = {
 
 struct emulator_query {
   enum emulator_query_type type;
+  uint8_t st[2];
 };
 
 struct emulator_query_response {

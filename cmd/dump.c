@@ -82,7 +82,7 @@ static void disassemble(FILE *f) {
       }
     } break;
     case charset: {
-      logmsg("CHARSET %c", ch);
+      TODO("charset %c", ch);
       s = normal;
     } break;
     case dcs: {
