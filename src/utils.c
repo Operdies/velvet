@@ -17,7 +17,7 @@ static inline void enable_raw_mode(void);
 static inline void enable_focus_reporting(void);
 static inline void disable_focus_reporting(void);
 
-#define BUFSIZE 128
+#define BUFSIZE 256
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   static char prevbuf[BUFSIZE] = {0};
   static char buf[BUFSIZE] = {0};
@@ -39,15 +39,17 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
     // Assume utf8 continuation byte
     if ((buf[i]) & 0x80) continue;
     if (buf[i] == ' ') continue;
+    if (buf[i] == '\\') buf[i] = '.';
     if (!isgraph(buf[i])) buf[i] = '.';
   }
-  if (strncmp(buf, prevbuf, n_buf) != 0) {
+
+  if (strcmp(buf, prevbuf) == 0) {
+    repeat_count++;
+    fprintf(f, "\r%.*s (%d)", n_buf, buf, repeat_count);
+  } else {
     repeat_count = 1;
     fprintf(f, "\n%.*s", n_buf, buf);
     memcpy(prevbuf, buf, n_buf);
-  } else {
-    repeat_count++;
-    fprintf(f, "\r%.*s (%d)", n_buf, buf, repeat_count);
   }
   fflush(f);
 }
@@ -62,8 +64,7 @@ void flogmsg(FILE *f, char *fmt, ...) {
 void *erealloc(void *array, size_t nmemb, size_t size) {
   void *p;
 
-  if (!(p = realloc(array, nmemb * size)))
-    die("realloc:");
+  if (!(p = realloc(array, nmemb * size))) die("realloc:");
 
   return p;
 }

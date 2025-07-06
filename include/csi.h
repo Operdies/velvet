@@ -30,7 +30,7 @@ struct csi {
   };
 };
 
-int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len);
+int csi_parse(struct csi *c, const uint8_t *buffer, int len);
 bool csi_dispatch(struct fsm *fsm, struct csi *csi);
 
 #endif /*  CSI_H */

@@ -29,7 +29,7 @@ static char *byte_names[UINT8_MAX + 1] = {
 };
 
 static bool csi_dispatch_todo(struct fsm *fsm, struct csi *csi) {
-  (void)fsm, (void)csi;
+  (void)fsm;
   char leading[] = {csi->leading, 0};
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
@@ -308,27 +308,8 @@ static bool csi_dispatch_leading(struct fsm *fsm, struct csi *csi) {
 }
 
 bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
+  assert(csi->state == CSI_ACCEPT);
   return csi_dispatch_leading(fsm, csi);
-}
-
-void csi_parse_and_execute_buffer(struct fsm *fsm, const uint8_t *buffer, int len) {
-  if (len < 3) {
-    logmsg("CSI sequence shorter than 3 bytes!!");
-    return;
-  }
-
-  // Strip leading escape
-  buffer += 2;
-  len -= 2;
-
-  struct csi csi = {0};
-  int processed = csi_parse_parameters(&csi, buffer, len);
-  if (csi.state != CSI_ACCEPT) {
-    logmsg("Error parsing CSI: %.*s", len, buffer);
-    return;
-  }
-  assert(processed == len);
-  csi_dispatch(fsm, &csi);
 }
 
 static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params) {
@@ -486,7 +467,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
   return true;
 }
 
-int csi_parse_parameters(struct csi *c, const uint8_t *buffer, int len) {
+int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
   if (len < 1) {
     c->state = CSI_REJECT;
     return 0;

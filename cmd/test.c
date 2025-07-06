@@ -672,7 +672,7 @@ void assert_csi_equals(const char *testname, struct csi *expected, struct csi *a
 void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected) {
   int n = strlen((char *)input);
   struct csi actual = {0};
-  int count = csi_parse_parameters(&actual, input, n);
+  int count = csi_parse(&actual, input, n);
   if (expected.state == CSI_ACCEPT) assert(count = n);
   assert_csi_equals(testname, &expected, &actual);
 }
@@ -701,6 +701,9 @@ void test_csi_parsing(void) {
       u8"38;2;100;100;100m",
       (struct csi){
           .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
+}
+
+void test_osc(void) {
 }
 
 void done() {

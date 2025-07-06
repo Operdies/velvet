@@ -19,6 +19,9 @@ enum fsm_state {
   fsm_charset,
 };
 
+// NOTE: This can be tweaked, but we should not go below 2000. This is a
+// defacto-ish limit for URLs (OSC 8). Another example of a long escape sequence
+// is clipboards which can also get arbitrarily large.
 #define MAX_ESC_SEQ_LEN 4096
 struct escape_sequence {
   uint8_t buffer[MAX_ESC_SEQ_LEN];

@@ -1,6 +1,7 @@
 #include "emulator.h"
 #include "collections.h"
 #include "csi.h"
+#include "osc.h"
 #include "utils.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -118,11 +119,6 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
     TODO("Unknown # command: %x", ch);
   } break;
   }
-}
-
-static void handle_osc(struct fsm *fsm, const char *st) {
-  (void)st;
-  TODO("OSC sequence: %.*s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer);
 }
 
 void fsm_ensure_grid_initialized(struct fsm *fsm) {
@@ -376,7 +372,7 @@ static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
     // Strip the leading escape sequence
     uint8_t *buffer = fsm->escape_buffer.buffer + 2;
     int len = fsm->escape_buffer.n - 2;
-    int parsed = csi_parse_parameters(&csi, buffer, len);
+    int parsed = csi_parse(&csi, buffer, len);
     assert(len == parsed);
     if (csi.state == CSI_ACCEPT) {
       csi_dispatch(fsm, &csi);
@@ -384,6 +380,7 @@ static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
     fsm->state = fsm_ground;
   } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
     fsm->state = fsm_ground;
+    logmsg("Abort CSI: max length exceeded");
   }
 }
 
@@ -396,11 +393,18 @@ static void fsm_dispatch_osc(struct fsm *fsm, uint8_t ch) {
   char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
   escape_buffer_append(fsm, ch);
   if (ch == BELL || (ch == '\\' && prev == ESC)) {
-    handle_osc(fsm, ch == BELL ? BEL : ST);
+    const char *st = ch == BELL ? BEL : ST;
+    uint8_t *buffer = fsm->escape_buffer.buffer + 2;
+    int len = fsm->escape_buffer.n - strlen(st) - 2;
+    struct osc osc = {0};
+    osc_parse(&osc, buffer, len);
+    if (osc.state == OSC_ACCEPT) {
+      osc_dispatch(fsm, &osc);
+    }
     fsm->state = fsm_ground;
   } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
-    fsm->state = fsm_ground;
     logmsg("Abort OSC: max length exceeded");
+    fsm->state = fsm_ground;
   }
 }
 static void fsm_dispatch_pct(struct fsm *fsm, uint8_t ch) {
@@ -421,9 +425,11 @@ static void fsm_dispatch_spc(struct fsm *fsm, uint8_t ch) {
 }
 
 void fsm_process(struct fsm *fsm, uint8_t *buf, int n) {
+  char *whole = buf;
   fsm_ensure_grid_initialized(fsm);
   for (int i = 0; i < n; i++) {
     uint8_t ch = buf[i];
+    char *debug = &buf[i];
     switch (fsm->state) {
     case fsm_ground: fsm_dispatch_ground(fsm, ch); break;
     case fsm_utf8: fsm_dispatch_utf8(fsm, ch); break;
