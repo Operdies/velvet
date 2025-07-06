@@ -261,6 +261,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       } else {
         string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
       }
+      string_clear(&pastebuffer);
       continue;
     }
     switch (s) {
