@@ -130,7 +130,7 @@ static void pane_notify_focus(struct pane *p, bool focused) {
   if (p) {
     p->border_dirty = true;
     p->has_focus = focused;
-    if (p->pty && p->fsm.features.focus_reporting) {
+    if (p->pty && p->fsm.options.focus_reporting) {
       if (focused) {
         write(p->pty, focus_in, strlen(focus_in));
       } else {
@@ -255,7 +255,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     } else if (s == bracketed_paste && pastebuf == paste_end) {
       pastebuffer.len -= 5;
       s = normal;
-      if (focused && focused->fsm.features.bracketed_paste) {
+      if (focused && focused->fsm.options.bracketed_paste) {
         string_push(&writebuffer, u8"\x1b[200~");
         string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
         string_push(&writebuffer, u8"\x1b[201~");
@@ -287,14 +287,14 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       }
     } break;
     case csi: {
-      if (ch >= 'A' && ch <= 'D' && focused->fsm.features.application_mode) {
+      if (ch >= 'A' && ch <= 'D' && focused->fsm.options.application_mode) {
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, 'O');
         string_push_char(&writebuffer, ch);
       } else if (ch == 'O' || ch == 'I') {
         // Focus event. Forward it if the focused pane has the feature enabled
         bool did_focus = ch == 'I';
-        if (focused->fsm.features.focus_reporting) {
+        if (focused->fsm.options.focus_reporting) {
           const char *s = did_focus ? focus_in : focus_out;
           string_push_slice(&writebuffer, (uint8_t *)s, strlen(s));
         }
@@ -428,9 +428,9 @@ static void render_frame(struct string *draw_buffer) {
 
   if (!focused) focus_pane(clients);
   if (focused) move_cursor_to_pane(focused, draw_buffer);
-  if (focused && focused->fsm.features.cursor.hidden == false) string_push(draw_buffer, show_cursor);
-  if (focused && focused->fsm.features.cursor.style != current_cursor_style) {
-    current_cursor_style = focused->fsm.features.cursor.style;
+  if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, show_cursor);
+  if (focused && focused->fsm.options.cursor.style != current_cursor_style) {
+    current_cursor_style = focused->fsm.options.cursor.style;
     string_push(draw_buffer, u8"\x1b[");
     string_push_int(draw_buffer, current_cursor_style);
     string_push(draw_buffer, u8" q");

@@ -82,13 +82,13 @@ static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
 
   if (len == 3 && ch < LENGTH(charset_lookup)) {
     enum charset new_charset = charset_lookup[ch];
-    fsm->features.charset_options.charsets[index] = new_charset;
+    fsm->options.charset.charsets[index] = new_charset;
     if (new_charset != CHARSET_ASCII) {
       TODO("Implement charset %c", ch);
     }
   } else {
     // unsupported charset -- fallback to ascii
-    fsm->features.charset_options.charsets[index] = CHARSET_ASCII;
+    fsm->options.charset.charsets[index] = CHARSET_ASCII;
     // TODO("Implement charset %.*s", len - 1, fsm->escape_buffer.buffer + 1);
     TODO("Implement charset %c", ch);
   }
@@ -122,7 +122,7 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
 }
 
 void fsm_ensure_grid_initialized(struct fsm *fsm) {
-  struct grid *g = fsm->features.alternate_screen ? &fsm->alternate : &fsm->primary;
+  struct grid *g = fsm->options.alternate_screen ? &fsm->alternate : &fsm->primary;
   fsm_set_active_grid(fsm, g);
 }
 
@@ -130,7 +130,7 @@ bool color_equals(const struct color *const a, const struct color *const b) {
   if (a->cmd != b->cmd) return false;
   switch (a->cmd) {
   case COLOR_RESET: return true;
-  case COLOR_RGB: return a->color == b->color;
+  case COLOR_RGB: return a->r == b->r && a->g == b->g && a->b == b->b;
   case COLOR_TABLE: return a->table == b->table;
   }
   return false;
@@ -180,7 +180,7 @@ static void ground_tab(struct fsm *fsm, uint8_t ch) {
   int numSpaces = x2 - x;
   struct grid_cell c = fsm->cell;
   c.symbol = utf8_blank;
-  grid_insert(fsm->active_grid, c, fsm->features.auto_wrap_mode);
+  grid_insert(fsm->active_grid, c, fsm->options.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
     grid_insert(fsm->active_grid, c, false);
   }
@@ -193,13 +193,13 @@ static void ground_bell(struct fsm *fsm, uint8_t ch) {
 
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_newline(fsm->active_grid, fsm->features.auto_return);
+  grid_newline(fsm->active_grid, fsm->options.auto_return);
 }
 
 static void ground_accept(struct fsm *fsm) {
   struct utf8 clear = {0};
   struct grid *g = fsm->active_grid;
-  grid_insert(g, fsm->cell, fsm->features.auto_wrap_mode);
+  grid_insert(g, fsm->cell, fsm->options.auto_wrap_mode);
   fsm->cell.symbol = clear;
 }
 static void ground_reject(struct fsm *fsm) {
@@ -210,15 +210,15 @@ static void ground_reject(struct fsm *fsm) {
   // Render a replacement char for this sequence (U+FFFD)
   struct grid_cell replacement = {.symbol = utf8_fffd};
   struct grid *g = fsm->active_grid;
-  grid_insert(g, replacement, fsm->features.auto_wrap_mode);
+  grid_insert(g, replacement, fsm->options.auto_wrap_mode);
   if (copy.len > 1) fsm_process(fsm, &copy.utf8[1], copy.len - 1);
 }
 
 static void ground_process_shift_in_out(struct fsm *fsm, uint8_t ch) {
   if (ch == SI)
-    fsm->features.charset_options.active_charset = CHARSET_G0;
+    fsm->options.charset.active_charset = CHARSET_G0;
   else if (ch == SO)
-    fsm->features.charset_options.active_charset = CHARSET_G1;
+    fsm->options.charset.active_charset = CHARSET_G1;
 }
 
 static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
@@ -285,7 +285,7 @@ static void fsm_dispatch_utf8(struct fsm *fsm, uint8_t ch) {
 
 static void fsm_full_reset(struct fsm *fsm) {
   fsm->cell.style = style_default;
-  fsm->features = (struct features){0};
+  fsm->options = emulator_options_default;
   fsm->active_grid = &fsm->primary;
   grid_full_reset(&fsm->primary);
 }
@@ -313,8 +313,8 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case 'N': TODO("Single Shift to G2"); break;
   case 'O': TODO("Single Shift to G3"); break;
   case 'X': TODO("Start of String"); break;
-  case '=': fsm->features.application_keypad_mode = true; break;
-  case '>': fsm->features.application_keypad_mode = false; break;
+  case '=': fsm->options.application_keypad_mode = true; break;
+  case '>': fsm->options.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
     utf8_push(&fsm->cell.symbol, ESC);
     ground_accept(fsm);

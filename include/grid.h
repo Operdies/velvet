@@ -13,7 +13,9 @@
 #define grid_virtual_top(g) (g->offset)
 #define grid_virtual_bottom(g) ((g->h + g->offset - 1) % g->h)
 
-enum cell_attributes {
+#define PACK __attribute__((packed))
+
+enum PACK cell_attributes {
   ATTR_NONE = 0,
 
   ATTR_BOLD = 1u << 0,      // SGR 1
@@ -36,14 +38,6 @@ enum cell_attributes {
   ATTR_ENCIRCLED = 1u << 14, // SGR 52
   ATTR_OVERLINED = 1u << 15, // SGR 53
 
-  // Font (SGR 10–19): store in separate field if needed.
-  // Optionally: 3 bits reserved for font ID (bits 16–18)
-
-  // Reserve for future use
-  ATTR_RESERVED_1 = 1u << 16,
-  ATTR_RESERVED_2 = 1u << 17,
-  ATTR_RESERVED_3 = 1u << 18,
-
   // Masks for groups
   ATTR_UNDERLINE_ANY = ATTR_UNDERLINE | ATTR_UNDERLINE_DOUBLE |
                        ATTR_UNDERLINE_CURLY | ATTR_UNDERLINE_DOTTED |
@@ -52,7 +46,8 @@ enum cell_attributes {
   ATTR_BLINK_ANY = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
 };
 
-enum color_command {
+
+enum PACK color_command {
   COLOR_RESET,
   COLOR_RGB,
   COLOR_TABLE,
@@ -60,7 +55,6 @@ enum color_command {
 struct color {
   enum color_command cmd;
   union {
-    uint32_t color;
     struct {
       uint8_t r, g, b;
     };

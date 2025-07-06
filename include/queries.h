@@ -18,6 +18,7 @@ enum emulator_query_type {
   REQUEST_FOCUS_REPORTING_STATUS,      /* CSI ? 2027 $ p */
   REQUEST_EXTENDED_FEATURES,           /* CSI ? 2031 $ p */
   REQUEST_TRUECOLOR_STATUS,            /* CSI ? 2048 $ p */
+  REQUEST_WINDOW_SIZE,                 /* CSI 18t */
 };
 
 static char *emulator_query_type_names[] = {
@@ -36,6 +37,7 @@ static char *emulator_query_type_names[] = {
     [REQUEST_FOCUS_REPORTING_STATUS] = "REQUEST_FOCUS_REPORTING_STATUS",
     [REQUEST_EXTENDED_FEATURES] = "REQUEST_EXTENDED_FEATURES",
     [REQUEST_TRUECOLOR_STATUS] = "REQUEST_TRUECOLOR_STATUS",
+    [REQUEST_WINDOW_SIZE] = "REQUEST_WINDOW_SIZE",
 };
 
 struct emulator_query {

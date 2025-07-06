@@ -1,11 +1,9 @@
 Tasks that need doing in no particular order of priority:
 
-* Chroming (visually distinguish panes)
 * "minimize" windows to 1 or 2 lines (maybe the top bar is minimized)
 * Support multi-width characters (emojis, characters in other scripts?)
 * Scrollback buffer (unless?)
 * CSI: Configurable scroll region (needed for vim)
-* Bracketed paste
 * Floating panes
 
 Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled panes and then naively fully redraw floating panes on every frame
@@ -28,7 +26,7 @@ appropriate pane.
 
 * Performance testing 
 
-perf binary which spawns vv / tmux in a pty and sends a bunch of commands vv
+perf binary which spawns vv / tmux in a pty and sends a bunch of commands. vv
 doesn't need to be the fastest multiplexer in the world, but it would be good
 to know if some sequences are being handled very poorly.
 
@@ -43,6 +41,12 @@ all about..
 
 tbh, just rely on tmux for sessions and persistence until this thing is
 actually stable
+
+* Implement query support for all modes
+
+Run it through the dispatcher?
+Currently, dispatcher returns true / false. Would also need to be able to know
+if something changed. Update dispatcher to return 0/1/2 ?
 
 * Status bar
 

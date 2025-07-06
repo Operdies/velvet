@@ -126,16 +126,30 @@ enum cursor_style {
   CURSOR_STYLE_STEADY_BAR,
   CURSOR_STYLE_LAST,
 };
+
 struct cursor_options {
   /* turned on / off by CSI ?25h/l */
-  bool hidden;
+  bool visible;
   enum cursor_style style;
 };
 
-struct features {
-  /* if enabled, we should translate mouse events and forward them to the
-   * appropriate pane */
-  bool mouse_reporting;
+struct mouse_options {
+  bool send_x_and_y;          // 9    -- X10 implementation (?)
+  bool mouse_tracking;        // 1000 -- X11 implementation
+  bool hilite_mouse_tracking; // 1001
+  bool cell_motion;           // 1002
+  bool all_motion;            // 1003
+  bool utf8;                  // 1005
+  bool sgr;                   // 1006
+  bool alternate_scroll_mode; // 1007
+  bool urxv5;                 // 1015
+  bool sgr_pixel;             // 1016
+  bool readline_mouse1;       // 2001
+  bool readline_mouse2;       // 2002
+  bool readline_mouse3;       // 2003
+};
+
+struct emulator_options {
   /* if wrapping, we should return the cursor to the beginning of the line when
    * inserting a character which would cause an overflow. Otherwise, the cursor
    * should stay at the last column. */
@@ -147,14 +161,17 @@ struct features {
   /* in application mode, arrow keys should be translated from ESC [ A-D to ESC
    * O A-D */
   bool application_mode;
+  /* translate keypad keys to escaped variants so applications can distinguish
+   * e.g. numpad 1 from regular 1. */
+  bool application_keypad_mode;
   /* when focus reporting is enabled, send ESC [ I and ESC [ O when the pane
    * receives / loses keyboard focus */
   bool focus_reporting;
 
-  struct modifier_options modifier_options;
-  bool application_keypad_mode;
-  struct charset_options charset_options;
+  struct modifier_options modifiers;
+  struct charset_options charset;
   struct cursor_options cursor;
+  struct mouse_options mouse;
 };
 
 /* finite state machine for parsing ansi escape codes */
@@ -168,7 +185,7 @@ struct fsm {
    * Used whenever a new character is emitted */
   struct grid_cell cell;
   struct escape_sequence escape_buffer;
-  struct features features;
+  struct emulator_options options;
   struct grid primary;
   struct grid alternate;
   /* pointer to either primary or alternate */
@@ -176,8 +193,14 @@ struct fsm {
   request_buffer pending_requests;
 };
 
+static const struct emulator_options emulator_options_default = {
+    .auto_wrap_mode = true,
+    .cursor.visible = true,
+};
+
 static const struct fsm fsm_default = {
-    .features = {.auto_wrap_mode = true},
+    .options = emulator_options_default,
+    .cell = {.style = style_default},
     .pending_requests = {.element_size = sizeof(struct emulator_query)},
 };
 

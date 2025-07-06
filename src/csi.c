@@ -1,4 +1,5 @@
 #include "csi.h"
+#include "emulator.h"
 #include "grid.h"
 #include "utils.h"
 #include <ctype.h>
@@ -10,11 +11,11 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
 static void csi_query_modifiers(struct fsm *fsm, int n, int params[n]) {
   TODO("Implement query modifiers");
   if (n == 0) {
-    fsm->features.modifier_options = (struct modifier_options){0};
+    fsm->options.modifiers = (struct modifier_options){0};
   } else {
     int options = params[0];
     if (options >= 0 && options <= 7) {
-      fsm->features.modifier_options.options[options] = params[1];
+      fsm->options.modifiers.options[options] = params[1];
     }
   }
 }
@@ -33,8 +34,9 @@ static bool csi_dispatch_todo(struct fsm *fsm, struct csi *csi) {
   char leading[] = {csi->leading, 0};
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
-  TODO("CSI %2s %2s %2s",
+  TODO("CSI %2s %d %2s %2s",
        byte_names[csi->leading] ?: leading,
+       csi->params[0].primary,
        byte_names[csi->intermediate] ?: intermediate,
        byte_names[csi->final] ?: final);
   return false;
@@ -61,27 +63,37 @@ static bool csi_dispatch_set_mode(struct fsm *fsm, struct csi *csi) {
   switch (csi->params[0].primary) {
   case 2: TODO("Keyboard Action Mode (KAM)"); return false;
   case 4: TODO("Insert Mode (IRM)"); return false;
-  case 12: TODO("Send/receive (SRM)"); return false;
-  case 20: fsm->features.auto_return = on;
-  default: return csi_dispatch_todo(fsm, csi);
+  case 12: OMITTED("Send/receive (SRM)"); return false;
+  case 20: fsm->options.auto_return = on; return true;
+  default: TODO("Set Mode %d", csi->params[0].primary); return false;
   }
 }
 
 /* CSI ? Pm h/l */
 static bool csi_dispatch_decset(struct fsm *fsm, struct csi *csi) {
+  struct mouse_options *m = &fsm->options.mouse;
   bool on = csi->final == 'h';
-  bool off = csi->final == 'l';
   switch (csi->params[0].primary) {
-  case 1: fsm->features.application_mode = on; break;
-  case 7: fsm->features.auto_wrap_mode = on; break;
+  case 1: fsm->options.application_mode = on; break;
+  case 7: fsm->options.auto_wrap_mode = on; break;
   case 12: TODO("Set Blinking Cursor"); break;
-  case 25: fsm->features.cursor.hidden = off; break;
-  case 1004: fsm->features.focus_reporting = on; break;
+  case 25: fsm->options.cursor.visible = on; break;
+  case 1004: fsm->options.focus_reporting = on; break;
   case 1049:
-    fsm->features.alternate_screen = on;
+    fsm->options.alternate_screen = on;
     fsm_ensure_grid_initialized(fsm);
     break;
-  case 2004: fsm->features.bracketed_paste = on; break;
+  case 2004: fsm->options.bracketed_paste = on; break;
+  case 1000: m->mouse_tracking = on; break;
+  case 1002: m->cell_motion = on; break;
+  case 1003: m->all_motion = on; break;
+  case 1006: m->sgr = on; break;
+  case 1007: m->alternate_scroll_mode = on; break;
+  case 1016: OMITTED("SGR Pixel Mouse Tracking"); return false;
+  case 1001: OMITTED("Hilite mouse tracking"); return false;
+  case 1005: OMITTED("UTF8 mouse tracking"); return false;
+  case 1015: OMITTED("urxvt mouse mode"); return false;
+  case 9: OMITTED("X10 mouse reporting"); return false;
   default: return csi_dispatch_todo(fsm, csi);
   }
 
@@ -89,19 +101,19 @@ static bool csi_dispatch_decset(struct fsm *fsm, struct csi *csi) {
 }
 
 static bool csi_dispatch_dec_final(struct fsm *fsm, struct csi *csi) {
-  if (csi->final == 'h' || csi->final == 'l') {
-    return csi_dispatch_decset(fsm, csi);
+  switch (csi->final) {
+  case 'h':
+  case 'l': return csi_dispatch_decset(fsm, csi);
+  default: return csi_dispatch_todo(fsm, csi);
   }
-  return csi_dispatch_todo(fsm, csi);
 }
 
 /* CSI ? ... */
 static bool csi_dispatch_dec_intermediate(struct fsm *fsm, struct csi *csi) {
   switch (csi->intermediate) {
   case 0: return csi_dispatch_dec_final(fsm, csi);
-  case '$':
+  default: return csi_dispatch_todo(fsm, csi);
   }
-  return csi_dispatch_todo(fsm, csi);
 }
 
 /* CSI ... m */
@@ -233,7 +245,7 @@ static bool csi_dispatch_rep(struct fsm *fsm, struct csi *csi) {
   struct grid_cell repeat = fsm->cell;
   if (repeat.symbol.len == 0) repeat.symbol = utf8_blank;
   for (int i = 0; i < count; i++) {
-    grid_insert(g, repeat, fsm->features.auto_wrap_mode);
+    grid_insert(g, repeat, fsm->options.auto_wrap_mode);
   }
   return true;
 }
@@ -248,10 +260,16 @@ static bool csi_dispatch_decstbm(struct fsm *fsm, struct csi *csi) {
   return csi_dispatch_todo(fsm, csi);
 }
 
-/* xtwinops deals with commands specific to Xterm and the X windowing system. I don't see any reason to implement this
- */
 static bool csi_dispatch_xtwinops(struct fsm *fsm, struct csi *csi) {
-  return csi_dispatch_omitted(fsm, csi);
+  switch (csi->params[0].primary) {
+  case 14: TODO("Report Text Area Size in Pixels"); return false;
+  case 16: TODO("Report Cell Size in Pixels"); return false;
+  case 18: TODO("Report Text Area Size in Characters"); return false;
+  default:
+    /* The rest of the commands in this group manipulate the window or otherwise interface with the windowing system.
+     * Regardless of whether or not the underlying terminal emulator supports it, */
+    return csi_dispatch_omitted(fsm, csi);
+  }
 }
 
 static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
@@ -287,7 +305,7 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
 static bool csi_dispatch_decscusr(struct fsm *fsm, struct csi *csi) {
   int cursor = csi->params[0].primary;
   if (cursor >= CURSOR_STYLE_BLINKING_BLOCK && cursor < CURSOR_STYLE_LAST) {
-    fsm->features.cursor.style = cursor;
+    fsm->options.cursor.style = cursor;
   } else {
     OMITTED("Unknown cursor style %d", cursor);
   }
@@ -317,8 +335,8 @@ static bool csi_dispatch_intermediate(struct fsm *fsm, struct csi *csi) {
  * but sometimes the proper action is determined by intermediate bytes.
  * One or more intermediate bytes can appear before and after
  * the optional numeric arguments. The number of intermediate bytes is not restricted by the standard, and is
- * effectively unbounded, but in practice, there will be at most one leading intermediate byte, and at most one trailing
- * intermediate byte. This implementation rejects sequences where this is not true.
+ * effectively unbounded, but in practice, there will be at most one leading intermediate byte, and at most one
+ * trailing intermediate byte. This implementation rejects sequences where this is not true.
  *
  * Our dispatching strategy is to dispatch based on the triple (leading, trailing, final).
  */
