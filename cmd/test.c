@@ -673,7 +673,7 @@ void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected
   int n = strlen((char *)input);
   struct csi actual = {0};
   int count = csi_parse(&actual, input, n);
-  if (expected.state == CSI_ACCEPT) assert(count = n);
+  if (expected.state == CSI_ACCEPT) assert(count == n);
   assert_csi_equals(testname, &expected, &actual);
 }
 
