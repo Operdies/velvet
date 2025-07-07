@@ -44,7 +44,8 @@ struct vec {
   size_t capacity;
 };
 
-void string_push_slice(struct string *str, const uint8_t *const src, size_t len);
+void string_push_slice(struct string *str, const uint8_t *const src,
+                       size_t len);
 void string_push(struct string *str, const uint8_t *const src);
 void string_push_char(struct string *str, uint8_t ch);
 void string_push_int(struct string *str, int value);
@@ -53,6 +54,8 @@ void string_clear(struct string *str);
 void string_destroy(struct string *str);
 /* flush the string instance to the specified file descriptor */
 bool string_flush(struct string *str, int fd, int *total_written);
+void string_push_csi(struct string *str, int *ps, int n,
+                     const char *const c);
 
 void vec_push(struct vec *v, const void *elem);
 void vec_clear(struct vec *v);

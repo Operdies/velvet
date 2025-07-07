@@ -351,14 +351,27 @@ void grid_destroy(struct grid *grid) {
 /* copy to content from one grid to another. This is a naive resizing implementation which just re-inserts everything
  * and counts on the final grid to be accurate */
 void grid_copy(struct grid *restrict dst, const struct grid *const restrict src, bool wrap) {
+  bool fullscreen = !wrap;
   for (int i0 = 0; i0 < src->h; i0++) {
     int row = (i0 + src->offset) % src->h;
 
     struct grid_row *grid_row = &src->rows[row];
 
-    for (int col = 0; col < src->w && col < grid_row->n_significant; col++) {
+    int col = 0;
+    for (; col < src->w && col < grid_row->n_significant; col++) {
       struct grid_cell c = grid_row->cells[col];
       grid_insert(dst, c, wrap);
+    }
+
+    // If wrapping is not enabled, pad the line with blank cells.
+    // This is done to reduce resize artifacts when resizing fullscreen applications
+    // with a different background color from the default terminal background
+    if (fullscreen) {
+      struct grid_cell c = grid_row->cells[src->w - 1];
+      c.symbol = utf8_blank;
+      for (; col < dst->w; col++) {
+        grid_insert(dst, c, false);
+      }
     }
     if (grid_row->newline) {
       grid_newline(dst, true, style_default);

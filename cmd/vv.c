@@ -360,25 +360,12 @@ void handle_sigwinch(struct string *draw_buffer) {
   string_push_slice(draw_buffer, clear, sizeof(clear) - 1);
 }
 
-static void string_write_arg_list(struct string *str, uint8_t *escape, int n, int *args, char terminator) {
-  string_push(str, escape);
-  for (int i = 0; i < n; i++) {
-    string_push_int(str, args[i]);
-    string_push_char(str, ';');
-  }
-  if (n) str->len--;
-  string_push_char(str, terminator);
-}
 
 static void handle_queries(struct pane *p) {
   static struct string response = {0};
   struct emulator_query *req;
   vec_foreach(req, p->fsm.pending_requests) {
     switch (req->type) {
-    case REQUEST_CURSOR_POSITION: {
-      int args[] = {p->fsm.active_grid->cursor.row, p->fsm.active_grid->cursor.col};
-      string_write_arg_list(&response, u8"\x1b[", 2, args, 'R');
-    } break;
     case REQUEST_DEFAULT_FG: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
     case REQUEST_DEFAULT_BG:
       string_push(&response, u8"\x1b]11;rgb:1e1e/1e1e/2e2e");
@@ -431,9 +418,8 @@ static void render_frame(struct string *draw_buffer) {
   if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, show_cursor);
   if (focused && focused->fsm.options.cursor.style != current_cursor_style) {
     current_cursor_style = focused->fsm.options.cursor.style;
-    string_push(draw_buffer, u8"\x1b[");
-    string_push_int(draw_buffer, current_cursor_style);
-    string_push(draw_buffer, u8" q");
+    int cur = current_cursor_style;
+    string_push_csi(draw_buffer, &cur, 1, " q");
   }
 
   string_flush(draw_buffer, STDOUT_FILENO, NULL);

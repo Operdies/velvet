@@ -22,18 +22,31 @@ static void string_ensure_capacity(struct string *str, size_t required) {
 }
 
 void string_push_int(struct string *str, int n) {
+  assert(n >= 0);
   const int max = 11;
   uint8_t buf[max];
   int idx = max;
-  bool sign = n < 0;
 
   do {
     buf[--idx] = '0' + n % 10;
     n /= 10;
   } while (n);
 
-  if (sign) buf[--idx] = '-';
   string_push_slice(str, buf + idx, max - idx);
+}
+
+void string_push_csi(struct string *str, int *ps, int n, const char *const c) {
+  const uint8_t *csi = u8"\x1b[";
+  string_push(str, csi);
+  for (int i = 0; i < n; i++) {
+    assert(ps[i] >= 0);
+    if (ps[i]) string_push_int(str, ps[i]);
+    string_push_char(str, ';');
+  }
+  if (n) { /* overwrite the last semicolon */
+    str->len--;
+  }
+  string_push(str, (uint8_t*)c);
 }
 
 void string_push_slice(struct string *str, const uint8_t *const src, size_t len) {
@@ -43,7 +56,7 @@ void string_push_slice(struct string *str, const uint8_t *const src, size_t len)
   str->len += len;
 }
 void string_push(struct string *str, const uint8_t *src) {
-  size_t len = strlen((char*)src);
+  size_t len = strlen((char *)src);
   string_push_slice(str, src, len);
 }
 
@@ -71,7 +84,7 @@ bool string_flush(struct string *str, int fd, int *total_written) {
   while (written < str->len) {
     ssize_t w = write(fd, str->content + written, str->len - written);
     if (w == -1) {
-      if (errno == EAGAIN) {
+      if (errno == EAGAIN || errno == EINTR) {
         usleep(1);
         continue;
       }

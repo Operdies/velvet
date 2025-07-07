@@ -37,17 +37,6 @@ static inline int write_int(uint8_t *dst, int n) {
 #undef INT_MAX_CHAR
 }
 
-static const uint8_t *move(int row, int col) {
-  static uint8_t buf[20] = "\x1b[";
-  int i_buf = 2;
-  i_buf += write_int(buf + i_buf, row);
-  buf[i_buf++] = ';';
-  i_buf += write_int(buf + i_buf, col);
-  buf[i_buf++] = 'H';
-  buf[i_buf++] = 0;
-  return buf;
-}
-
 void pane_destroy(struct pane *pane) {
   if (pane->pty > 0) {
     close(pane->pty);
@@ -203,7 +192,6 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
   bg = style->bg;
 
   if (sgr.n) {
-    int start = outbuffer->len;
     string_push(outbuffer, u8"\x1b[");
     int current_load = 0;
     for (int i = 0; i < sgr.n; i++) {
@@ -244,7 +232,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     int columnno = 1 + pane->rect.client.x;
     int lineno = 1 + pane->rect.client.y + i0;
     int line_length = MIN(grid_row->n_significant, g->w);
-    string_push(outbuffer, move(lineno, columnno));
+    string_push_csi(outbuffer, (int[]){lineno, columnno}, 2, "H");
 
     for (int col = 0; col < line_length; col++) {
       struct grid_cell *c = &grid_row->cells[col];
@@ -254,14 +242,10 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     }
 
     int num_blanks = g->w - line_length;
-    if (num_blanks > 3) {
-      // CSI Pn X -- Erase Pn characters after cursor
+    if (num_blanks > 4) { /* CSI Pn X -- Erase Pn characters after cursor */
       apply_style(&style_default, outbuffer);
-      string_push(outbuffer, u8"\x1b[");
-      string_push_int(outbuffer, num_blanks);
-      string_push_char(outbuffer, 'X');
-    } else {
-      // Micro optimization. Insert spaces if the number of blanks is very small
+      string_push_csi(outbuffer, &num_blanks, 1, "X");
+    } else { /* Micro optimization. Insert spaces if the number of blanks is very small */
       apply_style(&style_default, outbuffer);
       string_memset(outbuffer, ' ', num_blanks);
     }
@@ -330,7 +314,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
   apply_style(p->has_focus ? &focused_style : &normal_style, b);
 
   // top left corner
-  string_push(b, move(top, left));
+  string_push_csi(b, (int[]){top, left}, 2, "H");
   string_push(b, topleft_corner);
   // top line
   {
@@ -347,14 +331,14 @@ void pane_draw_border(struct pane *p, struct string *b) {
     string_push(b, topright_corner);
   }
   if (!leftmost) {
-    string_push(b, move(top, left + 1));
+    string_push_csi(b, (int[]){top, left + 1}, 2, "H");
     for (int row = top + 1; row < bottom - 1; row++) {
       string_push(b, pipe);
     }
     string_push(b, bottomleftcorner);
   }
   if (has_right_neighbor) {
-    string_push(b, move(top, right + 1));
+    string_push_csi(b, (int[]){top, right + 1}, 2, "H");
     for (int row = top + 1; row < bottom; row++) {
       string_push(b, pipe);
     }
