@@ -173,14 +173,14 @@ static void disable_bracketed_paste(void) {
   write(STDOUT_FILENO, buf, sizeof(buf));
 }
 
-void enable_raw_mode_etc(void) {
+void terminal_setup(void) {
   enter_alternate_screen();
   enable_raw_mode();
   disable_line_wrapping();
   enable_focus_reporting();
   enable_bracketed_paste();
 }
-void disable_raw_mode_etc(void) {
+void terminal_reset(void) {
   disable_bracketed_paste();
   disable_focus_reporting();
   enable_line_wrapping();

@@ -10,15 +10,14 @@ void flogmsg(FILE *f, char *fmt, ...);
 _Noreturn void die(char *fmt, ...);
 void *ecalloc(size_t sz, size_t count);
 void *erealloc(void *array, size_t nmemb, size_t size);
-void enable_raw_mode_etc(void);
-void disable_raw_mode_etc(void);
+void terminal_setup(void);
+void terminal_reset(void);
 void set_nonblocking(int fd);
 extern struct winsize ws_current;
 
 #define LENGTH(x) (sizeof(x) / sizeof((x)[0]))
 
-
-#ifdef NDEBUG
+#ifdef RELEASE_BUILD
 
 // Experimental performance optimization?
 // Mark assertions as unreachable on the assumption that this would have been
@@ -51,7 +50,7 @@ extern struct winsize ws_current;
 #define OMITTED(...) UNUSED(__VA_ARGS__)
 #define ERROR(...) logmsg(__VA_ARGS__)
 
-#else /* !NDEBUG */
+#else
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -60,18 +59,22 @@ extern struct winsize ws_current;
 #define DBG(...) logmsg(__VA_ARGS__)
 #define INFO(...) logmsg(__VA_ARGS__)
 #define ERROR(...) logmsg(__VA_ARGS__)
+// Use in stubs to indicate what the missing funcionality is, and communicate
+// that implementaiton is planned.
 #define TODO(...)                                                              \
-  INFO("[" __FILE__ ":" LINE_STR "] "                                          \
-       "TODO: " __VA_ARGS__)
+  DBG("[" __FILE__ ":" LINE_STR "] "                                           \
+      "TODO: " __VA_ARGS__)
+// Use in stubs to indicate what the missing functionality is, and communicate
+// that no implementation is planned.
 #define OMITTED(...)                                                           \
   DIAG("[" __FILE__ ":" LINE_STR "] "                                          \
        "OMITTED: " __VA_ARGS__)
 #define FAIL_ASSERT(cond)                                                      \
-  disable_raw_mode_etc();                                                      \
+  terminal_reset();                                                            \
   ERROR("Assertion failed: %s, file %s, line %d\n", #cond, __FILE__,           \
         __LINE__);                                                             \
   exit(EXIT_FAILURE);
-#endif /* NDEBUG */
+#endif /* RELEASE_BUILD */
 
 #define assert(cond)                                                           \
   do {                                                                         \

@@ -425,7 +425,7 @@ static void render_frame(struct string *draw_buffer) {
 }
 
 int main(int argc, char **argv) {
-  enable_raw_mode_etc();
+  terminal_setup();
 
   install_signal_handlers();
 
@@ -583,7 +583,7 @@ int main(int argc, char **argv) {
 
   string_destroy(&draw_buffer);
 
-  disable_raw_mode_etc();
+  terminal_reset();
   printf("[exited]\n");
   free(fds);
 }

@@ -21,7 +21,7 @@ static void render(void) {
 }
 
 int main(void) {
-  enable_raw_mode_etc();
+  terminal_setup();
   struct pollfd fds[1] = {0};
   fds[0].fd = STDIN_FILENO;
   fds[0].events = POLLIN;
@@ -49,5 +49,5 @@ int main(void) {
       }
     }
   }
-  disable_raw_mode_etc();
+  terminal_reset();
 }

@@ -43,7 +43,7 @@ ifeq ($(BUILD),debug)
 	OUT_DIR = bin
 endif
 ifeq ($(BUILD),release)
-	CFLAGS += -O3 -flto -mtune=native -march=native -DNDEBUG -DASSERTS_UNREACHABLE
+	CFLAGS += -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD -DASSERTS_UNREACHABLE
 	LDFLAGS += -flto
 	STRIP = strip
 	OUT_DIR = release
