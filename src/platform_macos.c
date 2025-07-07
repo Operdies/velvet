@@ -1,6 +1,3 @@
-#ifndef PLATFORM_MACOS_H
-#define PLATFORM_MACOS_H
-
 #include "platform.h"
 #include <libproc.h>
 #include <string.h>
@@ -23,5 +20,3 @@ bool get_cwd_from_pty(int pty, char *buffer, int len) {
 const struct PLATFORM_IMPL platform = {
     .get_cwd_from_pty = get_cwd_from_pty,
 };
-
-#endif /*  PLATFORM_MACOS_H */
