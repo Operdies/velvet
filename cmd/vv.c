@@ -73,7 +73,7 @@ static void arrange(struct winsize ws, struct pane *p) {
   // else
   for (struct pane *c = p; c; c = c->next) c->border_width = 1;
 
-  i = my = sy = sw = mx = 0;
+  i = my = sy = mx = 0;
   nm = n > nmaster ? nmaster : n;
   ns = n > nmaster ? n - nmaster : 0;
 
@@ -360,7 +360,6 @@ void handle_sigwinch(struct string *draw_buffer) {
   string_push_slice(draw_buffer, clear, sizeof(clear) - 1);
 }
 
-
 static void handle_queries(struct pane *p) {
   static struct string response = {0};
   struct emulator_query *req;
@@ -436,10 +435,9 @@ int main(int argc, char **argv) {
       struct pane *p = calloc(1, sizeof(*p));
       memcpy(&p->fsm, &fsm_default, sizeof(fsm_default));
       p->process = strdup(argv[i]);
-      if (!clients) {
+      if (!prev) {
         // first element -- asign head
         clients = p;
-        prev = clients;
       } else {
         // Otherwise append to previous element
         prev->next = p;
@@ -533,24 +531,24 @@ int main(int argc, char **argv) {
         polled--;
         struct pane *p = pane_from_pty(clients, fds[i].fd);
         if (p) {
-/* These parameters greatly affect throughput when an application is writing in a busy loop.
- * Observations from brief testing on Mac in Alacritty:
- * Raw ascii output was generated with dd if=/dev/urandom | base64
- * Increasing BUFSIZE above 4k only hurts performance
- * Responsiveness of other panes depends on the MAX_IT variable. From my testing,
- * vv is completely responsive even when 4 panes are generating garbage full throttle.
- * In a similar scenario in tmux, I observed a lot of flickering, but that is not the case in vv.
- * Raising MAX_IT greatly increases throughput, but past 512kb the gains are marginal (Unbounded is ~5% faster), so
- * responsiveness is a more important metric.
- *
- * On MacOS, I observed the maximum read from the PTY to be 1024, but it could be different on other platforms, and the
- * gains of decreasing the buffer size are also very marginal (~3%)
- *
- * TODO: Benchmark performance with ansi escapes instead of just ascii
- */
-#define BUFSIZE (4096)      // 4kb
-#define MAX_BYTES (1 << 19) // 512kb
-#define MAX_IT (MAX_BYTES / BUFSIZE)
+          /* These parameters greatly affect throughput when an application is writing in a busy loop.
+           * Observations from brief testing on Mac in Alacritty:
+           * Raw ascii output was generated with dd if=/dev/urandom | base64
+           * Increasing BUFSIZE above 4k only hurts performance
+           * Responsiveness of other panes depends on the MAX_IT variable. From my testing,
+           * vv is completely responsive even when 4 panes are generating garbage full throttle.
+           * In a similar scenario in tmux, I observed a lot of flickering, but that is not the case in vv.
+           * Raising MAX_IT greatly increases throughput, but past 512kb the gains are marginal (Unbounded is ~5%
+           * faster), so responsiveness is a more important metric.
+           *
+           * On MacOS, I observed the maximum read from the PTY to be 1024, but it could be different on other
+           * platforms, and the gains of decreasing the buffer size are also very marginal (~3%)
+           *
+           * TODO: Benchmark performance with ansi escapes instead of just ascii
+           */
+          constexpr int BUFSIZE = 4096;      // 4kb
+          constexpr int MAX_BYTES = 1 << 19; // 512kb
+          constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
           uint8_t buf[BUFSIZE];
           int n = 0, iterations = 0;
           while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {

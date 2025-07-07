@@ -1,6 +1,10 @@
 #ifndef COLLECTIONS_H
 #define COLLECTIONS_H
 
+#ifdef MIN
+#undef MIN
+#undef MAX
+#endif
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
