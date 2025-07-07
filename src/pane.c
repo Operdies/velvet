@@ -11,31 +11,12 @@
 #include <unistd.h>
 
 #include "collections.h"
-#include "csi.h"
 #include "emulator.h"
 #include "utils.h"
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 struct pane *clients = NULL;
 struct pane *focused = NULL;
-
-// sprintf is extremely slow because it needs to deal with format strings. We can do better
-// when we know we just want to write a small positive integer
-static inline int write_int(uint8_t *dst, int n) {
-  assert(n >= 0);
-  const int max = 11;
-  char buf[max];
-  int idx = max;
-
-  do {
-    buf[--idx] = '0' + n % 10;
-    n /= 10;
-  } while (n);
-
-  for (int i = idx; i < max; i++, dst++) *dst = buf[i];
-  return max - idx;
-#undef INT_MAX_CHAR
-}
 
 void pane_destroy(struct pane *pane) {
   if (pane->pty > 0) {
@@ -215,13 +196,10 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
 }
 
 void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
-
-  {
-    // Ensure the grid content is in sync with the pane just-in-time
-    pane->fsm.w = pane->rect.client.w;
-    pane->fsm.h = pane->rect.client.h;
-    fsm_ensure_grid_initialized(&pane->fsm);
-  }
+  // Ensure the grid content is in sync with the pane just-in-time
+  pane->fsm.w = pane->rect.client.w;
+  pane->fsm.h = pane->rect.client.h;
+  fsm_ensure_grid_initialized(&pane->fsm);
 
   struct grid *g = pane->fsm.active_grid;
   for (int i0 = 0; i0 < g->h; i0++) {
@@ -406,7 +384,9 @@ void pane_start(struct pane *pane) {
 }
 
 void pane_remove(struct pane **lst, struct pane *rem) {
-  assert(lst), assert(*lst), assert(rem);
+  assert(lst);
+  assert(*lst);
+  assert(rem);
   if (*lst == rem) {
     *lst = rem->next;
     return;
