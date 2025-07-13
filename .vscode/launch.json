@@ -1,40 +1,93 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Debug zsh",
-            "type": "codelldb",
-            "request": "launch",
-            "program": "bin/vv",
-            "args": ["zsh"],
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "lldb"
-        },
-        {
-            "name": "Debug vv",
-            "type": "codelldb",
-            "request": "launch",
-            "program": "bin/vv",
-            "args": ["nvim"],
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "lldb"
-        },
-        {
-            "name": "Debug tests",
-            "type": "codelldb",
-            "request": "launch",
-            "program": "bin/test",
-            "stopAtEntry": false,
-            "cwd": "${fileDirname}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "lldb"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "attach to vv",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${workspaceFolder}/bin/vv",
+      "MIMode": "lldb"
+    },
+    {
+      "name": "nvim quit",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [
+        "nvim --clean --cmd ':qa'"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "Debug cat",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [
+        "cat"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "Debug zsh",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [
+        "zsh"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "Debug lazygit",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [
+        "lazygit"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "Debug vv",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [
+        "nvim"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "Debug tests",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/test",
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    }
+  ]
 }
