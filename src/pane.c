@@ -1,4 +1,5 @@
 #include "platform.h"
+#include <ctype.h>
 #include <pane.h>
 #include <signal.h>
 #include <stdio.h>
@@ -66,6 +67,16 @@ struct sgr_buffer {
   uint8_t n;
 };
 
+// Concatenate the strings in `strings` into `dst`.
+static void cat_strings(char *dst, int n, char **strings) {
+  int i = 0;
+  for (; strings && *strings; strings++) {
+    const uint8_t *ch = (uint8_t *)*strings;
+    for (; ch && *ch && i < n; ch++) dst[i++] = iscntrl(*ch) ? '.' : *ch;
+  }
+  dst[i] = 0;
+}
+
 void pane_update_cwd(struct pane *p) {
   if (platform.get_cwd_from_pty) {
     char buf[256];
@@ -73,8 +84,12 @@ void pane_update_cwd(struct pane *p) {
       if (strncmp(buf, p->cwd, MIN(sizeof(buf), sizeof(p->cwd)))) {
         p->border_dirty = true;
         strncpy(p->cwd, buf, MIN(sizeof(buf), sizeof(p->cwd)));
+        cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->process, " — ", p->cwd, NULL});
       }
     }
+  } else if (!p->title[0]) {
+    // fallback to using the process as title
+    cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->process, NULL});
   }
 }
 
@@ -298,13 +313,12 @@ void pane_draw_border(struct pane *p, struct string *b) {
   {
     int i = left + 1;
     // TODO: Technically process can contain utf8 which could be problematic with strlen
-    int n = strlen(p->process) + strlen(p->cwd);
+    int n = strlen(p->title);
     i += n + 3;
     string_push(b, dash);
     string_push(b, beforetitle);
-    string_push(b, (uint8_t *)p->process);
+    string_push(b, (uint8_t *)p->title);
     string_push(b, aftertitle);
-    string_push(b, (uint8_t *)p->cwd);
     for (; i < right; i++) string_push(b, dash);
     string_push(b, topright_corner);
   }

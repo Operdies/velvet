@@ -5,6 +5,7 @@
 #undef MIN
 #undef MAX
 #endif
+
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
@@ -12,12 +13,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* TODO:
- * String prepend without copy:
- * Write data to end of buffer
- * On resize: Cannonicalize string by copying backbuffer
- * On flush: write with iovec
- */
 struct string {
   uint8_t *content;
   size_t len, cap;

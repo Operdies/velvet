@@ -11,6 +11,7 @@ struct bounds {
 struct pane {
   // TODO: scrollback
   char *process;
+  char title[256];
   char startwd[256];
   char cwd[256];
   int pty, pid;
