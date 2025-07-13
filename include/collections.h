@@ -50,7 +50,38 @@ struct running_hash {
   };
 };
 
-bool running_hash_match(struct running_hash running, struct running_hash item, int count);
+enum [[gnu::packed]] hashmap_slot_state {
+  // Never used
+  HASHMAP_SLOT_PRISTINE,
+  // Currently used
+  HASHMAP_SLOT_OCCUPIED,
+  // Previously used
+  HASHMAP_SLOT_TOMBSTONE
+};
+
+struct hashmap {
+  uint32_t capacity;
+  uint32_t count;
+  uint32_t *keys;
+  void **values;
+  enum hashmap_slot_state *metadata;
+};
+
+// Destroy
+void hashmap_destroy(struct hashmap *h);
+// Add an item if the specified key does not exist.
+bool hashmap_add(struct hashmap *h, uint32_t key, void *item);
+// Set the item with the specified key, returning the existing item.
+void *hashmap_set(struct hashmap *h, uint32_t key, void *item);
+// Return a bool indicating if a given key exists.
+bool hashmap_contains(const struct hashmap *h, uint32_t key);
+// Get the item with the specified key, if it exists.
+void *hashmap_get(const struct hashmap *h, uint32_t key);
+// Return the item with the specified key, if it exists, returning it.
+bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
+
+bool running_hash_match(struct running_hash running, struct running_hash item,
+                        int count);
 void running_hash_append(struct running_hash *hash, uint8_t ch);
 void string_push_slice(struct string *str, const uint8_t *const src,
                        size_t len);
@@ -62,8 +93,7 @@ void string_clear(struct string *str);
 void string_destroy(struct string *str);
 /* flush the string instance to the specified file descriptor */
 bool string_flush(struct string *str, int fd, int *total_written);
-void string_push_csi(struct string *str, int *ps, int n,
-                     const char *const c);
+void string_push_csi(struct string *str, int *ps, int n, const char *const c);
 
 void vec_push(struct vec *v, const void *elem);
 void vec_clear(struct vec *v);

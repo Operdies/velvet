@@ -154,3 +154,145 @@ bool running_hash_match(struct running_hash running, struct running_hash item, i
   uint64_t keep = ~0UL >> discard;
   return (running.hash >> discard) == (item.hash & keep);
 }
+
+#define HASHMAP_MAX_LOAD (0.7)
+
+[[gnu::const]] static uint32_t hashmap_hash(uint32_t key) {
+  return key * 7;
+}
+static uint64_t hashmap_next_size(struct hashmap *h) {
+  if (h->capacity <= 1) return 13;
+  return h->capacity * 2 - 1;
+}
+
+// Find key, probing past tombstones.
+static bool hashmap_find_key(const struct hashmap *h, uint32_t key, uint32_t *index) {
+  for (uint32_t i = 0; i < h->capacity; i++) {
+    uint32_t slot = (i + hashmap_hash(key)) % h->capacity;
+    enum hashmap_slot_state s = h->metadata[slot];
+    switch (s) {
+    case HASHMAP_SLOT_PRISTINE: {
+      return false;
+    }
+    case HASHMAP_SLOT_OCCUPIED: {
+      if (h->keys[slot] == key) {
+        *index = slot;
+        return true;
+      }
+      // keep probing
+    } break;
+    case HASHMAP_SLOT_TOMBSTONE: continue; // keep probing
+    }
+  }
+  return false;
+}
+
+static void hashmap_maybe_enlarge(struct hashmap *h);
+
+// Only call this *after* ensuring that the key is not present.
+// This should functionaly be the *only* way to increase the count of the map
+static void hashmap_add_unchecked(struct hashmap *h, uint32_t key, void *value) {
+  for (uint32_t i = 0; i < h->capacity; i++) {
+    uint32_t slot = (i + hashmap_hash(key)) % h->capacity;
+    enum hashmap_slot_state s = h->metadata[slot];
+    if (s == HASHMAP_SLOT_OCCUPIED) continue;
+    h->count++;
+    h->keys[slot] = key;
+    h->values[slot] = value;
+    h->metadata[slot] = HASHMAP_SLOT_OCCUPIED;
+    return;
+  }
+  assert(!"Unreachable");
+}
+
+static void hashmap_maybe_enlarge(struct hashmap *h) {
+  float item_load = (float)(h->count + 1) / (float)h->capacity;
+  if (item_load > HASHMAP_MAX_LOAD || h->capacity == 0) {
+    uint32_t cap = hashmap_next_size(h);
+    size_t v_size = sizeof(h->values);
+    size_t k_size = sizeof(h->keys);
+    size_t m_size = sizeof(h->metadata);
+    uint8_t *data = calloc(cap, v_size + k_size + m_size);
+    void *values = data;
+    void *keys = data + cap * v_size;
+    void *metadata = data + cap * v_size + cap * k_size;
+    struct hashmap new = {.values = values, .keys = keys, .metadata = metadata, .capacity = cap};
+    for (uint32_t i = 0; i < h->capacity; i++) {
+      if (h->metadata[i] == HASHMAP_SLOT_OCCUPIED) {
+        hashmap_add(&new, h->keys[i], h->values[i]);
+      }
+    }
+    hashmap_destroy(h);
+    *h = new;
+  }
+}
+
+bool hashmap_add(struct hashmap *h, uint32_t key, void *value) {
+  uint32_t slot;
+  if (hashmap_find_key(h, key, &slot)) {
+    return false;
+  } else {
+    hashmap_maybe_enlarge(h);
+    hashmap_add_unchecked(h, key, value);
+    return true;
+  }
+  assert(!"Unreachable");
+}
+
+void *hashmap_set(struct hashmap *h, uint32_t key, void *value) {
+  uint32_t slot;
+  if (hashmap_find_key(h, key, &slot)) {
+    void *removed = h->values[slot];
+    h->values[slot] = value;
+    return removed;
+  } else {
+    hashmap_maybe_enlarge(h);
+    hashmap_add_unchecked(h, key, value);
+    return nullptr;
+  }
+  assert(!"Unreachable");
+}
+
+void *hashmap_get(const struct hashmap *h, uint32_t key) {
+  uint32_t slot;
+  if (hashmap_find_key(h, key, &slot)) {
+    return h->values[slot];
+  }
+  return nullptr;
+}
+
+bool hashmap_contains(const struct hashmap *h, uint32_t key) {
+  uint32_t slot;
+  return hashmap_find_key(h, key, &slot);
+}
+
+static uint32_t hashmap_next_slot(struct hashmap *h, uint32_t slot) {
+  return (slot + 1 + h->capacity) % h->capacity;
+}
+static uint32_t hashmap_prev_slot(struct hashmap *h, uint32_t slot) {
+  return (slot - 1 + h->capacity) % h->capacity;
+}
+
+bool hashmap_remove(struct hashmap *h, uint32_t key, void **removed) {
+  uint32_t slot;
+  if (hashmap_find_key(h, key, &slot)) {
+    if (removed) *removed = h->values[slot];
+    // Mark this slot as a tombstone to allow for probing in case of collisions
+    h->metadata[slot] = HASHMAP_SLOT_TOMBSTONE;
+    // If the next slot is pristine, this slot cannot be used for probing, and must also be pristine
+    while (h->metadata[hashmap_next_slot(h, slot)] == HASHMAP_SLOT_PRISTINE &&
+           h->metadata[slot] == HASHMAP_SLOT_TOMBSTONE) {
+      h->metadata[slot] = HASHMAP_SLOT_PRISTINE;
+      slot = hashmap_prev_slot(h, slot);
+    }
+    h->count--;
+    return true;
+  }
+  return false;
+#undef next
+#undef prev
+}
+
+void hashmap_destroy(struct hashmap *h) {
+  free(h->values);
+}

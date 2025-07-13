@@ -710,19 +710,127 @@ void done() {
   logmsg("[Test Exit]");
 }
 
-
 static void test_hash() {
   const uint8_t characters[8] = u8"\x1b[200~\0\0";
-  const struct running_hash paste_start = { .characters = u8"\x1b[200~" };
+  const struct running_hash paste_start = {.characters = u8"\x1b[200~"};
   struct running_hash running_hash = {0};
 
-    running_hash_append(&running_hash, characters[0]);
+  running_hash_append(&running_hash, characters[0]);
   for (int i = 1; i < 8; i++) {
     assert(running_hash_match(running_hash, paste_start, i));
     assert(!running_hash_match(running_hash, paste_start, i + 1));
     running_hash_append(&running_hash, characters[i]);
   }
   assert(running_hash_match(running_hash, paste_start, 8));
+}
+
+#define assertf(cond, fmt, ...)                                                                                        \
+  do {                                                                                                                 \
+    if (!(cond)) {                                                                                                     \
+      ERROR(fmt, __VA_ARGS__);                                                                                         \
+      FAIL_ASSERT(cond);                                                                                               \
+    }                                                                                                                  \
+  } while (0)
+
+static void test_hashmap() {
+  constexpr int n_strings = 10;
+  constexpr int stress = 1 << 22;
+
+  struct hashmap h = {0};
+  assert(hashmap_add(&h, 0, nullptr));
+  assert(hashmap_get(&h, 0) == nullptr);
+  assert(!hashmap_add(&h, 0, nullptr));
+  assert(!hashmap_get(&h, 1));
+  assert(hashmap_add(&h, 1, "Hello"));
+  char *str;
+  assert((str = hashmap_get(&h, 1)) && strcmp(str, "Hello") == 0);
+
+  char *strings[n_strings] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  assert(hashmap_remove(&h, 0, nullptr));
+  assert(!hashmap_remove(&h, 0, nullptr));
+  assert(hashmap_remove(&h, 1, nullptr));
+  assert(!hashmap_remove(&h, 1, nullptr));
+  for (int i = 0; i < n_strings; i++) {
+    assert(hashmap_add(&h, i, strings[i]));
+    for (int j = 0; j <= i; j++) {
+      assert((str = hashmap_get(&h, j)));
+      assert(strcmp(str, strings[j]) == 0);
+    }
+  }
+  for (int i = 0; i < n_strings; i++) {
+    assert((str = hashmap_get(&h, i)));
+    assert(strcmp(str, strings[i]) == 0);
+  }
+  assert(h.count == n_strings);
+  for (int i = 0; i < n_strings; i++) {
+    assert(hashmap_remove(&h, i, nullptr));
+  }
+  assert(h.count == 0);
+
+  for (int i = 0; i < stress; i++) {
+    assert(hashmap_add(&h, i, strings[i % n_strings]));
+    assert((str = hashmap_get(&h, i)));
+    assert(strcmp(str, strings[i % n_strings]) == 0);
+  }
+  assert(h.count == stress);
+  for (int i = 0; i < stress; i++) {
+    assert((str = hashmap_get(&h, i)));
+    assert(strcmp(str, strings[i % n_strings]) == 0);
+  }
+  assert(h.count == stress);
+  for (int i = stress - 1; i >= 0; i--) {
+    assert(hashmap_remove(&h, i, nullptr));
+  }
+  assert(h.count == 0);
+  for (int i = 0; i < stress; i++) {
+    assert(hashmap_add(&h, i, strings[i % n_strings]));
+    assert((str = hashmap_get(&h, i)));
+    assert(strcmp(str, strings[i % n_strings]) == 0);
+  }
+  assert(h.count == stress);
+  for (int i = 0; i < stress; i += 2) {
+    assert(hashmap_remove(&h, i, nullptr));
+  }
+  assert(h.count == stress / 2);
+  for (int i = 0; i < stress; i += 2) {
+    assert(!hashmap_remove(&h, i, nullptr));
+  }
+  assert(h.count == stress / 2);
+  for (int i = 0; i < stress; i++) {
+    if (i % 2 == 0) {
+      assert(hashmap_add(&h, i, strings[i % n_strings]));
+      assert((str = hashmap_get(&h, i)));
+      assert(strcmp(str, strings[i % n_strings]) == 0);
+    } else {
+      assert(!hashmap_add(&h, i, strings[i % n_strings]));
+    }
+  }
+  hashmap_destroy(&h);
+}
+
+void test_hashmap_collisions() {
+  constexpr int n_strings = 10;
+  char *strings[n_strings] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  char *str;
+  struct hashmap h = {0};
+  for (int i = 0; i < 8; i++) {
+    uint32_t k = i * 13;
+    assert(hashmap_add(&h, k, strings[i]));
+    assert((str = hashmap_get(&h, k)) && str == strings[i]);
+  }
+  for (int i = 2; i < 10; i++) {
+    uint32_t k = (i % 8) * 13;
+    assertf(hashmap_remove(&h, k, nullptr), "Error removing element at index %d", k);
+  }
+  for (int i = 0; i < 8; i++) {
+    uint32_t k = i * 13;
+    assert(hashmap_add(&h, k, strings[i]));
+    assert((str = hashmap_get(&h, k)) && str == strings[i]);
+  }
+  for (int i = 7; i >= 0; i--) {
+    uint32_t k = i * 13;
+    assertf(hashmap_remove(&h, k, nullptr), "Error removing element at index %d", k);
+  }
 }
 
 int main(void) {
@@ -733,5 +841,7 @@ int main(void) {
   test_scrolling();
   test_csi_parsing();
   test_hash();
+  test_hashmap();
+  test_hashmap_collisions();
   return n_failures;
 }
