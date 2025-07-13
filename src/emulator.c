@@ -449,5 +449,4 @@ void fsm_process(struct fsm *fsm, uint8_t *buf, int n) {
 void fsm_destroy(struct fsm *fsm) {
   grid_destroy(&fsm->primary);
   grid_destroy(&fsm->alternate);
-  vec_destroy(&fsm->pending_requests);
 }

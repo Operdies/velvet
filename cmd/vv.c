@@ -352,38 +352,6 @@ void handle_sigwinch(struct string *draw_buffer) {
   string_push_slice(draw_buffer, clear, sizeof(clear) - 1);
 }
 
-static void handle_queries(struct pane *p) {
-  static struct string response = {0};
-  struct emulator_query *req;
-  vec_foreach(req, p->fsm.pending_requests) {
-    switch (req->type) {
-    case REQUEST_DEFAULT_FG: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
-    case REQUEST_DEFAULT_BG:
-      string_push(&response, u8"\x1b]11;rgb:1e1e/1e1e/2e2e");
-      string_push(&response, req->st);
-      break;
-    case REQUEST_DEFAULT_CURSOR_COLOR: string_push(&response, u8"\x1b]10;rgb:ffffff\a"); break;
-    case REQUEST_PRIMARY_DEVICE_ATTRIBUTES:
-    case REQUEST_SECONDARY_DEVICE_ATTRIBUTES:
-    case REQUEST_TERTIARY_DEVICE_ATTRIBUTES:
-    case REQUEST_STATUS_OK:
-    case REQUEST_WINDOW_TITLE:
-    case REQUEST_WINDOW_ICON:
-    case REQUEST_BRACKETED_PASTE_STATUS:
-    case REQUEST_FOCUS_REPORTING_STATUS:
-    case REQUEST_EXTENDED_FEATURES:
-    case REQUEST_TRUECOLOR_STATUS:
-    default: logmsg("Handle query type: %s", emulator_query_type_names[req->type]); break;
-    }
-  }
-
-  vec_clear(&p->fsm.pending_requests);
-  if (response.len) {
-    write(p->pty, response.content, response.len);
-  }
-  string_clear(&response);
-}
-
 static void pane_draw_borders(struct string *draw_buffer) {
   for (struct pane *p = clients; p; p = p->next) {
     if (p == focused) continue;
@@ -522,39 +490,37 @@ int main(int argc, char **argv) {
       if (fds[i].revents & POLL_IN) {
         polled--;
         struct pane *p = pane_from_pty(clients, fds[i].fd);
-        if (p) {
-          /* These parameters greatly affect throughput when an application is writing in a busy loop.
-           * Observations from brief testing on Mac in Alacritty:
-           * Raw ascii output was generated with dd if=/dev/urandom | base64
-           * Increasing BUFSIZE above 4k only hurts performance
-           * Responsiveness of other panes depends on the MAX_IT variable. From my testing,
-           * vv is completely responsive even when 4 panes are generating garbage full throttle.
-           * In a similar scenario in tmux, I observed a lot of flickering, but that is not the case in vv.
-           * Raising MAX_IT greatly increases throughput, but past 512kb the gains are marginal (Unbounded is ~5%
-           * faster), so responsiveness is a more important metric.
-           *
-           * On MacOS, I observed the maximum read from the PTY to be 1024, but it could be different on other
-           * platforms, and the gains of decreasing the buffer size are also very marginal (~3%)
-           *
-           * TODO: Benchmark performance with ansi escapes instead of just ascii
-           */
-          constexpr int BUFSIZE = 4096;      // 4kb
-          constexpr int MAX_BYTES = 1 << 19; // 512kb
-          constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
-          uint8_t buf[BUFSIZE];
-          int n = 0, iterations = 0;
-          while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
-            pane_write(p, buf, n);
-            iterations++;
-          }
-          handle_queries(p);
-          if (n == -1) {
-            if (errno == EAGAIN || errno == EINTR) continue;
-            die("read %s:", p->process);
-          } else if (n == 0) {
-            // pipe closed -- destroy pane
-            pane_remove_and_destroy(p);
-          }
+        assert(p);
+        /* These parameters greatly affect throughput when an application is writing in a busy loop.
+         * Observations from brief testing on Mac in Alacritty:
+         * Raw ascii output was generated with dd if=/dev/urandom | base64
+         * Increasing BUFSIZE above 4k only hurts performance
+         * Responsiveness of other panes depends on the MAX_IT variable. From my testing,
+         * vv is completely responsive even when 4 panes are generating garbage full throttle.
+         * In a similar scenario in tmux, I observed a lot of flickering, but that is not the case in vv.
+         * Raising MAX_IT greatly increases throughput, but past 512kb the gains are marginal (Unbounded is ~5%
+         * faster), so responsiveness is a more important metric.
+         *
+         * On MacOS, I observed the maximum read from the PTY to be 1024, but it could be different on other
+         * platforms, and the gains of decreasing the buffer size are also very marginal (~3%)
+         *
+         * TODO: Benchmark performance with ansi escapes instead of just ascii
+         */
+        constexpr int BUFSIZE = 4096;      // 4kb
+        constexpr int MAX_BYTES = 1 << 19; // 512kb
+        constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
+        uint8_t buf[BUFSIZE];
+        int n = 0, iterations = 0;
+        while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
+          pane_write(p, buf, n);
+          iterations++;
+        }
+        if (n == -1) {
+          if (errno == EAGAIN || errno == EINTR) continue;
+          die("read %s:", p->process);
+        } else if (n == 0) {
+          // pipe closed -- destroy pane
+          pane_remove_and_destroy(p);
         }
       }
     }

@@ -2,7 +2,6 @@
 #define EMULATOR_H
 
 #include "grid.h"
-#include "queries.h"
 #include "text.h"
 #include <stdint.h>
 
@@ -190,7 +189,6 @@ struct fsm {
   struct grid alternate;
   /* pointer to either primary or alternate */
   struct grid *active_grid;
-  request_buffer pending_requests;
 };
 
 static const struct emulator_options emulator_options_default = {
@@ -201,7 +199,6 @@ static const struct emulator_options emulator_options_default = {
 static const struct fsm fsm_default = {
     .options = emulator_options_default,
     .cell = {.style = style_default},
-    .pending_requests = {.element_size = sizeof(struct emulator_query)},
 };
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);

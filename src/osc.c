@@ -1,5 +1,4 @@
 #include "osc.h"
-#include "queries.h"
 #include "utils.h"
 
 #include <ctype.h>
@@ -12,12 +11,6 @@ static bool osc_dispatch_todo(struct fsm *fsm, struct osc *osc) {
 }
 
 static bool osc_dispatch_background_color(struct fsm *fsm, struct osc *osc) {
-  if (osc->pt.len == 1 && osc->pt.text[0] == '?') {
-    struct emulator_query q = {.type = REQUEST_DEFAULT_BG};
-    memcpy(q.st, osc->st, sizeof(osc->st));
-    vec_push(&fsm->pending_requests, &q);
-    return true;
-  }
   return osc_dispatch_todo(fsm, osc);
 }
 static bool osc_dispatch_hyperlink(struct fsm *fsm, struct osc *osc) {
