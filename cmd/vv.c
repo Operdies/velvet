@@ -221,14 +221,6 @@ bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
   return false;
 }
 
-static inline uint64_t dumbest_hash(uint8_t *str) {
-  uint64_t hash = 0;
-  for (; *str; str++) hash = (hash << 8) | *str;
-  return hash;
-}
-
-// Who needs to paste more than 1mb lol
-#define PASTEBUFFER_MAX (1 << 20)
 static void handle_stdin(const char *const buf, int n, struct string *draw_buffer) {
   static struct string writebuffer = {0};
   static struct string pastebuffer = {0};
@@ -239,26 +231,26 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     bracketed_paste,
   } s;
 
-  uint64_t paste_start = dumbest_hash((uint8_t *)"\x1b[200~");
-  uint64_t paste_end = dumbest_hash((uint8_t *)"\x1b[201~");
-  uint64_t pastebuf = 0;
+  static const struct running_hash paste_start = {.characters = "\x1b[200~"};
+  static const struct running_hash paste_end = {.characters = "\x1b[201~"};
+  static struct running_hash running_hash = {0};
 
   string_clear(&writebuffer);
 
   for (int i = 0; i < n; i++) {
     uint8_t ch = buf[i];
-    pastebuf = ((pastebuf << 8) | ch) & 0x00ffffffffffff;
-    if (s == normal && pastebuf == paste_start) {
+    running_hash_append(&running_hash, ch);
+    if (s == normal && running_hash_match(running_hash, paste_start, 6)) {
       writebuffer.len -= 5;
       s = bracketed_paste;
       continue;
-    } else if (s == bracketed_paste && pastebuf == paste_end) {
+    } else if (s == bracketed_paste && running_hash_match(running_hash, paste_end, 6)) {
       pastebuffer.len -= 5;
       s = normal;
       if (focused && focused->fsm.options.bracketed_paste) {
-        string_push(&writebuffer, u8"\x1b[200~");
+        string_push(&writebuffer, paste_start.characters);
         string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
-        string_push(&writebuffer, u8"\x1b[201~");
+        string_push(&writebuffer, paste_end.characters);
       } else {
         string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
       }

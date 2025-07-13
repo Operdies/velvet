@@ -43,6 +43,15 @@ struct vec {
   size_t capacity;
 };
 
+struct running_hash {
+  union {
+    uint8_t characters[8];
+    uint64_t hash;
+  };
+};
+
+bool running_hash_match(struct running_hash running, struct running_hash item, int count);
+void running_hash_append(struct running_hash *hash, uint8_t ch);
 void string_push_slice(struct string *str, const uint8_t *const src,
                        size_t len);
 void string_push(struct string *str, const uint8_t *const src);

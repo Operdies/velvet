@@ -710,6 +710,21 @@ void done() {
   logmsg("[Test Exit]");
 }
 
+
+static void test_hash() {
+  const uint8_t characters[8] = u8"\x1b[200~\0\0";
+  const struct running_hash paste_start = { .characters = u8"\x1b[200~" };
+  struct running_hash running_hash = {0};
+
+    running_hash_append(&running_hash, characters[0]);
+  for (int i = 1; i < 8; i++) {
+    assert(running_hash_match(running_hash, paste_start, i));
+    assert(!running_hash_match(running_hash, paste_start, i + 1));
+    running_hash_append(&running_hash, characters[i]);
+  }
+  assert(running_hash_match(running_hash, paste_start, 8));
+}
+
 int main(void) {
   atexit(done);
   test_input_output();
@@ -717,5 +732,6 @@ int main(void) {
   test_erase();
   test_scrolling();
   test_csi_parsing();
+  test_hash();
   return n_failures;
 }

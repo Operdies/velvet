@@ -46,7 +46,7 @@ void string_push_csi(struct string *str, int *ps, int n, const char *const c) {
   if (n) { /* overwrite the last semicolon */
     str->len--;
   }
-  string_push(str, (uint8_t*)c);
+  string_push(str, (uint8_t *)c);
 }
 
 void string_push_slice(struct string *str, const uint8_t *const src, size_t len) {
@@ -141,4 +141,16 @@ void vec_destroy(struct vec *v) {
   v->capacity = 0;
   free(v->content);
   v->content = nullptr;
+}
+
+void running_hash_append(struct running_hash *hash, uint8_t ch) {
+  hash->hash = (hash->hash >> 8) | (uint64_t)ch << 56;
+}
+
+bool running_hash_match(struct running_hash running, struct running_hash item, int count) {
+  assert(count >= 1);
+  assert(count <= 8);
+  int discard = 8 * (8 - count);
+  uint64_t keep = ~0UL >> discard;
+  return (running.hash >> discard) == (item.hash & keep);
 }
