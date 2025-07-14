@@ -273,6 +273,14 @@ static bool csi_dispatch_xtwinops(struct fsm *fsm, struct csi *csi) {
   }
 }
 
+/* cursor preceding line */
+static bool csi_dispatch_cpl(struct fsm *fsm, struct csi *csi) {
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_move_cursor(fsm->active_grid, 0, -count);
+  grid_position_cursor_column(fsm->active_grid, 0);
+  return true;
+}
+
 static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   assert(csi->leading == 0);
   assert(csi->intermediate == 0);
@@ -282,6 +290,7 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   case 'B': return csi_dispatch_cux(fsm, csi);
   case 'C': return csi_dispatch_cux(fsm, csi);
   case 'D': return csi_dispatch_cux(fsm, csi);
+  case 'F': return csi_dispatch_cpl(fsm, csi);
   case 'G': return csi_dispatch_cha(fsm, csi);
   case 'H': return csi_dispatch_cup(fsm, csi);
   case 'J': return csi_dispatch_ed(fsm, csi);
