@@ -33,7 +33,7 @@ OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
-CFLAGS = -std=c23 -Wall -Wextra -I$(INCLUDE_DIR)  -MMD -MP
+CFLAGS = -std=c23 -Wall -Wextra -I$(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = 
 ifeq ($(BUILD),debug)
 	CFLAGS += -O0 -g -fsanitize=address
