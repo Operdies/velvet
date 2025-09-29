@@ -71,6 +71,30 @@ should display? (selected tag, what windows are on what tags, etc.) Feed this
 information on stdin? And then the bar should interpret whether stdin is user
 input based on whether it is focused or not?
 
+* Neat thing
+
+Encountered this C macro in the wild:
+It solves a limitation of C macros when you want to declare related pieces
+of data together, and then join them in separate static arrays:
+
+```c
+// load keymap table for linux
+#define KEYMAP(k, s)    k,
+static int keymap_linux_val[] = {
+#include "keymap_linux.def"
+};
+#undef KEYMAP
+
+#define KEYMAP(k, s)    s,
+static char *keymap_linux_str[] = {
+#include "keymap_linux.def"
+};
+#undef KEYMAP
+```
+
+the KEYMAP macro is invoked in the `keymap_linx.def` file, but different arguments
+passed to the macro are extracted in each pass. This is awesome for static comp time configuration.
+
 * Bugs
  - nvim + vim broken (scrolling, scroll region, missing queries)
  - MANPAGER=nvim +Man! hangs on startup
