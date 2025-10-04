@@ -8,21 +8,14 @@ Tasks that need doing in no particular order of priority:
 
 Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled panes and then naively fully redraw floating panes on every frame
 
+* Replay mechanism
+
+Record & replay sessions. The main use case is debugging scenarios and
+end-to-end tests, but could be useful for automation.
+
+
 * Mouse support
 * Change all char to typedef utf8_t (unsigned char) to avoid confusing ascii and utf8 strings
-* Command buffer so stdin/out requests can be processed outside of the state
-machine 
-
-Some applications request the current cursor position which must be
-provided on stdin. Other applications request information about terminal
-features which velvet must request from the host emulator before it can
-respond. Handling this inside the state machine complicates testing and adds
-unnecessary IO latency.
-
-In addition, reading stdin from the terminal is not really safe inside the
-state machine since it could contain STDIN which must be processed in the main
-loop. The main loop should always detect responses and dispatch them to the
-appropriate pane.
 
 * Performance testing 
 
@@ -36,6 +29,13 @@ Don't spend time on this before before all basic terminal emulator features are 
 
 Tagging panes / toggling visible tags / keybind system, what this project is
 all about..
+
+Formally separate rendering, io dispatch, and layout systems. Currently
+everything is interleaved in the main event loop, which is not really
+sustainable.
+
+The current output pipeline is very neatly running through a state machine, but
+the input pipeline is completely ad-hoc.
 
 * Session management + socket protocol
 
