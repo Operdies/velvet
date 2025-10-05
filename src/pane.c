@@ -14,6 +14,7 @@
 #include "collections.h"
 #include "emulator.h"
 #include "utils.h"
+#include "virtual_terminal_sequences.h"
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 struct pane *clients = NULL;
@@ -313,7 +314,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
   {
     int i = left + 1;
     // TODO: Technically process can contain utf8 which could be problematic with strlen
-    int n = strlen(p->title);
+    int n = utf8_strlen(p->title);
     i += n + 3;
     string_push(b, dash);
     string_push(b, beforetitle);
@@ -411,6 +412,20 @@ void pane_remove(struct pane **lst, struct pane *rem) {
       prev->next = p->next;
     }
     prev = p;
+  }
+}
+
+void pane_notify_focus(struct pane *p, bool focused) {
+  if (p) {
+    p->border_dirty = true;
+    p->has_focus = focused;
+    if (p->pty && p->fsm.options.focus_reporting) {
+      if (focused) {
+        write(p->pty, vt_focus_in, sizeof(vt_focus_in));
+      } else {
+        write(p->pty, vt_focus_out, sizeof(vt_focus_out));
+      }
+    }
   }
 }
 

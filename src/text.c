@@ -2,6 +2,14 @@
 #include "utils.h"
 #include <string.h>
 
+// assume *str is a valid utf8 string
+int utf8_strlen(char *str) {
+  int i = 0;
+  for (; *str; str++)
+    if (((uint8_t)(*str) & 0xC0) != 0x80) i++;
+  return i;
+}
+
 uint8_t utf8_expected_length(uint8_t ch) {
   if ((ch & 0x80) == 0x00)
     return 1; /* 0xxxxxxx */

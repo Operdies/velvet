@@ -14,6 +14,8 @@
 #include "collections.h"
 #include "emulator.h"
 #include "pane.h"
+#include "platform.h"
+#include "virtual_terminal_sequences.h"
 #include "utils.h"
 #include <sys/wait.h>
 
@@ -30,9 +32,6 @@ static struct {
     };
   };
 } sigpipe;
-
-static const char *const focus_out = "\x1b[O";
-static const char *const focus_in = "\x1b[I";
 
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
@@ -114,29 +113,12 @@ static void arrange(struct winsize ws, struct pane *p) {
 static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
   if (pane && pane->fsm.active_grid) {
     focused = pane;
-    uint8_t fmt[40];
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
     struct raw_cursor *c = &g->cursor;
     int lineno = 1 + pane->rect.client.y + (c->row - g->offset + g->h) % g->h;
     int columnno = 1 + pane->rect.client.x + c->col;
-    int n = snprintf((char *)fmt, sizeof(fmt), "\x1b[%d;%dH", lineno, columnno);
-    // write(STDOUT_FILENO, fmt, n);
-    string_push_slice(drawbuffer, fmt, n);
-  }
-}
-
-static void pane_notify_focus(struct pane *p, bool focused) {
-  if (p) {
-    p->border_dirty = true;
-    p->has_focus = focused;
-    if (p->pty && p->fsm.options.focus_reporting) {
-      if (focused) {
-        write(p->pty, focus_in, strlen(focus_in));
-      } else {
-        write(p->pty, focus_out, strlen(focus_out));
-      }
-    }
+    string_push_csi(drawbuffer, (int[]){lineno, columnno}, 2, "H");
   }
 }
 
@@ -287,8 +269,10 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         // Focus event. Forward it if the focused pane has the feature enabled
         bool did_focus = ch == 'I';
         if (focused->fsm.options.focus_reporting) {
-          const char *s = did_focus ? focus_in : focus_out;
-          string_push_slice(&writebuffer, (uint8_t *)s, strlen(s));
+          if (did_focus)
+            string_push_slice(&writebuffer, vt_focus_in, sizeof(vt_focus_in));
+          else
+            string_push_slice(&writebuffer, vt_focus_out, sizeof(vt_focus_out));
         }
         // If the pane does not have the feature enabled, ignore it.
       } else {
@@ -362,10 +346,8 @@ static void pane_draw_borders(struct string *draw_buffer) {
 
 static void render_frame(struct string *draw_buffer) {
   static enum cursor_style current_cursor_style = 0;
-  static const uint8_t *hide_cursor = u8"\x1b[?25l";
-  static const uint8_t *show_cursor = u8"\x1b[?25h";
 
-  string_push(draw_buffer, hide_cursor);
+  string_push(draw_buffer, vt_hide_cursor);
   for (struct pane *p = clients; p; p = p->next) {
     pane_update_cwd(p);
     pane_draw(p, false, draw_buffer);
@@ -374,7 +356,7 @@ static void render_frame(struct string *draw_buffer) {
 
   if (!focused) focus_pane(clients);
   if (focused) move_cursor_to_pane(focused, draw_buffer);
-  if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, show_cursor);
+  if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, vt_show_cursor);
   if (focused && focused->fsm.options.cursor.style != current_cursor_style) {
     current_cursor_style = focused->fsm.options.cursor.style;
     int cur = current_cursor_style;

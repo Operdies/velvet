@@ -40,5 +40,6 @@ void pane_remove(struct pane **lst, struct pane *rem);
 void pane_draw(struct pane *pane, bool redraw, struct string *buffer);
 void pane_draw_border(struct pane *p, struct string *b);
 void pane_update_cwd(struct pane *p);
+void pane_notify_focus(struct pane *p, bool focused);
 
 #endif /*  PANE_H */

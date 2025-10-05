@@ -1,16 +1,25 @@
 MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 
-UNAME_S := $(shell uname -s)
+BINARY_EXTENSION =
 
-ifeq ($(UNAME_S),Linux)
-	DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
-	OBJECTS += platform_linux
+ifeq ($(OS),Windows_NT)
+	DEFINES += -DWIN32_LEAN_AND_MEAN
+	OBJECTS += platform_windows
+	BINARY_EXTENSION = .exe
+else
+	UNAME_S := $(shell uname -s)
+	OBJECTS += platform_unix
+	ifeq ($(UNAME_S),Linux)
+		DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
+		OBJECTS += platform_linux
+	endif
+
+	ifeq ($(UNAME_S),Darwin)
+		OBJECTS += platform_macos
+	endif
 endif
 
-ifeq ($(UNAME_S),Darwin)
-	OBJECTS += platform_macos
-endif
 
 BUILD ?= debug
 
@@ -25,7 +34,7 @@ CMD_DIR = cmd
 CC ?= clang
 
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
-CMD_OUT = $(patsubst %.c.o, %, $(CMD_OBJECTS))
+CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
 OBJECTS += pane utils collections emulator text csi grid osc
@@ -60,7 +69,7 @@ $(OUT_DIR)/%.c.o: $(OBJECT_DIR)/%.c | $(OUT_DIR)
 $(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c | $(OUT_DIR)
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(OUT_DIR)/%: $(OUT_DIR)/%.c.o $(OBJECT_OUT) | $(OUT_DIR)
+$(OUT_DIR)/%$(BINARY_EXTENSION): $(OUT_DIR)/%.c.o $(OBJECT_OUT) | $(OUT_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 	$(STRIP) $@
 

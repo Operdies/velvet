@@ -5,17 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/fcntl.h>
-#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <platform.h>
 
-static inline void leave_alternate_screen(void);
-static inline void enter_alternate_screen(void);
-static inline void exit_raw_mode(void);
-static inline void enable_raw_mode(void);
-static inline void enable_focus_reporting(void);
-static inline void disable_focus_reporting(void);
 
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   constexpr int bufsize = 256;
@@ -107,89 +100,3 @@ void logmsg(char *fmt, ...) {
 }
 #endif
 
-struct termios original_terminfo;
-struct termios raw_term;
-struct winsize ws_current;
-
-void leave_alternate_screen(void) {
-  char buf[] = "\x1b[2J\x1b[H\x1b[?1049l";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-void enter_alternate_screen(void) {
-  char buf[] = "\x1b[?1049h\x1b[2J\x1b[H";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-void exit_raw_mode(void) {
-  char show_cursor[] = "\x1b[?25h";
-  write(STDOUT_FILENO, show_cursor, sizeof(show_cursor));
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
-}
-
-void enable_raw_mode(void) {
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
-    die("ioctl TIOCGWINSZ:");
-  }
-
-  // Save and configure raw terminal mode
-  if (tcgetattr(STDIN_FILENO, &original_terminfo) == -1) {
-    die("tcgetattr:");
-  }
-
-  raw_term = original_terminfo;
-  cfmakeraw(&raw_term);
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
-    die("tcsetattr:");
-  }
-}
-
-static void disable_line_wrapping(void) {
-  char *disable = "\x1b[?7l";
-  write(STDOUT_FILENO, disable, strlen(disable));
-}
-static void enable_line_wrapping(void) {
-  char *disable = "\x1b[?7h";
-  write(STDOUT_FILENO, disable, strlen(disable));
-}
-
-static void disable_focus_reporting(void) {
-  char buf[] = "\x1b[?1004l";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-static void enable_focus_reporting(void) {
-  char buf[] = "\x1b[?1004h";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-static void enable_bracketed_paste(void) {
-  char buf[] = "\x1b[?2004h";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-static void disable_bracketed_paste(void) {
-  char buf[] = "\x1b[?2004l";
-  write(STDOUT_FILENO, buf, sizeof(buf));
-}
-
-void terminal_setup(void) {
-  enter_alternate_screen();
-  enable_raw_mode();
-  disable_line_wrapping();
-  enable_focus_reporting();
-  enable_bracketed_paste();
-}
-void terminal_reset(void) {
-  disable_bracketed_paste();
-  disable_focus_reporting();
-  enable_line_wrapping();
-  exit_raw_mode();
-  leave_alternate_screen();
-}
-void set_nonblocking(int fd) {
-  int flags = fcntl(fd, F_GETFL);
-  if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    die("fcntl:");
-  }
-}
