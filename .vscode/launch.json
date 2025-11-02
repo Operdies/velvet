@@ -2,92 +2,42 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "attach to vv",
-      "type": "cppdbg",
-      "request": "attach",
-      "program": "${workspaceFolder}/bin/vv",
-      "MIMode": "lldb"
-    },
-    {
-      "name": "nvim quit",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
-      "args": [
-        "nvim --clean --cmd ':qa'"
-      ],
-      "stopAtEntry": false,
-      "cwd": "${fileDirname}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb"
-    },
-    {
-      "name": "Debug cat",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
-      "args": [
-        "cat"
-      ],
-      "stopAtEntry": false,
-      "cwd": "${fileDirname}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb"
-    },
-    {
       "name": "Debug zsh",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [
-        "zsh"
-      ],
-      "stopAtEntry": false,
+      "args": [ "zsh" ],
       "cwd": "${fileDirname}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb"
+      "preLaunchTask": "make all",
+      "console": "externalTerminal"
     },
     {
       "name": "Debug lazygit",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [
-        "lazygit"
-      ],
-      "stopAtEntry": false,
+      "args": [ "lazygit" ],
       "cwd": "${fileDirname}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb"
+      "preLaunchTask": "make all",
+      "console": "externalTerminal"
     },
     {
-      "name": "Debug vv",
+      "name": "nvim quit",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [
-        "nvim"
-      ],
-      "stopAtEntry": false,
+      "args": [ "nvim --clean --cmd ':qa'" ],
       "cwd": "${fileDirname}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb"
+      "preLaunchTask": "make all",
+      "console": "externalTerminal"
     },
     {
       "name": "Debug tests",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/test",
-      "stopAtEntry": false,
+      "preLaunchTask": "make all",
       "cwd": "${fileDirname}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb"
     }
   ]
 }
