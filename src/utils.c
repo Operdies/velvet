@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <platform.h>
 
+#define CSI "\x1b["
+
 
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   constexpr int bufsize = 256;
@@ -38,10 +40,12 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
 
   if (strcmp(buf, prevbuf) == 0) {
     repeat_count++;
-    fprintf(f, "\r%.*s (%d)", n_buf, buf, repeat_count);
+    // F: up one line, 2K: clear the line
+    fprintf(f, CSI "F" CSI "2K");
+    fprintf(f, "%.*s (%d)\n", n_buf, buf, repeat_count);
   } else {
     repeat_count = 1;
-    fprintf(f, "\n%.*s", n_buf, buf);
+    fprintf(f, "%.*s\n", n_buf, buf);
     memcpy(prevbuf, buf, n_buf + 1);
   }
   fflush(f);
