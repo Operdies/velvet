@@ -128,12 +128,13 @@ static bool csi_dispatch_sgr(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
-static bool csi_dispatch_cup(struct fsm *fsm, struct csi *csi) {
+static bool CUP(struct fsm *fsm, struct csi *csi) {
   int col = csi->params[1].primary ? csi->params[1].primary : 1;
   int row = csi->params[0].primary ? csi->params[0].primary : 1;
   grid_position_visual_cursor(fsm->active_grid, col - 1, row - 1);
   return true;
 }
+static bool HVP(struct fsm *fsm, struct csi *csi) { return CUP(fsm, csi); }
 
 // CSI Ps X
 static bool csi_dispatch_ech(struct fsm *fsm, struct csi *csi) {
@@ -145,7 +146,7 @@ static bool csi_dispatch_ech(struct fsm *fsm, struct csi *csi) {
 }
 
 // CSI Ps J
-static bool csi_dispatch_ed(struct fsm *fsm, struct csi *csi) {
+static bool ED(struct fsm *fsm, struct csi *csi) {
   struct grid *g = fsm->active_grid;
   int mode = csi->params[0].primary;
   struct raw_cursor start = g->cursor;
@@ -176,21 +177,31 @@ static bool csi_dispatch_ed(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
-// CUU, CUD, CUF, CUB
-static bool csi_dispatch_cux(struct fsm *fsm, struct csi *csi) {
+static bool CUU(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct grid *g = fsm->active_grid;
-  switch (csi->final) {
-  case 'A': grid_move_cursor(g, 0, -count); break; // up
-  case 'B': grid_move_cursor(g, 0, count); break;  // down
-  case 'C': grid_move_cursor(g, count, 0); break;  // right
-  case 'D': grid_move_cursor(g, -count, 0); break; // left
-  default: return csi_dispatch_todo(fsm, csi);
-  }
+  grid_move_cursor(fsm->active_grid, 0, -count);
   return true;
 }
 
-static bool csi_dispatch_el(struct fsm *fsm, struct csi *csi) {
+static bool CUD(struct fsm *fsm, struct csi *csi) {
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_move_cursor(fsm->active_grid, 0, count);
+  return true;
+}
+
+static bool CUF(struct fsm *fsm, struct csi *csi) {
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_move_cursor(fsm->active_grid, count, 0);
+  return true;
+}
+
+static bool CUB(struct fsm *fsm, struct csi *csi) {
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_move_cursor(fsm->active_grid, -count, 0);
+  return true;
+}
+
+static bool EL(struct fsm *fsm, struct csi *csi) {
   int mode = csi->params[0].primary;
   struct grid *g = fsm->active_grid;
   struct raw_cursor start = g->cursor;
@@ -225,12 +236,12 @@ static bool csi_dispatch_dch(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
-static bool csi_dispatch_ich(struct fsm *fsm, struct csi *csi) {
+static bool ICH(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   grid_insert_blanks_at_cursor(fsm->active_grid, count, fsm->cell.style);
   return true;
 }
-static bool csi_dispatch_cha(struct fsm *fsm, struct csi *csi) {
+static bool CHA(struct fsm *fsm, struct csi *csi) {
   int col = csi->params[0].primary ? csi->params[0].primary : 1;
   grid_position_cursor_column(fsm->active_grid, col - 1);
   return true;
@@ -251,7 +262,8 @@ static bool csi_dispatch_da1(struct fsm *fsm, struct csi *csi) {
   }
 }
 
-static bool csi_dispatch_rep(struct fsm *fsm, struct csi *csi) {
+// Repeat the preceding graphic character Ps times (REP).
+static bool REP(struct fsm *fsm, struct csi *csi) {
   struct grid *g = fsm->active_grid;
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   struct grid_cell repeat = fsm->cell;
@@ -268,7 +280,7 @@ static bool csi_dispatch_vpa(struct fsm *fsm, struct csi *csi) {
 }
 
 // Scroll Region
-static bool csi_dispatch_decstbm(struct fsm *fsm, struct csi *csi) {
+static bool DECSTBM(struct fsm *fsm, struct csi *csi) {
   int top, bottom;
   top = csi->params[0].primary;
   bottom = csi->params[1].primary;
@@ -296,9 +308,17 @@ static bool csi_dispatch_xtwinops(struct fsm *fsm, struct csi *csi) {
 }
 
 /* cursor preceding line */
-static bool csi_dispatch_cpl(struct fsm *fsm, struct csi *csi) {
+static bool CPL(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   grid_move_cursor(fsm->active_grid, 0, -count);
+  grid_position_cursor_column(fsm->active_grid, 0);
+  return true;
+}
+
+/* cursor next line */
+static bool CNL(struct fsm *fsm, struct csi *csi) {
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_move_cursor(fsm->active_grid, 0, count);
   grid_position_cursor_column(fsm->active_grid, 0);
   return true;
 }
@@ -307,26 +327,21 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   assert(csi->leading == 0);
   assert(csi->intermediate == 0);
   switch (csi->final) {
-  case '@': return csi_dispatch_ich(fsm, csi);
-  case 'A': return csi_dispatch_cux(fsm, csi);
-  case 'B': return csi_dispatch_cux(fsm, csi);
-  case 'C': return csi_dispatch_cux(fsm, csi);
-  case 'D': return csi_dispatch_cux(fsm, csi);
-  case 'F': return csi_dispatch_cpl(fsm, csi);
-  case 'G': return csi_dispatch_cha(fsm, csi);
-  case 'H': return csi_dispatch_cup(fsm, csi);
-  case 'J': return csi_dispatch_ed(fsm, csi);
-  case 'K': return csi_dispatch_el(fsm, csi);
+  case 'F': return CPL(fsm, csi);
+  case 'G': return CHA(fsm, csi);
+  case 'H': return CUP(fsm, csi);
+  case 'J': return ED(fsm, csi);
+  case 'K': return EL(fsm, csi);
   case 'L': return csi_dispatch_il(fsm, csi);
   case 'M': return csi_dispatch_dl(fsm, csi);
   case 'P': return csi_dispatch_dch(fsm, csi);
   case 'X': return csi_dispatch_ech(fsm, csi);
-  case 'b': return csi_dispatch_rep(fsm, csi);
+  case 'b': return REP(fsm, csi);
   case 'c': return csi_dispatch_da1(fsm, csi);
   case 'd': return csi_dispatch_vpa(fsm, csi);
-  case 'f': return csi_dispatch_cup(fsm, csi);
+  case 'f': return CUP(fsm, csi);
   case 'm': return csi_dispatch_sgr(fsm, csi);
-  case 'r': return csi_dispatch_decstbm(fsm, csi);
+  case 'r': return DECSTBM(fsm, csi);
   case 't': return csi_dispatch_xtwinops(fsm, csi);
   case 'h':
   case 'l': return csi_dispatch_set_mode(fsm, csi);
@@ -380,10 +395,14 @@ static bool csi_dispatch_leading(struct fsm *fsm, struct csi *csi) {
   }
 }
 
-bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
-  assert(csi->state == CSI_ACCEPT);
-  return csi_dispatch_leading(fsm, csi);
-}
+static bool SL(struct fsm *fsm, struct csi *csi) { return csi_dispatch_todo(fsm, csi); }
+static bool SR(struct fsm *fsm, struct csi *csi) { return csi_dispatch_todo(fsm, csi); }
+static bool CHT(struct fsm *fsm, struct csi *csi) { return csi_dispatch_todo(fsm, csi); }
+
+// "are these ancient escapes still in use??" -- Yes:
+// https://github.com/xtermjs/xterm.js/issues/3651
+static bool DECSED(struct fsm *fsm, struct csi *csi) { return csi_dispatch_todo(fsm, csi); }
+static bool DECSEL(struct fsm *fsm, struct csi *csi) { return csi_dispatch_todo(fsm, csi); }
 
 static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params) {
   // Special case when the 0 is omitted
@@ -618,3 +637,25 @@ int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
 #undef PARAMETER
 #undef ACCEPT
 #undef INTERMEDIATE
+
+bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
+  assert(csi->state == CSI_ACCEPT);
+
+  // convert the three byte values into a single u32 value
+#define KEY(leading, intermediate, final)                                                                              \
+  ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
+
+  // convert each CSI item from csi.def into a switch case
+#define CSI(leading, intermediate, final, dispatch, _)                                                                 \
+  case KEY(leading, intermediate, final): return dispatch(fsm, csi);
+
+#define SP ' '
+#define _ 0
+
+  switch (KEY(csi->leading, csi->intermediate, csi->final)) {
+#include "csi.def"
+  default: return csi_dispatch_todo(fsm, csi);
+  }
+
+  return csi_dispatch_leading(fsm, csi);
+}

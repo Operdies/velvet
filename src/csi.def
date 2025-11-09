@@ -1,0 +1,31 @@
+// This file should be included by a C source file which defines a macro called CSI
+// which accepts the following parameters
+// CSI(leading, intermediate, final, dispatch)
+
+// These descriptions are based on https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+
+#define SP ' '
+#define _ 0
+
+CSI(_,   _,  '@', ICH,    "Insert Ps (Blank) Character(s) (default = 1) (ICH).")
+CSI(_,   SP, '@', SL,     "Shift left Ps columns(s) (default = 1) (SL), ECMA-48.")
+CSI(_,   _,  'A', CUU,    "Cursor Up Ps Times (default = 1) (CUU).")
+CSI(_,   SP, 'A', SR,     "A Shift right Ps columns(s) (default = 1) (SR), ECMA-48.")
+CSI(_,   _,  'B', CUD,    "Cursor Down Ps Times (default = 1) (CUD).")
+CSI(_,   _,  'C', CUF,    "Cursor Forward Ps Times (default = 1) (CUF).")
+CSI(_,   _,  'D', CUB,    "Cursor Backward Ps Times (default = 1) (CUB).")
+CSI(_,   _,  'E', CNL,    "Cursor Next Line Ps Times (default = 1) (CNL).")
+CSI(_,   _,  'F', CPL,    "Cursor Preceding Line Ps Times (default = 1) (CPL).")
+CSI(_,   _,  'G', CHA,    "Cursor Character Absolute  [column] (default = [row,1]) (CHA).")
+CSI(_,   _,  'H', CUP,    "Cursor Position [row;column] (default = [1,1]) (CUP).")
+CSI(_,   _,  'I', CHT,    "Cursor Forward Tabulation Ps tab stops (default = 1) (CHT).")
+CSI(_,   _,  'J', ED,     "Erase in Display (ED), VT100.")
+CSI('?', _,  'J', DECSED, "Erase in Display (DECSED), VT220.")
+CSI(_,   _,  'K', EL,     "Erase in Line (EL), VT100.")
+CSI('?', _,  'K', DECSEL, "Erase in Line (DECSEL), VT220.")
+CSI(_,   _,  'f', HVP,    "Horizontal and Vertical Position [row;column] (default = [1,1]) (HVP).")
+
+#undef SP
+#undef _
+
+// vim: ft=c
