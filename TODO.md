@@ -42,6 +42,20 @@ the input pipeline is completely ad-hoc.
 tbh, just rely on tmux for sessions and persistence until this thing is
 actually stable
 
+socket control motivation: I recently thought of using tmux as an "external"
+terminal for nvim-dap if the nvim session is nested in a tmux session. The
+below snippet works flawlessly. Communicating with the controlling vv session
+is a must in order to implement this kind of integration.
+
+```lua
+if vim.fn.getenv("TMUX") ~= vim.NIL then
+  dap.defaults.fallback.external_terminal = {
+    command = 'tmux',
+    args = { 'split-window', '-d',  '-h',  '-l', '80' }
+  }
+end
+```
+
 * Implement query support for all modes
 
 Run it through the dispatcher?
@@ -57,6 +71,16 @@ which is not known is static enough that it can be hardcoded or read once and
 reused. It would be a great simplification to queue the response directly
 rather than bubbling it up
 
+* Graphics support
+
+Graphics comes in two flavors; 
+ - sixel -- not widely supported, and no plans to implement it in alacritty /
+ most mainstream terminals, except Windows Terminal.
+- kitty graphics -- considered superior to sixel as it allows efficiently
+specifying data sources and generally supports much more advanced features
+
+I have no interest in implementing sixel support if alacritty will not support it,
+which is likely never.
 
 * Status bar
 
