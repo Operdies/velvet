@@ -286,7 +286,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
   }
 
   // TODO: Implement timing mechanism for escapes.
-  // For now, flush flush before return to restore state machine to normal input mode
+  // For now, flush before return to restore state machine to normal input mode
   if (s == csi) {
     string_push_char(&writebuffer, 0x1b);
     string_push_char(&writebuffer, '[');
@@ -356,12 +356,12 @@ static void render_frame(struct string *draw_buffer) {
 
   if (!focused) focus_pane(clients);
   if (focused) move_cursor_to_pane(focused, draw_buffer);
-  if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, vt_show_cursor);
   if (focused && focused->fsm.options.cursor.style != current_cursor_style) {
     current_cursor_style = focused->fsm.options.cursor.style;
     int cur = current_cursor_style;
     string_push_csi(draw_buffer, &cur, 1, " q");
   }
+  if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, vt_show_cursor);
 
   string_flush(draw_buffer, STDOUT_FILENO, NULL);
 }
@@ -413,10 +413,9 @@ int main(int argc, char **argv) {
     nfds = 1 + i;
   }
 
-  static struct string draw_buffer = {0};
-  render_frame(&draw_buffer);
-
+  struct string draw_buffer = {0};
   char readbuffer[4096];
+
   for (; running && pane_count(clients);) {
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
@@ -494,7 +493,7 @@ int main(int argc, char **argv) {
         uint8_t buf[BUFSIZE];
         int n = 0, iterations = 0;
         while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
-          pane_write(p, buf, n);
+          pane_process_output(p, buf, n);
           iterations++;
         }
         if (n == -1) {

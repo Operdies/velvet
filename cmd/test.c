@@ -169,13 +169,13 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   {
     string_clear(&output);
     // 1. Write the input and verify the output
-    pane_write(&p, (uint8_t *)input, strlen(input));
+    pane_process_output(&p, (uint8_t *)input, strlen(input));
     pane_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
     assert_grid_equals(expected, p.fsm.active_grid, testname2);
 
     // 1.b Feed the render buffer back to the fsm and verify the output is clear
-    pane_write(&p, output.content, output.len);
+    pane_process_output(&p, output.content, output.len);
     string_clear(&output);
     pane_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
@@ -184,7 +184,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   {
     // 2. Clear the screen ensuring it is clean
     string_clear(&output);
-    pane_write(&p, (uint8_t *)reset, strlen(reset));
+    pane_process_output(&p, (uint8_t *)reset, strlen(reset));
     pane_draw(&p, false, &output);
     struct chargrid *cleared = make_chargrid(5, 8, (grid_5x8){0});
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
@@ -193,7 +193,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
     // See 1.b
-    pane_write(&p, output.content, output.len);
+    pane_process_output(&p, output.content, output.len);
     string_clear(&output);
     pane_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
@@ -204,14 +204,14 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   {
     // 3. Redraw the screen and verify output
     string_clear(&output);
-    pane_write(&p, (uint8_t *)reset, strlen(reset));
-    pane_write(&p, (uint8_t *)input, strlen(input));
+    pane_process_output(&p, (uint8_t *)reset, strlen(reset));
+    pane_process_output(&p, (uint8_t *)input, strlen(input));
     pane_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
     assert_grid_equals(expected, p.fsm.active_grid, testname2);
 
     // See 1.b
-    pane_write(&p, output.content, output.len);
+    pane_process_output(&p, output.content, output.len);
     string_clear(&output);
     pane_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
@@ -228,7 +228,7 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
 
   struct pane p = {.fsm = fsm_default};
   pane_resize(&p, bsmall);
-  pane_write(&p, (uint8_t *)input, strlen(input));
+  pane_process_output(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
   {
     string_clear(&output);
@@ -260,7 +260,7 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
 
   struct pane p = {.fsm = fsm_default};
   pane_resize(&p, blarge);
-  pane_write(&p, (uint8_t *)input, strlen(input));
+  pane_process_output(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
   {
     string_clear(&output);
@@ -470,7 +470,7 @@ static void test_input_output(void) {
                          "DDDDDDDD"
                          "EEEEEEEEE",
                          (grid_5x8){
-                             {"BBBBBBBB"},
+                             { "BBBBBBBB"},
                              {"CCCCCCCC"},
                              {"DDDDDDDD"},
                              {"EEEEEEEE"},

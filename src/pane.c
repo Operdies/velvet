@@ -339,13 +339,13 @@ void pane_draw_border(struct pane *p, struct string *b) {
   apply_style(&style_default, b);
 }
 
-void pane_write(struct pane *pane, uint8_t *buf, int n) {
-  // Pass current size information to fsm so it can determine if grids should
-  // be resized
+void pane_process_output(struct pane *pane, uint8_t *buf, int n) {
+  // Pass current size information to fsm so it can determine if grids should be resized
   pane->fsm.w = pane->rect.client.w;
   pane->fsm.h = pane->rect.client.h;
   if (pane->logfile > 0) write(pane->logfile, buf, n);
   fsm_process(&pane->fsm, buf, n);
+  string_flush(&pane->fsm.pending_output, pane->pty, nullptr);
 }
 
 static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
