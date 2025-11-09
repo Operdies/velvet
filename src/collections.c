@@ -76,7 +76,9 @@ void string_clear(struct string *str) {
 }
 
 void string_destroy(struct string *str) {
+  str->cap = str->len = 0;
   free(str->content);
+  str->content = nullptr;
 }
 
 bool string_flush(struct string *str, int fd, int *total_written) {
@@ -137,8 +139,7 @@ void vec_clear(struct vec *v) {
 }
 
 void vec_destroy(struct vec *v) {
-  v->length = 0;
-  v->capacity = 0;
+  v->length = v->capacity = 0;
   free(v->content);
   v->content = nullptr;
 }
