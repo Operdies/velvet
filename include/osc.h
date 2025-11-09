@@ -37,7 +37,7 @@ struct osc {
   enum osc_fsm_state state;
   enum osc_command ps;
   struct osc_pt pt;
-  uint8_t st[2];
+  const uint8_t *st; // either BEL (\a) or ST (\x1b\)
   struct osc_parameter parameters[OSC_MAX_PARAMS];
   int n_parameters;
 };

@@ -121,7 +121,7 @@ static bool csi_dispatch_dec_intermediate(struct fsm *fsm, struct csi *csi) {
 static bool csi_dispatch_sgr(struct fsm *fsm, struct csi *csi) {
   char *error = csi_apply_sgr_from_params(&fsm->cell, csi->n_params, csi->params);
   if (error) {
-    logmsg("Error parsing SGR: %.*s: %s", fsm->escape_buffer.n - 1, fsm->escape_buffer.buffer + 1, error);
+    logmsg("Error parsing SGR: %.*s: %s", fsm->command_buffer.len - 1, fsm->command_buffer.content + 1, error);
     return false;
   }
 
@@ -236,8 +236,19 @@ static bool csi_dispatch_cha(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
-static bool csi_dispatch_pda(struct fsm *fsm, struct csi *csi) {
-  return csi_dispatch_todo(fsm, csi);
+// primary device attributes
+static bool csi_dispatch_da1(struct fsm *fsm, struct csi *csi) {
+  switch (csi->params[0].primary) {
+    case 0: {
+      // Advertise VT102 support (same as alacritty)
+      // TODO: Figure out how to advertise exact supported features here.
+      // Step 0: find good documentation.
+      string_push(&fsm->pending_output, u8"\x1b[?6c");
+      return true;
+    } break;
+    default:
+      return csi_dispatch_todo(fsm, csi);
+  }
 }
 
 static bool csi_dispatch_rep(struct fsm *fsm, struct csi *csi) {
@@ -258,7 +269,18 @@ static bool csi_dispatch_vpa(struct fsm *fsm, struct csi *csi) {
 
 // Scroll Region
 static bool csi_dispatch_decstbm(struct fsm *fsm, struct csi *csi) {
-  return csi_dispatch_todo(fsm, csi);
+  int top, bottom;
+  top = csi->params[0].primary;
+  bottom = csi->params[1].primary;
+
+  if (bottom == 0) bottom = fsm->h;
+  if (top > 0) top--;
+  if (bottom > 0) bottom--;
+
+  TODO("Scroll Region %d;%d", top, bottom);
+
+  grid_set_scroll_region(fsm->active_grid, top, bottom);
+  return true;
 }
 
 static bool csi_dispatch_xtwinops(struct fsm *fsm, struct csi *csi) {
@@ -300,7 +322,7 @@ static bool csi_dispatch_final(struct fsm *fsm, struct csi *csi) {
   case 'P': return csi_dispatch_dch(fsm, csi);
   case 'X': return csi_dispatch_ech(fsm, csi);
   case 'b': return csi_dispatch_rep(fsm, csi);
-  case 'c': return csi_dispatch_pda(fsm, csi);
+  case 'c': return csi_dispatch_da1(fsm, csi);
   case 'd': return csi_dispatch_vpa(fsm, csi);
   case 'f': return csi_dispatch_cup(fsm, csi);
   case 'm': return csi_dispatch_sgr(fsm, csi);

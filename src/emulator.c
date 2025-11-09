@@ -30,12 +30,13 @@
 #define SO 0x0E
 #define ENQ 0x5
 
+// Unclear what this should be -- an escape sequence can contain clipboard information, which can
+// in be arbitrarily large, but in practice will probably not exceed a couple of kB
+// It can also contain a picture in sixel format, which can also be quite large.
+#define MAX_ESC_SEQ_LEN (1 << 16)
+
 static void escape_buffer_append(struct fsm *fsm, char ch) {
-  struct escape_sequence *seq = &fsm->escape_buffer;
-  if (seq->n < (int)sizeof(seq->buffer)) {
-    seq->buffer[seq->n] = ch;
-    seq->n++;
-  }
+  string_push_char(&fsm->command_buffer, ch);
 }
 
 void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
@@ -49,10 +50,10 @@ void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
 }
 
 static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
-  assert(fsm->escape_buffer.n > 1);
+  assert(fsm->command_buffer.len > 1);
   escape_buffer_append(fsm, ch);
 
-  int len = fsm->escape_buffer.n;
+  int len = fsm->command_buffer.len;
   if (len > 3) {
     fsm->state = fsm_ground;
     TODO("charset specifier too long! (rejected)");
@@ -66,7 +67,7 @@ static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
 
   fsm->state = fsm_ground;
 
-  uint8_t designate = fsm->escape_buffer.buffer[1];
+  uint8_t designate = fsm->command_buffer.content[1];
   int index = 0;
   if (designate == '(') { // G0
     index = 0;
@@ -90,7 +91,7 @@ static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
   } else {
     // unsupported charset -- fallback to ascii
     fsm->options.charset.charsets[index] = CHARSET_ASCII;
-    // TODO("Implement charset %.*s", len - 1, fsm->escape_buffer.buffer + 1);
+    // TODO("Implement charset %.*s", len - 1, fsm->command_buffer.content + 1);
     TODO("Implement charset %c", ch);
   }
 }
@@ -147,7 +148,7 @@ bool cell_equals(const struct grid_cell *const a, const struct grid_cell *const 
 
 static void ground_esc(struct fsm *fsm, uint8_t ch) {
   fsm->state = fsm_escape;
-  fsm->escape_buffer.n = 0;
+  string_clear(&fsm->command_buffer);
   escape_buffer_append(fsm, ch);
 }
 static void ground_noop(struct fsm *fsm, uint8_t ch) {
@@ -307,7 +308,7 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case '8': grid_restore_cursor(fsm->active_grid); break;
   case 'D': grid_advance_cursor_y(g, fsm->cell.style); break;                        // Index
   case 'M': grid_advance_cursor_y_reverse(fsm->active_grid, fsm->cell.style); break; // Reverse Index
-  case 'E':                                                         // Next Line
+  case 'E':                                                                          // Next Line
     grid_advance_cursor_y(g, fsm->cell.style);
     grid_carriage_return(g);
     break;
@@ -355,12 +356,12 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
 }
 
 void fsm_dispatch_dcs(struct fsm *fsm, uint8_t ch) {
-  char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
+  char prev = fsm->command_buffer.len > 1 ? fsm->command_buffer.content[fsm->command_buffer.len - 1] : 0;
   escape_buffer_append(fsm, ch);
   if (ch == '\\' && prev == ESC) {
     fsm->state = fsm_ground;
-    TODO("DCS sequence: '%.*s'", fsm->escape_buffer.n - 2, fsm->escape_buffer.buffer + 1);
-  } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
+    TODO("DCS sequence: '%.*s'", fsm->command_buffer.len - 2, fsm->command_buffer.content + 1);
+  } else if (fsm->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     fsm->state = fsm_ground;
     logmsg("Abort DCS: max length exceeded");
   }
@@ -369,18 +370,18 @@ void fsm_dispatch_dcs(struct fsm *fsm, uint8_t ch) {
 static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
   escape_buffer_append(fsm, ch);
   if (ch >= 0x40 && ch <= 0x7E) {
-    fsm->escape_buffer.buffer[fsm->escape_buffer.n] = 0;
+    fsm->command_buffer.content[fsm->command_buffer.len] = 0;
     struct csi csi = {0};
     // Strip the leading escape sequence
-    uint8_t *buffer = fsm->escape_buffer.buffer + 2;
-    int len = fsm->escape_buffer.n - 2;
+    uint8_t *buffer = fsm->command_buffer.content + 2;
+    int len = fsm->command_buffer.len - 2;
     int parsed = csi_parse(&csi, buffer, len);
     assert(len == parsed);
     if (csi.state == CSI_ACCEPT) {
       csi_dispatch(fsm, &csi);
     }
     fsm->state = fsm_ground;
-  } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
+  } else if (fsm->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     fsm->state = fsm_ground;
     logmsg("Abort CSI: max length exceeded");
   }
@@ -390,21 +391,21 @@ static void fsm_dispatch_osc(struct fsm *fsm, uint8_t ch) {
   // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands
   // OSC commands can be terminated with either BEL or ST. Although ST is preferred, we respond to the query with the
   // same terminator as the one we received for maximum compatibility
-  static const char *BEL = "\a";
-  static const char *ST = "\x1b\\";
-  char prev = fsm->escape_buffer.n > 1 ? fsm->escape_buffer.buffer[fsm->escape_buffer.n - 1] : 0;
+  static const uint8_t *BEL = u8"\a";
+  static const uint8_t *ST = u8"\x1b\\";
+  char prev = fsm->command_buffer.len > 1 ? fsm->command_buffer.content[fsm->command_buffer.len - 1] : 0;
   escape_buffer_append(fsm, ch);
   if (ch == BELL || (ch == '\\' && prev == ESC)) {
-    const char *st = ch == BELL ? BEL : ST;
-    uint8_t *buffer = fsm->escape_buffer.buffer + 2;
-    int len = fsm->escape_buffer.n - strlen(st) - 2;
+    const uint8_t *st = ch == BELL ? BEL : ST;
+    uint8_t *buffer = fsm->command_buffer.content + 2;
+    int len = fsm->command_buffer.len - strlen((char*)st) - 2;
     struct osc osc = {0};
     osc_parse(&osc, buffer, len, (uint8_t*)st);
     if (osc.state == OSC_ACCEPT) {
       osc_dispatch(fsm, &osc);
     }
     fsm->state = fsm_ground;
-  } else if (fsm->escape_buffer.n >= MAX_ESC_SEQ_LEN) {
+  } else if (fsm->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     logmsg("Abort OSC: max length exceeded");
     fsm->state = fsm_ground;
   }
@@ -449,4 +450,6 @@ void fsm_process(struct fsm *fsm, uint8_t *buf, int n) {
 void fsm_destroy(struct fsm *fsm) {
   grid_destroy(&fsm->primary);
   grid_destroy(&fsm->alternate);
+  string_destroy(&fsm->pending_output);
+  string_destroy(&fsm->command_buffer);
 }

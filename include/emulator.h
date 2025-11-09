@@ -3,6 +3,7 @@
 
 #include "grid.h"
 #include "text.h"
+#include "collections.h"
 #include <stdint.h>
 
 enum fsm_state {
@@ -16,15 +17,6 @@ enum fsm_state {
   fsm_spc,
   fsm_pct,
   fsm_charset,
-};
-
-// NOTE: This can be tweaked, but we should not go below 2000. This is a
-// defacto-ish limit for URLs (OSC 8). Another example of a long escape sequence
-// is clipboards which can also get arbitrarily large.
-#define MAX_ESC_SEQ_LEN 4096
-struct escape_sequence {
-  uint8_t buffer[MAX_ESC_SEQ_LEN];
-  int n;
 };
 
 struct modifier_options {
@@ -183,12 +175,13 @@ struct fsm {
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
    * Used whenever a new character is emitted */
   struct grid_cell cell;
-  struct escape_sequence escape_buffer;
   struct emulator_options options;
   struct grid primary;
   struct grid alternate;
   /* pointer to either primary or alternate */
   struct grid *active_grid;
+  struct string pending_output;
+  struct string command_buffer;
 };
 
 static const struct emulator_options emulator_options_default = {

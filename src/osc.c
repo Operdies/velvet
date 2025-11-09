@@ -11,10 +11,14 @@ static bool osc_dispatch_todo(struct fsm *fsm, struct osc *osc) {
 }
 
 static bool osc_dispatch_background_color(struct fsm *fsm, struct osc *osc) {
-  return osc_dispatch_todo(fsm, osc);
+  string_push(&fsm->pending_output, u8"\x1b]11;rgb:0000/0000/0000");
+  string_push(&fsm->pending_output, osc->st);
+  return true;
 }
+
 static bool osc_dispatch_hyperlink(struct fsm *fsm, struct osc *osc) {
-  return osc_dispatch_todo(fsm, osc);
+  TODO("OSC hyperlink %d %.*s", osc->ps, osc->pt.len, osc->pt.text);
+  return false;
 }
 
 bool osc_dispatch(struct fsm *fsm, struct osc *osc) {
@@ -79,10 +83,7 @@ static int osc_parse_parameters(struct osc *o, const uint8_t *buffer, int len) {
 // the client expects.
 int osc_parse(struct osc *o, const uint8_t *buffer, int len, const uint8_t *st) {
   int ps = 0;
-  {
-    int n_st = 0;
-    for (; st[n_st]; n_st++) o->st[n_st] = st[n_st];
-  }
+  o->st = st;
 
   int i = 0;
   for (; i < len && isdigit(buffer[i]); i++) {

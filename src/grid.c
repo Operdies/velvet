@@ -263,8 +263,7 @@ void grid_initialize(struct grid *g, int w, int h) {
   g->cells = ecalloc(w * h, sizeof(*g->cells));
   g->h = h;
   g->w = w;
-  g->scroll_top = 0;
-  g->scroll_bottom = h;
+  grid_set_scroll_region(g, 0, h - 1);
 
   struct grid_cell empty_cell = { .style = style_default, .symbol = utf8_blank };
   for (int i = 0; i < h; i++) {
