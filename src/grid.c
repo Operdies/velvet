@@ -185,6 +185,13 @@ void grid_restore_cursor(struct grid *g) {
 }
 
 void grid_save_cursor(struct grid *g) {
+  // TODO: This is incorrect. This should save:
+  // * cursor position
+  // * graphic rendition
+  // * character set shift state
+  // * state of wrap flag
+  // * state of origin mode
+  // * state of selective erase
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
   g->saved_cursor = g->cursor;
