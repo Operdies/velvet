@@ -202,7 +202,10 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
       current_load += this_load;
       string_push_int(outbuffer, p->primary);
       for (int j = 0; j < p->n_sub; j++) {
-        string_push_char(outbuffer, ':');
+        // I would prefer to properly use ':' to split subparameters here, but it appears that 
+        // some terminal emulators do not properly implement this. For compatibility, 
+        // use ';' as a separator instead.
+        string_push_char(outbuffer, ';');
         string_push_int(outbuffer, p->sub[j]);
       }
       string_push_char(outbuffer, ';');
