@@ -37,12 +37,25 @@
 
 void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
   assert(g == &fsm->primary || g == &fsm->alternate);
+  bool grid_changed = false;
   if (fsm->active_grid != g) {
+    grid_changed = true;
     fsm->active_grid = g;
     for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
   }
   bool reflow_content = fsm->active_grid == &fsm->primary;
   grid_resize_if_needed(fsm->active_grid, fsm->w, fsm->h, reflow_content);
+
+  if (grid_changed && g == &fsm->alternate) {
+    // TODO: when scrollback is introduced, the scrollback buffer
+    // should be accessible from the alternate screen, but new lines should
+    // not be appended; the `m` rows in the alternate screen should be reused.
+    // Leaving the alternate screen discards the `m` rows
+    g->cursor = fsm->primary.cursor;
+    struct raw_cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
+    struct raw_cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
+    grid_erase_between_cursors(g, start, end, style_default);
+  }
 }
 
 static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
