@@ -200,6 +200,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     assert_grid_equals(cleared, p.fsm.active_grid, outer_test_name);
 
     assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
+    free(cleared);
   }
   {
     // 3. Redraw the screen and verify output
@@ -217,6 +218,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
     assert_grid_equals(expected, p.fsm.active_grid, testname2);
   }
+  free(expected);
   string_destroy(&output);
   pane_destroy(&p);
 }
@@ -701,6 +703,11 @@ void test_csi_parsing(void) {
       u8"38;2;100;100;100m",
       (struct csi){
           .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
+  test_csi_testcase(
+      "RGB Legacy Syntax 2",
+      u8"48;2;118;159;240;38;2;235;160;172m",
+      (struct csi){
+          .final = 'm', .n_params = 2, .state = CSI_ACCEPT, .params = {{.primary = 48, .sub = {2, 118, 159, 240}}, {.primary = 38, .sub = {2, 235, 160, 172}}}});
 }
 
 void test_osc(void) {
