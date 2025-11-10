@@ -35,10 +35,6 @@
 // It can also contain a picture in sixel format, which can also be quite large.
 #define MAX_ESC_SEQ_LEN (1 << 16)
 
-static void escape_buffer_append(struct fsm *fsm, char ch) {
-  string_push_char(&fsm->command_buffer, ch);
-}
-
 void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
   assert(g == &fsm->primary || g == &fsm->alternate);
   if (fsm->active_grid != g) {
@@ -51,7 +47,7 @@ void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
 
 static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
   assert(fsm->command_buffer.len > 1);
-  escape_buffer_append(fsm, ch);
+  string_push_char(&fsm->command_buffer, ch);
 
   int len = fsm->command_buffer.len;
   if (len > 3) {
@@ -149,7 +145,7 @@ bool cell_equals(const struct grid_cell *const a, const struct grid_cell *const 
 static void ground_esc(struct fsm *fsm, uint8_t ch) {
   fsm->state = fsm_escape;
   string_clear(&fsm->command_buffer);
-  escape_buffer_append(fsm, ch);
+  string_push_char(&fsm->command_buffer, ch);
 }
 static void ground_noop(struct fsm *fsm, uint8_t ch) {
   (void)fsm, (void)ch;
@@ -294,7 +290,7 @@ static void fsm_full_reset(struct fsm *fsm) {
 }
 
 static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
-  escape_buffer_append(fsm, ch);
+  string_push_char(&fsm->command_buffer, ch);
   fsm->state = fsm_ground;
   struct grid *g = fsm->active_grid;
   switch (ch) {
@@ -357,7 +353,7 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
 
 void fsm_dispatch_dcs(struct fsm *fsm, uint8_t ch) {
   char prev = fsm->command_buffer.len > 1 ? fsm->command_buffer.content[fsm->command_buffer.len - 1] : 0;
-  escape_buffer_append(fsm, ch);
+  string_push_char(&fsm->command_buffer, ch);
   if (ch == '\\' && prev == ESC) {
     fsm->state = fsm_ground;
     TODO("DCS sequence: '%.*s'", fsm->command_buffer.len - 2, fsm->command_buffer.content + 1);
@@ -368,7 +364,7 @@ void fsm_dispatch_dcs(struct fsm *fsm, uint8_t ch) {
 }
 
 static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
-  escape_buffer_append(fsm, ch);
+  string_push_char(&fsm->command_buffer, ch);
   if (ch >= 0x40 && ch <= 0x7E) {
     fsm->command_buffer.content[fsm->command_buffer.len] = 0;
     struct csi csi = {0};
@@ -394,7 +390,7 @@ static void fsm_dispatch_osc(struct fsm *fsm, uint8_t ch) {
   static const uint8_t *BEL = u8"\a";
   static const uint8_t *ST = u8"\x1b\\";
   char prev = fsm->command_buffer.len > 1 ? fsm->command_buffer.content[fsm->command_buffer.len - 1] : 0;
-  escape_buffer_append(fsm, ch);
+  string_push_char(&fsm->command_buffer, ch);
   if (ch == BELL || (ch == '\\' && prev == ESC)) {
     const uint8_t *st = ch == BELL ? BEL : ST;
     uint8_t *buffer = fsm->command_buffer.content + 2;
