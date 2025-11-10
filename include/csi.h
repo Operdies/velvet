@@ -21,13 +21,11 @@ struct csi_param {
 
 struct csi {
   enum csi_fsm_state state;
-  struct {
-    struct csi_param params[CSI_MAX_PARAMS];
-    int n_params;
-    uint8_t leading;
-    uint8_t intermediate;
-    uint8_t final;
-  };
+  struct csi_param params[CSI_MAX_PARAMS];
+  int n_params;
+  uint8_t leading;
+  uint8_t intermediate;
+  uint8_t final;
 };
 
 int csi_parse(struct csi *c, const uint8_t *buffer, int len);
