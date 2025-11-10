@@ -102,7 +102,7 @@ struct grid {
   /* scroll region is local to the grid and is not persisted when the window /
    * pane is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
-  struct grid_cell *cells; // cells[w*h]
+  struct grid_cell *_cells; // cells[w*h]
   struct grid_row *rows;   // rows[h]
   struct raw_cursor cursor;
   struct raw_cursor saved_cursor;

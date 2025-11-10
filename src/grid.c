@@ -1,8 +1,9 @@
-#include "grid.h"
 #include "collections.h"
 #include "text.h"
 #include "utils.h"
 #include <stdlib.h>
+#define PRIVATE
+#include "grid.h"
 
 #define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
 
@@ -106,14 +107,14 @@ static void grid_shift_lines_reverse(struct grid *g, int n, struct grid_cell_sty
   int cell = 0;
   // As long as cell + shift is within the grid, copy forward
   for (cell = cells_after_point - 1; cell >= shift; cell--) {
-    struct grid_cell *dst = &g->cells[(cell + point) % total_cells_in_grid];
-    struct grid_cell *src = &g->cells[(cell + point - shift) % total_cells_in_grid];
+    struct grid_cell *dst = &g->_cells[(cell + point) % total_cells_in_grid];
+    struct grid_cell *src = &g->_cells[(cell + point - shift) % total_cells_in_grid];
     *dst = *src;
   }
 
   // Now clear the first n lines
   for (cell = 0; cell < shift; cell++) {
-    struct grid_cell *dst = &g->cells[(cell + point) % total_cells_in_grid];
+    struct grid_cell *dst = &g->_cells[(cell + point) % total_cells_in_grid];
     *dst = template;
   }
 
@@ -141,14 +142,14 @@ void grid_shift_lines(struct grid *g, int n, struct grid_cell_style style) {
   int cell = 0;
   // As long as cell + shift is within the bounds of the grid, copy back
   for (; (cell + shift) < cells_after_point; cell++) {
-    struct grid_cell *dst = &g->cells[(cell + point) % total_cells_in_grid];
-    struct grid_cell *src = &g->cells[(cell + point + shift) % total_cells_in_grid];
+    struct grid_cell *dst = &g->_cells[(cell + point) % total_cells_in_grid];
+    struct grid_cell *src = &g->_cells[(cell + point + shift) % total_cells_in_grid];
     *dst = *src;
   }
 
   // If cell + shift is out of range of the grid, clear the cell
   for (; cell < cells_after_point; cell++) {
-    struct grid_cell *dst = &g->cells[(cell + point) % total_cells_in_grid];
+    struct grid_cell *dst = &g->_cells[(cell + point) % total_cells_in_grid];
     *dst = template;
   }
 
@@ -254,7 +255,7 @@ void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
 /* Ensure the grid is able contain the specified number of cells, potentially realloacting it and copying the previous
  * content */
 void grid_resize_if_needed(struct grid *g, int w, int h, bool wrap) {
-  if (!g->cells) {
+  if (!g->_cells) {
     grid_initialize(g, w, h);
   } else if (g->h != h || g->w != w) {
     struct grid new = {.w = w, .h = h};
@@ -267,16 +268,16 @@ void grid_resize_if_needed(struct grid *g, int w, int h, bool wrap) {
 
 void grid_initialize(struct grid *g, int w, int h) {
   g->rows = ecalloc(h, sizeof(*g->rows));
-  g->cells = ecalloc(w * h, sizeof(*g->cells));
+  g->_cells = ecalloc(w * h, sizeof(*g->_cells));
   g->h = h;
   g->w = w;
   grid_set_scroll_region(g, 0, h - 1);
 
   struct grid_cell empty_cell = { .style = style_default, .symbol = utf8_blank };
   for (int i = 0; i < h; i++) {
-    g->rows[i] = (struct grid_row){.cells = &g->cells[i * w], .dirty = true};
+    g->rows[i] = (struct grid_row){.cells = &g->_cells[i * w], .dirty = true};
     for (int j = 0; j < w; j++) {
-      g->cells[i * w + j] = empty_cell;
+      g->_cells[i * w + j] = empty_cell;
     }
   }
 }
@@ -349,9 +350,9 @@ void grid_carriage_return(struct grid *g) {
   grid_position_cursor_column(g, 0);
 }
 void grid_destroy(struct grid *grid) {
-  free(grid->cells);
+  free(grid->_cells);
   free(grid->rows);
-  grid->cells = NULL;
+  grid->_cells = NULL;
   grid->rows = NULL;
 }
 /* copy to content from one grid to another. This is a naive resizing implementation which just re-inserts everything
@@ -391,6 +392,7 @@ void grid_backspace(struct grid *g) {
 }
 
 void grid_full_reset(struct grid *g) {
+  assert(g); assert(g->rows);
   struct grid_row *row = grid_row(g);
   row->end_of_line = false;
   struct raw_cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
