@@ -1,5 +1,4 @@
 #include "csi.h"
-#include "emulator.h"
 #include "utils.h"
 #include <ctype.h>
 
@@ -123,17 +122,12 @@ int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
                                     : CSI_REJECT;
     } break;
     case CSI_LEADING: {
-      char intermediate = ch;
+      c->leading = ch;
       ch = buffer[++i];
       c->state = PARAMETER(ch)      ? CSI_PARAMETER
                  : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
                  : ACCEPT(ch)       ? CSI_ACCEPT
                                     : CSI_REJECT;
-      if (c->state == CSI_ACCEPT) {
-        c->intermediate = intermediate;
-      } else {
-        c->leading = intermediate;
-      }
     } break;
     case CSI_INTERMEDIATE: {
       c->intermediate = ch;

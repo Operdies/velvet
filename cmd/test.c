@@ -708,6 +708,21 @@ void test_csi_parsing(void) {
       u8"48;2;118;159;240;38;2;235;160;172m",
       (struct csi){
           .final = 'm', .n_params = 2, .state = CSI_ACCEPT, .params = {{.primary = 48, .sub = {2, 118, 159, 240}}, {.primary = 38, .sub = {2, 235, 160, 172}}}});
+  test_csi_testcase(
+    "Test leading / intermediate parsing 1",
+    u8">c",
+    (struct csi) {
+      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 1 });
+  test_csi_testcase(
+    "Test leading / intermediate parsing 1",
+    u8">?c",
+    (struct csi) {
+      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .intermediate = '?' });
+  test_csi_testcase(
+    "Test leading / intermediate parsing 1",
+    u8"4?c",
+    (struct csi) {
+      .leading = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
 }
 
 void test_osc(void) {
