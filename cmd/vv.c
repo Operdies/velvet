@@ -115,7 +115,7 @@ static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
     focused = pane;
     // set cursor position within the pane
     struct grid *g = pane->fsm.active_grid;
-    struct raw_cursor *c = &g->cursor;
+    struct cursor *c = &g->cursor;
     int lineno = 1 + pane->rect.client.y + (c->row - g->offset + g->h) % g->h;
     int columnno = 1 + pane->rect.client.x + c->col;
     string_push_csi(drawbuffer, (int[]){lineno, columnno}, 2, "H");

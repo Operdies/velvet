@@ -208,11 +208,11 @@ static bool csi_dispatch_omitted(struct fsm *fsm, struct csi *csi) {
   return false;
 }
 
-static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_param *params) {
+static char *csi_apply_sgr_from_params(struct grid_cell_style *style, int n, struct csi_param *params) {
   // Special case when the 0 is omitted
   if (n == 0) {
-    c->style.attr = 0;
-    c->style.bg = c->style.fg = color_default;
+    style->attr = 0;
+    style->bg = style->fg = color_default;
     return NULL;
   }
 
@@ -220,8 +220,8 @@ static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_pa
     struct csi_param *attribute = &params[i];
 
     if (attribute->primary == 0) {
-      c->style.attr = 0;
-      c->style.bg = c->style.fg = color_default;
+      style->attr = 0;
+      style->bg = style->fg = color_default;
     } else if (attribute->primary <= 9) {
       uint32_t enable[] = {
           0,
@@ -235,9 +235,9 @@ static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_pa
           ATTR_CONCEAL,
           ATTR_CROSSED_OUT,
       };
-      c->style.attr |= enable[attribute->primary];
+      style->attr |= enable[attribute->primary];
     } else if (attribute->primary == 21) {
-      c->style.attr |= ATTR_UNDERLINE_DOUBLE;
+      style->attr |= ATTR_UNDERLINE_DOUBLE;
     } else if (attribute->primary >= 22 && attribute->primary <= 28) {
       uint32_t disable[] = {
           [2] = (ATTR_BOLD | ATTR_FAINT),
@@ -249,9 +249,9 @@ static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_pa
           [8] = ATTR_CONCEAL,
           [9] = ATTR_CROSSED_OUT,
       };
-      c->style.attr &= ~disable[attribute->primary % 10];
+      style->attr &= ~disable[attribute->primary % 10];
     } else if (attribute->primary >= 30 && attribute->primary <= 49) {
-      struct color *target = attribute->primary >= 40 ? &c->style.bg : &c->style.fg;
+      struct color *target = attribute->primary >= 40 ? &style->bg : &style->fg;
       int color = attribute->primary % 10;
       if (color == 8) {
         int type = attribute->sub[0];
@@ -271,10 +271,10 @@ static char *csi_apply_sgr_from_params(struct grid_cell *c, int n, struct csi_pa
       }
     } else if (attribute->primary >= 90 && attribute->primary <= 97) {
       int bright = 8 + attribute->primary - 90;
-      c->style.fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+      style->fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
     } else if (attribute->primary >= 100 && attribute->primary <= 107) {
       int bright = 8 + attribute->primary - 100;
-      c->style.bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+      style->bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
     }
   }
   return NULL;
@@ -302,7 +302,7 @@ bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
 
 static bool ICH(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_insert_blanks_at_cursor(fsm->active_grid, count, fsm->cell.style);
+  grid_insert_blanks_at_cursor(fsm->active_grid, count);
   return true;
 }
 
@@ -362,8 +362,8 @@ bool CHT(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("CHT"); 
 static bool ED(struct fsm *fsm, struct csi *csi) {
   struct grid *g = fsm->active_grid;
   int mode = csi->params[0].primary;
-  struct raw_cursor start = g->cursor;
-  struct raw_cursor end = g->cursor;
+  struct cursor start = g->cursor;
+  struct cursor end = g->cursor;
 
   switch (mode) {
   case 1: // Erase from start of screen to cursor
@@ -385,7 +385,7 @@ static bool ED(struct fsm *fsm, struct csi *csi) {
     break;
   }
 
-  grid_erase_between_cursors(g, start, end, fsm->cell.style);
+  grid_erase_between_cursors(g, start, end);
 
   return true;
 }
@@ -395,8 +395,8 @@ bool DECSED(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("DECS
 static bool EL(struct fsm *fsm, struct csi *csi) {
   int mode = csi->params[0].primary;
   struct grid *g = fsm->active_grid;
-  struct raw_cursor start = g->cursor;
-  struct raw_cursor end = g->cursor;
+  struct cursor start = g->cursor;
+  struct cursor end = g->cursor;
   switch (mode) {
   case 0: end.col = grid_end(g); break;     // erase from cursor to end
   case 1: start.col = grid_start(g); break; // erase from start to cursor
@@ -406,7 +406,7 @@ static bool EL(struct fsm *fsm, struct csi *csi) {
     break;
   default: return csi_dispatch_todo(fsm, csi);
   }
-  grid_erase_between_cursors(g, start, end, fsm->cell.style);
+  grid_erase_between_cursors(g, start, end);
   return true;
 }
 
@@ -414,19 +414,19 @@ bool DECSEL(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("DECS
 
 static bool IL(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_lines(fsm->active_grid, -count, fsm->cell.style);
+  grid_shift_lines(fsm->active_grid, -count);
   return true;
 }
 
 static bool DL(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_lines(fsm->active_grid, count, fsm->cell.style);
+  grid_shift_lines(fsm->active_grid, count);
   return true;
 }
 
 static bool DCH(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_from_cursor(fsm->active_grid, count, fsm->cell.style);
+  grid_shift_from_cursor(fsm->active_grid, count);
   return true;
 }
 
@@ -438,9 +438,9 @@ bool DECST8C(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("DEC
 
 static bool ECH(struct fsm *fsm, struct csi *csi) {
   int clear = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct raw_cursor start = fsm->active_grid->cursor;
-  struct raw_cursor end = {.row = start.row, .col = start.col + clear};
-  grid_erase_between_cursors(fsm->active_grid, start, end, fsm->cell.style);
+  struct cursor start = fsm->active_grid->cursor;
+  struct cursor end = {.row = start.row, .col = start.col + clear};
+  grid_erase_between_cursors(fsm->active_grid, start, end);
   return true;
 }
 
@@ -453,7 +453,7 @@ bool HPR(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("HPR"); 
 static bool REP(struct fsm *fsm, struct csi *csi) {
   struct grid *g = fsm->active_grid;
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct grid_cell repeat = fsm->cell;
+  struct grid_cell repeat = { .symbol = fsm->previous_symbol, .style = g->cursor.brush };
   if (utf8_equals(&repeat.symbol, &utf8_zero)) repeat.symbol = utf8_blank;
   for (int i = 0; i < count; i++) {
     grid_insert(g, repeat, fsm->options.auto_wrap_mode);
@@ -500,6 +500,7 @@ static bool SM(struct fsm *fsm, struct csi *csi) {
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
   assert(on || off);
+
   switch (csi->params[0].primary) {
   case 2: TODO("Keyboard Action Mode (KAM)"); return false;
   case 4: TODO("Insert Mode (IRM)"); return false;
@@ -512,8 +513,12 @@ static bool SM(struct fsm *fsm, struct csi *csi) {
 static bool DECSET(struct fsm *fsm, struct csi *csi) {
   struct mouse_options *m = &fsm->options.mouse;
   bool on = csi->final == 'h';
+  bool off = csi->final == 'l';
+  assert(on || off);
+
   switch (csi->params[0].primary) {
   case 1: fsm->options.application_mode = on; break;
+  case 6: fsm->options.origin_mode = on; break;
   case 7: fsm->options.auto_wrap_mode = on; break;
   case 12: TODO("Set Blinking Cursor"); break;
   case 25: fsm->options.cursor.visible = on; break;
@@ -526,11 +531,11 @@ static bool DECSET(struct fsm *fsm, struct csi *csi) {
   case 1000: m->mouse_tracking = on; break;
   case 1002: m->cell_motion = on; break;
   case 1003: m->all_motion = on; break;
-  case 1006: m->sgr = on; break;
+  case 1005: TODO("UTF8 Mouse Mode"); /* m->utf8_mouse_mode = on; */ break;
+  case 1006: TODO("SGR Mouse Mode"); /* m->sgr_mouse_mode = on; */ break;
   case 1007: m->alternate_scroll_mode = on; break;
   case 1016: OMITTED("SGR Pixel Mouse Tracking"); return false;
   case 1001: OMITTED("Hilite mouse tracking"); return false;
-  case 1005: OMITTED("UTF8 mouse tracking"); return false;
   case 1015: OMITTED("urxvt mouse mode"); return false;
   case 9: OMITTED("X10 mouse reporting"); return false;
   default: return csi_dispatch_todo(fsm, csi);
@@ -547,7 +552,7 @@ static bool RM(struct fsm *fsm, struct csi *csi) { return SM(fsm, csi); }
 static bool DECRST(struct fsm *fsm, struct csi *csi) { return DECSET(fsm, csi); }
 
 static bool SGR(struct fsm *fsm, struct csi *csi) {
-  char *error = csi_apply_sgr_from_params(&fsm->cell, csi->n_params, csi->params);
+  char *error = csi_apply_sgr_from_params(&fsm->active_grid->cursor.brush, csi->n_params, csi->params);
   if (error) {
     logmsg("Error parsing SGR: %.*s: %s", fsm->command_buffer.len - 1, fsm->command_buffer.content + 1, error);
     return false;

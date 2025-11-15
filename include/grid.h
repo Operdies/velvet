@@ -78,8 +78,6 @@ struct grid_cell {
 struct grid_row {
   // Track newline locations to support rewrapping
   bool newline;
-  // Indicates that this line is wrapped and should be cleared when written
-  bool end_of_line;
   // Track whether or not the line starting with this cell is dirty (should be
   // re-rendered)
   bool dirty;
@@ -90,9 +88,17 @@ struct grid_row {
 };
 
 // 0-indexed grid coordinates. This cursor points at a raw cell
-struct raw_cursor {
+struct cursor {
   int col, row;
+  /* cell containing state relevant for new characters (fg, bg, attributes, ...)
+   * Used whenever a new character is emitted */
+  struct grid_cell_style brush;
+  /* flag set when a character is written at the final column.
+   * Cleared after wrapping, or when the cursor is moved.
+   * */
+  bool wrap_pending;
 };
+
 
 struct grid {
   int w, h;
@@ -104,36 +110,33 @@ struct grid {
   int scroll_top, scroll_bottom;
   struct grid_cell *_cells; // cells[w*h]
   struct grid_row *rows;   // rows[h]
-  struct raw_cursor cursor;
-  struct raw_cursor saved_cursor;
+  struct cursor cursor;
+  struct cursor saved_cursor;
 };
 
-void grid_advance_cursor_y(struct grid *g, struct grid_cell_style style);
-void grid_advance_cursor_y_reverse(struct grid *g,
-                                   struct grid_cell_style style);
+void grid_advance_cursor_y(struct grid *g);
+void grid_advance_cursor_y_reverse(struct grid *g);
 void grid_backspace(struct grid *g);
 void grid_carriage_return(struct grid *g);
 void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,
                bool wrap);
 void grid_destroy(struct grid *grid);
-void grid_erase_between_cursors(struct grid *g, struct raw_cursor from,
-                                struct raw_cursor to,
-                                struct grid_cell_style style);
+void grid_erase_between_cursors(struct grid *g, struct cursor from,
+                                struct cursor to);
 void grid_full_reset(struct grid *g);
 void grid_initialize(struct grid *g, int w, int h);
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
-void grid_insert_blanks_at_cursor(struct grid *g, int n,
-                                  struct grid_cell_style style);
+void grid_insert_blanks_at_cursor(struct grid *g, int n);
 void grid_move_cursor(struct grid *g, int x, int y);
-void grid_newline(struct grid *g, bool carriage, struct grid_cell_style style);
+void grid_newline(struct grid *g, bool carriage);
 void grid_resize_if_needed(struct grid *g, int w, int h, bool reflow);
 void grid_cursor_position(struct grid *g, int x);
 void grid_position_cursor_row(struct grid *g, int y);
 void grid_position_cursor_column(struct grid *g, int x);
 void grid_set_scroll_region(struct grid *g, int top, int bottom);
 void grid_position_visual_cursor(struct grid *g, int x, int y);
-void grid_shift_from_cursor(struct grid *g, int n, struct grid_cell_style style);
-void grid_shift_lines(struct grid *g, int n, struct grid_cell_style style);
+void grid_shift_from_cursor(struct grid *g, int n);
+void grid_shift_lines(struct grid *g, int n);
 void grid_restore_cursor(struct grid *g);
 void grid_save_cursor(struct grid *g);
 #endif /*  GRID_H */

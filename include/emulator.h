@@ -130,8 +130,8 @@ struct mouse_options {
   bool hilite_mouse_tracking; // 1001
   bool cell_motion;           // 1002
   bool all_motion;            // 1003
-  bool utf8;                  // 1005
-  bool sgr;                   // 1006
+  bool utf8_mouse_mode;       // 1005
+  bool sgr_mouse_mode;        // 1006
   bool alternate_scroll_mode; // 1007
   bool urxv5;                 // 1015
   bool sgr_pixel;             // 1016
@@ -158,6 +158,8 @@ struct emulator_options {
   /* when focus reporting is enabled, send ESC [ I and ESC [ O when the pane
    * receives / loses keyboard focus */
   bool focus_reporting;
+  /* DECOM */
+  bool origin_mode;
 
   struct modifier_options modifiers;
   struct charset_options charset;
@@ -172,9 +174,6 @@ struct fsm {
   int w, h;
   /* the current state of the machine */
   enum fsm_state state;
-  /* cell containing state relevant for new characters (fg, bg, attributes, ...)
-   * Used whenever a new character is emitted */
-  struct grid_cell cell;
   struct emulator_options options;
   struct grid primary;
   struct grid alternate;
@@ -182,6 +181,8 @@ struct fsm {
   struct grid *active_grid;
   struct string pending_output;
   struct string command_buffer;
+  struct utf8 pending_symbol;
+  struct utf8 previous_symbol;
 };
 
 static const struct emulator_options emulator_options_default = {
@@ -191,7 +192,6 @@ static const struct emulator_options emulator_options_default = {
 
 static const struct fsm fsm_default = {
     .options = emulator_options_default,
-    .cell = {.style = style_default},
 };
 
 void fsm_process(struct fsm *fsm, unsigned char *buf, int n);

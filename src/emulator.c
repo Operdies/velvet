@@ -52,9 +52,9 @@ void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
     // not be appended; the `m` rows in the alternate screen should be reused.
     // Leaving the alternate screen discards the `m` rows
     g->cursor = fsm->primary.cursor;
-    struct raw_cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
-    struct raw_cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
-    grid_erase_between_cursors(g, start, end, style_default);
+    struct cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
+    struct cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
+    grid_erase_between_cursors(g, start, end);
   }
 }
 
@@ -180,7 +180,7 @@ static void ground_backspace(struct fsm *fsm, uint8_t ch) {
 }
 static void ground_vtab(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_advance_cursor_y(fsm->active_grid, fsm->cell.style);
+  grid_advance_cursor_y(fsm->active_grid);
 }
 
 static void ground_tab(struct fsm *fsm, uint8_t ch) {
@@ -189,8 +189,7 @@ static void ground_tab(struct fsm *fsm, uint8_t ch) {
   int x = fsm->active_grid->cursor.col;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
-  struct grid_cell c = fsm->cell;
-  c.symbol = utf8_blank;
+  struct grid_cell c = { .style = fsm->active_grid->cursor.brush, .symbol = utf8_blank };
   grid_insert(fsm->active_grid, c, fsm->options.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
     grid_insert(fsm->active_grid, c, false);
@@ -204,19 +203,21 @@ static void ground_bell(struct fsm *fsm, uint8_t ch) {
 
 static void ground_newline(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_newline(fsm->active_grid, fsm->options.auto_return, fsm->cell.style);
+  grid_newline(fsm->active_grid, fsm->options.auto_return);
 }
 
 static void ground_accept(struct fsm *fsm) {
   struct utf8 clear = {0};
   struct grid *g = fsm->active_grid;
-  grid_insert(g, fsm->cell, fsm->options.auto_wrap_mode);
-  fsm->cell.symbol = clear;
+  struct grid_cell c = { .symbol = fsm->pending_symbol, .style = fsm->active_grid->cursor.brush };
+  grid_insert(g, c, fsm->options.auto_wrap_mode);
+  fsm->previous_symbol = fsm->pending_symbol;
+  fsm->pending_symbol = clear;
 }
 static void ground_reject(struct fsm *fsm) {
   struct utf8 clear = {0};
-  struct utf8 copy = fsm->cell.symbol;
-  fsm->cell.symbol = clear;
+  struct utf8 copy = fsm->pending_symbol;
+  fsm->pending_symbol = clear;
   // If we are rejecting this symbol, we should
   // Render a replacement char for this sequence (U+FFFD)
   struct grid_cell replacement = {.symbol = utf8_fffd};
@@ -251,13 +252,13 @@ static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
   case ENQ: ground_enquiry(fsm, ch); break;
   default: {
     if (ch >= 0xC2 && ch <= 0xF4) { // UTF8 leading byte range
-      utf8_push(&fsm->cell.symbol, ch);
+      utf8_push(&fsm->pending_symbol, ch);
       fsm->state = fsm_utf8;
     } else if (ch <= 0x7F) { // ASCII range
-      utf8_push(&fsm->cell.symbol, ch);
+      utf8_push(&fsm->pending_symbol, ch);
       ground_accept(fsm);
     } else { // Outside of ascii range, and not part of a valid utf8 sequence -- error symbol
-      fsm->cell.symbol = utf8_fffd;
+      fsm->pending_symbol = utf8_fffd;
       ground_accept(fsm);
     }
   } break;
@@ -265,9 +266,9 @@ static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
 }
 
 static void fsm_dispatch_utf8(struct fsm *fsm, uint8_t ch) {
-  utf8_push(&fsm->cell.symbol, ch);
-  uint8_t len = utf8_length(fsm->cell.symbol);
-  uint8_t exp = utf8_expected_length(fsm->cell.symbol.utf8[0]);
+  utf8_push(&fsm->pending_symbol, ch);
+  uint8_t len = utf8_length(fsm->pending_symbol);
+  uint8_t exp = utf8_expected_length(fsm->pending_symbol.utf8[0]);
   assert(exp <= 4);
 
   if (exp <= 1) {
@@ -296,7 +297,6 @@ static void fsm_dispatch_utf8(struct fsm *fsm, uint8_t ch) {
 }
 
 static void fsm_full_reset(struct fsm *fsm) {
-  fsm->cell.style = style_default;
   fsm->options = emulator_options_default;
   fsm->active_grid = &fsm->primary;
   grid_full_reset(&fsm->primary);
@@ -315,10 +315,10 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case DCS: fsm->state = fsm_dcs; break;
   case '7': grid_save_cursor(fsm->active_grid); break;
   case '8': grid_restore_cursor(fsm->active_grid); break;
-  case 'D': grid_advance_cursor_y(g, fsm->cell.style); break;                        // Index
-  case 'M': grid_advance_cursor_y_reverse(fsm->active_grid, fsm->cell.style); break; // Reverse Index
+  case 'D': grid_advance_cursor_y(g); break;                        // Index
+  case 'M': grid_advance_cursor_y_reverse(fsm->active_grid); break; // Reverse Index
   case 'E':                                                                          // Next Line
-    grid_advance_cursor_y(g, fsm->cell.style);
+    grid_advance_cursor_y(g);
     grid_carriage_return(g);
     break;
   case 'H': TODO("Horizontal Tab Set"); break;
@@ -328,7 +328,7 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case '=': fsm->options.application_keypad_mode = true; break;
   case '>': fsm->options.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
-    utf8_push(&fsm->cell.symbol, ESC);
+    utf8_push(&fsm->pending_symbol, ESC);
     ground_accept(fsm);
     break;
   case 'F': grid_move_cursor(g, 0, g->h); break;
