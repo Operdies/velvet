@@ -221,13 +221,12 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   fsm_ensure_grid_initialized(&pane->fsm);
 
   struct grid *g = pane->fsm.active_grid;
-  for (int i0 = 0; i0 < g->h; i0++) {
-    int row = (i0 + g->offset) % g->h;
+  for (int row = 0; row < g->h; row++) {
     struct grid_row *grid_row = &g->rows[row];
     if (!redraw && !grid_row->dirty) continue;
     grid_row->dirty = false;
     int columnno = 1 + pane->rect.client.x;
-    int lineno = 1 + pane->rect.client.y + i0;
+    int lineno = 1 + pane->rect.client.y + row;
     int line_length = MIN(grid_row->n_significant, g->w);
     string_push_csi(outbuffer, (int[]){lineno, columnno}, 2, "H");
 

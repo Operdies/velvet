@@ -10,8 +10,8 @@
 #define grid_column(g) (g->cursor.col)
 #define grid_line(g) (g->cursor.row)
 #define grid_row(g) (&g->rows[g->cursor.row])
-#define grid_virtual_top(g) (g->offset)
-#define grid_virtual_bottom(g) ((g->h + g->offset - 1) % g->h)
+#define grid_virtual_top(g) (0) // (g->offset)
+#define grid_virtual_bottom(g) (g->h - 1) // ((g->h + g->offset - 1) % g->h)
 
 #define PACK __attribute__((packed))
 
@@ -102,9 +102,6 @@ struct cursor {
 
 struct grid {
   int w, h;
-  // line offset to the first line of the cell (e.g. cells[offset * w] is the
-  // first cell in the grid)
-  int offset;
   /* scroll region is local to the grid and is not persisted when the window /
    * pane is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
@@ -128,15 +125,16 @@ void grid_initialize(struct grid *g, int w, int h);
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
 void grid_insert_blanks_at_cursor(struct grid *g, int n);
 void grid_move_cursor(struct grid *g, int x, int y);
+void grid_position_cursor(struct grid *g, int x, int y);
 void grid_newline(struct grid *g, bool carriage);
 void grid_resize_if_needed(struct grid *g, int w, int h, bool reflow);
-void grid_cursor_position(struct grid *g, int x);
 void grid_position_cursor_row(struct grid *g, int y);
 void grid_position_cursor_column(struct grid *g, int x);
 void grid_set_scroll_region(struct grid *g, int top, int bottom);
 void grid_position_visual_cursor(struct grid *g, int x, int y);
 void grid_shift_from_cursor(struct grid *g, int n);
-void grid_shift_lines(struct grid *g, int n);
+void grid_insert_lines(struct grid *g, int n);
+void grid_delete_lines(struct grid *g, int n);
 void grid_restore_cursor(struct grid *g);
 void grid_save_cursor(struct grid *g);
 #endif /*  GRID_H */

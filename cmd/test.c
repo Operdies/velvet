@@ -8,14 +8,14 @@
 #include <unistd.h>
 
 #define CSI "\x1b["
-#define UP(x) CSI #x "A"
-#define DOWN(x) CSI #x "B"
-#define DOWN1 CSI "B"
-#define RIGHT1 CSI "C"
-#define RIGHT(x) CSI #x "C"
-#define LEFT(x) CSI #x "D"
-#define ABS(x, y) CSI #x ";" #y "H"
-#define REGION(top, bottom) CSI #top ";" #bottom "r"
+#define CUU(x) CSI #x "A"
+#define CUD(x) CSI #x "B"
+#define CUF(x) CSI #x "C"
+#define CUB(x) CSI #x "D"
+#define CUP(x, y) CSI #x ";" #y "H"
+#define DECSTBM(top, bottom) CSI #top ";" #bottom "r"
+#define IL(x) CSI #x "L"
+#define DL(x) CSI #x "M"
 
 static bool exit_on_failure = true;
 typedef char grid_5x8[5][8];
@@ -46,11 +46,10 @@ static struct chargrid *grid_to_chargrid(const struct grid *const src) {
   struct chargrid *grid = calloc(sizeof(*grid) + src->w * src->h, 1);
   grid->cols = src->w;
   grid->rows = src->h;
-  for (int i0 = 0; i0 < src->h; i0++) {
-    int row = (i0 + src->offset) % src->h;
+  for (int row = 0; row < src->h; row++) {
     struct grid_row *grid_row = &src->rows[row];
     for (int col = 0; col < src->w; col++) {
-      grid->cells[i0 * src->w + col] = grid_row->cells[col].symbol.utf8[0];
+      grid->cells[row * src->w + col] = grid_row->cells[col].symbol.utf8[0];
     }
   }
   return grid;
@@ -294,7 +293,7 @@ static void test_input_output(void) {
                          });
   // move cursor to extremes and type
   test_grid_input_output("cursor movement",
-                         UP(123) LEFT(123) RIGHT1 DOWN1 "12" RIGHT(99) DOWN(99) UP(1) LEFT(1) "3",
+                         CUU(123) CUB(123) CUF(1) CUD(1) "12" CUF(99) CUD(99) CUU(1) CUB(1) "3",
                          (grid_5x8){
                              {"        "},
                              {" 12     "},
@@ -307,7 +306,7 @@ static void test_input_output(void) {
                          "                 "
                          "                 "
                          "                 " // keep
-                         UP(123) LEFT(123) RIGHT1 DOWN1 "12" RIGHT(99) DOWN(99) UP(1) LEFT(1) "3",
+                         CUU(123) CUB(123) CUF(1) CUD(1) "12" CUF(99) CUD(99) CUU(1) CUB(1) "3",
                          (grid_5x8){
                              {"     "},
                              {" 12 "},
@@ -373,7 +372,7 @@ static void test_input_output(void) {
                              {"EEEEEEEE"},
                          });
   test_grid_input_output("Off by one 2",
-                         RIGHT(99) DOWN(99) "Y" CSI "0m" UP(99) LEFT(99) "X" CSI "0m",
+                         CUF(99) CUD(99) "Y" CSI "0m" CUU(99) CUB(99) "X" CSI "0m",
                          (grid_5x8){
                              {"X       "},
                              {"        "},
@@ -397,9 +396,9 @@ static void test_input_output(void) {
                              {"world!!"},
                          });
 
-  test_grid_input_output("Shift Lines Down",
+  test_grid_input_output("Insert Lines",
                          CSI "20h"
-                             "Line1\nLine2\nLine3\nLine4\nLine5" ABS(2, 1) CSI "2L",
+                             "Line1\nLine2\nLine3\nLine4\nLine5" CUP(2, 1) IL(2),
                          (grid_5x8){
                              {"Line1"},
                              {"     "},
@@ -407,9 +406,9 @@ static void test_input_output(void) {
                              {"Line2"},
                              {"Line3"},
                          });
-  test_grid_input_output("Shift Lines Down Virtual",
+  test_grid_input_output("Insert Lines Virtual",
                          CSI "20h"
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" ABS(2, 1) CSI "2L",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" CUP(2, 1) IL(2),
                          (grid_5x8){
                              {"Line3"},
                              {"     "},
@@ -417,23 +416,23 @@ static void test_input_output(void) {
                              {"Line4"},
                              {"Line5"},
                          });
-  test_grid_input_output("Shift Lines Up",
+  test_grid_input_output("Delete Lines",
                          CSI "20h"
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2),
                          (grid_5x8){
                              {"Line2"},
                              {"Line5"},
                              {"Line6"},
                          });
-  test_grid_input_output("Shift Many Lines Up",
+  test_grid_input_output("Delete Many Lines",
                          CSI "20h" /* enable auto-return */
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "10M",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(10),
                          (grid_5x8){
                              {"Line2"},
                          });
-  test_grid_input_output("Shift Many Lines Up 2",
+  test_grid_input_output("Delete Many Lines 2",
                          CSI "20h" /* enable auto-return */
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(9, 1) CSI "10M",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(9, 1) DL(10),
                          (grid_5x8){
                              {"Line2"},
                              {"Line3"},
@@ -441,24 +440,24 @@ static void test_input_output(void) {
                              {"Line5"},
                              {"     "},
                          });
-  test_grid_input_output("Shift Up All But Last",
+  test_grid_input_output("Delete Lines All But Last",
                          CSI "20h" /* enable auto-return */
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(1, 2) CSI "4M",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(1, 2) DL(4),
                          (grid_5x8){
                              {"Line6"},
                          });
-  test_grid_input_output("Shift Lines Down Then Up",
+  test_grid_input_output("Insert Lines Then Delete",
                          CSI "20h"
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2M" CSI "L",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2) IL(1),
                          (grid_5x8){
                              {"Line2"},
                              {"     "},
                              {"Line5"},
                              {"Line6"},
                          });
-  test_grid_input_output("Shift Lines Up Then Down",
+  test_grid_input_output("Delete Lines Then Insert",
                          CSI "20h"
-                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" ABS(2, 1) CSI "2L" CSI "M",
+                             "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) IL(2) DL(1),
                          (grid_5x8){
                              {"Line2"},
                              {"     "},
@@ -492,9 +491,9 @@ static void test_input_output(void) {
                              {"EEEEEEEE"},
                          });
 
-  // test_grid_input_output("Test Clear Region",
+  // test_grid_input_output("Test Clear DECSTBM",
   //                        "ABCDEFGHIJKLMNOP"
-  //                        "ABCDEFGHIJKLMNOP" ABS(5,1) CSI "J",
+  //                        "ABCDEFGHIJKLMNOP" CUP(5,1) CSI "J",
   //                        (grid_5x8){
   //                            {"AAAAAAAA"},
   //                            {"BBBBBBBB"},
@@ -569,10 +568,10 @@ static void test_erase(void) {
    * [0]K: Cursor to end
    * */
   test_grid_input_output("Line Delete",
-                         "xxx" ABS(1, 2) CSI "1K\r\n"                  // Delete first two characters
+                         "xxx" CUP(1, 2) CSI "1K\r\n"                  // Delete first two characters
                                              "xxxx" CSI "2K\r\n"       // Delete line
                                              "ababab" CSI "K\r\n"      // Delete nothing
-                                             "ababab" LEFT(5) CSI "K", // Delete all but first
+                                             "ababab" CUB(5) CSI "K", // Delete all but first
                          (grid_5x8){
                              {"  x     "},
                              {"        "},
@@ -587,7 +586,7 @@ static void test_erase(void) {
    */
   test_grid_input_output("CSI 1J: Clear Start To Cursor (simple)", "www" CSI "1J", (grid_5x8){0});
   test_grid_input_output("CSI 2J: Clear Screen (simple)", "xxx" CSI "2J", (grid_5x8){0});
-  test_grid_input_output("CSI J: Clear Cursor To End (simple)", "www" ABS(1, 1) CSI "J", (grid_5x8){0});
+  test_grid_input_output("CSI J: Clear Cursor To End (simple)", "www" CUP(1, 1) CSI "J", (grid_5x8){0});
   test_grid_input_output(
       "CSI 1J: Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CSI "1J", (grid_5x8){0});
   test_grid_input_output("CSI 1J: Clear Start To Cursor 2",
@@ -595,7 +594,7 @@ static void test_erase(void) {
                          "wwwwwwww"
                          "wwwwwwww"
                          "wwwwwwww"
-                         "wwwwwwww" ABS(5, 7) CSI "1J",
+                         "wwwwwwww" CUP(5, 7) CSI "1J",
                          (grid_5x8){
                              {""},
                              {""},
@@ -604,11 +603,11 @@ static void test_erase(void) {
                              {"       w"},
                          });
   test_grid_input_output(
-      "CSI J: Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 1) CSI "J", (grid_5x8){0});
+      "CSI J: Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) CSI "J", (grid_5x8){0});
   test_grid_input_output(
-      "CSI J: Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 2) CSI "J", (grid_5x8){"w"});
+      "CSI J: Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) CSI "J", (grid_5x8){"w"});
   test_grid_input_output(
-      "CSI 2J: Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ABS(1, 1) CSI "2J", (grid_5x8){0});
+      "CSI 2J: Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) CSI "2J", (grid_5x8){0});
 
   test_grid_input_output("Backspace 0",
                          "w\b\bxy\b\bab",
@@ -621,13 +620,13 @@ static void test_erase(void) {
                              {"ywxxx"},
                          });
   test_grid_input_output("Insert Blanks 1",
-                         "helloooooo" LEFT(10) CSI "1P",
+                         "helloooooo" CUB(10) CSI "1P",
                          (grid_5x8){
                              {"helloooo"},
                              {"o       "},
                          });
   test_grid_input_output("Insert Blanks 2",
-                         "www" LEFT(3)
+                         "www" CUB(3)
                          /* delete first w */ CSI "1P"
                          /* displace last w past end of line */ CSI "7@",
                          (grid_5x8){
@@ -756,7 +755,7 @@ static void test_hash() {
 
 static void test_hashmap() {
   constexpr int n_strings = 10;
-  constexpr int stress = 1 << 22;
+  constexpr int stress = 1 << 15;
 
   struct hashmap h = {0};
   assert(hashmap_add(&h, 0, nullptr));

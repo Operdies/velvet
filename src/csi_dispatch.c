@@ -353,7 +353,7 @@ bool CHA(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("CHA"); 
 static bool CUP(struct fsm *fsm, struct csi *csi) {
   int col = csi->params[1].primary ? csi->params[1].primary : 1;
   int row = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_position_visual_cursor(fsm->active_grid, col - 1, row - 1);
+  grid_position_cursor(fsm->active_grid, col - 1, row - 1);
   return true;
 }
 
@@ -414,13 +414,15 @@ bool DECSEL(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("DECS
 
 static bool IL(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_lines(fsm->active_grid, -count);
+  grid_insert_lines(fsm->active_grid, count);
+  grid_position_cursor_column(fsm->active_grid, 0);
   return true;
 }
 
 static bool DL(struct fsm *fsm, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_lines(fsm->active_grid, count);
+  grid_delete_lines(fsm->active_grid, count);
+  grid_position_cursor_column(fsm->active_grid, 0);
   return true;
 }
 

@@ -110,11 +110,11 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
   // and can be applied immediately
   fsm->state = fsm_ground;
   switch (ch) {
-  case '3':
-  case '4': TODO("DEC double height"); break;
-  case '5': TODO("DEC single-width line"); break;
-  case '6': TODO("DEC double-width line"); break;
-  case '8': {
+  case '3': OMITTED("DECDHL / TOP"); break;
+  case '4': OMITTED("DECDHL / BOTTOM"); break;
+  case '5': OMITTED("DECSWL"); break;
+  case '6': OMITTED("DECDWL"); break;
+  case '8': { /* DECALN */
     struct grid_cell E = {.symbol = {.utf8 = {'E'}}};
     struct grid *g = fsm->active_grid;
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
@@ -127,7 +127,7 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
     }
   } break;
   default: {
-    TODO("Unknown # command: %x", ch);
+    logmsg("Unknown ESC # command: %x", ch);
   } break;
   }
 }
@@ -331,7 +331,6 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
     utf8_push(&fsm->pending_symbol, ESC);
     ground_accept(fsm);
     break;
-  case 'F': grid_move_cursor(g, 0, g->h); break;
   case 'c': fsm_full_reset(fsm); break;
   case '(': // designate G0, VT100
   case ')': // designate G1, VT100
