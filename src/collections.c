@@ -35,16 +35,13 @@ void string_push_int(struct string *str, int n) {
   string_push_slice(str, buf + idx, max - idx);
 }
 
-void string_push_csi(struct string *str, int *ps, int n, const char *const c) {
+void string_push_csi(struct string *str, struct int_slice params, const char *const c) {
   const uint8_t *csi = u8"\x1b[";
   string_push(str, csi);
-  for (int i = 0; i < n; i++) {
-    assert(ps[i] >= 0);
-    if (ps[i]) string_push_int(str, ps[i]);
-    string_push_char(str, ';');
-  }
-  if (n) { /* overwrite the last semicolon */
-    str->len--;
+  for (int i = 0; i < params.n; i++) {
+    assert(params.content[i] >= 0);
+    if (i) string_push_char(str, ';');
+    if (params.content[i]) string_push_int(str, params.content[i]);
   }
   string_push(str, (uint8_t *)c);
 }

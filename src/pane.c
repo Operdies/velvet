@@ -228,7 +228,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     int columnno = 1 + pane->rect.client.x;
     int lineno = 1 + pane->rect.client.y + row;
     int line_length = MIN(grid_row->n_significant, g->w);
-    string_push_csi(outbuffer, (int[]){lineno, columnno}, 2, "H");
+    string_push_csi(outbuffer, INT_SLICE(lineno, columnno), "H");
 
     for (int col = 0; col < line_length; col++) {
       struct grid_cell *c = &grid_row->cells[col];
@@ -240,7 +240,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     int num_blanks = g->w - line_length;
     if (num_blanks > 4) { /* CSI Pn X -- Erase Pn characters after cursor */
       apply_style(&style_default, outbuffer);
-      string_push_csi(outbuffer, &num_blanks, 1, "X");
+      string_push_csi(outbuffer, INT_SLICE(num_blanks), "X");
     } else { /* Micro optimization. Insert spaces if the number of blanks is very small */
       apply_style(&style_default, outbuffer);
       string_memset(outbuffer, ' ', num_blanks);
@@ -310,7 +310,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
   apply_style(p->has_focus ? &focused_style : &normal_style, b);
 
   // top left corner
-  string_push_csi(b, (int[]){top, left}, 2, "H");
+  string_push_csi(b, INT_SLICE(top, left), "H");
   string_push(b, topleft_corner);
   // top line
   {
@@ -326,14 +326,14 @@ void pane_draw_border(struct pane *p, struct string *b) {
     string_push(b, topright_corner);
   }
   if (!leftmost) {
-    string_push_csi(b, (int[]){top, left + 1}, 2, "H");
+    string_push_csi(b, INT_SLICE(top, left + 1), "H");
     for (int row = top + 1; row < bottom - 1; row++) {
       string_push(b, pipe);
     }
     string_push(b, bottomleftcorner);
   }
   if (has_right_neighbor) {
-    string_push_csi(b, (int[]){top, right + 1}, 2, "H");
+    string_push_csi(b, INT_SLICE(top, right + 1), "H");
     for (int row = top + 1; row < bottom; row++) {
       string_push(b, pipe);
     }

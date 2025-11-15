@@ -17,6 +17,7 @@ static bool osc_dispatch_background_color(struct fsm *fsm, struct osc *osc) {
 }
 
 static bool osc_dispatch_hyperlink(struct fsm *fsm, struct osc *osc) {
+  (void)fsm;
   TODO("OSC hyperlink %d %.*s", osc->ps, osc->pt.len, osc->pt.text);
   return false;
 }

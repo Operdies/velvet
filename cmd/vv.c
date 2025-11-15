@@ -118,7 +118,7 @@ static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
     struct cursor *c = &g->cursor;
     int lineno = 1 + pane->rect.client.y + c->row;
     int columnno = 1 + pane->rect.client.x + c->col;
-    string_push_csi(drawbuffer, (int[]){lineno, columnno}, 2, "H");
+    string_push_csi(drawbuffer, INT_SLICE(lineno, columnno), "H");
   }
 }
 
@@ -358,8 +358,7 @@ static void render_frame(struct string *draw_buffer) {
   if (focused) move_cursor_to_pane(focused, draw_buffer);
   if (focused && focused->fsm.options.cursor.style != current_cursor_style) {
     current_cursor_style = focused->fsm.options.cursor.style;
-    int cur = current_cursor_style;
-    string_push_csi(draw_buffer, &cur, 1, " q");
+    string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
   }
   if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, vt_show_cursor);
 

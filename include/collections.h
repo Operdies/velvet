@@ -13,6 +13,14 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+#define INT_SLICE(...) ((struct int_slice) { .n = LENGTH(((int[]){ __VA_ARGS__ })), .content = ((int[]){ __VA_ARGS__ }) })
+
+struct int_slice {
+  int *content;
+  int n;
+};
+
 struct string {
   uint8_t *content;
   size_t len, cap;
@@ -93,7 +101,7 @@ void string_clear(struct string *str);
 void string_destroy(struct string *str);
 /* flush the string instance to the specified file descriptor */
 bool string_flush(struct string *str, int fd, int *total_written);
-void string_push_csi(struct string *str, int *ps, int n, const char *const c);
+void string_push_csi(struct string *str, struct int_slice params, const char *const c);
 
 void vec_push(struct vec *v, const void *elem);
 void vec_clear(struct vec *v);

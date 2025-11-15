@@ -15,8 +15,6 @@ void terminal_reset(void);
 void set_nonblocking(int fd);
 extern struct winsize ws_current;
 
-#define LENGTH(x) (sizeof(x) / sizeof((x)[0]))
-
 #ifdef RELEASE_BUILD
 
 // Experimental performance optimization?
