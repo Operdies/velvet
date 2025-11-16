@@ -170,23 +170,26 @@ static void zoom(void) {
 
 static bool running = true;
 
-bool handle_keybinds(uint8_t ch, struct string *draw_buffer) {
-  switch (ch) {
-  case CTRL('N'):
+static void new_client() {
     if (pane_count(clients) < 6) {
       struct pane *new = calloc(1, sizeof(*new));
       // TODO: Start user's preferred shell
       new->process = strdup("zsh");
       new->next = clients;
-      memcpy(&new->fsm, &fsm_default, sizeof(fsm_default));
+      new->fsm = fsm_default;
       clients = new;
       arrange(ws_current, clients);
       pane_start(new);
       focus_pane(new);
-      string_push(draw_buffer, u8"\x1b[2J");
     } else {
       logmsg("Too many panes. Spawn request ignored.");
     }
+}
+
+bool handle_keybinds(uint8_t ch) {
+  switch (ch) {
+  case CTRL('N'):
+      new_client();
     return true;
   case CTRL('G'): zoom(); return true;
   case CTRL('A'):
@@ -244,7 +247,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     case normal: {
       if (ch == 0x1b) {
         s = esc;
-      } else if (handle_keybinds(ch, draw_buffer)) {
+      } else if (handle_keybinds(ch)) {
         continue;
       } else {
         string_push_char(&writebuffer, ch);
