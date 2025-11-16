@@ -168,8 +168,6 @@ struct emulator_options {
 };
 
 /* finite state machine for parsing ansi escape codes */
-// TODO: Reset scroll region of alternate screen when it is entered
-// TODO: Reset scroll region of all grids when pane is resized
 struct fsm {
   int w, h;
   /* the current state of the machine */

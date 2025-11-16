@@ -149,6 +149,10 @@ void grid_save_cursor(struct grid *g) {
   g->saved_cursor = g->cursor;
 }
 
+/* TODO: Respect scroll region. 
+ * Inside scroll region: scroll scroll region
+ * Outside scroll region: Do nothing
+ */
 void grid_advance_cursor_y(struct grid *g) {
   struct cursor *c = &g->cursor;
   c->row = c->row + 1;
@@ -218,7 +222,7 @@ void grid_initialize(struct grid *g, int w, int h) {
   g->_cells = ecalloc(w * h, sizeof(*g->_cells));
   g->h = h;
   g->w = w;
-  grid_set_scroll_region(g, 0, h - 1);
+  grid_reset_scroll_region(g);
 
   struct grid_cell empty_cell = { .style = style_default, .symbol = utf8_blank };
   for (int i = 0; i < h; i++) {
@@ -227,6 +231,10 @@ void grid_initialize(struct grid *g, int w, int h) {
       g->_cells[i * w + j] = empty_cell;
     }
   }
+}
+
+void grid_reset_scroll_region(struct grid *g) {
+  grid_set_scroll_region(g, 0, g->h - 1);
 }
 
 void grid_set_scroll_region(struct grid *g, int top, int bottom) {

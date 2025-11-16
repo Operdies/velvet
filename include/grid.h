@@ -130,6 +130,7 @@ void grid_newline(struct grid *g, bool carriage);
 void grid_resize_if_needed(struct grid *g, int w, int h, bool reflow);
 void grid_position_cursor_row(struct grid *g, int y);
 void grid_position_cursor_column(struct grid *g, int x);
+void grid_reset_scroll_region(struct grid *g);
 void grid_set_scroll_region(struct grid *g, int top, int bottom);
 void grid_position_visual_cursor(struct grid *g, int x, int y);
 void grid_shift_from_cursor(struct grid *g, int n);

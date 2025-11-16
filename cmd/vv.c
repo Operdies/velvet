@@ -296,6 +296,9 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     s = normal;
   }
 
+  // TODO: Push this to focused->fsm->pending_output instead?
+  // To consolidate pty writing and avoid blocking the main loop / other clients
+  // in cases where a single client is slow
   write(focused->pty, writebuffer.content, writebuffer.len);
 }
 
@@ -451,19 +454,10 @@ int main(int argc, char **argv) {
 
     if (fds[0].revents & POLL_IN) {
       polled--;
-      // handle stdin
       int n = read(STDIN_FILENO, readbuffer, sizeof(readbuffer));
-      if (n == -1) {
-        if (errno == EINTR) {
-          // This can happen if the process was signaled during the read
-          continue;
-        }
-        die("read stdin:");
-      }
-      if (n == 0) {
-        break;
-      }
-      handle_stdin(readbuffer, n, &draw_buffer);
+      if (n == -1 && errno != EINTR) die("read stdin:"); // EINTR: a signal was raised during the read
+      if (n == 0) break;                                 // EOF
+      if (n > 0) handle_stdin(readbuffer, n, &draw_buffer);
     }
 
     for (int i = 1; polled > 0 && i < nfds; i++) {
@@ -495,12 +489,10 @@ int main(int argc, char **argv) {
           pane_process_output(p, buf, n);
           iterations++;
         }
-        if (n == -1) {
-          if (errno == EAGAIN || errno == EINTR) continue;
+        if (n == -1 && errno != EAGAIN && errno != EINTR) {
           die("read %s:", p->process);
         } else if (n == 0) {
-          // pipe closed -- destroy pane
-          pane_remove_and_destroy(p);
+          pane_remove_and_destroy(p); // pipe closed -- destroy pane
         }
       }
     }
@@ -512,6 +504,8 @@ int main(int argc, char **argv) {
       for (struct pane *p = clients; p; p = p->next) {
         fds[i + 1].fd = p->pty;
         fds[i + 1].events = POLL_IN;
+        // if we have pending writes, monitor pollout
+        if (p->fsm.pending_output.len > 0) fds[i + 1].events |= POLL_OUT;
         i++;
       }
       nfds = 1 + i;

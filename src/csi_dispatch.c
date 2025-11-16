@@ -487,11 +487,7 @@ static bool VPA(struct fsm *fsm, struct csi *csi) {
 
 bool VPR(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("VPR"); return false; }
 
-static bool HVP(struct fsm *fsm, struct csi *csi) { 
-  // TODO: This is not entirely correct. AFACT this should respect 'origin',
-  // which is also not yet implemented.
-  return CUP(fsm, csi); 
-}
+static bool HVP(struct fsm *fsm, struct csi *csi) { return CUP(fsm, csi); }
 
 bool TBC(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("TBC"); return false; }
 

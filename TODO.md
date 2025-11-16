@@ -13,7 +13,6 @@ Implement an efficient redraw algorithm. We definitely don't want to naively dra
 Record & replay sessions. The main use case is debugging scenarios and
 end-to-end tests, but could be useful for automation.
 
-
 * Mouse support
 * Change all char to typedef utf8_t (unsigned char) to avoid confusing ascii and utf8 strings
 
@@ -24,6 +23,14 @@ doesn't need to be the fastest multiplexer in the world, but it would be good
 to know if some sequences are being handled very poorly.
 
 Don't spend time on this before before all basic terminal emulator features are supported
+
+* Improve IO
+
+Right now, pane->pty is being accessed willy-nilly. We have a `pending_output` buffer
+which is flushed to the pty after a pane is processed. All writing can be handled from there.
+
+Additionally, string buffers are being synchronously flushed to streams.
+It would be great to early return on EAGAIN and add the write task to the main loop instead.
 
 * Layout system
 
@@ -62,15 +69,6 @@ Run it through the dispatcher?
 Currently, dispatcher returns true / false. Would also need to be able to know
 if something changed. Update dispatcher to return 0/1/2 ?
 
-* Improve query dispatch 
-
-I initially assumed query responses would require communicating with the host
-emulator, so I bubbled it up to the main event loop, but on further inspection
-it looks like all output is known by the state machine, and the information
-which is not known is static enough that it can be hardcoded or read once and
-reused. It would be a great simplification to queue the response directly
-rather than bubbling it up
-
 * Graphics support
 
 Graphics comes in two flavors; 
@@ -95,31 +93,4 @@ should display? (selected tag, what windows are on what tags, etc.) Feed this
 information on stdin? And then the bar should interpret whether stdin is user
 input based on whether it is focused or not?
 
-* Neat thing
-
-Encountered this C macro in the wild:
-It solves a limitation of C macros when you want to declare related pieces
-of data together, and then join them in separate static arrays:
-
-```c
-// load keymap table for linux
-#define KEYMAP(k, s)    k,
-static int keymap_linux_val[] = {
-#include "keymap_linux.def"
-};
-#undef KEYMAP
-
-#define KEYMAP(k, s)    s,
-static char *keymap_linux_str[] = {
-#include "keymap_linux.def"
-};
-#undef KEYMAP
-```
-
-the KEYMAP macro is invoked in the `keymap_linx.def` file, but different arguments
-passed to the macro are extracted in each pass. This is awesome for static comp time configuration.
-
 * Bugs
- - nvim + vim broken (scrolling, scroll region, missing queries)
- - MANPAGER=nvim +Man! hangs on startup
- - nvim shutdown slow (likely waiting for query response)

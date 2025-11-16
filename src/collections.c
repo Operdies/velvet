@@ -78,6 +78,10 @@ void string_destroy(struct string *str) {
   str->content = nullptr;
 }
 
+// TODO: Avoid blocking here.
+// If the full content cannot be flushed (EAGAIN), try again later
+// This requires moving the content of the *str object instead of clearing it.
+// Special care should be taken to ensure a *str does not grow indefinitely.
 bool string_flush(struct string *str, int fd, int *total_written) {
   size_t written = 0;
   while (written < str->len) {
