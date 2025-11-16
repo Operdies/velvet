@@ -52,15 +52,18 @@ void grid_invalidate(struct grid *g) {
   }
 }
 
+// If the cursor is outside the scroll region, this should do nothing.
+// Lines outside the scroll region must not be affected by this.
 void grid_insert_lines(struct grid *g, int n) {
   assert(n > 0);
-  int rows_after_point = g->h - g->cursor.row;
-  n = MIN(n, rows_after_point);
+  if (g->cursor.row < g->scroll_top || g->cursor.row > g->scroll_bottom) return;
+  int n_affected_rows = g->scroll_bottom - g->cursor.row + 1;
+  n = MIN(n, n_affected_rows);
   // Shift the last `n` rows backwards one by one, starting from the back.
   // This will result in all rows after the cursor being shifted forward `n` places,
   // except for the last `n` rows which will be precisely at [row .. row + n],
   // aka the blank lines we need to insert at the cursor.
-  for (int row = g->h - 1; row >= g->cursor.row + n; row--) {
+  for (int row = g->scroll_bottom; row >= g->cursor.row + n; row--) {
     int swap_target = row - n;
     struct grid_row tmp = g->rows[swap_target];
     g->rows[swap_target] = g->rows[row];
@@ -74,12 +77,16 @@ void grid_insert_lines(struct grid *g, int n) {
   }
 }
 
+// If the cursor is outside the scroll region, this should do nothing.
+// Lines outside the scroll region must not be affected by this.
 void grid_delete_lines(struct grid *g, int n) {
   assert(n > 0);
-  int rows_after_point = g->h - g->cursor.row;
-  n = MIN(n, rows_after_point);
+  if (g->cursor.row < g->scroll_top || g->cursor.row > g->scroll_bottom) return;
+  int rows_after_cursor = g->scroll_bottom + 1;
+  int n_affected_rows = rows_after_cursor - g->cursor.row;
+  n = MIN(n, n_affected_rows);
 
-  for (int row = g->cursor.row; row < g->h - n; row++) {
+  for (int row = g->cursor.row; row < rows_after_cursor - n; row++) {
     int swap_target = row + n;
     struct grid_row tmp = g->rows[swap_target];
     g->rows[swap_target] = g->rows[row];
@@ -88,7 +95,7 @@ void grid_delete_lines(struct grid *g, int n) {
   }
 
   // clear the final `n` rows
-  for (int row = g->h - n; row < g->h; row++) {
+  for (int row = rows_after_cursor - n; row < rows_after_cursor; row++) {
     grid_clear_line(g, row);
   }
 }
