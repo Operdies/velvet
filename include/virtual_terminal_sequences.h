@@ -14,4 +14,7 @@ static const uint8_t vt_enable_line_wrapping[] = CSI "?7h";
 static const uint8_t vt_focus_out[] = CSI "O";
 static const uint8_t vt_focus_in[] = CSI "I";
 
+#undef ESC
+#undef CSI
+
 #endif // VIRTUAL_TERMINAL_SEQUENCES_H

@@ -288,18 +288,18 @@ static void test_input_output(void) {
   test_grid_input_output("wrapping",
                          "abcdefghijk",
                          (grid_5x8){
-                             {"abcdefgh"},
-                             {"ijk"},
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' },
+                             {'i', 'j', 'k'},
                          });
   // move cursor to extremes and type
   test_grid_input_output("cursor movement",
                          CUU(123) CUB(123) CUF(1) CUD(1) "12" CUF(99) CUD(99) CUU(1) CUB(1) "3",
                          (grid_5x8){
-                             {"        "},
-                             {" 12     "},
-                             {"        "},
-                             {"      3 "},
-                             {"        "},
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', '1', '2', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', '3', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
   test_grid_input_output("cursor movement virutal scroll",
                          "                 "
@@ -311,7 +311,7 @@ static void test_input_output(void) {
                              {"     "},
                              {" 12 "},
                              {"     "},
-                             {"      3 "},
+                             {' ', ' ', ' ', ' ', ' ', ' ', '3', ' ' },
                              {"     "},
                          });
   // line 1 scrolls out of view
@@ -337,58 +337,58 @@ static void test_input_output(void) {
   test_grid_input_output("E test command",
                          "\x1b#8",
                          (grid_5x8){
-                             {"EEEEEEEE"},
-                             {"EEEEEEEE"},
-                             {"EEEEEEEE"},
-                             {"EEEEEEEE"},
-                             {"EEEEEEEE"},
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
   test_grid_input_output("Clear Command",
                          "\x1b#8" CSI "2J",
                          (grid_5x8){
-                             {"        "},
-                             {"        "},
-                             {"        "},
-                             {"        "},
-                             {"        "},
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
   test_grid_input_output(
       "Clear Command 2",
       "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CSI "2J",
       (grid_5x8){
-          {"        "},
-          {"        "},
-          {"        "},
-          {"        "},
-          {"        "},
+          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
       });
   test_grid_input_output("Off by one",
                          "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDDEEEEEEEE" CSI "0m",
                          (grid_5x8){
-                             {"AAAAAAAA"},
-                             {"BBBBBBBB"},
-                             {"CCCCCCCC"},
-                             {"DDDDDDDD"},
-                             {"EEEEEEEE"},
+                             {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
+                             {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
+                             {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
+                             {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
   test_grid_input_output("Off by one 2",
                          CUF(99) CUD(99) "Y" CSI "0m" CUU(99) CUB(99) "X" CSI "0m",
                          (grid_5x8){
-                             {"X       "},
-                             {"        "},
-                             {"        "},
-                             {"        "},
-                             {"       Y"},
+                             {'X', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'Y' },
                          });
   test_grid_input_output("Normal Rendering",
                          "Hello!\r\n" CSI "K"
                          "Second line\r\n" CSI "K"
                          "Third line\r\n" CSI "K",
                          (grid_5x8){
-                             {"Second l"},
-                             {"ine     "},
-                             {"Third li"},
-                             {"ne      "},
+                             {'S', 'e', 'c', 'o', 'n', 'd', ' ', 'l' },
+                             {'i', 'n', 'e', ' ', ' ', ' ', ' ', ' ' },
+                             {'T', 'h', 'i', 'r', 'd', ' ', 'l', 'i' },
+                             {'n', 'e', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
   test_grid_input_output("Carriage Return",
                          "Hello!!\rworld",
@@ -471,11 +471,11 @@ static void test_input_output(void) {
                          "DDDDDDDD"
                          "EEEEEEEEE",
                          (grid_5x8){
-                             { "BBBBBBBB"},
-                             {"CCCCCCCC"},
-                             {"DDDDDDDD"},
-                             {"EEEEEEEE"},
-                             {"E"},
+                             { 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
+                             {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
+                             {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
+                             {'E'},
                          });
   test_grid_input_output("Fill Grid",
                          "AAAAAAAA"
@@ -484,22 +484,22 @@ static void test_input_output(void) {
                          "DDDDDDDD"
                          "EEEEEEEE",
                          (grid_5x8){
-                             {"AAAAAAAA"},
-                             {"BBBBBBBB"},
-                             {"CCCCCCCC"},
-                             {"DDDDDDDD"},
-                             {"EEEEEEEE"},
+                             {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
+                             {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
+                             {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
+                             {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
+                             {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
 
   // test_grid_input_output("Test Clear DECSTBM",
   //                        "ABCDEFGHIJKLMNOP"
   //                        "ABCDEFGHIJKLMNOP" CUP(5,1) CSI "J",
   //                        (grid_5x8){
-  //                            {"AAAAAAAA"},
-  //                            {"BBBBBBBB"},
-  //                            {"CCCCCCCC"},
-  //                            {"DDDDDDDD"},
-  //                            {"EEEEEEEE"},
+  //                            {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
+  //                            {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
+  //                            {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
+  //                            {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
+  //                            {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
   //                        });
 }
 
@@ -510,16 +510,16 @@ static void test_reflow(void) {
                         "CCCCC"
                         "DDDDD",
                         (grid_5x5){
-                            {"AAAAA"},
-                            {"BBBBB"},
-                            {"CCCCC"},
-                            {"DDDDD"},
-                            {"     "},
+                            {'A', 'A', 'A', 'A', 'A' },
+                            {'B', 'B', 'B', 'B', 'B' },
+                            {'C', 'C', 'C', 'C', 'C' },
+                            {'D', 'D', 'D', 'D', 'D' },
+                            {' ', ' ', ' ', ' ', ' ' },
                         },
                         (grid_5x8){
-                            {"AAAAABBB"},
-                            {"BBCCCCCD"},
-                            {"DDDD    "},
+                            {'A', 'A', 'A', 'A', 'A', 'B', 'B', 'B' },
+                            {'B', 'B', 'C', 'C', 'C', 'C', 'C', 'D' },
+                            {'D', 'D', 'D', 'D', ' ', ' ', ' ', ' ' },
                         });
   test_grid_reflow_shrink("shrink grid",
                           "AAAAAAAA"
@@ -528,35 +528,35 @@ static void test_reflow(void) {
                           "DDDDDDDD"
                           "EEEEEEEE",
                           (grid_5x8){
-                              {"AAAAAAAA"},
-                              {"BBBBBBBB"},
-                              {"CCCCCCCC"},
-                              {"DDDDDDDD"},
-                              {"EEEEEEEE"},
+                              {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
+                              {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
+                              {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
+                              {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
+                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                           },
                           // We are displacing 3x5 characters, so we expect losing 8 A's and 7 B's
                           (grid_5x5){
-                              {"BCCCC"},
-                              {"CCCCD"},
-                              {"DDDDD"},
-                              {"DDEEE"},
-                              {"EEEEE"},
+                              {'B', 'C', 'C', 'C', 'C' },
+                              {'C', 'C', 'C', 'C', 'D' },
+                              {'D', 'D', 'D', 'D', 'D' },
+                              {'D', 'D', 'E', 'E', 'E' },
+                              {'E', 'E', 'E', 'E', 'E' },
                           });
   test_grid_reflow_shrink("shrink grid 2",
                           "AAAAAAA\r\n"
                           "BB\r\n"
                           "DDDDDDD",
                           (grid_5x8){
-                              {"AAAAAAA "},
-                              {"BB      "},
+                              {'A', 'A', 'A', 'A', 'A', 'A', 'A', ' ' },
+                              {'B', 'B', ' ', ' ', ' ', ' ', ' ', ' ' },
                               {"DDDDDDD"},
                           },
                           (grid_5x5){
-                              {"AAAAA"},
-                              {"AA   "},
-                              {"BB   "},
-                              {"DDDDD"},
-                              {"DD   "},
+                              {'A', 'A', 'A', 'A', 'A' },
+                              {'A', 'A', ' ', ' ', ' ' },
+                              {'B', 'B', ' ', ' ', ' ' },
+                              {'D', 'D', 'D', 'D', 'D' },
+                              {'D', 'D', ' ', ' ', ' ' },
                           });
 }
 
@@ -573,10 +573,10 @@ static void test_erase(void) {
                                              "ababab" CSI "K\r\n"      // Delete nothing
                                              "ababab" CUB(5) CSI "K", // Delete all but first
                          (grid_5x8){
-                             {"  x     "},
-                             {"        "},
-                             {"ababab  "},
-                             {"a       "},
+                             {' ', ' ', 'x', ' ', ' ', ' ', ' ', ' ' },
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
+                             {'a', 'b', 'a', 'b', 'a', 'b', ' ', ' ' },
+                             {'a', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
 
   /* Test:
@@ -600,7 +600,7 @@ static void test_erase(void) {
                              {""},
                              {""},
                              {""},
-                             {"       w"},
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
   test_grid_input_output(
       "CSI J: Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) CSI "J", (grid_5x8){0});
@@ -622,20 +622,20 @@ static void test_erase(void) {
   test_grid_input_output("Insert Blanks 1",
                          "helloooooo" CUB(10) CSI "1P",
                          (grid_5x8){
-                             {"helloooo"},
-                             {"o       "},
+                             {'h', 'e', 'l', 'l', 'o', 'o', 'o', 'o' },
+                             {'o', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
   test_grid_input_output("Insert Blanks 2",
                          "www" CUB(3)
                          /* delete first w */ CSI "1P"
                          /* displace last w past end of line */ CSI "7@",
                          (grid_5x8){
-                             {"       w"},
+                             {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
   test_grid_input_output("Line Truncated",
                          "abcd\r" CSI "2@",
                          (grid_5x8){
-                             {"  abcd  "},
+                             {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
 }
 
@@ -643,7 +643,7 @@ void test_scrolling(void) {
   test_grid_input_output("Line Truncated",
                          "abcd\r" CSI "2@",
                          (grid_5x8){
-                             {"  abcd  "},
+                             {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
 }
 

@@ -347,7 +347,7 @@ static void pane_draw_borders(struct string *draw_buffer) {
 static void render_frame(struct string *draw_buffer) {
   static enum cursor_style current_cursor_style = 0;
 
-  string_push(draw_buffer, vt_hide_cursor);
+  string_push_slice(draw_buffer, vt_hide_cursor, sizeof(vt_hide_cursor));
   for (struct pane *p = clients; p; p = p->next) {
     pane_update_cwd(p);
     pane_draw(p, false, draw_buffer);
@@ -360,7 +360,7 @@ static void render_frame(struct string *draw_buffer) {
     current_cursor_style = focused->fsm.options.cursor.style;
     string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
   }
-  if (focused && focused->fsm.options.cursor.visible) string_push(draw_buffer, vt_show_cursor);
+  if (focused && focused->fsm.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor, sizeof(vt_show_cursor));
 
   string_flush(draw_buffer, STDOUT_FILENO, NULL);
 }
