@@ -345,7 +345,11 @@ static bool CPL(struct fsm *fsm, struct csi *csi) {
   return true;
 }
 
-bool CHA(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("CHA"); return false; }
+bool CHA(struct fsm *fsm, struct csi *csi) { 
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_position_cursor_column(fsm->active_grid, count - 1);
+  return true;
+}
 
 static bool CUP(struct fsm *fsm, struct csi *csi) {
   int col = csi->params[1].primary ? csi->params[1].primary : 1;
