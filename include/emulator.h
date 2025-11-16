@@ -202,5 +202,6 @@ bool cell_style_equals(const struct grid_cell_style *const a,
                        const struct grid_cell_style *const b);
 bool color_equals(const struct color *const a, const struct color *const b);
 void fsm_set_active_grid(struct fsm *fsm, struct grid *grid);
+void fsm_send_device_attributes(struct fsm *fsm);
 
 #endif /*  EMULATOR_H */

@@ -1,0 +1,25 @@
+#ifndef CONTROL 
+// avoid syntax errors while viewing this file, but warn at include sites
+#warning "CONTROL macro not defined."
+#define CONTROL(esc, eight_bit, command, description)
+#endif
+
+CONTROL('D',  0x84, IND,   "Index")
+CONTROL('E',  0x85, NEL,   "Next Line")
+CONTROL('H',  0x88, HTS,   "Tab Set")
+CONTROL('M',  0x8d, RI,    "Reverse Index")
+CONTROL('N',  0x8e, SS2,   "Single Shift Select of G2 Character Set , VT220. This affects next character only.")
+CONTROL('O',  0x8f, SS3,   "Single Shift Select of G3 Character Set , VT220. This affects next character only.")
+CONTROL('P',  0x90, DCS,   "Device Control String")
+CONTROL('V',  0x96, SPA,   "Start of Guarded Area")
+CONTROL('W',  0x97, EPA,   "End of Guarded Area")
+CONTROL('X',  0x98, SOS,   "Start of String")
+CONTROL('Z',  0x9a, DECID, "Return Terminal ID  Obsolete form of CSI c  (DA).")
+CONTROL('[',  0x9b, CSI,   "Control Sequence Introducer")
+CONTROL('\\', 0x9c, ST,    "String Terminator")
+CONTROL(']',  0x9d, OSC,   "Operating System Command")
+CONTROL('^',  0x9e, PM,    "Privacy Message")
+CONTROL('_',  0x9f, APC,   "Application Program Command")
+
+// modeline {{{1
+// vim: ft=c fdm=marker

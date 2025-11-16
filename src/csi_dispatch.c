@@ -466,15 +466,11 @@ static bool REP(struct fsm *fsm, struct csi *csi) {
 
 static bool DA_PRIMARY(struct fsm *fsm, struct csi *csi) {
   switch (csi->params[0].primary) {
-    case 0: {
-      // Advertise VT102 support (same as alacritty)
-      // TODO: Figure out how to advertise exact supported features here.
-      // Step 0: find good documentation.
-      string_push(&fsm->pending_output, u8"\x1b[?6c");
-      return true;
-    } break;
-    default:
-      return csi_dispatch_todo(fsm, csi);
+  case 0: {
+    fsm_send_device_attributes(fsm);
+    return true;
+  } break;
+  default: return csi_dispatch_todo(fsm, csi);
   }
 }
 

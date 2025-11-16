@@ -58,6 +58,13 @@ void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
   }
 }
 
+void fsm_send_device_attributes(struct fsm *fsm) {
+  // Advertise VT102 support (same as alacritty)
+  // TODO: Figure out how to advertise exact supported features here.
+  // Step 0: find good documentation.
+  string_push(&fsm->pending_output, u8"\x1b[?6c");
+}
+
 static void fsm_dispatch_charset(struct fsm *fsm, uint8_t ch) {
   assert(fsm->command_buffer.len > 1);
   string_push_char(&fsm->command_buffer, ch);
@@ -236,9 +243,41 @@ static void ground_process_shift_in_out(struct fsm *fsm, uint8_t ch) {
     fsm->options.charset.active_charset = CHARSET_G1;
 }
 
+static void DISPATCH_RI(struct fsm *fsm) {
+  grid_move_or_scroll_up(fsm->active_grid);
+}
+
+static void DISPATCH_IND(struct fsm *fsm) {
+  grid_move_or_scroll_down(fsm->active_grid);
+}
+
+static void DISPATCH_NEL(struct fsm *fsm) {
+  grid_move_or_scroll_down(fsm->active_grid);
+  grid_position_cursor_column(fsm->active_grid, 0);
+}
+
+static void DISPATCH_HTS(struct fsm *fsm)   { (void)fsm; TODO("HTS"); }
+static void DISPATCH_SS2(struct fsm *fsm)   { (void)fsm; TODO("SS2"); }
+static void DISPATCH_SS3(struct fsm *fsm)   { (void)fsm; TODO("SS3"); }
+static void DISPATCH_DCS(struct fsm *fsm)   { fsm->state = fsm_dcs; }
+static void DISPATCH_SPA(struct fsm *fsm)   { (void)fsm; TODO("SPA"); }
+static void DISPATCH_EPA(struct fsm *fsm)   { (void)fsm; TODO("EPA"); }
+static void DISPATCH_SOS(struct fsm *fsm)   { (void)fsm; TODO("SOS"); }
+static void DISPATCH_DECID(struct fsm *fsm) { fsm_send_device_attributes(fsm); }
+static void DISPATCH_CSI(struct fsm *fsm)   { fsm->state = fsm_csi; }
+static void DISPATCH_ST(struct fsm *fsm)    { (void)fsm; TODO("ST"); }
+static void DISPATCH_OSC(struct fsm *fsm)   { fsm->state = fsm_osc; }
+static void DISPATCH_PM(struct fsm *fsm)    { (void)fsm; OMITTED("PM"); }
+static void DISPATCH_APC(struct fsm *fsm)   { (void)fsm; OMITTED("APC"); }
+
+
 static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
   // These symbols have special behavior in terms of how they affect layout
   switch (ch) {
+#define CONTROL(_1, seq, cmd, _2)                                                                                      \
+  case seq: DISPATCH_##cmd(fsm); break;
+#include "control_characters.def"
+#undef CONTROL
   case NUL: ground_noop(fsm, ch); break;
   case ESC: ground_esc(fsm, ch); break;
   case RET: ground_carriage_return(fsm, ch); break;
@@ -309,24 +348,11 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   fsm->state = fsm_ground;
   struct grid *g = fsm->active_grid;
   switch (ch) {
-  case CSI: fsm->state = fsm_csi; break;
-  case OSC: fsm->state = fsm_osc; break;
   case PCT: fsm->state = fsm_pct; break;
   case SPC: fsm->state = fsm_spc; break;
   case PND: fsm->state = fsm_pnd; break;
-  case DCS: fsm->state = fsm_dcs; break;
   case '7': grid_save_cursor(fsm->active_grid); break;
   case '8': grid_restore_cursor(fsm->active_grid); break;
-  case 'D': grid_move_or_scroll_down(g); break;              // Index
-  case 'M': grid_move_or_scroll_up(fsm->active_grid); break; // Reverse Index
-  case 'E':                                                  // Next Line
-    grid_move_or_scroll_down(g);
-    grid_position_cursor_column(g, 0);
-    break;
-  case 'H': TODO("Horizontal Tab Set"); break;
-  case 'N': TODO("Single Shift to G2"); break;
-  case 'O': TODO("Single Shift to G3"); break;
-  case 'X': TODO("Start of String"); break;
   case '=': fsm->options.application_keypad_mode = true; break;
   case '>': fsm->options.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
@@ -350,13 +376,12 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case '~': TODO("Invoke Character Set"); break;
   case '6': OMITTED("Back Index"); break;
   case '9': OMITTED("Forward Index"); break;
-  case 'V': OMITTED("Start Guarded Area"); break;
-  case 'W': OMITTED("End Guarded Area"); break;
-  case 'Z': OMITTED("Return Terminal ID"); break;
-  case '^': OMITTED("Privacy Message"); break;
-  case '_': OMITTED("Application Program Command"); break;
   case 'l': OMITTED("Memory lock"); break;
   case 'm': OMITTED("Memory unlock"); break;
+#define CONTROL(ch, _1, cmd, _2)                                                                                      \
+  case ch: DISPATCH_##cmd(fsm); break;
+#include "control_characters.def"
+#undef CONTROL
   default: {
     // Unrecognized escape. Treat this char as escaped and continue parsing normally.
     TODO("Unhandled sequence ESC 0x%x", ch);
