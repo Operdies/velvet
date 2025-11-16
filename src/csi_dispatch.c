@@ -287,15 +287,12 @@ bool csi_dispatch(struct fsm *fsm, struct csi *csi) {
 #define KEY(leading, intermediate, final)                                                                              \
   ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
 
-  // convert each CSI item from csi.def into a switch case
-#define CSI(leading, intermediate, final, dispatch, _)                                                                 \
-  case KEY(leading, intermediate, final): return dispatch(fsm, csi);
-
-#define SP ' '
-#define _ 0
-
   switch (KEY(csi->leading, csi->intermediate, csi->final)) {
+    // convert each CSI item from csi.def into a switch case
+#define CSI(l, i, f, fn, _)                                                                                            \
+  case KEY(l, i, f): return fn(fsm, csi);
 #include "csi.def"
+#undef CSI
   default: return csi_dispatch_todo(fsm, csi);
   }
 }
