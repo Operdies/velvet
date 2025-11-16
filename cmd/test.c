@@ -301,7 +301,7 @@ static void test_input_output(void) {
                              {' ', ' ', ' ', ' ', ' ', ' ', '3', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
-  test_grid_input_output("cursor movement virutal scroll",
+  test_grid_input_output("cursor movement virtual scroll",
                          "                 "
                          "                 "
                          "                 "

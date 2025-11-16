@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #define PRIVATE
 #include "grid.h"
+#include "emulator.h"
 
 #define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
 
@@ -49,6 +50,12 @@ void grid_invalidate(struct grid *g) {
     for (int i = 0; i < g->h; i++) {
       g->rows[i].dirty = true;
     }
+  }
+}
+
+static void grid_invalidate_scroll_region(struct grid *g) {
+  for (int i = g->scroll_top; i <= g->scroll_bottom; i++) {
+    g->rows[i].dirty = true;
   }
 }
 
@@ -104,35 +111,50 @@ void grid_newline(struct grid *g, bool carriage) {
   if (carriage) grid_carriage_return(g);
   struct grid_row *row = grid_row(g);
   row->newline = true;
-  grid_advance_cursor_y(g);
+  grid_move_or_scroll_down(g);
 }
 
 static void grid_rotate_rows_forward(struct grid *g) {
-  struct grid_row last = g->rows[g->h-1];
-  for (int i = 0; i < g->h - 1; i++) {
-    g->rows[i+1] = g->rows[i];
+  struct grid_row last = g->rows[g->scroll_bottom];
+  for (int i = g->scroll_bottom; i > g->scroll_top; i--) {
+    g->rows[i] = g->rows[i-1];
   }
-  g->rows[0] = last;
+  g->rows[g->scroll_top] = last;
 }
 
 /* Get a new row. Right now, that means reusing the first row, but when scrollback is implemented,
  * it will mean managing scrollback and somehow getting a new row. */
 static void grid_rotate_rows_reverse(struct grid *g) {
-  struct grid_row first = g->rows[0];
-  for (int i = 0; i < g->h - 1; i++) {
+  struct grid_row first = g->rows[g->scroll_top];
+  for (int i = g->scroll_top; i < g->scroll_bottom; i++) {
     g->rows[i] = g->rows[i + 1];
   }
-  g->rows[g->h-1] = first;
+  g->rows[g->scroll_bottom] = first;
 }
 
-void grid_advance_cursor_y_reverse(struct grid *g) {
-  if (g->cursor.row == 0) {
+void grid_move_or_scroll_up(struct grid *g) {
+  if (g->cursor.row == g->scroll_top) {
     grid_rotate_rows_forward(g);
-    grid_clear_line(g, 0);
-    grid_invalidate(g);
+    grid_clear_line(g, g->scroll_top);
+    grid_invalidate_scroll_region(g);
+  } else {
+    grid_move_cursor(g, 0, -1);
   }
-  grid_position_cursor(g, 0, -1);
 }
+
+void grid_move_or_scroll_down(struct grid *g) {
+  struct cursor *c = &g->cursor;
+  if (c->row == g->scroll_bottom) {
+    grid_rotate_rows_reverse(g);
+    grid_clear_line(g, g->scroll_bottom);
+    grid_invalidate_scroll_region(g);
+  } else {
+    c->row = c->row + 1;
+  }
+  assert(c->row < g->h);
+  g->cursor.wrap_pending = false;
+}
+
 
 void grid_restore_cursor(struct grid *g) {
   g->cursor = g->saved_cursor;
@@ -149,23 +171,6 @@ void grid_save_cursor(struct grid *g) {
   g->saved_cursor = g->cursor;
 }
 
-/* TODO: Respect scroll region. 
- * Inside scroll region: scroll scroll region
- * Outside scroll region: Do nothing
- */
-void grid_advance_cursor_y(struct grid *g) {
-  struct cursor *c = &g->cursor;
-  c->row = c->row + 1;
-  if (c->row == g->h) {
-    c->row = g->h - 1;
-    grid_rotate_rows_reverse(g);
-    grid_clear_line(g, c->row);
-    grid_invalidate(g);
-  }
-  assert(c->row < g->h);
-  g->cursor.wrap_pending = false;
-}
-
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
   /* Implementation notes:
    * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
@@ -180,7 +185,7 @@ void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
     assert(cur->col == grid_end(g));
     if (wrap) {
       cur->col = 0;
-      grid_advance_cursor_y(g);
+      grid_move_or_scroll_down(g);
       row = grid_row(g);
     } else {
       // Overwrite last character

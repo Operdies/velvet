@@ -109,10 +109,11 @@ struct grid {
   struct grid_row *rows;   // rows[h]
   struct cursor cursor;
   struct cursor saved_cursor;
+  struct emulator_options *options;
 };
 
-void grid_advance_cursor_y(struct grid *g);
-void grid_advance_cursor_y_reverse(struct grid *g);
+void grid_move_or_scroll_down(struct grid *g);
+void grid_move_or_scroll_up(struct grid *g);
 void grid_backspace(struct grid *g);
 void grid_carriage_return(struct grid *g);
 void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,

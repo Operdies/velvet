@@ -589,8 +589,6 @@ static bool DECSTBM(struct fsm *fsm, struct csi *csi) {
   if (top > 0) top--;
   if (bottom > 0) bottom--;
 
-  TODO("Scroll Region %d;%d", top, bottom);
-
   grid_set_scroll_region(fsm->active_grid, top, bottom);
   return true;
 }

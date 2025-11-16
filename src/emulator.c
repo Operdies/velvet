@@ -135,6 +135,8 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
 void fsm_ensure_grid_initialized(struct fsm *fsm) {
   struct grid *g = fsm->options.alternate_screen ? &fsm->alternate : &fsm->primary;
   fsm_set_active_grid(fsm, g);
+  fsm->primary.options = &fsm->options;
+  fsm->alternate.options = &fsm->options;
 }
 
 bool color_equals(const struct color *const a, const struct color *const b) {
@@ -180,7 +182,7 @@ static void ground_backspace(struct fsm *fsm, uint8_t ch) {
 }
 static void ground_vtab(struct fsm *fsm, uint8_t ch) {
   (void)ch;
-  grid_advance_cursor_y(fsm->active_grid);
+  grid_move_or_scroll_down(fsm->active_grid);
 }
 
 static void ground_tab(struct fsm *fsm, uint8_t ch) {
@@ -315,11 +317,11 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case DCS: fsm->state = fsm_dcs; break;
   case '7': grid_save_cursor(fsm->active_grid); break;
   case '8': grid_restore_cursor(fsm->active_grid); break;
-  case 'D': grid_advance_cursor_y(g); break;                        // Index
-  case 'M': grid_advance_cursor_y_reverse(fsm->active_grid); break; // Reverse Index
-  case 'E':                                                                          // Next Line
-    grid_advance_cursor_y(g);
-    grid_carriage_return(g);
+  case 'D': grid_move_or_scroll_down(g); break;              // Index
+  case 'M': grid_move_or_scroll_up(fsm->active_grid); break; // Reverse Index
+  case 'E':                                                  // Next Line
+    grid_move_or_scroll_down(g);
+    grid_position_cursor_column(g, 0);
     break;
   case 'H': TODO("Horizontal Tab Set"); break;
   case 'N': TODO("Single Shift to G2"); break;
