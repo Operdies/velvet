@@ -7,6 +7,12 @@
 
 #define ___ 0
 
+#ifndef CSI 
+// avoid syntax errors while viewing this file, but warn at include sites
+#warning "CSI macro not defined."
+#define CSI(leading, intermdiate, final, command, description)
+#endif
+
 CSI(___,    ___,  '@', ICH,                        "CSI Ps @  Insert Ps (Blank) Character(s) (default = 1) (ICH).")
 CSI(___,    ' ',  '@', SL,                         "CSI Ps SP @ Shift left Ps columns(s) (default = 1) (SL), ECMA-48.")
 CSI(___,    ___,  'A', CUU,                        "CSI Ps A  Cursor Up Ps Times (default = 1) (CUU).")
