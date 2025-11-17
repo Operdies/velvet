@@ -214,7 +214,7 @@ void grid_resize_if_needed(struct grid *g, int w, int h, bool wrap) {
   if (!g->_cells) {
     grid_initialize(g, w, h);
   } else if (g->h != h || g->w != w) {
-    struct grid new = {.w = w, .h = h};
+    struct grid new = {.w = w, .h = h, .options = g->options };
     grid_resize_if_needed(&new, w, h, false);
     grid_copy(&new, g, wrap);
     grid_destroy(g);
@@ -245,6 +245,9 @@ void grid_reset_scroll_region(struct grid *g) {
 void grid_set_scroll_region(struct grid *g, int top, int bottom) {
   g->scroll_top = top;
   g->scroll_bottom = bottom;
+  grid_position_cursor_column(g, 0);
+  int row = g->options->origin_mode ? g->scroll_top : 0;
+  grid_position_cursor_row(g, row);
 }
 
 /* inclusive erase between two cursor positions */
