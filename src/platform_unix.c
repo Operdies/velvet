@@ -15,16 +15,18 @@ struct termios original_terminfo;
 struct termios raw_term;
 struct winsize ws_current;
 
+static int write_slice(int fd, struct string_slice slice) { return write(fd, slice.content, slice.len); }
+
 void leave_alternate_screen(void) {
-  write(STDOUT_FILENO, vt_leave_alternate_screen, sizeof(vt_leave_alternate_screen));
+  write_slice(STDOUT_FILENO, vt_leave_alternate_screen);
 }
 
 void enter_alternate_screen(void) {
-  write(STDOUT_FILENO, vt_enter_alternate_screen, sizeof(vt_enter_alternate_screen));
+  write_slice(STDOUT_FILENO, vt_enter_alternate_screen);
 }
 
 void exit_raw_mode(void) {
-  write(STDOUT_FILENO, vt_show_cursor, sizeof(vt_show_cursor));
+  write_slice(STDOUT_FILENO, vt_show_cursor);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
 }
 
@@ -46,10 +48,10 @@ void enable_raw_mode(void) {
 }
 
 static void disable_line_wrapping(void) {
-  write(STDOUT_FILENO, vt_disable_line_wrapping, sizeof(vt_disable_line_wrapping));
+  write_slice(STDOUT_FILENO, vt_disable_line_wrapping);
 }
 static void enable_line_wrapping(void) {
-  write(STDOUT_FILENO, vt_enable_line_wrapping, sizeof(vt_enable_line_wrapping));
+  write_slice(STDOUT_FILENO, vt_enable_line_wrapping);
 }
 
 static void disable_focus_reporting(void) {

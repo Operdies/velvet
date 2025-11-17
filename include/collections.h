@@ -28,7 +28,7 @@ struct string {
 
 struct string_slice {
   size_t len;
-  const char *const str;
+  const uint8_t *const content;
 };
 
 // A view into a vector
@@ -91,7 +91,8 @@ bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
 bool running_hash_match(struct running_hash running, struct running_hash item,
                         int count);
 void running_hash_append(struct running_hash *hash, uint8_t ch);
-void string_push_slice(struct string *str, const uint8_t *const src,
+void string_push_slice(struct string *str, struct string_slice slice);
+void string_push_range(struct string *str, const uint8_t *const src,
                        size_t len);
 void string_push(struct string *str, const uint8_t *const src);
 void string_push_char(struct string *str, uint8_t ch);

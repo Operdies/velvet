@@ -14,7 +14,6 @@
 #include "collections.h"
 #include "emulator.h"
 #include "pane.h"
-#include "platform.h"
 #include "virtual_terminal_sequences.h"
 #include "utils.h"
 #include <sys/wait.h>
@@ -234,10 +233,10 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       s = normal;
       if (focused && focused->fsm.options.bracketed_paste) {
         string_push(&writebuffer, paste_start.characters);
-        string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
+        string_push_range(&writebuffer, pastebuffer.content, pastebuffer.len);
         string_push(&writebuffer, paste_end.characters);
       } else {
-        string_push_slice(&writebuffer, pastebuffer.content, pastebuffer.len);
+        string_push_range(&writebuffer, pastebuffer.content, pastebuffer.len);
       }
       string_clear(&pastebuffer);
       continue;
@@ -273,9 +272,9 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         bool did_focus = ch == 'I';
         if (focused->fsm.options.focus_reporting) {
           if (did_focus)
-            string_push_slice(&writebuffer, vt_focus_in, sizeof(vt_focus_in));
+            string_push_slice(&writebuffer, vt_focus_in);
           else
-            string_push_slice(&writebuffer, vt_focus_out, sizeof(vt_focus_out));
+            string_push_slice(&writebuffer, vt_focus_out);
         }
         // If the pane does not have the feature enabled, ignore it.
       } else {
@@ -302,7 +301,9 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
   // TODO: Push this to focused->fsm->pending_output instead?
   // To consolidate pty writing and avoid blocking the main loop / other clients
   // in cases where a single client is slow
-  write(focused->pty, writebuffer.content, writebuffer.len);
+  if (writebuffer.len) {
+    write(focused->pty, writebuffer.content, writebuffer.len);
+  }
 }
 
 static void pane_remove_and_destroy(struct pane *p) {
@@ -338,8 +339,7 @@ void handle_sigwinch(struct string *draw_buffer) {
     p->border_dirty = true;
   }
   arrange(ws_current, clients);
-  uint8_t clear[] = "\x1b[2J";
-  string_push_slice(draw_buffer, clear, sizeof(clear) - 1);
+  string_push_slice(draw_buffer, vt_clear);
 }
 
 static void pane_draw_borders(struct string *draw_buffer) {
@@ -353,7 +353,7 @@ static void pane_draw_borders(struct string *draw_buffer) {
 static void render_frame(struct string *draw_buffer) {
   static enum cursor_style current_cursor_style = 0;
 
-  string_push_slice(draw_buffer, vt_hide_cursor, sizeof(vt_hide_cursor));
+  string_push_slice(draw_buffer, vt_hide_cursor);
   for (struct pane *p = clients; p; p = p->next) {
     pane_update_cwd(p);
     pane_draw(p, false, draw_buffer);
@@ -366,7 +366,7 @@ static void render_frame(struct string *draw_buffer) {
     current_cursor_style = focused->fsm.options.cursor.style;
     string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
   }
-  if (focused && focused->fsm.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor, sizeof(vt_show_cursor));
+  if (focused && focused->fsm.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
 
   string_flush(draw_buffer, STDOUT_FILENO, NULL);
 }

@@ -423,9 +423,9 @@ void pane_notify_focus(struct pane *p, bool focused) {
     p->has_focus = focused;
     if (p->pty && p->fsm.options.focus_reporting) {
       if (focused) {
-        write(p->pty, vt_focus_in, sizeof(vt_focus_in));
+        write(p->pty, vt_focus_in.content, vt_focus_in.len);
       } else {
-        write(p->pty, vt_focus_out, sizeof(vt_focus_out));
+        write(p->pty, vt_focus_out.content, vt_focus_out.len);
       }
     }
   }

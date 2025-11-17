@@ -32,7 +32,7 @@ void string_push_int(struct string *str, int n) {
     n /= 10;
   } while (n);
 
-  string_push_slice(str, buf + idx, max - idx);
+  string_push_range(str, buf + idx, max - idx);
 }
 
 void string_push_csi(struct string *str, struct int_slice params, const char *const c) {
@@ -46,7 +46,11 @@ void string_push_csi(struct string *str, struct int_slice params, const char *co
   string_push(str, (uint8_t *)c);
 }
 
-void string_push_slice(struct string *str, const uint8_t *const src, size_t len) {
+void string_push_slice(struct string *str, struct string_slice slice) {
+  string_push_range(str, slice.content, slice.len);
+}
+
+void string_push_range(struct string *str, const uint8_t *const src, size_t len) {
   size_t required = str->len + len;
   string_ensure_capacity(str, required);
   memcpy(str->content + str->len, src, len);
@@ -54,11 +58,11 @@ void string_push_slice(struct string *str, const uint8_t *const src, size_t len)
 }
 void string_push(struct string *str, const uint8_t *src) {
   size_t len = strlen((char *)src);
-  string_push_slice(str, src, len);
+  string_push_range(str, src, len);
 }
 
 void string_push_char(struct string *str, uint8_t ch) {
-  string_push_slice(str, &ch, 1);
+  string_push_range(str, &ch, 1);
 }
 
 void string_memset(struct string *str, uint8_t ch, size_t len) {

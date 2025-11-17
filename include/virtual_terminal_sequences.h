@@ -1,19 +1,24 @@
 #ifndef VIRTUAL_TERMINAL_SEQUENCES_H
 
 #include <stdint.h>
+#include "collections.h"
 
 #define ESC u8"\x1b"
 #define CSI ESC "["
 
-static const uint8_t vt_hide_cursor[] = CSI "?25l";
-static const uint8_t vt_show_cursor[] = CSI "?25h";
-static const uint8_t vt_leave_alternate_screen[] = CSI "2J" CSI "H" CSI "?1049l";
-static const uint8_t vt_enter_alternate_screen[] = CSI "?1049h" CSI "2J" CSI "H";
-static const uint8_t vt_disable_line_wrapping[] = CSI "?7l";
-static const uint8_t vt_enable_line_wrapping[] = CSI "?7h";
-static const uint8_t vt_focus_out[] = CSI "O";
-static const uint8_t vt_focus_in[] = CSI "I";
+#define VT(name, command) static const struct string_slice vt_##name = { .content = command, .len = sizeof(command) - 1 }
 
+VT(hide_cursor, CSI "?25l");
+VT(show_cursor, CSI "?25h");
+VT(leave_alternate_screen, CSI "2J" CSI "H" CSI "?1049l");
+VT(enter_alternate_screen, CSI "?1049h" CSI "2J" CSI "H");
+VT(disable_line_wrapping, CSI "?7l");
+VT(enable_line_wrapping, CSI "?7h");
+VT(focus_out, CSI "O");
+VT(focus_in, CSI "I");
+VT(clear, CSI "2J");
+
+#undef VT
 #undef ESC
 #undef CSI
 
