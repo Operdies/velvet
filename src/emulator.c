@@ -274,8 +274,8 @@ static void DISPATCH_APC(struct fsm *fsm)   { (void)fsm; OMITTED("APC"); }
 static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
   // These symbols have special behavior in terms of how they affect layout
   switch (ch) {
-#define CONTROL(_1, seq, cmd, _2)                                                                                      \
-  case seq: DISPATCH_##cmd(fsm); break;
+#define CONTROL(C0, C1, cmd, _2)                                                                                      \
+  case C1: DISPATCH_##cmd(fsm); break;
 #include "control_characters.def"
 #undef CONTROL
   case NUL: ground_noop(fsm, ch); break;
@@ -378,8 +378,8 @@ static void fsm_dispatch_escape(struct fsm *fsm, uint8_t ch) {
   case '9': OMITTED("Forward Index"); break;
   case 'l': OMITTED("Memory lock"); break;
   case 'm': OMITTED("Memory unlock"); break;
-#define CONTROL(ch, _1, cmd, _2)                                                                                      \
-  case ch: DISPATCH_##cmd(fsm); break;
+#define CONTROL(C0, C1, cmd, _2)                                                                                      \
+  case C0: DISPATCH_##cmd(fsm); break;
 #include "control_characters.def"
 #undef CONTROL
   default: {

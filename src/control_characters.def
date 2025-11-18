@@ -1,7 +1,7 @@
 #ifndef CONTROL 
 // avoid syntax errors while viewing this file, but warn at include sites
 #warning "CONTROL macro not defined."
-#define CONTROL(esc, eight_bit, command, description)
+#define CONTROL(C0, C1, command, description)
 #endif
 
 CONTROL('D',  0x84, IND,   "Index")
