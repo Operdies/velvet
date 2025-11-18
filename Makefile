@@ -24,7 +24,7 @@ endif
 BUILD ?= debug
 
 RELEASE_TARGET ?= release
-INCLUDE_DIR = $(abspath .)/include
+INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences
 OUT_DIR ?= bin
 COMMANDS = vv test statusbar dump
 CMD_DIR = cmd
@@ -42,7 +42,7 @@ OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
-CFLAGS = -std=c23 -Wall -Wextra -I$(INCLUDE_DIR)  -MMD -MP $(DEFINES)
+CFLAGS = -std=c23 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = 
 ifeq ($(BUILD),debug)
 	CFLAGS += -O0 -g -fsanitize=address
