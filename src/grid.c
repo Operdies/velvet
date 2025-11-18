@@ -7,6 +7,8 @@
 #include "emulator.h"
 
 #define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
+#define grid_column(g) (g->cursor.col)
+#define grid_row(g) (&g->rows[g->cursor.row])
 
 /* Missing features:
  * Scrollback
@@ -32,7 +34,7 @@ void grid_position_cursor_row(struct grid *g, int y) {
 }
 
 void grid_position_cursor_column(struct grid *g, int x) {
-  g->cursor.col = CLAMP(x, grid_start(g), grid_end(g));
+  g->cursor.col = CLAMP(x, grid_left(g), grid_right(g));
   g->cursor.wrap_pending = false;
 }
 
@@ -186,14 +188,14 @@ void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
   if (g->cursor.wrap_pending) {
   // if (row->end_of_line) {
     g->cursor.wrap_pending = false;
-    assert(cur->col == grid_end(g));
+    assert(cur->col == grid_right(g));
     if (wrap) {
       cur->col = 0;
       grid_move_or_scroll_down(g);
       row = grid_row(g);
     } else {
       // Overwrite last character
-      cur->col = grid_end(g);
+      cur->col = grid_right(g);
     }
   }
 
@@ -206,9 +208,9 @@ void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
   cur->col++;
   row->n_significant = MAX(row->n_significant, cur->col);
 
-  if (cur->col > grid_end(g)) {
+  if (cur->col > grid_right(g)) {
     cur->wrap_pending = true;
-    cur->col = grid_end(g);
+    cur->col = grid_right(g);
   }
 }
 
@@ -273,8 +275,8 @@ void grid_erase_between_cursors(struct grid *g, struct cursor from, struct curso
 
   for (int virtual_row = from.row; virtual_row <= to.row; virtual_row++) {
     int col_start = virtual_row == from.row ? from.col : 0;
-    int col_end = virtual_row == to.row ? to.col : grid_end(g);
-    col_end = MIN(col_end, grid_end(g));
+    int col_end = virtual_row == to.row ? to.col : grid_right(g);
+    col_end = MIN(col_end, grid_right(g));
 
     int row = virtual_row;
     struct grid_row *line = &g->rows[row];
@@ -298,7 +300,7 @@ void grid_insert_blanks_at_cursor(struct grid *g, int n) {
   struct grid_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
   struct grid_row *row = grid_row(g);
   int lcol = grid_column(g);
-  for (int col = grid_end(g); col >= lcol; col--) {
+  for (int col = grid_right(g); col >= lcol; col--) {
     int rcol = col - n;
     struct grid_cell replacement = rcol < lcol ? template : row->cells[rcol];
     row->cells[col] = replacement;
@@ -310,9 +312,9 @@ void grid_shift_from_cursor(struct grid *g, int n) {
   if (n == 0) return;
   struct grid_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
   struct grid_row *row = grid_row(g);
-  for (int col = grid_column(g); col < grid_end(g); col++) {
+  for (int col = grid_column(g); col < grid_right(g); col++) {
     int rcol = col + n;
-    struct grid_cell replacement = rcol > grid_end(g) ? template : row->cells[rcol];
+    struct grid_cell replacement = rcol > grid_right(g) ? template : row->cells[rcol];
     row->cells[col] = replacement;
   }
   row->dirty = true;
@@ -367,7 +369,7 @@ void grid_full_reset(struct grid *g) {
   struct cursor clear = {0};
   g->cursor = clear;
   g->saved_cursor = clear;
-  struct cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
-  struct cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
+  struct cursor start = {.col = grid_left(g), .row = grid_top(g)};
+  struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
   grid_erase_between_cursors(g, start, end);
 }

@@ -52,8 +52,8 @@ void fsm_set_active_grid(struct fsm *fsm, struct grid *g) {
     // not be appended; the `m` rows in the alternate screen should be reused.
     // Leaving the alternate screen discards the `m` rows
     g->cursor = fsm->primary.cursor;
-    struct cursor start = {.col = grid_start(g), .row = grid_virtual_top(g)};
-    struct cursor end = {.col = grid_end(g), .row = grid_virtual_bottom(g)};
+    struct cursor start = {.col = grid_left(g), .row = grid_top(g)};
+    struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
     grid_erase_between_cursors(g, start, end);
   }
 }

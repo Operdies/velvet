@@ -3,15 +3,10 @@
 
 #include "text.h"
 
-#define grid_start(g) (0)
-#define grid_end(g) (g->w - 1)
+#define grid_left(g) (0)
+#define grid_right(g) (g->w - 1)
 #define grid_top(g) (0)
 #define grid_bottom(g) (g->h - 1)
-#define grid_column(g) (g->cursor.col)
-#define grid_line(g) (g->cursor.row)
-#define grid_row(g) (&g->rows[g->cursor.row])
-#define grid_virtual_top(g) (0) // (g->offset)
-#define grid_virtual_bottom(g) (g->h - 1) // ((g->h + g->offset - 1) % g->h)
 
 #define PACK __attribute__((packed))
 

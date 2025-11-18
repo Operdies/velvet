@@ -371,21 +371,21 @@ static bool ED(struct fsm *fsm, struct csi *csi) {
 
   switch (mode) {
   case 1: // Erase from start of screen to cursor
-    start.col = grid_start(g);
-    start.row = grid_virtual_top(g);
+    start.col = grid_left(g);
+    start.row = grid_top(g);
     break;
   case 2: // Erase entire screen
-    start.col = grid_start(g);
-    start.row = grid_virtual_top(g);
-    end.col = grid_end(g);
-    end.row = grid_virtual_bottom(g);
+    start.col = grid_left(g);
+    start.row = grid_top(g);
+    end.col = grid_right(g);
+    end.row = grid_bottom(g);
     break;
   case 3: // erase scrollback
     return csi_dispatch_todo(fsm, csi);
   case 0:
   default: // erase from cursor to end of screen
-    end.col = grid_end(g);
-    end.row = grid_virtual_bottom(g);
+    end.col = grid_right(g);
+    end.row = grid_bottom(g);
     break;
   }
 
@@ -402,11 +402,11 @@ static bool EL(struct fsm *fsm, struct csi *csi) {
   struct cursor start = g->cursor;
   struct cursor end = g->cursor;
   switch (mode) {
-  case 0: end.col = grid_end(g); break;     // erase from cursor to end
-  case 1: start.col = grid_start(g); break; // erase from start to cursor
+  case 0: end.col = grid_right(g); break;     // erase from cursor to end
+  case 1: start.col = grid_left(g); break; // erase from start to cursor
   case 2:                                   // erase entire line
-    start.col = grid_start(g);
-    end.col = grid_end(g);
+    start.col = grid_left(g);
+    end.col = grid_right(g);
     break;
   default: return csi_dispatch_todo(fsm, csi);
   }
