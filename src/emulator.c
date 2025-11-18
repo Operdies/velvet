@@ -236,11 +236,13 @@ static void ground_reject(struct fsm *fsm) {
   if (n > 1) fsm_process(fsm, &copy.utf8[1], n - 1);
 }
 
-static void ground_process_shift_in_out(struct fsm *fsm, uint8_t ch) {
-  if (ch == SI)
-    fsm->options.charset.active_charset = CHARSET_G0;
-  else if (ch == SO)
-    fsm->options.charset.active_charset = CHARSET_G1;
+static void ground_process_shift_in(struct fsm *fsm, uint8_t ch) {
+  assert(ch == SI);
+  fsm->options.charset.active_charset = CHARSET_G0;
+}
+static void ground_process_shift_out(struct fsm *fsm, uint8_t ch) {
+  assert(ch == SO);
+  fsm->options.charset.active_charset = CHARSET_G1;
 }
 
 static void DISPATCH_RI(struct fsm *fsm) {
@@ -283,8 +285,8 @@ static void fsm_dispatch_ground(struct fsm *fsm, uint8_t ch) {
   case RET: ground_carriage_return(fsm, ch); break;
   case BSP: ground_backspace(fsm, ch); break;
   case BELL: ground_bell(fsm, ch); break;
-  case SI: ground_process_shift_in_out(fsm, ch); break;
-  case SO: ground_process_shift_in_out(fsm, ch); break;
+  case SI: ground_process_shift_in(fsm, ch); break;
+  case SO: ground_process_shift_out(fsm, ch); break;
   case DEL: ground_noop(fsm, ch); break;
   case TAB: ground_tab(fsm, ch); break;
   case VTAB: ground_vtab(fsm, ch); break;
