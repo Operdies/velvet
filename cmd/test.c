@@ -16,6 +16,12 @@
 #define DECSTBM(top, bottom) CSI #top ";" #bottom "r"
 #define IL(x) CSI #x "L"
 #define DL(x) CSI #x "M"
+#define DCH(x) CSI #x "P"
+#define ICH(x) CSI #x "@"
+#define ED(x) CSI #x "J"
+#define EL(x) CSI #x "K"
+#define SGR(x) CSI #x "m"
+#define SM(x) CSI #x "h"
 
 static bool exit_on_failure = true;
 typedef char grid_5x8[5][8];
@@ -344,7 +350,7 @@ static void test_input_output(void) {
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
   test_grid_input_output("Clear Command",
-                         "\x1b#8" CSI "2J",
+                         "\x1b#8" ED(2),
                          (grid_5x8){
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
@@ -354,7 +360,7 @@ static void test_input_output(void) {
                          });
   test_grid_input_output(
       "Clear Command 2",
-      "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CSI "2J",
+      "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ED(2),
       (grid_5x8){
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
@@ -363,7 +369,7 @@ static void test_input_output(void) {
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
       });
   test_grid_input_output("Off by one",
-                         "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDDEEEEEEEE" CSI "0m",
+                         "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDDEEEEEEEE" SGR(0),
                          (grid_5x8){
                              {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
                              {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
@@ -372,7 +378,7 @@ static void test_input_output(void) {
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
   test_grid_input_output("Off by one 2",
-                         CUF(99) CUD(99) "Y" CSI "0m" CUU(99) CUB(99) "X" CSI "0m",
+                         CUF(99) CUD(99) "Y" SGR(0) CUU(99) CUB(99) "X" SGR(0),
                          (grid_5x8){
                              {'X', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
@@ -381,9 +387,9 @@ static void test_input_output(void) {
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'Y' },
                          });
   test_grid_input_output("Normal Rendering",
-                         "Hello!\r\n" CSI "K"
-                         "Second line\r\n" CSI "K"
-                         "Third line\r\n" CSI "K",
+                         "Hello!\r\n" EL(0)
+                         "Second line\r\n" EL(0)
+                         "Third line\r\n" EL(0),
                          (grid_5x8){
                              {'S', 'e', 'c', 'o', 'n', 'd', ' ', 'l' },
                              {'i', 'n', 'e', ' ', ' ', ' ', ' ', ' ' },
@@ -397,7 +403,7 @@ static void test_input_output(void) {
                          });
 
   test_grid_input_output("Insert Lines",
-                         CSI "20h"
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5" CUP(2, 1) IL(2),
                          (grid_5x8){
                              {"Line1"},
@@ -407,7 +413,7 @@ static void test_input_output(void) {
                              {"Line3"},
                          });
   test_grid_input_output("Insert Lines Virtual",
-                         CSI "20h"
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" CUP(2, 1) IL(2),
                          (grid_5x8){
                              {"Line3"},
@@ -417,7 +423,7 @@ static void test_input_output(void) {
                              {"Line5"},
                          });
   test_grid_input_output("Delete Lines",
-                         CSI "20h"
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2),
                          (grid_5x8){
                              {"Line2"},
@@ -425,13 +431,13 @@ static void test_input_output(void) {
                              {"Line6"},
                          });
   test_grid_input_output("Delete Many Lines",
-                         CSI "20h" /* enable auto-return */
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(10),
                          (grid_5x8){
                              {"Line2"},
                          });
   test_grid_input_output("Delete Many Lines 2",
-                         CSI "20h" /* enable auto-return */
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(9, 1) DL(10),
                          (grid_5x8){
                              {"Line2"},
@@ -441,13 +447,13 @@ static void test_input_output(void) {
                              {"     "},
                          });
   test_grid_input_output("Delete Lines All But Last",
-                         CSI "20h" /* enable auto-return */
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(1, 2) DL(4),
                          (grid_5x8){
                              {"Line6"},
                          });
   test_grid_input_output("Insert Lines Then Delete",
-                         CSI "20h"
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2) IL(1),
                          (grid_5x8){
                              {"Line2"},
@@ -456,7 +462,7 @@ static void test_input_output(void) {
                              {"Line6"},
                          });
   test_grid_input_output("Delete Lines Then Insert",
-                         CSI "20h"
+                         SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) IL(2) DL(1),
                          (grid_5x8){
                              {"Line2"},
@@ -568,10 +574,10 @@ static void test_erase(void) {
    * [0]K: Cursor to end
    * */
   test_grid_input_output("Line Delete",
-                         "xxx" CUP(1, 2) CSI "1K\r\n"                  // Delete first two characters
-                                             "xxxx" CSI "2K\r\n"       // Delete line
-                                             "ababab" CSI "K\r\n"      // Delete nothing
-                                             "ababab" CUB(5) CSI "K", // Delete all but first
+                         "xxx" CUP(1, 2) EL(1) "\r\n"                  // Delete first two characters
+                                             "xxxx" EL(2) "\r\n"       // Delete line
+                                             "ababab" EL(0) "\r\n"      // Delete nothing
+                                             "ababab" CUB(5) EL(0), // Delete all but first
                          (grid_5x8){
                              {' ', ' ', 'x', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
@@ -584,17 +590,17 @@ static void test_erase(void) {
    * 2J: Entire screen (clear)
    * [0]J: Cursor to end of screen
    */
-  test_grid_input_output("CSI 1J: Clear Start To Cursor (simple)", "www" CSI "1J", (grid_5x8){0});
-  test_grid_input_output("CSI 2J: Clear Screen (simple)", "xxx" CSI "2J", (grid_5x8){0});
-  test_grid_input_output("CSI J: Clear Cursor To End (simple)", "www" CUP(1, 1) CSI "J", (grid_5x8){0});
+  test_grid_input_output("ED(1): Clear Start To Cursor (simple)", "www" ED(1), (grid_5x8){0});
+  test_grid_input_output("ED(2): Clear Screen (simple)", "xxx" ED(2), (grid_5x8){0});
+  test_grid_input_output("ED(0): Clear Cursor To End (simple)", "www" CUP(1, 1) ED(0), (grid_5x8){0});
   test_grid_input_output(
-      "CSI 1J: Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CSI "1J", (grid_5x8){0});
-  test_grid_input_output("CSI 1J: Clear Start To Cursor 2",
+      "ED(1): Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ED(1), (grid_5x8){0});
+  test_grid_input_output("ED(1): Clear Start To Cursor 2",
                          "wwwwwwww"
                          "wwwwwwww"
                          "wwwwwwww"
                          "wwwwwwww"
-                         "wwwwwwww" CUP(5, 7) CSI "1J",
+                         "wwwwwwww" CUP(5, 7) ED(1),
                          (grid_5x8){
                              {""},
                              {""},
@@ -603,11 +609,11 @@ static void test_erase(void) {
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
   test_grid_input_output(
-      "CSI J: Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) CSI "J", (grid_5x8){0});
+      "ED(0): Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(0), (grid_5x8){0});
   test_grid_input_output(
-      "CSI J: Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) CSI "J", (grid_5x8){"w"});
+      "ED(0): Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) ED(0), (grid_5x8){"w"});
   test_grid_input_output(
-      "CSI 2J: Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) CSI "2J", (grid_5x8){0});
+      "ED(2): Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(2), (grid_5x8){0});
 
   test_grid_input_output("Backspace 0",
                          "w\b\bxy\b\bab",
@@ -620,20 +626,20 @@ static void test_erase(void) {
                              {"ywxxx"},
                          });
   test_grid_input_output("Insert Blanks 1",
-                         "helloooooo" CUB(10) CSI "1P",
+                         "helloooooo" CUB(10) DCH(1),
                          (grid_5x8){
                              {'h', 'e', 'l', 'l', 'o', 'o', 'o', 'o' },
                              {'o', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
   test_grid_input_output("Insert Blanks 2",
                          "www" CUB(3)
-                         /* delete first w */ CSI "1P"
-                         /* displace last w past end of line */ CSI "7@",
+                         /* delete first w */ DCH(1)
+                         /* displace last w past end of line */ ICH(7),
                          (grid_5x8){
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
   test_grid_input_output("Line Truncated",
-                         "abcd\r" CSI "2@",
+                         "abcd\r" ICH(2),
                          (grid_5x8){
                              {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
@@ -641,7 +647,7 @@ static void test_erase(void) {
 
 void test_scrolling(void) {
   test_grid_input_output("Line Truncated",
-                         "abcd\r" CSI "2@",
+                         "abcd\r" ICH(2),
                          (grid_5x8){
                              {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
