@@ -477,9 +477,22 @@ static bool DA_PRIMARY(struct fsm *fsm, struct csi *csi) {
   }
 }
 
-bool DA_TERTIARY(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("DA_TERTIARY"); return false; }
+bool DA_SECONDARY(struct fsm *fsm, struct csi *csi) {
+  switch (csi->params[0].primary) {
+  case 0: {
+      // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
+      // CSI  > Pp ; Pv ; Pc c
+      // Pp = terminal type, where '1' means VT220
+      // Pv = firmware version. Ghostty responds with 10, so it must be good.
+      // Pc indicates the ROM cartridge registration number and is always zero
+    string_push(&fsm->pending_output, u8"\x1b[>1;10;0c");
+    return true;
+  } break;
+  default: return csi_dispatch_todo(fsm, csi);
+  }
+}
 
-bool DA_SECONDARY(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; TODO("DA_SECONDARY"); return false; }
+bool DA_TERTIARY(struct fsm *fsm, struct csi *csi) { (void)fsm, (void)csi; OMITTED("DA_TERTIARY (VT400 and up)"); return false; }
 
 static bool VPA(struct fsm *fsm, struct csi *csi) {
   // TODO: Same as HPV, this probably needs to respect 'origin'
