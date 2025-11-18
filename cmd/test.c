@@ -22,6 +22,11 @@
 #define EL(x) CSI #x "K"
 #define SGR(x) CSI #x "m"
 #define SM(x) CSI #x "h"
+#define RI "\x1bM"
+#define IND "\x1b" "D"
+
+#define EIGHT(X) X, X, X, X, X, X, X, X
+#define FIVE(X) X, X, X, X, X
 
 static bool exit_on_failure = true;
 typedef char grid_5x8[5][8];
@@ -650,6 +655,24 @@ void test_scrolling(void) {
                          "abcd\r" ICH(2),
                          (grid_5x8){
                              {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
+                         });
+  test_grid_input_output("Reverse Index (RI)",
+                         "\x1b#8" CUP(3,2) RI "xyz" RI RI,
+                         (grid_5x8){
+                         { EIGHT(' ') },
+                         { EIGHT('E') },
+                         { 'E', 'x', 'y', 'z', 'E', 'E', 'E', 'E' },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         });
+  test_grid_input_output("Index (IND)",
+                         "\x1b#8" CUP(3,2) IND "xyz" IND IND IND RI "a",
+                         (grid_5x8){
+                         { EIGHT('E') },
+                         { 'E', 'x', 'y', 'z', 'E', 'E', 'E', 'E' },
+                         { EIGHT('E') },
+                         { ' ', ' ', ' ', ' ', 'a', ' ', ' ', ' ' },
+                         { EIGHT(' ') },
                          });
 }
 

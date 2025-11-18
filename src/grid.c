@@ -2,7 +2,6 @@
 #include "text.h"
 #include "utils.h"
 #include <stdlib.h>
-#define PRIVATE
 #include "grid.h"
 #include "emulator.h"
 
