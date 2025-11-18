@@ -63,6 +63,8 @@ static void grid_invalidate_scroll_region(struct grid *g) {
 // Lines outside the scroll region must not be affected by this.
 void grid_insert_lines(struct grid *g, int n) {
   assert(n > 0);
+  assert(g->scroll_top >= 0);
+  assert(g->scroll_bottom < g->h);
   if (g->cursor.row < g->scroll_top || g->cursor.row > g->scroll_bottom) return;
   int n_affected_rows = g->scroll_bottom - g->cursor.row + 1;
   n = MIN(n, n_affected_rows);
@@ -88,6 +90,8 @@ void grid_insert_lines(struct grid *g, int n) {
 // Lines outside the scroll region must not be affected by this.
 void grid_delete_lines(struct grid *g, int n) {
   assert(n > 0);
+  assert(g->scroll_top >= 0);
+  assert(g->scroll_bottom < g->h);
   if (g->cursor.row < g->scroll_top || g->cursor.row > g->scroll_bottom) return;
   int rows_after_cursor = g->scroll_bottom + 1;
   int n_affected_rows = rows_after_cursor - g->cursor.row;
@@ -243,8 +247,16 @@ void grid_reset_scroll_region(struct grid *g) {
 }
 
 void grid_set_scroll_region(struct grid *g, int top, int bottom) {
-  g->scroll_top = top;
-  g->scroll_bottom = bottom;
+  if (top < 0) top = 0;
+  if (bottom >= g->h) bottom = g->h - 1;
+
+  // the scroll region must contain at least two rows.
+  // Since top and bottom are inclusive bounds, that means bottom must be greater than top.
+  // If this is not the case, continue without updating the margins.
+  if (bottom >= top) {
+    g->scroll_top = top;
+    g->scroll_bottom = bottom;
+  }
   grid_position_cursor_column(g, 0);
   int row = g->options->origin_mode ? g->scroll_top : 0;
   grid_position_cursor_row(g, row);
