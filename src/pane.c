@@ -227,7 +227,7 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
     grid_row->dirty = false;
     int columnno = 1 + pane->rect.client.x;
     int lineno = 1 + pane->rect.client.y + row;
-    int line_length = MIN(grid_row->n_significant, g->w);
+    int line_length = MIN(grid_row->eol, g->w);
     string_push_csi(outbuffer, INT_SLICE(lineno, columnno), "H");
 
     for (int col = 0; col < line_length; col++) {

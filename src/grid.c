@@ -24,7 +24,7 @@ void grid_clear_line(struct grid *g, int n) {
   }
   row->dirty = true;
   row->newline = false;
-  row->n_significant = 0;
+  row->eol = 0;
 }
 
 void grid_position_cursor_row(struct grid *g, int y) {
@@ -206,7 +206,7 @@ void grid_insert(struct grid *g, struct grid_cell c, bool wrap) {
   row->cells[cur->col] = c;
   row->dirty = true;
   cur->col++;
-  row->n_significant = MAX(row->n_significant, cur->col);
+  row->eol = MAX(row->eol, cur->col);
 
   if (cur->col > grid_right(g)) {
     cur->wrap_pending = true;
@@ -266,33 +266,24 @@ void grid_set_scroll_region(struct grid *g, int top, int bottom) {
 
 /* inclusive erase between two cursor positions */
 void grid_erase_between_cursors(struct grid *g, struct cursor from, struct cursor to) {
-  int virtual_start = from.row;
-  int virtual_end = to.row;
   struct grid_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
 
-  from.row = virtual_start;
-  to.row = virtual_end;
-
-  for (int virtual_row = from.row; virtual_row <= to.row; virtual_row++) {
-    int col_start = virtual_row == from.row ? from.col : 0;
-    int col_end = virtual_row == to.row ? to.col : grid_right(g);
+  for (int r = from.row; r <= to.row; r++) {
+    int col_start = r == from.row ? from.col : 0;
+    int col_end = r == to.row ? to.col : grid_right(g);
     col_end = MIN(col_end, grid_right(g));
 
-    int row = virtual_row;
-    struct grid_row *line = &g->rows[row];
+    struct grid_row *row = &g->rows[r];
 
     for (; col_start <= col_end; col_start++) {
-      line->cells[col_start] = template;
+      row->cells[col_start] = template;
     }
 
-    line->dirty = true;
-    if (line->n_significant <= col_end && line->n_significant >= col_start) {
-      // If the most significant character was deleted, rewind it to at most 'x'
-      line->n_significant = MIN(line->n_significant, col_start);
-    } else {
-      // Otherwise restore the most significant character
-      line->n_significant = line->n_significant;
+    // If eol was in the range we just erased, update it to be at most the start of the range.
+    if (row->eol <= col_end && row->eol >= col_start) {
+      row->eol = MIN(row->eol, col_start);
     }
+    row->dirty = true;
   }
 }
 
@@ -305,7 +296,7 @@ void grid_insert_blanks_at_cursor(struct grid *g, int n) {
     struct grid_cell replacement = rcol < lcol ? template : row->cells[rcol];
     row->cells[col] = replacement;
   }
-  row->n_significant = MIN(row->n_significant + n, g->w);
+  row->eol = MIN(row->eol + n, g->w);
 }
 
 void grid_shift_from_cursor(struct grid *g, int n) {
@@ -318,7 +309,7 @@ void grid_shift_from_cursor(struct grid *g, int n) {
     row->cells[col] = replacement;
   }
   row->dirty = true;
-  if (row->n_significant > g->cursor.col) row->n_significant = MAX(0, row->n_significant - n);
+  if (row->eol > g->cursor.col) row->eol = MAX(0, row->eol - n);
 }
 void grid_carriage_return(struct grid *g) {
   grid_position_cursor_column(g, 0);
@@ -338,7 +329,7 @@ void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,
     struct grid_row *grid_row = &src->rows[row];
 
     int col = 0;
-    for (; col < src->w && col < grid_row->n_significant; col++) {
+    for (; col < src->w && col < grid_row->eol; col++) {
       struct grid_cell c = grid_row->cells[col];
       grid_insert(dst, c, wrap);
     }

@@ -78,7 +78,7 @@ struct grid_row {
   bool dirty;
   // Track how many characters are significant on this line. This is needed for
   // reflowing when resizing grids.
-  int n_significant;
+  int eol;
   struct grid_cell *cells;
 };
 

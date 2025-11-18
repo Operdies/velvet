@@ -129,7 +129,7 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
       for (int col = 0; col < g->w; col++) {
         row->cells[col] = E;
       }
-      row->n_significant = g->w;
+      row->eol = g->w;
       row->dirty = true;
     }
   } break;
