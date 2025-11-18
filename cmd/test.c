@@ -704,6 +704,11 @@ void test_csi_parsing(void) {
       (struct csi){
           .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
   test_csi_testcase(
+      "RGB Modern Syntax + colorspace",
+      u8"38:2::100:100:100m",
+      (struct csi){
+          .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 0, 100, 100, 100}}}});
+  test_csi_testcase(
       "RGB Legacy Syntax",
       u8"38;2;100;100;100m",
       (struct csi){

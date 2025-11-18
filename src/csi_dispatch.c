@@ -259,9 +259,12 @@ static char *csi_apply_sgr_from_params(struct grid_cell_style *style, int n, str
           int color = attribute->sub[1];
           *target = (struct color){.table = color, .cmd = COLOR_TABLE};
         } else if (type == 2) {
-          int red = attribute->sub[1];
-          int green = attribute->sub[2];
-          int blue = attribute->sub[3];
+          // if n_sub > 4, that means colorspace was specified. We always ignore colorspace, but because it preceedes
+          // the rgb values, the indices are shifted if it is present.
+          int start = attribute->n_sub > 4 ? 2 : 1;
+          int red = attribute->sub[start];
+          int green = attribute->sub[start + 1];
+          int blue = attribute->sub[start + 2];
           *target = (struct color){.r = red, .g = green, .b = blue, .cmd = COLOR_RGB};
         }
       } else if (color == 9) { /* reset */

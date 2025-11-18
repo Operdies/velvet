@@ -79,6 +79,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
       *read = i;
       return false;
     }
+    param->n_sub = n_subparameters;
   }
 
   *read = i;

@@ -16,7 +16,8 @@ enum csi_fsm_state {
 
 struct csi_param {
   uint32_t primary;
-  uint8_t sub[4];
+  uint8_t n_sub;
+  uint8_t sub[5];
 };
 
 struct csi {
