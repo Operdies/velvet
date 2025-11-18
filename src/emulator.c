@@ -413,9 +413,11 @@ static void fsm_dispatch_csi(struct fsm *fsm, uint8_t ch) {
     uint8_t *buffer = fsm->command_buffer.content + 2;
     int len = fsm->command_buffer.len - 2;
     int parsed = csi_parse(&csi, buffer, len);
-    assert(len == parsed);
     if (csi.state == CSI_ACCEPT) {
+      assert(len == parsed);
       csi_dispatch(fsm, &csi);
+    } else {
+      logmsg("Reject CSI: %.*s", len, fsm->command_buffer.content);
     }
     fsm->state = fsm_ground;
   } else if (fsm->command_buffer.len >= MAX_ESC_SEQ_LEN) {

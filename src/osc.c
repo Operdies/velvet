@@ -103,6 +103,11 @@ int osc_parse(struct osc *o, const uint8_t *buffer, int len, const uint8_t *st) 
   }
 
   if (buffer[i] != ';') {
+    // These particular OSC commands to not require a Pt argument
+    if (ps == 110 || ps == 111 || ps == 112) {
+      o->state = OSC_ACCEPT;
+      return i;
+    }
     logmsg("Reject OSC: Expected semicolon before Pt");
     o->state = OSC_REJECT;
     return i;
@@ -112,5 +117,5 @@ int osc_parse(struct osc *o, const uint8_t *buffer, int len, const uint8_t *st) 
   o->state = OSC_ACCEPT;
   o->pt = (struct osc_pt){.len = len - i, .text = pt};
 
-  return 0;
+  return i;
 }
