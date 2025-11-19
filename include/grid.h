@@ -71,8 +71,8 @@ struct grid_cell {
 };
 
 struct grid_row {
-  // Track newline locations to support rewrapping
-  bool newline;
+  // If set, this indicates a newline was inserted at `eol`. This is relevant when the grid is resized.
+  bool has_newline;
   // Track whether or not the line starting with this cell is dirty (should be
   // re-rendered)
   bool dirty;
@@ -104,7 +104,6 @@ struct grid {
   struct grid_row *rows;   // rows[h]
   struct cursor cursor;
   struct cursor saved_cursor;
-  struct emulator_options *options;
 };
 
 void grid_move_or_scroll_down(struct grid *g);

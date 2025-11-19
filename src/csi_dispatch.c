@@ -609,7 +609,10 @@ static bool DECSTBM(struct fsm *fsm, struct csi *csi) {
   if (top > 0) top--;
   if (bottom > 0) bottom--;
 
-  grid_set_scroll_region(fsm->active_grid, top, bottom);
+  struct grid *g = fsm->active_grid;
+  grid_set_scroll_region(g, top, bottom);
+  grid_position_cursor_column(g, 0);
+  grid_position_cursor_row(g, fsm->options.origin_mode ? top : 0);
   return true;
 }
 

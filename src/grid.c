@@ -3,7 +3,6 @@
 #include "utils.h"
 #include <stdlib.h>
 #include "grid.h"
-#include "emulator.h"
 
 #define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
 #define grid_column(g) (g->cursor.col)
@@ -16,13 +15,13 @@
 
 
 void grid_clear_line(struct grid *g, int n) {
-  struct grid_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
+  struct grid_cell clear = { .symbol = utf8_blank, .style = g->cursor.brush };
   struct grid_row *row = &g->rows[n];
   for (int i = 0; i < g->w; i++) {
-    row->cells[i] = template;
+    row->cells[i] = clear;
   }
   row->dirty = true;
-  row->newline = false;
+  row->has_newline = false;
   row->eol = 0;
 }
 
@@ -112,7 +111,7 @@ void grid_delete_lines(struct grid *g, int n) {
 void grid_newline(struct grid *g, bool carriage) {
   if (carriage) grid_carriage_return(g);
   struct grid_row *row = grid_row(g);
-  row->newline = true;
+  row->has_newline = true;
   grid_move_or_scroll_down(g);
 }
 
@@ -218,7 +217,7 @@ void grid_resize_if_needed(struct grid *g, int w, int h, bool wrap) {
   if (!g->_cells) {
     grid_initialize(g, w, h);
   } else if (g->h != h || g->w != w) {
-    struct grid new = {.w = w, .h = h, .options = g->options };
+    struct grid new = {.w = w, .h = h};
     grid_resize_if_needed(&new, w, h, false);
     grid_copy(&new, g, wrap);
     grid_destroy(g);
@@ -257,9 +256,6 @@ void grid_set_scroll_region(struct grid *g, int top, int bottom) {
     g->scroll_top = top;
     g->scroll_bottom = bottom;
   }
-  grid_position_cursor_column(g, 0);
-  int row = g->options->origin_mode ? g->scroll_top : 0;
-  grid_position_cursor_row(g, row);
 }
 
 /* inclusive erase between two cursor positions */
@@ -342,7 +338,7 @@ void grid_copy(struct grid *restrict dst, const struct grid *const restrict src,
         grid_insert(dst, c, false);
       }
     }
-    if (grid_row->newline) {
+    if (grid_row->has_newline) {
       grid_newline(dst, true);
     }
   }

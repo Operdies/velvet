@@ -141,8 +141,6 @@ static void fsm_dispatch_pnd(struct fsm *fsm, unsigned char ch) {
 
 void fsm_ensure_grid_initialized(struct fsm *fsm) {
   struct grid *g = fsm->options.alternate_screen ? &fsm->alternate : &fsm->primary;
-  fsm->primary.options = &fsm->options;
-  fsm->alternate.options = &fsm->options;
   fsm_set_active_grid(fsm, g);
 }
 
