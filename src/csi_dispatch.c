@@ -549,6 +549,10 @@ static bool DECSET(struct fsm *fsm, struct csi *csi) {
   case 1001: OMITTED("Hilite mouse tracking"); return false;
   case 1015: OMITTED("urxvt mouse mode"); return false;
   case 9: OMITTED("X10 mouse reporting"); return false;
+  case 2026:
+    TODO("Synchronized rendering: "
+         "https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md");
+    return false;
   default: return csi_dispatch_todo(fsm, csi);
   }
   return true;

@@ -54,11 +54,16 @@ void grid_invalidate(struct grid *g) {
   }
 }
 
-static void grid_invalidate_scroll_region(struct grid *g) {
-  for (int i = g->scroll_top; i <= g->scroll_bottom; i++) {
-    g->rows[i].dirty = true;
+static void grid_swap_rows(struct grid *g, int r1, int r2) {
+  if (r1 != r2) {
+    struct grid_row tmp = g->rows[r1];
+    g->rows[r1] = g->rows[r2];
+    g->rows[r2] = tmp;
+    g->rows[r1].dirty = true;
+    g->rows[r2].dirty = true;
   }
 }
+
 
 // If the cursor is outside the scroll region, this should do nothing.
 // Lines outside the scroll region must not be affected by this.
@@ -74,14 +79,10 @@ void grid_insert_lines(struct grid *g, int n) {
   // except for the last `n` rows which will be precisely at [row .. row + n],
   // aka the blank lines we need to insert at the cursor.
   for (int row = g->scroll_bottom; row >= g->cursor.row + n; row--) {
-    int swap_target = row - n;
-    struct grid_row tmp = g->rows[swap_target];
-    g->rows[swap_target] = g->rows[row];
-    g->rows[row] = tmp;
-    g->rows[row].dirty = true;
+    grid_swap_rows(g, row, row - n);
   }
 
-  // clear the lines which were pushed back
+  // clear the first `n` rows
   for (int row = g->cursor.row; row < g->cursor.row + n; row++) {
     grid_clear_line(g, row);
   }
@@ -99,11 +100,7 @@ void grid_delete_lines(struct grid *g, int n) {
   n = MIN(n, n_affected_rows);
 
   for (int row = g->cursor.row; row < rows_after_cursor - n; row++) {
-    int swap_target = row + n;
-    struct grid_row tmp = g->rows[swap_target];
-    g->rows[swap_target] = g->rows[row];
-    g->rows[row] = tmp;
-    g->rows[row].dirty = true;
+    grid_swap_rows(g, row, row + n);
   }
 
   // clear the final `n` rows
@@ -121,8 +118,10 @@ void grid_newline(struct grid *g, bool carriage) {
 
 static void grid_rotate_rows_forward(struct grid *g) {
   struct grid_row last = g->rows[g->scroll_bottom];
+  last.dirty = true;
   for (int i = g->scroll_bottom; i > g->scroll_top; i--) {
     g->rows[i] = g->rows[i-1];
+    g->rows[i].dirty = true;
   }
   g->rows[g->scroll_top] = last;
 }
@@ -131,8 +130,10 @@ static void grid_rotate_rows_forward(struct grid *g) {
  * it will mean managing scrollback and somehow getting a new row. */
 static void grid_rotate_rows_reverse(struct grid *g) {
   struct grid_row first = g->rows[g->scroll_top];
+  first.dirty = true;
   for (int i = g->scroll_top; i < g->scroll_bottom; i++) {
     g->rows[i] = g->rows[i + 1];
+    g->rows[i].dirty = true;
   }
   g->rows[g->scroll_bottom] = first;
 }
@@ -141,7 +142,6 @@ void grid_move_or_scroll_up(struct grid *g) {
   if (g->cursor.row == g->scroll_top) {
     grid_rotate_rows_forward(g);
     grid_clear_line(g, g->scroll_top);
-    grid_invalidate_scroll_region(g);
   } else {
     grid_move_cursor(g, 0, -1);
   }
@@ -152,7 +152,6 @@ void grid_move_or_scroll_down(struct grid *g) {
   if (c->row == g->scroll_bottom) {
     grid_rotate_rows_reverse(g);
     grid_clear_line(g, g->scroll_bottom);
-    grid_invalidate_scroll_region(g);
   } else {
     c->row = c->row + 1;
   }
