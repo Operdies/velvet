@@ -4,30 +4,30 @@
 #include <ctype.h>
 #include <string.h>
 
-static bool osc_dispatch_todo(struct fsm *fsm, struct osc *osc) {
-  (void)fsm;
+static bool osc_dispatch_todo(struct vte *vte, struct osc *osc) {
+  (void)vte;
   TODO("OSC %d %.*s", osc->ps, osc->pt.len, osc->pt.text);
   return false;
 }
 
-static bool osc_dispatch_background_color(struct fsm *fsm, struct osc *osc) {
-  string_push(&fsm->pending_output, u8"\x1b]11;rgb:0000/0000/0000");
-  string_push(&fsm->pending_output, osc->st);
+static bool osc_dispatch_background_color(struct vte *vte, struct osc *osc) {
+  string_push(&vte->pending_output, u8"\x1b]11;rgb:0000/0000/0000");
+  string_push(&vte->pending_output, osc->st);
   return true;
 }
 
-static bool osc_dispatch_hyperlink(struct fsm *fsm, struct osc *osc) {
-  (void)fsm;
+static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
+  (void)vte;
   TODO("OSC hyperlink %d %.*s", osc->ps, osc->pt.len, osc->pt.text);
   return false;
 }
 
-bool osc_dispatch(struct fsm *fsm, struct osc *osc) {
+bool osc_dispatch(struct vte *vte, struct osc *osc) {
   assert(osc->state == OSC_ACCEPT);
   switch (osc->ps) {
-  case OSC_HYPERLINK: return osc_dispatch_hyperlink(fsm, osc);
-  case OSC_BACKGROUND_COLOR: return osc_dispatch_background_color(fsm, osc);
-  default: return osc_dispatch_todo(fsm, osc);
+  case OSC_HYPERLINK: return osc_dispatch_hyperlink(vte, osc);
+  case OSC_BACKGROUND_COLOR: return osc_dispatch_background_color(vte, osc);
+  default: return osc_dispatch_todo(vte, osc);
   };
 }
 

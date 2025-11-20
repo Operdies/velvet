@@ -1,13 +1,13 @@
 #ifndef OSC_H
 #define OSC_H
 
-#include "emulator.h"
+#include "vte.h"
 #include <stdint.h>
 #include <unistd.h>
 
 #define OSC_MAX_PARAMS 16
 
-enum osc_fsm_state {
+enum osc_vte_state {
   OSC_GROUND,
   OSC_ACCEPT,
   OSC_REJECT,
@@ -34,7 +34,7 @@ struct osc_parameter {
 };
 
 struct osc {
-  enum osc_fsm_state state;
+  enum osc_vte_state state;
   enum osc_command ps;
   struct osc_pt pt;
   const uint8_t *st; // either BEL (\a) or ST (\x1b\)
@@ -43,6 +43,6 @@ struct osc {
 };
 
 int osc_parse(struct osc *c, const uint8_t *buffer, int len, const uint8_t *st);
-bool osc_dispatch(struct fsm *fsm, struct osc *osc);
+bool osc_dispatch(struct vte *vte, struct osc *osc);
 
 #endif /*  OSC_H */

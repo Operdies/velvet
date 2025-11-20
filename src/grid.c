@@ -358,3 +358,22 @@ void grid_full_reset(struct grid *g) {
   struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
   grid_erase_between_cursors(g, start, end);
 }
+
+bool color_equals(const struct color *const a, const struct color *const b) {
+  if (a->cmd != b->cmd) return false;
+  switch (a->cmd) {
+  case COLOR_RESET: return true;
+  case COLOR_RGB: return a->r == b->r && a->g == b->g && a->b == b->b;
+  case COLOR_TABLE: return a->table == b->table;
+  }
+  return false;
+}
+
+bool cell_equals(const struct grid_cell *const a, const struct grid_cell *const b) {
+  return utf8_equals(&a->symbol, &b->symbol) && cell_style_equals(&a->style, &b->style);
+}
+
+bool cell_style_equals(const struct grid_cell_style *const a, const struct grid_cell_style *const b) {
+  return a->attr == b->attr && color_equals(&a->fg, &b->fg) && color_equals(&a->bg, &b->bg);
+}
+

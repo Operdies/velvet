@@ -106,6 +106,9 @@ struct grid {
   struct cursor saved_cursor;
 };
 
+bool cell_equals(const struct grid_cell *const a, const struct grid_cell *const b);
+bool cell_style_equals(const struct grid_cell_style *const a, const struct grid_cell_style *const b);
+bool color_equals(const struct color *const a, const struct color *const b);
 void grid_move_or_scroll_down(struct grid *g);
 void grid_move_or_scroll_up(struct grid *g);
 void grid_backspace(struct grid *g);
@@ -117,6 +120,7 @@ void grid_erase_between_cursors(struct grid *g, struct cursor from,
                                 struct cursor to);
 void grid_full_reset(struct grid *g);
 void grid_initialize(struct grid *g, int w, int h);
+void grid_invalidate(struct grid *g);
 void grid_insert(struct grid *g, struct grid_cell c, bool wrap);
 void grid_insert_blanks_at_cursor(struct grid *g, int n);
 void grid_move_cursor(struct grid *g, int x, int y);

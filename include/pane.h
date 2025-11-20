@@ -1,7 +1,7 @@
 #ifndef PANE_H
 #define PANE_H
 
-#include "emulator.h"
+#include "vte.h"
 #include "collections.h"
 
 struct bounds {
@@ -23,7 +23,7 @@ struct pane {
     struct bounds client;
   } rect;
   struct pane *next;
-  struct fsm fsm;
+  struct vte vte;
 };
 
 extern struct pane *clients;

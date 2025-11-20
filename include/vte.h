@@ -1,22 +1,22 @@
-#ifndef EMULATOR_H
-#define EMULATOR_H
+#ifndef VTE_H
+#define VTE_H
 
 #include "grid.h"
 #include "text.h"
 #include "collections.h"
 #include <stdint.h>
 
-enum fsm_state {
-  fsm_ground,
-  fsm_utf8,
-  fsm_escape,
-  fsm_csi,
-  fsm_osc,
-  fsm_dcs,
-  fsm_pnd,
-  fsm_spc,
-  fsm_pct,
-  fsm_charset,
+enum vte_state {
+  vte_ground,
+  vte_utf8,
+  vte_escape,
+  vte_csi,
+  vte_osc,
+  vte_dcs,
+  vte_pnd,
+  vte_spc,
+  vte_pct,
+  vte_charset,
 };
 
 struct modifier_options {
@@ -168,10 +168,10 @@ struct emulator_options {
 };
 
 /* finite state machine for parsing ansi escape codes */
-struct fsm {
+struct vte {
   int w, h;
   /* the current state of the machine */
-  enum fsm_state state;
+  enum vte_state state;
   struct emulator_options options;
   struct grid primary;
   struct grid alternate;
@@ -188,20 +188,14 @@ static const struct emulator_options emulator_options_default = {
     .cursor.visible = true,
 };
 
-static const struct fsm fsm_default = {
+static const struct vte vte_default = {
     .options = emulator_options_default,
 };
 
-void fsm_process(struct fsm *fsm, unsigned char *buf, int n);
-void fsm_destroy(struct fsm *fsm);
-void grid_invalidate(struct grid *g);
-void fsm_ensure_grid_initialized(struct fsm *fsm);
-bool cell_equals(const struct grid_cell *const a,
-                 const struct grid_cell *const b);
-bool cell_style_equals(const struct grid_cell_style *const a,
-                       const struct grid_cell_style *const b);
-bool color_equals(const struct color *const a, const struct color *const b);
-void fsm_set_active_grid(struct fsm *fsm, struct grid *grid);
-void fsm_send_device_attributes(struct fsm *fsm);
+void vte_process(struct vte *vte, unsigned char *buf, int n);
+void vte_destroy(struct vte *vte);
+void vte_ensure_grid_initialized(struct vte *vte);
+void vte_set_active_grid(struct vte *vte, struct grid *grid);
+void vte_send_device_attributes(struct vte *vte);
 
-#endif /*  EMULATOR_H */
+#endif /*  VTE_H */

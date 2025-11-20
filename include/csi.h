@@ -2,10 +2,10 @@
 #define CSI_H
 
 #include <stdint.h>
-#include "emulator.h"
+#include "vte.h"
 #define CSI_MAX_PARAMS 16
 
-enum csi_fsm_state {
+enum csi_vte_state {
   CSI_GROUND,
   CSI_ACCEPT,
   CSI_PARAMETER,
@@ -21,7 +21,7 @@ struct csi_param {
 };
 
 struct csi {
-  enum csi_fsm_state state;
+  enum csi_vte_state state;
   struct csi_param params[CSI_MAX_PARAMS];
   int n_params;
   uint8_t leading;
@@ -30,6 +30,6 @@ struct csi {
 };
 
 int csi_parse(struct csi *c, const uint8_t *buffer, int len);
-bool csi_dispatch(struct fsm *fsm, struct csi *csi);
+bool csi_dispatch(struct vte *vte, struct csi *csi);
 
 #endif /*  CSI_H */

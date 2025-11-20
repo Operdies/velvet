@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "collections.h"
-#include "emulator.h"
+#include "vte.h"
 #include "utils.h"
 #include "virtual_terminal_sequences.h"
 
@@ -35,7 +35,7 @@ void pane_destroy(struct pane *pane) {
     close(pane->logfile);
     pane->logfile = 0;
   }
-  fsm_destroy(&pane->fsm);
+  vte_destroy(&pane->vte);
   free(pane->process);
   pane->pty = pane->pid = pane->logfile = 0;
   pane->process = nullptr;
@@ -216,11 +216,11 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
 
 void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
   // Ensure the grid content is in sync with the pane just-in-time
-  pane->fsm.w = pane->rect.client.w;
-  pane->fsm.h = pane->rect.client.h;
-  fsm_ensure_grid_initialized(&pane->fsm);
+  pane->vte.w = pane->rect.client.w;
+  pane->vte.h = pane->rect.client.h;
+  vte_ensure_grid_initialized(&pane->vte);
 
-  struct grid *g = pane->fsm.active_grid;
+  struct grid *g = pane->vte.active_grid;
   for (int row = 0; row < g->h; row++) {
     struct grid_row *grid_row = &g->rows[row];
     if (!redraw && !grid_row->dirty) continue;
@@ -342,12 +342,12 @@ void pane_draw_border(struct pane *p, struct string *b) {
 }
 
 void pane_process_output(struct pane *pane, uint8_t *buf, int n) {
-  // Pass current size information to fsm so it can determine if grids should be resized
-  pane->fsm.w = pane->rect.client.w;
-  pane->fsm.h = pane->rect.client.h;
+  // Pass current size information to vte so it can determine if grids should be resized
+  pane->vte.w = pane->rect.client.w;
+  pane->vte.h = pane->rect.client.h;
   if (pane->logfile > 0) write(pane->logfile, buf, n);
-  fsm_process(&pane->fsm, buf, n);
-  string_flush(&pane->fsm.pending_output, pane->pty, nullptr);
+  vte_process(&pane->vte, buf, n);
+  string_flush(&pane->vte.pending_output, pane->pty, nullptr);
 }
 
 static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
@@ -374,7 +374,7 @@ void pane_resize(struct pane *pane, struct bounds outer) {
 
   // If anything changed about the window position / dimensions, do a full redraw
   if (!bounds_equal(&outer, &pane->rect.window) || !bounds_equal(&inner, &pane->rect.client)) {
-    grid_invalidate(pane->fsm.active_grid);
+    grid_invalidate(pane->vte.active_grid);
     pane->border_dirty = true;
   }
   pane->rect.window = outer;
@@ -421,7 +421,7 @@ void pane_notify_focus(struct pane *p, bool focused) {
   if (p) {
     p->border_dirty = true;
     p->has_focus = focused;
-    if (p->pty && p->fsm.options.focus_reporting) {
+    if (p->pty && p->vte.options.focus_reporting) {
       if (focused) {
         write(p->pty, vt_focus_in.content, vt_focus_in.len);
       } else {

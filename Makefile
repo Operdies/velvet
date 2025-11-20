@@ -37,7 +37,7 @@ CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_D
 CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
-OBJECTS += pane utils collections emulator text csi csi_dispatch grid osc
+OBJECTS += pane utils collections vte text csi csi_dispatch grid osc
 OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)

@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "collections.h"
-#include "emulator.h"
+#include "vte.h"
 #include "pane.h"
 #include "virtual_terminal_sequences.h"
 #include "utils.h"
@@ -110,10 +110,10 @@ static void arrange(struct winsize ws, struct pane *p) {
 }
 
 static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
-  if (pane && pane->fsm.active_grid) {
+  if (pane && pane->vte.active_grid) {
     focused = pane;
     // set cursor position within the pane
-    struct grid *g = pane->fsm.active_grid;
+    struct grid *g = pane->vte.active_grid;
     struct cursor *c = &g->cursor;
     int lineno = 1 + pane->rect.client.y + c->row;
     int columnno = 1 + pane->rect.client.x + c->col;
@@ -175,7 +175,7 @@ static void new_client() {
       // TODO: Start user's preferred shell
       new->process = strdup("zsh");
       new->next = clients;
-      new->fsm = fsm_default;
+      new->vte = vte_default;
       clients = new;
       arrange(ws_current, clients);
       pane_start(new);
@@ -231,7 +231,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     } else if (s == bracketed_paste && running_hash_match(running_hash, paste_end, 6)) {
       pastebuffer.len -= 5;
       s = normal;
-      if (focused && focused->fsm.options.bracketed_paste) {
+      if (focused && focused->vte.options.bracketed_paste) {
         string_push(&writebuffer, paste_start.characters);
         string_push_range(&writebuffer, pastebuffer.content, pastebuffer.len);
         string_push(&writebuffer, paste_end.characters);
@@ -263,14 +263,14 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
       }
     } break;
     case csi: {
-      if (ch >= 'A' && ch <= 'D' && focused->fsm.options.application_mode) {
+      if (ch >= 'A' && ch <= 'D' && focused->vte.options.application_mode) {
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, 'O');
         string_push_char(&writebuffer, ch);
       } else if (ch == 'O' || ch == 'I') {
         // Focus event. Forward it if the focused pane has the feature enabled
         bool did_focus = ch == 'I';
-        if (focused->fsm.options.focus_reporting) {
+        if (focused->vte.options.focus_reporting) {
           if (did_focus)
             string_push_slice(&writebuffer, vt_focus_in);
           else
@@ -298,7 +298,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
     s = normal;
   }
 
-  // TODO: Push this to focused->fsm->pending_output instead?
+  // TODO: Push this to focused->vte->pending_output instead?
   // To consolidate pty writing and avoid blocking the main loop / other clients
   // in cases where a single client is slow
   if (writebuffer.len) {
@@ -335,7 +335,7 @@ void handle_sigwinch(struct string *draw_buffer) {
     die("ioctl TIOCGWINSZ:");
   }
   for (struct pane *p = clients; p; p = p->next) {
-    grid_invalidate(p->fsm.active_grid);
+    grid_invalidate(p->vte.active_grid);
     p->border_dirty = true;
   }
   arrange(ws_current, clients);
@@ -362,25 +362,24 @@ static void render_frame(struct string *draw_buffer) {
 
   if (!focused) focus_pane(clients);
   if (focused) move_cursor_to_pane(focused, draw_buffer);
-  if (focused && focused->fsm.options.cursor.style != current_cursor_style) {
-    current_cursor_style = focused->fsm.options.cursor.style;
+  if (focused && focused->vte.options.cursor.style != current_cursor_style) {
+    current_cursor_style = focused->vte.options.cursor.style;
     string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
   }
-  if (focused && focused->fsm.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
+  if (focused && focused->vte.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
 
   string_flush(draw_buffer, STDOUT_FILENO, NULL);
 }
 
 int main(int argc, char **argv) {
   terminal_setup();
-
   install_signal_handlers();
 
   {
     struct pane *prev = NULL;
     for (int i = 1; i < argc; i++) {
       struct pane *p = calloc(1, sizeof(*p));
-      memcpy(&p->fsm, &fsm_default, sizeof(fsm_default));
+      memcpy(&p->vte, &vte_default, sizeof(vte_default));
       p->process = strdup(argv[i]);
       if (!prev) {
         // first element -- asign head
@@ -395,7 +394,7 @@ int main(int argc, char **argv) {
     if (argc < 2) {
       clients = calloc(1, sizeof(*clients));
       clients->process = strdup("zsh");
-      memcpy(&clients->fsm, &fsm_default, sizeof(fsm_default));
+      memcpy(&clients->vte, &vte_default, sizeof(vte_default));
     }
   }
 
@@ -508,7 +507,7 @@ int main(int argc, char **argv) {
         fds[i + 1].fd = p->pty;
         fds[i + 1].events = POLL_IN;
         // if we have pending writes, monitor pollout
-        if (p->fsm.pending_output.len > 0) fds[i + 1].events |= POLL_OUT;
+        if (p->vte.pending_output.len > 0) fds[i + 1].events |= POLL_OUT;
         i++;
       }
       nfds = 1 + i;

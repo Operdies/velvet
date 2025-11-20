@@ -1,0 +1,473 @@
+#include "vte.h"
+#include "collections.h"
+#include "csi.h"
+#include "osc.h"
+#include "text.h"
+#include "utils.h"
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#define NUL 0
+#define BELL '\a'
+#define BSP '\b'
+#define DEL 0x7f
+#define ESC '\e'
+#define FORMFEED '\f'
+#define NEWLINE '\n'
+#define RET '\r'
+#define TAB '\t'
+#define VTAB '\v'
+#define CSI '['
+#define DCS 'P'
+#define PND '#'
+#define SPC ' '
+#define PCT '%'
+#define OSC ']'
+#define SI 0x0F
+#define SO 0x0E
+#define ENQ 0x5
+
+// Unclear what this should be -- an escape sequence can contain clipboard information, which can
+// in be arbitrarily large, but in practice will probably not exceed a couple of kB
+// It can also contain a picture in sixel format, which can also be quite large.
+#define MAX_ESC_SEQ_LEN (1 << 16)
+
+void vte_set_active_grid(struct vte *vte, struct grid *g) {
+  assert(g == &vte->primary || g == &vte->alternate);
+  bool grid_changed = false;
+  if (vte->active_grid != g) {
+    grid_changed = true;
+    vte->active_grid = g;
+    for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
+  }
+  bool reflow_content = vte->active_grid == &vte->primary;
+  grid_resize_if_needed(vte->active_grid, vte->w, vte->h, reflow_content);
+
+  if (grid_changed && g == &vte->alternate) {
+    // TODO: when scrollback is introduced, the scrollback buffer
+    // should be accessible from the alternate screen, but new lines should
+    // not be appended; the `m` rows in the alternate screen should be reused.
+    // Leaving the alternate screen discards the `m` rows
+    g->cursor = vte->primary.cursor;
+    struct cursor start = {.col = grid_left(g), .row = grid_top(g)};
+    struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
+    grid_erase_between_cursors(g, start, end);
+  }
+}
+
+void vte_send_device_attributes(struct vte *vte) {
+  // Advertise VT102 support (same as alacritty)
+  // TODO: Figure out how to advertise exact supported features here.
+  // Step 0: find good documentation.
+  string_push(&vte->pending_output, u8"\x1b[?6c");
+}
+
+static void vte_dispatch_charset(struct vte *vte, uint8_t ch) {
+  assert(vte->command_buffer.len > 1);
+  string_push_char(&vte->command_buffer, ch);
+
+  int len = vte->command_buffer.len;
+  if (len > 3) {
+    vte->state = vte_ground;
+    TODO("charset specifier too long! (rejected)");
+    return;
+  }
+
+  // These symbols are not terminal.
+  if (ch == '"' || ch == '%' || ch == '&') {
+    return;
+  }
+
+  vte->state = vte_ground;
+
+  uint8_t designate = vte->command_buffer.content[1];
+  int index = 0;
+  if (designate == '(') { // G0
+    index = 0;
+  } else if (designate == ')' || designate == '-') { // G1
+    index = 1;
+  } else if (designate == '*' || designate == '.') { // G2
+    index = 2;
+  } else if (designate == '+' || designate == '/') { // G3
+    index = 3;
+  } else {
+    TODO("Unknown charset designator: `%c'", designate);
+    return;
+  }
+
+  if (len == 3 && ch < LENGTH(charset_lookup)) {
+    enum charset new_charset = charset_lookup[ch];
+    vte->options.charset.charsets[index] = new_charset;
+    if (new_charset != CHARSET_ASCII) {
+      TODO("Implement charset %c", ch);
+    }
+  } else {
+    // unsupported charset -- fallback to ascii
+    vte->options.charset.charsets[index] = CHARSET_ASCII;
+    // TODO("Implement charset %.*s", len - 1, vte->command_buffer.content + 1);
+    TODO("Implement charset %c", ch);
+  }
+}
+
+static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
+  // All pnd commands are single character commands
+  // and can be applied immediately
+  vte->state = vte_ground;
+  switch (ch) {
+  case '3': OMITTED("DECDHL / TOP"); break;
+  case '4': OMITTED("DECDHL / BOTTOM"); break;
+  case '5': OMITTED("DECSWL"); break;
+  case '6': OMITTED("DECDWL"); break;
+  case '8': { /* DECALN */
+    struct grid_cell E = {.symbol = {.utf8 = {'E'}}};
+    struct grid *g = vte->active_grid;
+    for (int rowidx = 0; rowidx < g->h; rowidx++) {
+      struct grid_row *row = &g->rows[rowidx];
+      for (int col = 0; col < g->w; col++) {
+        row->cells[col] = E;
+      }
+      row->eol = g->w;
+      row->dirty = true;
+    }
+  } break;
+  default: {
+    logmsg("Unknown ESC # command: %x", ch);
+  } break;
+  }
+}
+
+void vte_ensure_grid_initialized(struct vte *vte) {
+  struct grid *g = vte->options.alternate_screen ? &vte->alternate : &vte->primary;
+  vte_set_active_grid(vte, g);
+}
+
+static void ground_esc(struct vte *vte, uint8_t ch) {
+  vte->state = vte_escape;
+  string_clear(&vte->command_buffer);
+  string_push_char(&vte->command_buffer, ch);
+}
+static void ground_noop(struct vte *vte, uint8_t ch) {
+  (void)vte, (void)ch;
+}
+
+static void ground_enquiry(struct vte *vte, uint8_t ch) {
+  (void)vte, (void)ch;
+  TODO("Enquiry");
+}
+
+static void ground_carriage_return(struct vte *vte, uint8_t ch) {
+  (void)ch;
+  grid_carriage_return(vte->active_grid);
+}
+
+static void ground_backspace(struct vte *vte, uint8_t ch) {
+  (void)ch;
+  grid_backspace(vte->active_grid);
+}
+static void ground_vtab(struct vte *vte, uint8_t ch) {
+  (void)ch;
+  grid_move_or_scroll_down(vte->active_grid);
+}
+
+static void ground_tab(struct vte *vte, uint8_t ch) {
+  (void)ch;
+  const int tabwidth = 8;
+  int x = vte->active_grid->cursor.col;
+  int x2 = ((x / tabwidth) + 1) * tabwidth;
+  int numSpaces = x2 - x;
+  struct grid_cell c = { .style = vte->active_grid->cursor.brush, .symbol = utf8_blank };
+  grid_insert(vte->active_grid, c, vte->options.auto_wrap_mode);
+  for (int i = 1; i < numSpaces; i++) {
+    grid_insert(vte->active_grid, c, false);
+  }
+}
+
+static void ground_bell(struct vte *vte, uint8_t ch) {
+  (void)vte, (void)ch;
+  write(STDOUT_FILENO, "\a", 1);
+}
+
+static void ground_newline(struct vte *vte, uint8_t ch) {
+  (void)ch;
+  grid_newline(vte->active_grid, vte->options.auto_return);
+}
+
+static void ground_accept(struct vte *vte) {
+  struct utf8 clear = {0};
+  struct grid *g = vte->active_grid;
+  struct grid_cell c = { .symbol = vte->pending_symbol, .style = vte->active_grid->cursor.brush };
+  grid_insert(g, c, vte->options.auto_wrap_mode);
+  vte->previous_symbol = vte->pending_symbol;
+  vte->pending_symbol = clear;
+}
+static void ground_reject(struct vte *vte) {
+  struct utf8 clear = {0};
+  struct utf8 copy = vte->pending_symbol;
+  vte->pending_symbol = clear;
+  // If we are rejecting this symbol, we should
+  // Render a replacement char for this sequence (U+FFFD)
+  struct grid_cell replacement = {.symbol = utf8_fffd};
+  struct grid *g = vte->active_grid;
+  grid_insert(g, replacement, vte->options.auto_wrap_mode);
+  uint8_t n = utf8_length(copy);
+  if (n > 1) vte_process(vte, &copy.utf8[1], n - 1);
+}
+
+static void ground_process_shift_in(struct vte *vte, uint8_t ch) {
+  assert(ch == SI);
+  vte->options.charset.active_charset = CHARSET_G0;
+}
+static void ground_process_shift_out(struct vte *vte, uint8_t ch) {
+  assert(ch == SO);
+  vte->options.charset.active_charset = CHARSET_G1;
+}
+
+static void DISPATCH_RI(struct vte *vte) {
+  grid_move_or_scroll_up(vte->active_grid);
+}
+
+static void DISPATCH_IND(struct vte *vte) {
+  grid_move_or_scroll_down(vte->active_grid);
+}
+
+static void DISPATCH_NEL(struct vte *vte) {
+  grid_move_or_scroll_down(vte->active_grid);
+  grid_position_cursor_column(vte->active_grid, 0);
+}
+
+static void DISPATCH_HTS(struct vte *vte)   { (void)vte; TODO("HTS"); }
+static void DISPATCH_SS2(struct vte *vte)   { (void)vte; TODO("SS2"); }
+static void DISPATCH_SS3(struct vte *vte)   { (void)vte; TODO("SS3"); }
+static void DISPATCH_DCS(struct vte *vte)   { vte->state = vte_dcs; }
+static void DISPATCH_SPA(struct vte *vte)   { (void)vte; TODO("SPA"); }
+static void DISPATCH_EPA(struct vte *vte)   { (void)vte; TODO("EPA"); }
+static void DISPATCH_SOS(struct vte *vte)   { (void)vte; TODO("SOS"); }
+static void DISPATCH_DECID(struct vte *vte) { vte_send_device_attributes(vte); }
+static void DISPATCH_CSI(struct vte *vte)   { vte->state = vte_csi; }
+static void DISPATCH_ST(struct vte *vte)    { (void)vte; TODO("ST"); }
+static void DISPATCH_OSC(struct vte *vte)   { vte->state = vte_osc; }
+static void DISPATCH_PM(struct vte *vte)    { (void)vte; OMITTED("PM"); }
+static void DISPATCH_APC(struct vte *vte)   { (void)vte; OMITTED("APC"); }
+
+
+static void vte_dispatch_ground(struct vte *vte, uint8_t ch) {
+  // These symbols have special behavior in terms of how they affect layout
+  switch (ch) {
+#define CONTROL(C0, C1, cmd, _2)                                                                                      \
+  case C1: DISPATCH_##cmd(vte); break;
+#include "control_characters.def"
+#undef CONTROL
+  case NUL: ground_noop(vte, ch); break;
+  case ESC: ground_esc(vte, ch); break;
+  case RET: ground_carriage_return(vte, ch); break;
+  case BSP: ground_backspace(vte, ch); break;
+  case BELL: ground_bell(vte, ch); break;
+  case SI: ground_process_shift_in(vte, ch); break;
+  case SO: ground_process_shift_out(vte, ch); break;
+  case DEL: ground_noop(vte, ch); break;
+  case TAB: ground_tab(vte, ch); break;
+  case VTAB: ground_vtab(vte, ch); break;
+  case FORMFEED: ground_newline(vte, ch); break;
+  case NEWLINE: ground_newline(vte, ch); break;
+  case ENQ: ground_enquiry(vte, ch); break;
+  default: {
+    if (ch >= 0xC2 && ch <= 0xF4) { // UTF8 leading byte range
+      utf8_push(&vte->pending_symbol, ch);
+      vte->state = vte_utf8;
+    } else if (ch <= 0x7F) { // ASCII range
+      utf8_push(&vte->pending_symbol, ch);
+      ground_accept(vte);
+    } else { // Outside of ascii range, and not part of a valid utf8 sequence -- error symbol
+      vte->pending_symbol = utf8_fffd;
+      ground_accept(vte);
+    }
+  } break;
+  }
+}
+
+static void vte_dispatch_utf8(struct vte *vte, uint8_t ch) {
+  utf8_push(&vte->pending_symbol, ch);
+  uint8_t len = utf8_length(vte->pending_symbol);
+  uint8_t exp = utf8_expected_length(vte->pending_symbol.utf8[0]);
+  assert(exp <= 4);
+
+  if (exp <= 1) {
+    // Invalid sequence
+    ground_reject(vte);
+    return;
+  }
+
+  // continue processing
+  if (len < exp) return;
+
+  // If this is not a continuation byte, reject the sequence
+  if (len > 1 && (ch & 0xC0) != 0x80) {
+    ground_reject(vte);
+    return;
+  }
+
+  // If the sequence is too long, reject it
+  if (len > 4) {
+    ground_reject(vte);
+    return;
+  }
+
+  vte->state = vte_ground;
+  ground_accept(vte);
+}
+
+static void vte_full_reset(struct vte *vte) {
+  vte->options = emulator_options_default;
+  vte->active_grid = &vte->primary;
+  grid_full_reset(&vte->primary);
+}
+
+static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
+  string_push_char(&vte->command_buffer, ch);
+  vte->state = vte_ground;
+  switch (ch) {
+  case PCT: vte->state = vte_pct; break;
+  case SPC: vte->state = vte_spc; break;
+  case PND: vte->state = vte_pnd; break;
+  case '7': grid_save_cursor(vte->active_grid); break;
+  case '8': grid_restore_cursor(vte->active_grid); break;
+  case '=': vte->options.application_keypad_mode = true; break;
+  case '>': vte->options.application_keypad_mode = false; break;
+  case ESC: /* Literal escape */
+    utf8_push(&vte->pending_symbol, ESC);
+    ground_accept(vte);
+    break;
+  case 'c': vte_full_reset(vte); break;
+  case '(': // designate G0, VT100
+  case ')': // designate G1, VT100
+  case '*': // designate G2, VT220
+  case '+': // designate G3, VT220
+  case '-': // designate G1, VT300
+  case '.': // designate G2, VT300
+  case '/': // designate G3, VT300
+    vte->state = vte_charset;
+    break;
+  case 'n':
+  case 'o':
+  case '|':
+  case '}':
+  case '~': TODO("Invoke Character Set"); break;
+  case '6': OMITTED("Back Index"); break;
+  case '9': OMITTED("Forward Index"); break;
+  case 'l': OMITTED("Memory lock"); break;
+  case 'm': OMITTED("Memory unlock"); break;
+#define CONTROL(C0, C1, cmd, _2)                                                                                      \
+  case C0: DISPATCH_##cmd(vte); break;
+#include "control_characters.def"
+#undef CONTROL
+  default: {
+    // Unrecognized escape. Treat this char as escaped and continue parsing normally.
+    TODO("Unhandled sequence ESC 0x%x", ch);
+    break;
+  }
+  }
+}
+
+void vte_dispatch_dcs(struct vte *vte, uint8_t ch) {
+  char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
+  string_push_char(&vte->command_buffer, ch);
+  if (ch == '\\' && prev == ESC) {
+    vte->state = vte_ground;
+    TODO("DCS sequence: '%.*s'", vte->command_buffer.len - 2, vte->command_buffer.content + 1);
+  } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
+    vte->state = vte_ground;
+    logmsg("Abort DCS: max length exceeded");
+  }
+}
+
+static void vte_dispatch_csi(struct vte *vte, uint8_t ch) {
+  string_push_char(&vte->command_buffer, ch);
+  if (ch >= 0x40 && ch <= 0x7E) {
+    vte->command_buffer.content[vte->command_buffer.len] = 0;
+    struct csi csi = {0};
+    // Strip the leading escape sequence
+    uint8_t *buffer = vte->command_buffer.content + 2;
+    int len = vte->command_buffer.len - 2;
+    int parsed = csi_parse(&csi, buffer, len);
+    if (csi.state == CSI_ACCEPT) {
+      assert(len == parsed);
+      csi_dispatch(vte, &csi);
+    } else {
+      logmsg("Reject CSI: %.*s", len, vte->command_buffer.content);
+    }
+    vte->state = vte_ground;
+  } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
+    vte->state = vte_ground;
+    logmsg("Abort CSI: max length exceeded");
+  }
+}
+
+static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
+  // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands
+  // OSC commands can be terminated with either BEL or ST. Although ST is preferred, we respond to the query with the
+  // same terminator as the one we received for maximum compatibility
+  static const uint8_t *BEL = u8"\a";
+  static const uint8_t *ST = u8"\x1b\\";
+  char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
+  string_push_char(&vte->command_buffer, ch);
+  if (ch == BELL || (ch == '\\' && prev == ESC)) {
+    const uint8_t *st = ch == BELL ? BEL : ST;
+    uint8_t *buffer = vte->command_buffer.content + 2;
+    int len = vte->command_buffer.len - strlen((char*)st) - 2;
+    struct osc osc = {0};
+    osc_parse(&osc, buffer, len, (uint8_t*)st);
+    if (osc.state == OSC_ACCEPT) {
+      osc_dispatch(vte, &osc);
+    }
+    vte->state = vte_ground;
+  } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
+    logmsg("Abort OSC: max length exceeded");
+    vte->state = vte_ground;
+  }
+}
+static void vte_dispatch_pct(struct vte *vte, uint8_t ch) {
+  (void)ch;
+  vte->state = vte_ground;
+  TODO("Select Character Set");
+}
+static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
+  vte->state = vte_ground;
+  switch (ch) {
+  case 'F': TODO("7-bit controls"); break;
+  case 'G': TODO("8-bit controls"); break;
+  case 'L':
+  case 'M':
+  case 'N': TODO("ANSI Conformance Level"); break;
+  default: TODO("Unknown ESC SP command: %x", ch); break;
+  }
+}
+
+void vte_process(struct vte *vte, uint8_t *buf, int n) {
+  vte_ensure_grid_initialized(vte);
+  for (int i = 0; i < n; i++) {
+    uint8_t ch = buf[i];
+    switch (vte->state) {
+    case vte_ground: vte_dispatch_ground(vte, ch); break;
+    case vte_utf8: vte_dispatch_utf8(vte, ch); break;
+    case vte_escape: vte_dispatch_escape(vte, ch); break;
+    case vte_dcs: vte_dispatch_dcs(vte, ch); break;
+    case vte_osc: vte_dispatch_osc(vte, ch); break;
+    case vte_csi: vte_dispatch_csi(vte, ch); break;
+    case vte_pnd: vte_dispatch_pnd(vte, ch); break;
+    case vte_spc: vte_dispatch_spc(vte, ch); break;
+    case vte_pct: vte_dispatch_pct(vte, ch); break;
+    case vte_charset: vte_dispatch_charset(vte, ch); break;
+    default: assert(!"Unreachable");
+    }
+  }
+}
+
+void vte_destroy(struct vte *vte) {
+  grid_destroy(&vte->primary);
+  grid_destroy(&vte->alternate);
+  string_destroy(&vte->pending_output);
+  string_destroy(&vte->command_buffer);
+}
