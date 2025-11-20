@@ -4,9 +4,9 @@ Tasks that need doing in no particular order of priority:
 * Support multi-width characters (emojis, characters in other scripts?)
 * Scrollback buffer (unless?)
 * CSI: Configurable scroll region (needed for vim)
-* Floating panes
+* Floating vte_hosts
 
-Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled panes and then naively fully redraw floating panes on every frame
+Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled vte_hosts and then naively fully redraw floating vte_hosts on every frame
 
 * Replay mechanism
 
@@ -26,15 +26,15 @@ Don't spend time on this before before all basic terminal emulator features are 
 
 * Improve IO
 
-Right now, pane->pty is being accessed willy-nilly. We have a `pending_output` buffer
-which is flushed to the pty after a pane is processed. All writing can be handled from there.
+Right now, vte_host->pty is being accessed willy-nilly. We have a `pending_output` buffer
+which is flushed to the pty after a vte_host is processed. All writing can be handled from there.
 
 Additionally, string buffers are being synchronously flushed to streams.
 It would be great to early return on EAGAIN and add the write task to the main loop instead.
 
 * Layout system
 
-Tagging panes / toggling visible tags / keybind system, what this project is
+Tagging vte_hosts / toggling visible tags / keybind system, what this project is
 all about..
 
 Formally separate rendering, io dispatch, and layout systems. Currently
@@ -84,8 +84,8 @@ which is likely never.
 
 Something similar to the stock dwm bar. Make focusable (probably make it
 special..) Use it as a launcher so focusing it and typing e.g. vim opens vim in
-a new pane Maybe some keyboard shortcuts are only available in the status bar
-(per pane bindings?) so it can be used as a management pane Consider making the
+a new vte_host Maybe some keyboard shortcuts are only available in the status bar
+(per vte_host bindings?) so it can be used as a management vte_host Consider making the
 status bar a regular binary (rely on ^[[I/^[[O to switch mode)
 
 If the status bar is a regular binary, how does it know about vv internals it

@@ -1,6 +1,6 @@
 #include "platform.h"
 #include <ctype.h>
-#include <pane.h>
+#include <vte_host.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,37 +17,37 @@
 #include "virtual_terminal_sequences.h"
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-struct pane *clients = NULL;
-struct pane *focused = NULL;
+struct vte_host *clients = NULL;
+struct vte_host *focused = NULL;
 
-void pane_destroy(struct pane *pane) {
-  if (pane->pty > 0) {
-    close(pane->pty);
-    pane->pty = 0;
+void vte_host_destroy(struct vte_host *vte_host) {
+  if (vte_host->pty > 0) {
+    close(vte_host->pty);
+    vte_host->pty = 0;
   }
-  if (pane->pid > 0) {
+  if (vte_host->pid > 0) {
     int status;
-    kill(pane->pid, SIGTERM);
-    pid_t result = waitpid(pane->pid, &status, WNOHANG);
+    kill(vte_host->pid, SIGTERM);
+    pid_t result = waitpid(vte_host->pid, &status, WNOHANG);
     if (result == -1) die("waitpid:");
   }
-  if (pane->logfile > 0) {
-    close(pane->logfile);
-    pane->logfile = 0;
+  if (vte_host->logfile > 0) {
+    close(vte_host->logfile);
+    vte_host->logfile = 0;
   }
-  vte_destroy(&pane->vte);
-  free(pane->process);
-  pane->pty = pane->pid = pane->logfile = 0;
-  pane->process = nullptr;
+  vte_destroy(&vte_host->vte);
+  free(vte_host->process);
+  vte_host->pty = vte_host->pid = vte_host->logfile = 0;
+  vte_host->process = nullptr;
 }
 
-struct pane *pane_from_pty(struct pane *p, int pty) {
+struct vte_host *vte_host_from_pty(struct vte_host *p, int pty) {
   for (; p; p = p->next)
     if (p->pty == pty) return p;
   return nullptr;
 }
 
-struct pane *pane_from_pid(struct pane *p, int pid) {
+struct vte_host *vte_host_from_pid(struct vte_host *p, int pid) {
   for (; p; p = p->next)
     if (p->pid == pid) return p;
   return nullptr;
@@ -78,7 +78,7 @@ static void cat_strings(char *dst, int n, char **strings) {
   dst[i] = 0;
 }
 
-void pane_update_cwd(struct pane *p) {
+void vte_host_update_cwd(struct vte_host *p) {
   if (platform.get_cwd_from_pty) {
     char buf[256];
     if (platform.get_cwd_from_pty(p->pty, buf, sizeof(buf))) {
@@ -214,19 +214,19 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
   }
 }
 
-void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
-  // Ensure the grid content is in sync with the pane just-in-time
-  pane->vte.w = pane->rect.client.w;
-  pane->vte.h = pane->rect.client.h;
-  vte_ensure_grid_initialized(&pane->vte);
+void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuffer) {
+  // Ensure the grid content is in sync with the vte_host just-in-time
+  vte_host->vte.w = vte_host->rect.client.w;
+  vte_host->vte.h = vte_host->rect.client.h;
+  vte_ensure_grid_initialized(&vte_host->vte);
 
-  struct grid *g = pane->vte.active_grid;
+  struct grid *g = vte_host->vte.active_grid;
   for (int row = 0; row < g->h; row++) {
     struct grid_row *grid_row = &g->rows[row];
     if (!redraw && !grid_row->dirty) continue;
     grid_row->dirty = false;
-    int columnno = 1 + pane->rect.client.x;
-    int lineno = 1 + pane->rect.client.y + row;
+    int columnno = 1 + vte_host->rect.client.x;
+    int lineno = 1 + vte_host->rect.client.y + row;
     int line_length = MIN(grid_row->eol, g->w);
     string_push_csi(outbuffer, INT_SLICE(lineno, columnno), "H");
 
@@ -249,9 +249,9 @@ void pane_draw(struct pane *pane, bool redraw, struct string *outbuffer) {
 }
 
 // TODO: This sucks
-// Alternative implementation: Walk pane list and termine where all the borders are
-// Then draw the borders, and style the borders touching the focused pane
-void pane_draw_border(struct pane *p, struct string *b) {
+// Alternative implementation: Walk vte_host list and termine where all the borders are
+// Then draw the borders, and style the borders touching the focused vte_host
+void vte_host_draw_border(struct vte_host *p, struct string *b) {
   if (p->border_width == 0 || !p->border_dirty) return;
   static const struct grid_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
   static const struct grid_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
@@ -280,7 +280,7 @@ void pane_draw_border(struct pane *p, struct string *b) {
 
   if (!topmost) {
     bool before = true;
-    for (struct pane *c = clients; c; c = c->next) {
+    for (struct vte_host *c = clients; c; c = c->next) {
       if (c == p) {
         before = false;
         continue;
@@ -341,66 +341,66 @@ void pane_draw_border(struct pane *p, struct string *b) {
   apply_style(&style_default, b);
 }
 
-void pane_process_output(struct pane *pane, uint8_t *buf, int n) {
+void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n) {
   // Pass current size information to vte so it can determine if grids should be resized
-  pane->vte.w = pane->rect.client.w;
-  pane->vte.h = pane->rect.client.h;
-  if (pane->logfile > 0) write(pane->logfile, buf, n);
-  vte_process(&pane->vte, buf, n);
-  string_flush(&pane->vte.pending_output, pane->pty, nullptr);
+  vte_host->vte.w = vte_host->rect.client.w;
+  vte_host->vte.h = vte_host->rect.client.h;
+  if (vte_host->logfile > 0) write(vte_host->logfile, buf, n);
+  vte_process(&vte_host->vte, buf, n);
+  string_flush(&vte_host->vte.pending_output, vte_host->pty, nullptr);
 }
 
 static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
   return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h;
 }
 
-void pane_resize(struct pane *pane, struct bounds outer) {
+void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
   // Refuse to go below a minimum size
   if (outer.w < 2) outer.w = 2;
   if (outer.h < 2) outer.h = 2;
 
   bool leftmost = outer.x == 0;
 
-  struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : pane->border_width),
-                                        .y = outer.y + pane->border_width,
-                                        .w = outer.w - (leftmost ? 0 : pane->border_width),
-                                        .h = outer.h - pane->border_width};
-  if (pane->rect.window.w != outer.w || pane->rect.window.h != outer.h) {
+  struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : vte_host->border_width),
+                                        .y = outer.y + vte_host->border_width,
+                                        .w = outer.w - (leftmost ? 0 : vte_host->border_width),
+                                        .h = outer.h - vte_host->border_width};
+  if (vte_host->rect.window.w != outer.w || vte_host->rect.window.h != outer.h) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h};
-    if (pane->pty) ioctl(pane->pty, TIOCSWINSZ, &ws);
-    if (pane->pid) kill(pane->pid, SIGWINCH);
-    if (pane->border_width) pane->border_dirty = true;
+    if (vte_host->pty) ioctl(vte_host->pty, TIOCSWINSZ, &ws);
+    if (vte_host->pid) kill(vte_host->pid, SIGWINCH);
+    if (vte_host->border_width) vte_host->border_dirty = true;
   }
 
   // If anything changed about the window position / dimensions, do a full redraw
-  if (!bounds_equal(&outer, &pane->rect.window) || !bounds_equal(&inner, &pane->rect.client)) {
-    grid_invalidate(pane->vte.active_grid);
-    pane->border_dirty = true;
+  if (!bounds_equal(&outer, &vte_host->rect.window) || !bounds_equal(&inner, &vte_host->rect.client)) {
+    grid_invalidate(vte_host->vte.active_grid);
+    vte_host->border_dirty = true;
   }
-  pane->rect.window = outer;
-  pane->rect.client = inner;
+  vte_host->rect.window = outer;
+  vte_host->rect.client = inner;
 }
 
-void pane_start(struct pane *pane) {
-  struct winsize panesize = {.ws_col = pane->rect.client.w, .ws_row = pane->rect.client.h};
-  pid_t pid = forkpty(&pane->pty, NULL, NULL, &panesize);
+void vte_host_start(struct vte_host *vte_host) {
+  struct winsize vte_hostsize = {.ws_col = vte_host->rect.client.w, .ws_row = vte_host->rect.client.h};
+  pid_t pid = forkpty(&vte_host->pty, NULL, NULL, &vte_hostsize);
   if (pid < 0) die("forkpty:");
 
   if (pid == 0) {
-    char *argv[] = {"sh", "-c", pane->process, NULL};
+    char *argv[] = {"sh", "-c", vte_host->process, NULL};
     execvp("sh", argv);
     die("execlp:");
   }
-  pane->pid = pid;
+  vte_host->pid = pid;
   char buf[100];
-  int n = snprintf(buf, sizeof(buf), "%s_log.ansi", pane->process);
+  int n = snprintf(buf, sizeof(buf), "%s_log.ansi", vte_host->process);
   buf[n] = 0;
   int fd = open(buf, O_CREAT | O_CLOEXEC | O_RDWR | O_TRUNC, 0644);
-  pane->logfile = fd;
-  set_nonblocking(pane->pty);
+  vte_host->logfile = fd;
+  set_nonblocking(vte_host->pty);
 }
 
-void pane_remove(struct pane **lst, struct pane *rem) {
+void vte_host_remove(struct vte_host **lst, struct vte_host *rem) {
   assert(lst);
   assert(*lst);
   assert(rem);
@@ -408,8 +408,8 @@ void pane_remove(struct pane **lst, struct pane *rem) {
     *lst = rem->next;
     return;
   }
-  struct pane *prev = *lst;
-  for (struct pane *p = prev->next; p; p = p->next) {
+  struct vte_host *prev = *lst;
+  for (struct vte_host *p = prev->next; p; p = p->next) {
     if (p == rem) {
       prev->next = p->next;
     }
@@ -417,7 +417,7 @@ void pane_remove(struct pane **lst, struct pane *rem) {
   }
 }
 
-void pane_notify_focus(struct pane *p, bool focused) {
+void vte_host_notify_focus(struct vte_host *p, bool focused) {
   if (p) {
     p->border_dirty = true;
     p->has_focus = focused;
@@ -431,8 +431,8 @@ void pane_notify_focus(struct pane *p, bool focused) {
   }
 }
 
-int pane_count(struct pane *pane) {
+int vte_host_count(struct vte_host *vte_host) {
   int n = 0;
-  for (; pane; pane = pane->next) n++;
+  for (; vte_host; vte_host = vte_host->next) n++;
   return n;
 }

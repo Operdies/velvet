@@ -98,7 +98,7 @@ struct cursor {
 struct grid {
   int w, h;
   /* scroll region is local to the grid and is not persisted when the window /
-   * pane is resized or alternate screen is entered */
+   * vte_host is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
   struct grid_cell *_cells; // cells[w*h]
   struct grid_row *rows;   // rows[h]

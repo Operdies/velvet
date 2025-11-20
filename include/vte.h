@@ -155,7 +155,7 @@ struct emulator_options {
   /* translate keypad keys to escaped variants so applications can distinguish
    * e.g. numpad 1 from regular 1. */
   bool application_keypad_mode;
-  /* when focus reporting is enabled, send ESC [ I and ESC [ O when the pane
+  /* when focus reporting is enabled, send ESC [ I and ESC [ O when the vte_host
    * receives / loses keyboard focus */
   bool focus_reporting;
   /* DECOM */

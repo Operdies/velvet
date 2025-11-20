@@ -1,6 +1,6 @@
 #include "collections.h"
 #include "csi.h"
-#include "pane.h"
+#include "vte_host.h"
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -173,29 +173,29 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   const char *reset = "\x1b[2J\x1b[1;1H";
   struct chargrid *expected = make_chargrid(5, 8, expected1);
 
-  struct pane p = {.vte = vte_default};
-  pane_resize(&p, blarge);
+  struct vte_host p = {.vte = vte_default};
+  vte_host_resize(&p, blarge);
   struct string output = {0};
   {
     string_clear(&output);
     // 1. Write the input and verify the output
-    pane_process_output(&p, (uint8_t *)input, strlen(input));
-    pane_draw(&p, false, &output);
+    vte_host_process_output(&p, (uint8_t *)input, strlen(input));
+    vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
     assert_grid_equals(expected, p.vte.active_grid, testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
-    pane_process_output(&p, output.content, output.len);
+    vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
-    pane_draw(&p, false, &output);
+    vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
     assert_grid_equals(expected, p.vte.active_grid, testname2);
   }
   {
     // 2. Clear the screen ensuring it is clean
     string_clear(&output);
-    pane_process_output(&p, (uint8_t *)reset, strlen(reset));
-    pane_draw(&p, false, &output);
+    vte_host_process_output(&p, (uint8_t *)reset, strlen(reset));
+    vte_host_draw(&p, false, &output);
     struct chargrid *cleared = make_chargrid(5, 8, (grid_5x8){0});
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
     assert_grid_equals(cleared, p.vte.active_grid, testname2);
@@ -203,9 +203,9 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
     // See 1.b
-    pane_process_output(&p, output.content, output.len);
+    vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
-    pane_draw(&p, false, &output);
+    vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
     assert_grid_equals(cleared, p.vte.active_grid, outer_test_name);
 
@@ -215,22 +215,22 @@ static void test_grid_input_output(const char *const outer_test_name, const char
   {
     // 3. Redraw the screen and verify output
     string_clear(&output);
-    pane_process_output(&p, (uint8_t *)reset, strlen(reset));
-    pane_process_output(&p, (uint8_t *)input, strlen(input));
-    pane_draw(&p, false, &output);
+    vte_host_process_output(&p, (uint8_t *)reset, strlen(reset));
+    vte_host_process_output(&p, (uint8_t *)input, strlen(input));
+    vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
     assert_grid_equals(expected, p.vte.active_grid, testname2);
 
     // See 1.b
-    pane_process_output(&p, output.content, output.len);
+    vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
-    pane_draw(&p, false, &output);
+    vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
     assert_grid_equals(expected, p.vte.active_grid, testname2);
   }
   free(expected);
   string_destroy(&output);
-  pane_destroy(&p);
+  vte_host_destroy(&p);
 }
 
 static void
@@ -238,30 +238,30 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = {.vte = vte_default};
-  pane_resize(&p, bsmall);
-  pane_process_output(&p, (uint8_t *)input, strlen(input));
+  struct vte_host p = {.vte = vte_default};
+  vte_host_resize(&p, bsmall);
+  vte_host_process_output(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
   {
     string_clear(&output);
-    pane_draw(&p, false, &output);
+    vte_host_draw(&p, false, &output);
     assert_grid_equals(small, p.vte.active_grid, test_name);
   }
   {
     string_clear(&output);
-    pane_resize(&p, blarge);
-    pane_draw(&p, false, &output);
+    vte_host_resize(&p, blarge);
+    vte_host_draw(&p, false, &output);
     assert_grid_equals(large, p.vte.active_grid, test_name);
   }
   {
     string_clear(&output);
-    pane_resize(&p, bsmall);
-    pane_draw(&p, false, &output);
+    vte_host_resize(&p, bsmall);
+    vte_host_draw(&p, false, &output);
     // It is always possibly to losslessly convert back to the initial grid, so let's verify that
     assert_grid_equals(small, p.vte.active_grid, test_name);
   }
 
-  pane_destroy(&p);
+  vte_host_destroy(&p);
   free(small), free(large), string_destroy(&output);
 }
 
@@ -270,22 +270,22 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   struct chargrid *small = make_chargrid(5, 5, small1);
   struct chargrid *large = make_chargrid(5, 8, large1);
 
-  struct pane p = {.vte = vte_default};
-  pane_resize(&p, blarge);
-  pane_process_output(&p, (uint8_t *)input, strlen(input));
+  struct vte_host p = {.vte = vte_default};
+  vte_host_resize(&p, blarge);
+  vte_host_process_output(&p, (uint8_t *)input, strlen(input));
   struct string output = {0};
   {
     string_clear(&output);
-    pane_draw(&p, false, &output);
+    vte_host_draw(&p, false, &output);
     assert_grid_equals(large, p.vte.active_grid, test_name);
   }
   {
     string_clear(&output);
-    pane_resize(&p, bsmall);
-    pane_draw(&p, false, &output);
+    vte_host_resize(&p, bsmall);
+    vte_host_draw(&p, false, &output);
     assert_grid_equals(small, p.vte.active_grid, test_name);
   }
-  pane_destroy(&p);
+  vte_host_destroy(&p);
   free(small), free(large), string_destroy(&output);
 }
 

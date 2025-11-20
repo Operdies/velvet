@@ -13,7 +13,7 @@
 
 #include "collections.h"
 #include "vte.h"
-#include "pane.h"
+#include "vte_host.h"
 #include "virtual_terminal_sequences.h"
 #include "utils.h"
 #include <sys/wait.h>
@@ -61,15 +61,15 @@ static void install_signal_handlers(void) {
 static int nmaster = 1;
 static float factor = 0.5;
 
-static void arrange(struct winsize ws, struct pane *p) {
+static void arrange(struct winsize ws, struct vte_host *p) {
   if (!p) return;
   int mh, mx, mw, my, sy, sw, nm, ns, i, n;
 
-  n = pane_count(p);
+  n = vte_host_count(p);
   // if (n == 1)
   //   p->border_width = 0;
   // else
-  for (struct pane *c = p; c; c = c->next) c->border_width = 1;
+  for (struct vte_host *c = p; c; c = c->next) c->border_width = 1;
 
   i = my = sy = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -90,7 +90,7 @@ static void arrange(struct winsize ws, struct pane *p) {
 
   for (; i < nmaster && i < n; i++) {
     struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
-    pane_resize(p, b);
+    vte_host_resize(p, b);
     p = p->next;
     my += mh;
   }
@@ -101,7 +101,7 @@ static void arrange(struct winsize ws, struct pane *p) {
   for (; i < n; i++) {
     int height = (float)stack_height_left / stack_items_left;
     struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
-    pane_resize(p, b);
+    vte_host_resize(p, b);
     p = p->next;
     sy += height;
     stack_items_left--;
@@ -109,79 +109,79 @@ static void arrange(struct winsize ws, struct pane *p) {
   }
 }
 
-static void move_cursor_to_pane(struct pane *pane, struct string *drawbuffer) {
-  if (pane && pane->vte.active_grid) {
-    focused = pane;
-    // set cursor position within the pane
-    struct grid *g = pane->vte.active_grid;
+static void move_cursor_to_vte_host(struct vte_host *vte_host, struct string *drawbuffer) {
+  if (vte_host && vte_host->vte.active_grid) {
+    focused = vte_host;
+    // set cursor position within the vte_host
+    struct grid *g = vte_host->vte.active_grid;
     struct cursor *c = &g->cursor;
-    int lineno = 1 + pane->rect.client.y + c->row;
-    int columnno = 1 + pane->rect.client.x + c->col;
+    int lineno = 1 + vte_host->rect.client.y + c->row;
+    int columnno = 1 + vte_host->rect.client.x + c->col;
     string_push_csi(drawbuffer, INT_SLICE(lineno, columnno), "H");
   }
 }
 
-static void focus_pane(struct pane *p) {
+static void focus_vte_host(struct vte_host *p) {
   if (p != focused) {
-    pane_notify_focus(focused, false);
-    pane_notify_focus(p, true);
+    vte_host_notify_focus(focused, false);
+    vte_host_notify_focus(p, true);
   }
   focused = p;
 }
 
 static void focusprev(void) {
-  struct pane *c;
+  struct vte_host *c;
   if (focused == clients) {
     for (c = clients; c && c->next; c = c->next);
-    focus_pane(c);
+    focus_vte_host(c);
   } else {
     for (c = clients; c && c->next != focused; c = c->next);
-    if (c && c->next == focused) focus_pane(c);
+    if (c && c->next == focused) focus_vte_host(c);
   }
 }
 
 static void focusnext(void) {
   if (focused && focused->next) {
-    focus_pane(focused->next);
+    focus_vte_host(focused->next);
   } else {
-    focus_pane(clients);
+    focus_vte_host(clients);
   }
 }
 
-static void detachstack(struct pane *p) {
-  pane_remove(&clients, p);
+static void detachstack(struct vte_host *p) {
+  vte_host_remove(&clients, p);
 }
-static void attachstack(struct pane *p) {
+static void attachstack(struct vte_host *p) {
   p->next = clients;
   clients = p;
 }
 
 static void zoom(void) {
-  struct pane *current_main = clients;
-  struct pane *new_main = focused;
+  struct vte_host *current_main = clients;
+  struct vte_host *new_main = focused;
   if (current_main == new_main) new_main = current_main->next;
   if (!new_main) return;
   detachstack(new_main);
   attachstack(new_main);
-  focus_pane(new_main);
+  focus_vte_host(new_main);
   arrange(ws_current, clients);
 }
 
 static bool running = true;
 
 static void new_client() {
-    if (pane_count(clients) < 6) {
-      struct pane *new = calloc(1, sizeof(*new));
+    if (vte_host_count(clients) < 6) {
+      struct vte_host *new = calloc(1, sizeof(*new));
       // TODO: Start user's preferred shell
       new->process = strdup("zsh");
       new->next = clients;
       new->vte = vte_default;
       clients = new;
       arrange(ws_current, clients);
-      pane_start(new);
-      focus_pane(new);
+      vte_host_start(new);
+      focus_vte_host(new);
     } else {
-      logmsg("Too many panes. Spawn request ignored.");
+      logmsg("Too many vte_hosts. Spawn request ignored.");
     }
 }
 
@@ -192,7 +192,7 @@ bool handle_keybinds(uint8_t ch) {
     return true;
   case CTRL('G'): zoom(); return true;
   case CTRL('A'):
-    nmaster = MIN(pane_count(clients), nmaster + 1);
+    nmaster = MIN(vte_host_count(clients), nmaster + 1);
     arrange(ws_current, clients);
     return true;
   case CTRL('X'):
@@ -268,7 +268,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
         string_push_char(&writebuffer, 'O');
         string_push_char(&writebuffer, ch);
       } else if (ch == 'O' || ch == 'I') {
-        // Focus event. Forward it if the focused pane has the feature enabled
+        // Focus event. Forward it if the focused vte_host has the feature enabled
         bool did_focus = ch == 'I';
         if (focused->vte.options.focus_reporting) {
           if (did_focus)
@@ -276,7 +276,7 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
           else
             string_push_slice(&writebuffer, vt_focus_out);
         }
-        // If the pane does not have the feature enabled, ignore it.
+        // If the vte_host does not have the feature enabled, ignore it.
       } else {
         string_push_char(&writebuffer, 0x1b);
         string_push_char(&writebuffer, '[');
@@ -306,14 +306,14 @@ static void handle_stdin(const char *const buf, int n, struct string *draw_buffe
   }
 }
 
-static void pane_remove_and_destroy(struct pane *p) {
+static void vte_host_remove_and_destroy(struct vte_host *p) {
   if (p) {
     p->pid = 0;
     if (p == focused) focusnext();
-    // Special case when `p` was the last pane
+    // Special case when `p` was the last vte_host
     if (p == focused) focused = nullptr;
-    pane_remove(&clients, p);
-    pane_destroy(p);
+    vte_host_remove(&clients, p);
+    vte_host_destroy(p);
     free(p);
   }
 }
@@ -324,8 +324,8 @@ void remove_exited_processes(void) {
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     if (WIFEXITED(status)) {
-      struct pane *p = pane_from_pid(clients, pid);
-      pane_remove_and_destroy(p);
+      struct vte_host *p = vte_host_from_pid(clients, pid);
+      vte_host_remove_and_destroy(p);
     }
   }
 }
@@ -334,7 +334,7 @@ void handle_sigwinch(struct string *draw_buffer) {
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
     die("ioctl TIOCGWINSZ:");
   }
-  for (struct pane *p = clients; p; p = p->next) {
+  for (struct vte_host *p = clients; p; p = p->next) {
     grid_invalidate(p->vte.active_grid);
     p->border_dirty = true;
   }
@@ -342,26 +342,26 @@ void handle_sigwinch(struct string *draw_buffer) {
   string_push_slice(draw_buffer, vt_clear);
 }
 
-static void pane_draw_borders(struct string *draw_buffer) {
-  for (struct pane *p = clients; p; p = p->next) {
+static void vte_host_draw_borders(struct string *draw_buffer) {
+  for (struct vte_host *p = clients; p; p = p->next) {
     if (p == focused) continue;
-    pane_draw_border(p, draw_buffer);
+    vte_host_draw_border(p, draw_buffer);
   }
-  if (focused) pane_draw_border(focused, draw_buffer);
+  if (focused) vte_host_draw_border(focused, draw_buffer);
 }
 
 static void render_frame(struct string *draw_buffer) {
   static enum cursor_style current_cursor_style = 0;
 
   string_push_slice(draw_buffer, vt_hide_cursor);
-  for (struct pane *p = clients; p; p = p->next) {
-    pane_update_cwd(p);
-    pane_draw(p, false, draw_buffer);
+  for (struct vte_host *p = clients; p; p = p->next) {
+    vte_host_update_cwd(p);
+    vte_host_draw(p, false, draw_buffer);
   }
-  pane_draw_borders(draw_buffer);
+  vte_host_draw_borders(draw_buffer);
 
-  if (!focused) focus_pane(clients);
-  if (focused) move_cursor_to_pane(focused, draw_buffer);
+  if (!focused) focus_vte_host(clients);
+  if (focused) move_cursor_to_vte_host(focused, draw_buffer);
   if (focused && focused->vte.options.cursor.style != current_cursor_style) {
     current_cursor_style = focused->vte.options.cursor.style;
     string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
@@ -376,9 +376,9 @@ int main(int argc, char **argv) {
   install_signal_handlers();
 
   {
-    struct pane *prev = NULL;
+    struct vte_host *prev = NULL;
     for (int i = 1; i < argc; i++) {
-      struct pane *p = calloc(1, sizeof(*p));
+      struct vte_host *p = calloc(1, sizeof(*p));
       memcpy(&p->vte, &vte_default, sizeof(vte_default));
       p->process = strdup(argv[i]);
       if (!prev) {
@@ -399,7 +399,7 @@ int main(int argc, char **argv) {
   }
 
   arrange(ws_current, clients);
-  focus_pane(clients);
+  focus_vte_host(clients);
 
   struct pollfd *fds = calloc(100, sizeof(struct pollfd));
   fds[0].fd = fileno(stdin);
@@ -408,8 +408,8 @@ int main(int argc, char **argv) {
 
   {
     int i = 0;
-    for (struct pane *p = clients; p; p = p->next) {
-      pane_start(p);
+    for (struct vte_host *p = clients; p; p = p->next) {
+      vte_host_start(p);
       fds[i + 1].fd = p->pty;
       fds[i + 1].events = POLL_IN;
       i++;
@@ -420,7 +420,7 @@ int main(int argc, char **argv) {
   struct string draw_buffer = {0};
   char readbuffer[4096];
 
-  for (; running && pane_count(clients);) {
+  for (; running && vte_host_count(clients);) {
     int polled = poll(fds, nfds, -1);
     if (polled == -1) {
       if (errno != EAGAIN && errno != EINTR) {
@@ -465,14 +465,14 @@ int main(int argc, char **argv) {
     for (int i = 1; polled > 0 && i < nfds; i++) {
       if (fds[i].revents & POLL_IN) {
         polled--;
-        struct pane *p = pane_from_pty(clients, fds[i].fd);
+        struct vte_host *p = vte_host_from_pty(clients, fds[i].fd);
         assert(p);
         /* These parameters greatly affect throughput when an application is writing in a busy loop.
          * Observations from brief testing on Mac in Alacritty:
          * Raw ascii output was generated with dd if=/dev/urandom | base64
          * Increasing BUFSIZE above 4k only hurts performance
-         * Responsiveness of other panes depends on the MAX_IT variable. From my testing,
-         * vv is completely responsive even when 4 panes are generating garbage full throttle.
+         * Responsiveness of other vte_hosts depends on the MAX_IT variable. From my testing,
+         * vv is completely responsive even when 4 vte_hosts are generating garbage full throttle.
          * In a similar scenario in tmux, I observed a lot of flickering, but that is not the case in vv.
          * Raising MAX_IT greatly increases throughput, but past 512kb the gains are marginal (Unbounded is ~5%
          * faster), so responsiveness is a more important metric.
@@ -488,13 +488,13 @@ int main(int argc, char **argv) {
         uint8_t buf[BUFSIZE];
         int n = 0, iterations = 0;
         while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
-          pane_process_output(p, buf, n);
+          vte_host_process_output(p, buf, n);
           iterations++;
         }
         if (n == -1 && errno != EAGAIN && errno != EINTR) {
           die("read %s:", p->process);
         } else if (n == 0) {
-          pane_remove_and_destroy(p); // pipe closed -- destroy pane
+          vte_host_remove_and_destroy(p); // pipe closed -- destroy vte_host
         }
       }
     }
@@ -503,7 +503,7 @@ int main(int argc, char **argv) {
 
     { // update fd set
       int i = 0;
-      for (struct pane *p = clients; p; p = p->next) {
+      for (struct vte_host *p = clients; p; p = p->next) {
         fds[i + 1].fd = p->pty;
         fds[i + 1].events = POLL_IN;
         // if we have pending writes, monitor pollout
