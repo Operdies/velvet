@@ -29,10 +29,6 @@ OUT_DIR ?= bin
 COMMANDS = vv test statusbar dump
 CMD_DIR = cmd
 
-# Normally I would use CC ?= cc, but there is a bug in gcc causing compilation
-# of test.c to fail
-CC ?= clang
-
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
 CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
