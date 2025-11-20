@@ -203,6 +203,7 @@ static void ground_accept(struct vte *vte) {
   vte->previous_symbol = vte->pending_symbol;
   vte->pending_symbol = clear;
 }
+
 static void ground_reject(struct vte *vte) {
   struct utf8 clear = {0};
   struct utf8 copy = vte->pending_symbol;

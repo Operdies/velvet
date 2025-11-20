@@ -11,7 +11,8 @@ struct bounds {
 struct vte_host {
   // TODO: scrollback
   char *process;
-  char title[256];
+  char title[50];
+  char icon[50];
   char startwd[256];
   char cwd[256];
   int pty, pid;
