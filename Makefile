@@ -24,6 +24,7 @@ endif
 BUILD ?= debug
 
 RELEASE_TARGET ?= release
+PROFILE_TARGET ?= profile
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences
 OUT_DIR ?= bin
 COMMANDS = vv test statusbar dump vv2
@@ -40,19 +41,36 @@ OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
 CFLAGS = -std=c23 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = 
+
+DEBUG_CFLAGS = -O0 -g -fsanitize=address
+DEBUG_LDFLAGS = -fsanitize=address
+
+RELEASE_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD -DASSERTS_UNREACHABLE
+RELEASE_LDFLAGS = -flto
+
+PROFILE_CFLAGS = -fprofile-instr-generate -fcoverage-mapping
+PROFILE_LDFLAGS = 
+
 ifeq ($(BUILD),debug)
-	CFLAGS += -O0 -g -fsanitize=address
-	LDFLAGS += -fsanitize=address
+	CFLAGS += $(DEBUG_CFLAGS)
+	LDFLAGS += $(DEBUG_LDFLAGS)
 	# @true: noop which does not get printed
 	STRIP = @true
 	OUT_DIR = bin
 endif
 ifeq ($(BUILD),release)
-	CFLAGS += -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD -DASSERTS_UNREACHABLE
-	LDFLAGS += -flto
+	CFLAGS += $(RELEASE_CFLAGS)
+	LDFLAGS += $(RELEASE_LDFLAGS)
 	STRIP = strip
 	OUT_DIR = release
 	RELEASE_TARGET = hack
+endif
+ifeq ($(BUILD),profile)
+	CFLAGS += $(RELEASE_CFLAGS) $(PROFILE_CFLAGS)
+	LDFLAGS += $(RELEASE_LDFLAGS) $(PROFILE_LDFLAGS)
+	STRIP = @true
+	OUT_DIR = profile
+	PROFILE_TARGET = hack
 endif
 
 
@@ -85,6 +103,10 @@ scan-debug:
 	scan-build make all
 scan: scan-debug scan-release
 
+
+.PHONY: $(PROFILE_TARGET)
+$(PROFILE_TARGET):
+	@$(MAKE) BUILD=profile all
 
 .PHONY: $(RELEASE_TARGET)
 $(RELEASE_TARGET):
