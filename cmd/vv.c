@@ -345,9 +345,9 @@ void handle_sigwinch(struct string *draw_buffer) {
 static void vte_host_draw_borders(struct string *draw_buffer) {
   for (struct vte_host *p = clients; p; p = p->next) {
     if (p == focused) continue;
-    vte_host_draw_border(p, draw_buffer);
+    vte_host_draw_border(p, draw_buffer, false);
   }
-  if (focused) vte_host_draw_border(focused, draw_buffer);
+  if (focused) vte_host_draw_border(focused, draw_buffer, true);
 }
 
 static void render_frame(struct string *draw_buffer) {

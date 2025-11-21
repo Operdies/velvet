@@ -247,7 +247,7 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
 // TODO: This sucks
 // Alternative implementation: Walk vte_host list and termine where all the borders are
 // Then draw the borders, and style the borders touching the focused vte_host
-void vte_host_draw_border(struct vte_host *p, struct string *b) {
+void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
   if (p->border_width == 0 || !p->border_dirty) return;
   static const struct grid_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
   static const struct grid_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
@@ -303,7 +303,7 @@ void vte_host_draw_border(struct vte_host *p, struct string *b) {
   int bottom = p->rect.window.h + top;
   int right = p->rect.window.w + left;
 
-  apply_style(p->has_focus ? &focused_style : &normal_style, b);
+  apply_style(focused ? &focused_style : &normal_style, b);
 
   // top left corner
   string_push_csi(b, INT_SLICE(top, left), "H");
@@ -411,7 +411,6 @@ void vte_host_remove(struct vte_host **lst, struct vte_host *rem) {
 void vte_host_notify_focus(struct vte_host *p, bool focused) {
   if (p) {
     p->border_dirty = true;
-    p->has_focus = focused;
     if (p->pty && p->vte.options.focus_reporting) {
       if (focused) {
         write(p->pty, vt_focus_in.content, vt_focus_in.len);

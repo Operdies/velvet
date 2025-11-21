@@ -17,7 +17,7 @@ struct vte_host {
   char cwd[256];
   int pty, pid;
   int border_width;
-  bool border_dirty, has_focus;
+  bool border_dirty;
   struct {
     struct bounds window;
     struct bounds client;
@@ -38,7 +38,7 @@ void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n);
 int vte_host_count(struct vte_host *vte_host);
 void vte_host_remove(struct vte_host **lst, struct vte_host *rem);
 void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *buffer);
-void vte_host_draw_border(struct vte_host *p, struct string *b);
+void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused);
 void vte_host_update_cwd(struct vte_host *p);
 void vte_host_notify_focus(struct vte_host *p, bool focused);
 
