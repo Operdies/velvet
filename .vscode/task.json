@@ -6,7 +6,7 @@
             "command": "make",
             "type": "shell",
             "args": [ "all" ],
-            "group": "build",
+            "group": "build"
         }
     ]
 }
