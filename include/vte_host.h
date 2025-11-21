@@ -16,7 +16,6 @@ struct vte_host {
   char startwd[256];
   char cwd[256];
   int pty, pid;
-  int logfile;
   int border_width;
   bool border_dirty, has_focus;
   struct {

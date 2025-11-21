@@ -31,13 +31,9 @@ void vte_host_destroy(struct vte_host *vte_host) {
     pid_t result = waitpid(vte_host->pid, &status, WNOHANG);
     if (result == -1) die("waitpid:");
   }
-  if (vte_host->logfile > 0) {
-    close(vte_host->logfile);
-    vte_host->logfile = 0;
-  }
   vte_destroy(&vte_host->vte);
   free(vte_host->process);
-  vte_host->pty = vte_host->pid = vte_host->logfile = 0;
+  vte_host->pty = vte_host->pid = 0;
   vte_host->process = nullptr;
 }
 
@@ -345,7 +341,7 @@ void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n) {
   // Pass current size information to vte so it can determine if grids should be resized
   vte_host->vte.w = vte_host->rect.client.w;
   vte_host->vte.h = vte_host->rect.client.h;
-  if (vte_host->logfile > 0) write(vte_host->logfile, buf, n);
+  // if (vte_host->logfile > 0) write(vte_host->logfile, buf, n);
   vte_process(&vte_host->vte, buf, n);
   string_flush(&vte_host->vte.pending_output, vte_host->pty, nullptr);
 }
@@ -392,11 +388,6 @@ void vte_host_start(struct vte_host *vte_host) {
     die("execlp:");
   }
   vte_host->pid = pid;
-  char buf[100];
-  int n = snprintf(buf, sizeof(buf), "%s_log.ansi", vte_host->process);
-  buf[n] = 0;
-  int fd = open(buf, O_CREAT | O_CLOEXEC | O_RDWR | O_TRUNC, 0644);
-  vte_host->logfile = fd;
   set_nonblocking(vte_host->pty);
 }
 
