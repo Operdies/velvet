@@ -26,14 +26,14 @@ BUILD ?= debug
 RELEASE_TARGET ?= release
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences
 OUT_DIR ?= bin
-COMMANDS = vv test statusbar dump
+COMMANDS = vv test statusbar dump vv2
 CMD_DIR = cmd
 
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
 CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
-OBJECTS += vte_host utils collections vte text csi csi_dispatch grid osc
+OBJECTS += vte_host utils collections vte text csi csi_dispatch grid osc io multiplexer
 OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
