@@ -128,6 +128,16 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
   }
 }
 
+void vec_remove(struct vec *v, size_t n) {
+  assert(n < v->length);
+  assert(v->length);
+  void *dst = v->content + n;
+  void *src = v->content + n + 1;
+  size_t count = v->length - n - 1;
+  memmove(dst, src, count);
+  v->length--;
+}
+
 void vec_push(struct vec *v, const void *elem) {
   assert(v->element_size && "Element size cannot be 0");
   vec_ensure_capacity(v, v->length + 1);
@@ -147,6 +157,11 @@ void vec_destroy(struct vec *v) {
   v->length = v->capacity = 0;
   free(v->content);
   v->content = nullptr;
+}
+
+void *vec_new_element(struct vec *v) {
+  vec_push(v, nullptr);
+  return vec_nth(*v, v->length - 1);
 }
 
 void running_hash_append(struct running_hash *hash, uint8_t ch) {

@@ -105,10 +105,14 @@ bool string_flush(struct string *str, int fd, int *total_written);
 void string_push_csi(struct string *str, struct int_slice params, const char *const c);
 
 void vec_push(struct vec *v, const void *elem);
+/* remove the nth element from the vector */
+void vec_remove(struct vec *v, size_t n);
 void vec_clear(struct vec *v);
 void vec_destroy(struct vec *v);
+/* Append a zero'd out structure to the vector and return a pointer to it */
+void *vec_new_element(struct vec *v);
 
-#define vec(type) (struct vec){.element_size = sizeof(type)};
+#define vec(type) (struct vec){.element_size = sizeof(type)}
 #define vec_nth(vec, n)                                                        \
   (void *)((char *)(vec).content + ((n) * (vec).element_size))
 #define vec_foreach(item, vec)                                                 \
