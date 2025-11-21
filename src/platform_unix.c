@@ -47,6 +47,15 @@ void enable_raw_mode(void) {
   }
 }
 
+void platform_get_winsize(int *rows, int *columns) {
+  struct winsize ws;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
+    die("TIOCGWINSZ:");
+  }
+  *rows = ws.ws_row;
+  *columns = ws.ws_col;
+}
+
 static void disable_line_wrapping(void) {
   write_slice(STDOUT_FILENO, vt_disable_line_wrapping);
 }
