@@ -11,12 +11,26 @@ static bool osc_dispatch_todo(struct vte *vte, struct osc *osc) {
   return false;
 }
 
-static bool osc_dispatch_background_color(struct vte *vte, struct osc *osc) {
-  string_push(&vte->pending_output, u8"\x1b]11;rgb:0000/0000/0000");
-  string_push(&vte->pending_output, osc->st);
-  return true;
+static bool osc_dispatch_foreground_color(struct vte *vte, struct osc *osc) {
+  if (osc->pt.len && osc->pt.text[0] == '?') {
+    string_push(&vte->pending_output, u8"\x1b]10;rgb:ffff/ffff/ffff");
+    string_push(&vte->pending_output, osc->st);
+    return true;
+  }
+  return osc_dispatch_todo(vte, osc);
 }
 
+static bool osc_dispatch_background_color(struct vte *vte, struct osc *osc) {
+  if (osc->pt.len && osc->pt.text[0] == '?') {
+    string_push(&vte->pending_output, u8"\x1b]11;rgb:0000/0000/0000");
+    string_push(&vte->pending_output, osc->st);
+    return true;
+  }
+  return osc_dispatch_todo(vte, osc);
+}
+
+// used by lazygit
+// would be great to support well
 static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
   (void)vte;
   TODO("OSC hyperlink %d %.*s", osc->ps, osc->pt.len, osc->pt.text);
@@ -50,6 +64,7 @@ bool osc_dispatch(struct vte *vte, struct osc *osc) {
   case OSC_SET_ICON: return osc_set_icon(vte, osc);
   case OSC_SET_TITLE: return osc_set_title(vte, osc);
   case OSC_HYPERLINK: return osc_dispatch_hyperlink(vte, osc);
+  case OSC_FOREGROUND_COLOR: return osc_dispatch_foreground_color(vte, osc);
   case OSC_BACKGROUND_COLOR: return osc_dispatch_background_color(vte, osc);
   default: return osc_dispatch_todo(vte, osc);
   };
