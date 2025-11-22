@@ -436,9 +436,17 @@ static bool DCH(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool SU(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SU"); return false; }
+bool SU(struct vte *vte, struct csi *csi) { 
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_scroll_content_down(vte->active_grid, count);
+  return true;
+}
 
-bool SD(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SD"); return false; }
+bool SD(struct vte *vte, struct csi *csi) { 
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_scroll_content_up(vte->active_grid, count);
+  return true;
+}
 
 bool DECST8C(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECST8C"); return false; }
 

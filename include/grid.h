@@ -137,4 +137,6 @@ void grid_insert_lines(struct grid *g, int n);
 void grid_delete_lines(struct grid *g, int n);
 void grid_restore_cursor(struct grid *g);
 void grid_save_cursor(struct grid *g);
+void grid_scroll_content_up(struct grid *g, int count);
+void grid_scroll_content_down(struct grid *g, int count);
 #endif /*  GRID_H */

@@ -137,20 +137,32 @@ static void grid_rotate_rows_reverse(struct grid *g) {
   g->rows[g->scroll_bottom] = first;
 }
 
-void grid_move_or_scroll_up(struct grid *g) {
-  if (g->cursor.row == g->scroll_top) {
+void grid_scroll_content_down(struct grid *g, int count) {
+  for (int i = 0; i < count; i++) {
     grid_rotate_rows_forward(g);
     grid_clear_line(g, g->scroll_top);
+  }
+}
+
+void grid_move_or_scroll_up(struct grid *g) {
+  if (g->cursor.row == g->scroll_top) {
+    grid_scroll_content_down(g, 1);
   } else {
     grid_move_cursor(g, 0, -1);
+  }
+}
+
+void grid_scroll_content_up(struct grid *g, int count) {
+  for (int i = 0; i < count; i++) {
+    grid_rotate_rows_reverse(g);
+    grid_clear_line(g, g->scroll_bottom);
   }
 }
 
 void grid_move_or_scroll_down(struct grid *g) {
   struct cursor *c = &g->cursor;
   if (c->row == g->scroll_bottom) {
-    grid_rotate_rows_reverse(g);
-    grid_clear_line(g, g->scroll_bottom);
+    grid_scroll_content_up(g, 1);
   } else {
     c->row = c->row + 1;
   }
