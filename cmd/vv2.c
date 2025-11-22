@@ -57,33 +57,64 @@ struct app_context {
   bool quit;
 };
 
-static void read_callback(uint8_t *buffer, int n, struct io_source *src, void *data) {
-  struct app_context *m = data;
-  if (src->fd == STDIN_FILENO) {
-    if (n == 0) {
-      m->quit = true;
-      return;
+static void signal_callback(struct io_source *src, uint8_t *buffer, int n) {
+  struct app_context *app = src->data;
+  // 1. Dispatch any pending signals
+  bool did_resize = false;
+  bool did_sigchld = false;
+  int *signals = (int*)buffer;
+  for (int i = 0; i < (int)(n / sizeof(int)); i++) {
+    int signal = signals[i];
+    switch (signal) {
+    case SIGWINCH: {
+      did_resize = true;
+    } break;
+    case SIGCHLD: {
+      did_sigchld = true;
+    } break;
+    default:
+      app->quit = true;
+      logmsg("Unhandled signal: %d", signal);
+      break;
     }
-    multiplexer_feed_input(&m->multiplexer, buffer, n);
-  } else {
-    struct vte_host *vte;
-    vec_foreach(vte, m->multiplexer.hosted) {
-      if (vte->pty == src->fd) {
-        vte_host_process_output(vte, buffer, n);
-        break;
-      }
+  }
+
+  if (did_sigchld) multiplexer_remove_exited(&app->multiplexer);
+  if (did_resize) {
+    int rows, columns;
+    platform_get_winsize(&rows, &columns);
+    multiplexer_resize(&app->multiplexer, rows, columns);
+  }
+}
+
+static void stdin_callback(struct io_source *src, uint8_t *buffer, int n) {
+  struct app_context *m = src->data;
+  if (n == 0) {
+    m->quit = true;
+    return;
+  }
+  multiplexer_feed_input(&m->multiplexer, buffer, n);
+}
+
+static void read_callback(struct io_source *src, uint8_t *buffer, int n) {
+  struct app_context *m = src->data;
+  struct vte_host *vte;
+  vec_foreach(vte, m->multiplexer.clients) {
+    if (vte->pty == src->fd) {
+      vte_host_process_output(vte, buffer, n);
+      break;
     }
   }
 }
 
-static void render_frame(struct app_context *app) {
+static void render_frame(struct app_context *app, int target) {
   static enum cursor_style current_cursor_style = 0;
   struct string *draw_buffer = &app->draw_buffer;
-  struct vte_host *focused = vec_nth(app->multiplexer.hosted, app->multiplexer.focus);
+  struct vte_host *focused = vec_nth(app->multiplexer.clients, app->multiplexer.focus);
 
   string_push_slice(draw_buffer, vt_hide_cursor);
-  for (size_t i = 0; i < app->multiplexer.hosted.length; i++) {
-    struct vte_host *h = vec_nth(app->multiplexer.hosted, i);
+  for (size_t i = 0; i < app->multiplexer.clients.length; i++) {
+    struct vte_host *h = vec_nth(app->multiplexer.clients, i);
     vte_host_update_cwd(h);
     vte_host_draw(h, false, draw_buffer);
     vte_host_draw_border(h, draw_buffer, i == app->multiplexer.focus);
@@ -106,13 +137,13 @@ static void render_frame(struct app_context *app) {
 
   // Set cursor visibility according to the focused client.
   if (focused->vte.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
+
+  string_flush(&app->draw_buffer, target, nullptr);
 }
 
 int main(int argc, char **argv) {
   terminal_setup();
   install_signal_handlers();
-
-  set_nonblocking(STDIN_FILENO);
 
   struct app_context app = {.multiplexer = multiplexer_default};
   int rows, columns;
@@ -127,52 +158,29 @@ int main(int argc, char **argv) {
     multiplexer_spawn_process(&app.multiplexer, argv[i]);
   }
 
-  struct io io = {.sources = vec(struct io_source), .pollfds = vec(struct pollfd)};
+  struct io io = io_default;
 
-  while (app.multiplexer.hosted.length && !app.quit) {
-    // 1. Dispatch any pending signals
-    int signal = 0;
-    bool did_resize = false;
-    bool did_sigchld = false;
-    while (read(sigpipe.read, &signal, sizeof(signal)) > 0) {
-      switch (signal) {
-      case SIGWINCH: {
-        did_resize = true;
-      } break;
-      case SIGCHLD: {
-        did_sigchld = true;
-      } break;
-      default:
-        app.quit = true;
-        logmsg("Unhandled signal: %d", signal);
-        break;
-      }
-    }
-
-    if (did_sigchld) multiplexer_remove_exited(&app.multiplexer);
-    if (did_resize) {
-      platform_get_winsize(&rows, &columns);
-      multiplexer_resize(&app.multiplexer, rows, columns);
-    }
-    if (did_sigchld) continue;
-
-    // 2. Set up IO
+  for (;;) {
+    // Set up IO
     vec_clear(&io.sources);
-    vec_clear(&io.pollfds);
-    struct io_source stdin_src = {.fd = STDIN_FILENO, .events = POLL_IN};
+    struct io_source stdin_src = {.fd = STDIN_FILENO, .events = POLL_IN, .on_data = stdin_callback, .data = &app};
+    struct io_source signal_src = {.fd = sigpipe.read, .events = POLL_IN, .on_data = signal_callback, .data = &app};
+    vec_push(&io.sources, &signal_src);
     vec_push(&io.sources, &stdin_src);
     struct vte_host *h;
-    vec_foreach(h, app.multiplexer.hosted) {
-      struct io_source src = {.fd = h->pty, .events = POLL_IN};
+    vec_foreach(h, app.multiplexer.clients) {
+      struct io_source src = {.fd = h->pty, .events = POLL_IN, .on_data = read_callback, .data = &app};
       vec_push(&io.sources, &src);
     }
 
-    // 3. Dispatch all pending io
-    io_flush(&io, read_callback, &app);
+    // Dispatch all pending io
+    io_flush(&io);
 
-    // 4. Render the current multiplexer state
-    render_frame(&app);
-    string_flush(&app.draw_buffer, STDOUT_FILENO, nullptr);
+    // quit ?
+    if (app.multiplexer.clients.length == 0 || app.quit) break;
+
+    // Render the current app state
+    render_frame(&app, STDOUT_FILENO);
   }
 
   terminal_reset();

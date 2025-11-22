@@ -131,9 +131,9 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
 void vec_remove(struct vec *v, size_t n) {
   assert(n < v->length);
   assert(v->length);
-  void *dst = v->content + n;
-  void *src = v->content + n + 1;
-  size_t count = v->length - n - 1;
+  void *dst = v->content + n * v->element_size;
+  void *src = v->content + (n + 1) * v->element_size;
+  size_t count = (v->length - n) * v->element_size;
   memmove(dst, src, count);
   v->length--;
 }

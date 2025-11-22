@@ -13,9 +13,9 @@ static void multiplexer_arrange(struct multiplexer *m) {
   } ws = {.ws_col = m->columns, .ws_row = m->rows};
   int mh, mx, mw, my, sy, sw, nm, ns, i, n;
 
-  n = m->hosted.length;
+  n = m->clients.length;
   struct vte_host *c;
-  vec_foreach(c, m->hosted) c->border_width = 1;
+  vec_foreach(c, m->clients) c->border_width = 1;
 
   i = my = sy = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -35,7 +35,7 @@ static void multiplexer_arrange(struct multiplexer *m) {
   }
 
   for (; i < nmaster && i < n; i++) {
-    struct vte_host *p = vec_nth(m->hosted, i);
+    struct vte_host *p = vec_nth(m->clients, i);
     struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
     vte_host_resize(p, b);
     p = p->next;
@@ -46,7 +46,7 @@ static void multiplexer_arrange(struct multiplexer *m) {
   int stack_items_left = ns;
 
   for (; i < n; i++) {
-    struct vte_host *p = vec_nth(m->hosted, i);
+    struct vte_host *p = vec_nth(m->clients, i);
     int height = (float)stack_height_left / stack_items_left;
     struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
     vte_host_resize(p, b);
@@ -62,7 +62,7 @@ static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
 }
 
 void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
-  struct vte_host *focused = vec_nth(m->hosted, m->focus);
+  struct vte_host *focused = vec_nth(m->clients, m->focus);
 
   static struct string writebuffer = {0};
   static struct string pastebuffer = {0};
@@ -165,9 +165,9 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
 }
 
 void multiplexer_spawn_process(struct multiplexer *m, char *process) {
-  assert(m->hosted.element_size == sizeof(struct vte_host));
+  assert(m->clients.element_size == sizeof(struct vte_host));
   logmsg("Spawn %s", process);
-  struct vte_host *host = vec_new_element(&m->hosted);
+  struct vte_host *host = vec_new_element(&m->clients);
   host->process = strdup(process);
   host->vte = vte_default;
   multiplexer_arrange(m);
@@ -175,7 +175,7 @@ void multiplexer_spawn_process(struct multiplexer *m, char *process) {
 }
 
 void multiplexer_destroy(struct multiplexer *m) {
-  vec_destroy(&m->hosted);
+  vec_destroy(&m->clients);
 }
 
 void multiplexer_remove_exited(struct multiplexer *m) {
@@ -184,19 +184,20 @@ void multiplexer_remove_exited(struct multiplexer *m) {
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     if (WIFEXITED(status)) {
-      for (size_t i = 0; i < m->hosted.length; i++) {
-        struct vte_host *h = vec_nth(m->hosted, i);
+      for (size_t i = 0; i < m->clients.length; i++) {
+        struct vte_host *h = vec_nth(m->clients, i);
         if (h->pid == pid) {
           // zero the pid to indicate the process exited.
           // otherwise the process will be reaped in vte_host_destroy
           h->pid = 0;
           vte_host_destroy(h);
-          vec_remove(&m->hosted, i);
+          vec_remove(&m->clients, i);
           break;
         }
       }
     }
   }
+  multiplexer_arrange(m);
 }
 
 void multiplexer_resize(struct multiplexer *m, int rows, int columns) {

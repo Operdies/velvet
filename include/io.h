@@ -3,14 +3,19 @@
 #include "collections.h"
 #include <poll.h>
 
+struct io_source;
+typedef void (*io_callback)(struct io_source *src, uint8_t *buffer, int n);
+
 struct io_source {
   /* file descriptor */
   int fd;
   /* pollfd events */
   short events;
+  /* called when data is read from the file descriptor */
+  io_callback on_data;
+  /* user data */
+  void *data;
 };
-
-typedef void (*io_callback)(uint8_t *buffer, int n, struct io_source *src, void *data);
 
 struct io {
   struct vec /* io_source */ sources;
@@ -22,7 +27,7 @@ static const struct io io_default = {
     .pollfds = vec(struct pollfd),
 };
 
-void io_flush(struct io *io, io_callback cb, void *data);
+void io_flush(struct io *io);
 
 #define IO_H
 #endif // IO_H

@@ -5,13 +5,13 @@
 #include "vte_host.h"
 
 struct multiplexer {
-  struct vec /* vte_host */ hosted;
+  struct vec /* vte_host */ clients;
   int rows, columns;
   size_t focus;
   uint8_t prefix;
 };
 
-static const struct multiplexer multiplexer_default = {.hosted = vec(struct vte_host), .prefix = ('B' & 037 /* CTRL-B */)};
+static const struct multiplexer multiplexer_default = {.clients = vec(struct vte_host), .prefix = ('B' & 037 /* CTRL-B */)};
 
 void multiplexer_feed_input(struct multiplexer *m, uint8_t *input, int n);
 void multiplexer_spawn_process(struct multiplexer *m, char *process);

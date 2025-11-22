@@ -2,12 +2,26 @@
 #include "utils.h"
 #include <errno.h>
 
-void io_flush(struct io *io, io_callback cb, void *data) {
-  static uint8_t readbuffer[4096];
+static bool fd_hot(int fd) {
+  const int poll_ms = 0;
+  return poll(&(struct pollfd){ .fd = fd, .events = POLL_IN }, 1, poll_ms) == 1;
+}
+
+void io_flush(struct io *io) {
+  // These values are somewhat arbitrarily chosen;
+  // The key idea is that we want to continually read
+  // from the same file descriptor in high-throughput scenarios,
+  // but we don't want the same file descriptor to indefinitely block
+  // the main thread.
+  constexpr int BUFSIZE = 2048;      // 2kb
+  constexpr int MAX_BYTES = 1 << 19; // 512kb
+  constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
+
+  static uint8_t readbuffer[BUFSIZE];
   vec_clear(&io->pollfds);
   struct io_source *src;
   vec_foreach(src, io->sources) {
-    struct pollfd fd = { .events = src->events, .fd = src->fd };
+    struct pollfd fd = {.events = src->events, .fd = src->fd};
     vec_push(&io->pollfds, &fd);
   }
 
@@ -24,14 +38,32 @@ void io_flush(struct io *io, io_callback cb, void *data) {
   for (size_t i = 0; polled && i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(io->pollfds, i);
     struct io_source *src = vec_nth(io->sources, i);
+    assert(src->on_data);
     if (pfd->revents & POLL_IN) {
       polled--;
       int n = 0;
+      int num_reads = 0;
       do {
         n = read(pfd->fd, readbuffer, sizeof(readbuffer));
-        if (n == -1 && errno != EINTR && errno != EAGAIN) die("read:");
-        if (n >= 0) cb(readbuffer, n, src, data);
-      } while (n > 0);
+        num_reads++;
+        if (n == -1) {
+          if (errno == EBADF) {
+            // this happens if the file descriptor was closed.
+            // We can safely ignore this. (Unfortunately it can also
+            // be a more serious issue, but that is hard to detect.)
+            // The file descriptor may be closed because a the owning process
+            break;
+          }
+          // A signal was raised during the read. This is okay.
+          // We can just break and read it later.
+          if (errno == EINTR) break;
+          // This is also ok. The fd was non-blocking was not ready for reading.
+          if (errno == EAGAIN) break;
+          // Unexpected error; crash hard.
+          die("read:");
+        }
+        src->on_data(src, readbuffer, n);
+      } while (n > 0 && num_reads < MAX_IT && fd_hot(pfd->fd));
     }
   }
 }
