@@ -521,6 +521,26 @@ static bool SM(struct vte *vte, struct csi *csi) {
   }
 }
 
+static void set_cursor_blinking(struct vte *vte, bool blinking) {
+  if (blinking) {
+    switch (vte->options.cursor.style) {
+    case CURSOR_STYLE_DEFAULT:
+    case CURSOR_STYLE_STEADY_BLOCK: vte->options.cursor.style = CURSOR_STYLE_BLINKING_BLOCK; break;
+    case CURSOR_STYLE_STEADY_UNDERLINE: vte->options.cursor.style = CURSOR_STYLE_BLINKING_UNDERLINE; break;
+    case CURSOR_STYLE_STEADY_BAR: vte->options.cursor.style = CURSOR_STYLE_BLINKING_BAR; break;
+    default: break;
+    }
+  } else {
+    switch (vte->options.cursor.style) {
+    case CURSOR_STYLE_DEFAULT:
+    case CURSOR_STYLE_BLINKING_BLOCK: vte->options.cursor.style = CURSOR_STYLE_STEADY_BLOCK; break;
+    case CURSOR_STYLE_BLINKING_UNDERLINE: vte->options.cursor.style = CURSOR_STYLE_STEADY_UNDERLINE; break;
+    case CURSOR_STYLE_BLINKING_BAR: vte->options.cursor.style = CURSOR_STYLE_STEADY_BAR; break;
+    default: break;
+    }
+  }
+}
+
 static bool DECSET(struct vte *vte, struct csi *csi) {
   struct mouse_options *m = &vte->options.mouse;
   bool on = csi->final == 'h';
@@ -531,7 +551,7 @@ static bool DECSET(struct vte *vte, struct csi *csi) {
   case 1: vte->options.application_mode = on; break;
   case 6: vte->options.origin_mode = on; break;
   case 7: vte->options.auto_wrap_mode = on; break;
-  case 12: TODO("Set Blinking Cursor"); break;
+  case 12: set_cursor_blinking(vte, on); break;
   case 25: vte->options.cursor.visible = on; break;
   case 1004: vte->options.focus_reporting = on; break;
   case 1049:
@@ -590,7 +610,7 @@ bool DECLL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECLL
 
 static bool DECSCUSR(struct vte *vte, struct csi *csi) {
   int cursor = csi->params[0].primary;
-  if (cursor >= CURSOR_STYLE_BLINKING_BLOCK && cursor < CURSOR_STYLE_LAST) {
+  if (cursor >= CURSOR_STYLE_DEFAULT && cursor < CURSOR_STYLE_LAST) {
     vte->options.cursor.style = cursor;
   } else {
     OMITTED("Unknown cursor style %d", cursor);
