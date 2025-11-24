@@ -438,13 +438,15 @@ static bool DCH(struct vte *vte, struct csi *csi) {
 
 bool SU(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_scroll_content_down(vte->active_grid, count);
+  struct grid *g = vte->active_grid;
+  grid_shuffle_rows_up(g, count, g->scroll_top, g->scroll_bottom);
   return true;
 }
 
 bool SD(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_scroll_content_up(vte->active_grid, count);
+  struct grid *g = vte->active_grid;
+  grid_shuffle_rows_down(g, count, g->scroll_top, g->scroll_bottom);
   return true;
 }
 

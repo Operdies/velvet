@@ -13,9 +13,6 @@
  * Better dirty tracking (maybe that should happen entirely in the renderer)
  */
 
-static void grid_shuffle_rows_up(struct grid *g, int count, int top, int bottom);
-static void grid_shuffle_rows_down(struct grid *g, int count, int top, int bottom);
-
 void grid_clear_line(struct grid *g, int n) {
   struct grid_cell clear = { .symbol = utf8_blank, .style = g->cursor.brush };
   struct grid_row *row = &g->rows[n];
@@ -99,7 +96,7 @@ void grid_scroll_content_down(struct grid *g, int count) {
 
 void grid_move_or_scroll_up(struct grid *g) {
   if (g->cursor.row == g->scroll_top) {
-    grid_scroll_content_up(g, 1);
+    grid_shuffle_rows_down(g, 1, g->scroll_top, g->scroll_bottom);
   } else {
     grid_move_cursor(g, 0, -1);
   }
@@ -112,7 +109,7 @@ void grid_scroll_content_up(struct grid *g, int count) {
 void grid_move_or_scroll_down(struct grid *g) {
   struct cursor *c = &g->cursor;
   if (c->row == g->scroll_bottom) {
-    grid_scroll_content_down(g, 1);
+    grid_shuffle_rows_up(g, 1, g->scroll_top, g->scroll_bottom);
   } else {
     c->row = c->row + 1;
   }
@@ -340,7 +337,7 @@ bool cell_style_equals(const struct grid_cell_style *const a, const struct grid_
 }
 
 // Effectively scroll out the bottom `count` rows, leaving `count` clear rows at the top
-static void grid_shuffle_rows_down(struct grid *g, int count, int top, int bottom) {
+void grid_shuffle_rows_down(struct grid *g, int count, int top, int bottom) {
   assert(count > 0);
   assert(top >= 0);
   assert(bottom < g->h);
@@ -358,7 +355,7 @@ static void grid_shuffle_rows_down(struct grid *g, int count, int top, int botto
 }
 
 // Effectively scroll out the top `count` rows, leaving `count` clear rows at the bottom.
-static void grid_shuffle_rows_up(struct grid *g, int count, int top, int bottom) {
+void grid_shuffle_rows_up(struct grid *g, int count, int top, int bottom) {
   assert(count > 0);
   assert(top >= 0);
   assert(bottom < g->h);

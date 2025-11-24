@@ -139,4 +139,6 @@ void grid_restore_cursor(struct grid *g);
 void grid_save_cursor(struct grid *g);
 void grid_scroll_content_up(struct grid *g, int count);
 void grid_scroll_content_down(struct grid *g, int count);
+void grid_shuffle_rows_up(struct grid *g, int count, int top, int bottom);
+void grid_shuffle_rows_down(struct grid *g, int count, int top, int bottom);
 #endif /*  GRID_H */

@@ -24,6 +24,8 @@
 #define SM(x) CSI #x "h"
 #define RI "\x1bM"
 #define IND "\x1b" "D"
+#define SD(x) CSI #x "T"
+#define SU(x) CSI #x "S"
 
 #define EIGHT(X) X, X, X, X, X, X, X, X
 #define FIVE(X) X, X, X, X, X
@@ -673,6 +675,60 @@ void test_scrolling(void) {
                          { EIGHT('E') },
                          { ' ', ' ', ' ', ' ', 'a', ' ', ' ', ' ' },
                          { EIGHT(' ') },
+                         });
+  test_grid_input_output("Scroll Down 1 (SD)",
+                         "\x1b#8" SD(1),
+                         (grid_5x8){
+                         { EIGHT(' ') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         });
+  test_grid_input_output("Scroll Down 2 (SD)",
+                         "\x1b#8" SD(3),
+                         (grid_5x8){
+                         { EIGHT(' ') },
+                         { EIGHT(' ') },
+                         { EIGHT(' ') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         });
+  test_grid_input_output("Scroll Down + Scroll Region (SD)",
+                         DECSTBM(2,4) "\x1b#8" SD(2),
+                         (grid_5x8){
+                         { EIGHT('E') },
+                         { EIGHT(' ') },
+                         { EIGHT(' ') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         });
+  test_grid_input_output("Scroll Up 1 (SU)",
+                         "\x1b#8" SU(1),
+                         (grid_5x8){
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT(' ') },
+                         });
+  test_grid_input_output("Scroll Up 2 (SU)",
+                         "\x1b#8" SU(3),
+                         (grid_5x8){
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT(' ') },
+                         { EIGHT(' ') },
+                         { EIGHT(' ') },
+                         });
+  test_grid_input_output("Scroll Up + Scroll Region (SU)",
+                         DECSTBM(2,4) "\x1b#8" SU(2),
+                         (grid_5x8){
+                         { EIGHT('E') },
+                         { EIGHT('E') },
+                         { EIGHT(' ') },
+                         { EIGHT(' ') },
+                         { EIGHT('E') },
                          });
 }
 
