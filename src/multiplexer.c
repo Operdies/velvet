@@ -57,19 +57,70 @@ void multiplexer_arrange(struct multiplexer *m) {
   }
 }
 
+#ifndef CTRL
+#define CTRL(x) ((x) & 037)
+#endif
+
+#define client(n) ((struct vte_host *)(vec_nth(m->clients, n)))
+
+static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
+  if (c1 != c2) {
+    vec_swap(&m->clients, c1, c2);
+    client(c1)->border_dirty = true;
+    client(c2)->border_dirty = true;
+  }
+}
+
+static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
+  if (m->focus != focus) {
+    client(focus)->border_dirty = true;
+    client(m->focus)->border_dirty = true;
+    m->focus = focus;
+  }
+}
+
+static void multiplexer_swap_previous(struct multiplexer *m) {
+  if (m->focus > 0 && m->clients.length > 1) {
+    multiplexer_swap_clients(m, m->focus, m->focus - 1);
+    multiplexer_set_focus(m, m->focus - 1);
+  }
+}
+
+static void multiplexer_swap_next(struct multiplexer *m) {
+  if (m->focus < m->clients.length - 1 && m->clients.length > 1) {
+    multiplexer_swap_clients(m, m->focus, m->focus + 1);
+    multiplexer_set_focus(m, m->focus + 1);
+  }
+}
+
+static void multiplexer_focus_next(struct multiplexer *m) {
+  multiplexer_set_focus(m, (m->focus + 1) % m->clients.length);
+}
+
+static void multiplexer_focus_previous(struct multiplexer *m) {
+  multiplexer_set_focus(m, (m->focus + m->clients.length + 1) % m->clients.length);
+}
 static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
-  return false;
+  switch (ch) {
+  case 'k': multiplexer_swap_previous(m); break;
+  case 'j': multiplexer_swap_next(m); break;
+  case CTRL('k'): multiplexer_focus_previous(m); break;
+  case CTRL('j'): multiplexer_focus_next(m); break;
+  case 'c': multiplexer_spawn_process(m, "zsh"); break;
+  default: return false;
+  };
+  return true;
 }
 
 void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
-  struct vte_host *focused = vec_nth(m->clients, m->focus);
-
   static struct string writebuffer = {0};
   static struct string pastebuffer = {0};
   static enum stdin_state {
     normal,
     esc,
     csi,
+    prefix,
+    prefix_cont,
     bracketed_paste,
   } s;
 
@@ -80,6 +131,7 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
   string_clear(&writebuffer);
 
   for (int i = 0; i < n; i++) {
+    struct vte_host *focused = vec_nth(m->clients, m->focus);
     uint8_t ch = buf[i];
     running_hash_append(&running_hash, ch);
     if (s == normal && running_hash_match(running_hash, paste_start, 6)) {
@@ -99,13 +151,14 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
       string_clear(&pastebuffer);
       continue;
     }
+  regret:
     switch (s) {
     case bracketed_paste: string_push_char(&pastebuffer, ch); break;
     case normal: {
       if (ch == 0x1b) {
         s = esc;
-      } else if (handle_keybinds(m, ch)) {
-        continue;
+      } else if (ch == m->prefix) {
+        s = prefix;
       } else {
         string_push_char(&writebuffer, ch);
       }
@@ -136,14 +189,37 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
         }
         // If the vte_host does not have the feature enabled, ignore it.
       } else {
-        string_push_char(&writebuffer, 0x1b);
-        string_push_char(&writebuffer, '[');
-        string_push_char(&writebuffer, ch);
+        string_push_csi(&writebuffer, (struct int_slice){0}, (char[]){ch, 0});
       }
       s = normal;
     } break;
+    case prefix_cont: {
+      bool is_control = CTRL(ch) == ch;
+      if (!is_control) {
+        s = normal;
+        goto regret;
+      }
+      if (ch == m->prefix) {
+        s = prefix;
+        continue;
+      }
+      if (!handle_keybinds(m, ch)) {
+        s = normal;
+        goto regret;
+      }
+    } break;
+    case prefix: {
+      bool is_control = CTRL(ch) == ch;
+      if (ch == m->prefix) {
+        string_push_char(&writebuffer, m->prefix);
+      } else {
+        handle_keybinds(m, ch);
+      }
+      s = is_control ? prefix_cont : normal;
+    } break;
     }
   }
+  struct vte_host *focused = vec_nth(m->clients, m->focus);
 
   // TODO: Implement timing mechanism for escapes.
   // For now, flush before return to restore state machine to normal input mode
@@ -198,7 +274,12 @@ void multiplexer_remove_exited(struct multiplexer *m) {
       }
     }
   }
-  multiplexer_arrange(m);
+
+  // Ensure focus is within
+  if (m->clients.length) {
+    if (m->focus >= m->clients.length) m->focus = m->clients.length - 1;
+    multiplexer_arrange(m);
+  }
 }
 
 void multiplexer_resize(struct multiplexer *m, int rows, int columns) {
