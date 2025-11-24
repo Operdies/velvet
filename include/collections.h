@@ -107,6 +107,8 @@ void string_push_csi(struct string *str, struct int_slice params, const char *co
 void vec_push(struct vec *v, const void *elem);
 /* remove the nth element from the vector */
 void vec_remove(struct vec *v, size_t n);
+/* swap two vector elements */
+void vec_swap(struct vec *v, size_t i, size_t j);
 void vec_clear(struct vec *v);
 void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */

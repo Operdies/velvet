@@ -132,8 +132,8 @@ void vec_remove(struct vec *v, size_t n) {
   assert(n < v->length);
   assert(v->length);
   void *dst = v->content + n * v->element_size;
-  void *src = v->content + (n + 1) * v->element_size;
-  size_t count = (v->length - n) * v->element_size;
+  const void *src = v->content + (n + 1) * v->element_size;
+  size_t count = (v->length - n - 1) * v->element_size;
   memmove(dst, src, count);
   v->length--;
 }
@@ -312,6 +312,18 @@ bool hashmap_remove(struct hashmap *h, uint32_t key, void **removed) {
   return false;
 #undef next
 #undef prev
+}
+
+void vec_swap(struct vec *v, size_t i, size_t j) {
+  assert(i >= 0 && i < v->length);
+  assert(j >= 0 && j < v->length);
+  void *tmp = vec_new_element(v);
+  v->length--;
+  void *x = vec_nth(*v, i);
+  void *y = vec_nth(*v, j); 
+  memcpy(tmp, x, v->element_size);
+  memcpy(x, y, v->element_size);
+  memcpy(y, tmp, v->element_size);
 }
 
 void hashmap_destroy(struct hashmap *h) {
