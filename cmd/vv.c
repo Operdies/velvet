@@ -487,9 +487,12 @@ int main(int argc, char **argv) {
         constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
         uint8_t buf[BUFSIZE];
         int n = 0, iterations = 0;
-        while (iterations < MAX_IT && (n = read(p->pty, buf, BUFSIZE)) > 0) {
+        for (; iterations < MAX_IT; iterations++) {
+          n = read(p->pty, buf, BUFSIZE);
+          if (n <= 0) break;
           vte_host_process_output(p, buf, n);
-          iterations++;
+          struct pollfd pfd = {.fd = p->pty, .events = POLL_IN};
+          if (poll(&pfd, 1, 1) != 1) break;
         }
         if (n == -1 && errno != EAGAIN && errno != EINTR) {
           die("read %s:", p->cmdline);
