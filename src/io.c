@@ -7,7 +7,7 @@ static bool fd_hot(int fd) {
   return poll(&(struct pollfd){ .fd = fd, .events = POLL_IN }, 1, poll_ms) == 1;
 }
 
-void io_flush(struct io *io) {
+void io_flush(struct io *io, int poll_timeout) {
   // These values are somewhat arbitrarily chosen;
   // The key idea is that we want to continually read
   // from the same file descriptor in high-throughput scenarios,
@@ -26,7 +26,7 @@ void io_flush(struct io *io) {
     vec_push(&io->pollfds, &fd);
   }
 
-  int polled = poll(io->pollfds.content, io->pollfds.length, -1);
+  int polled = poll(io->pollfds.content, io->pollfds.length, poll_timeout);
   if (polled == -1) {
     // In case of unexpected errors, fail hard immediately.
     if (errno != EAGAIN && errno != EINTR) {

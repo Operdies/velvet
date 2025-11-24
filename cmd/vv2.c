@@ -165,7 +165,9 @@ int main(int argc, char **argv) {
     }
 
     // Dispatch all pending io
-    io_flush(&io);
+    // TODO: if stdin_handler->state == PREFIX or stdin_handler->state == ESCAPE,
+    // set a timeout of e.g. 1s and restore the state after the 
+    io_flush(&io, -1);
 
     // quit ?
     if (app.multiplexer.clients.length == 0 || app.quit) break;

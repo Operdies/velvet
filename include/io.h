@@ -27,7 +27,7 @@ static const struct io io_default = {
     .pollfds = vec(struct pollfd),
 };
 
-void io_flush(struct io *io);
+void io_flush(struct io *io, int poll_timeout);
 void io_add_source(struct io *io, struct io_source src);
 void io_clear_sources(struct io *io);
 
