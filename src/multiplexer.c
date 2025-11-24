@@ -176,6 +176,7 @@ void multiplexer_spawn_process(struct multiplexer *m, char *process) {
 
 void multiplexer_destroy(struct multiplexer *m) {
   vec_destroy(&m->clients);
+  string_destroy(&m->draw_buffer);
 }
 
 void multiplexer_remove_exited(struct multiplexer *m) {
@@ -204,4 +205,40 @@ void multiplexer_resize(struct multiplexer *m, int rows, int columns) {
   m->rows = rows;
   m->columns = columns;
   multiplexer_arrange(m);
+}
+
+void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void *context) {
+  if (m->clients.length == 0) return;
+  static enum cursor_style current_cursor_style = 0;
+  struct string *draw_buffer = &m->draw_buffer;
+  struct vte_host *focused = vec_nth(m->clients, m->focus);
+
+  string_push_slice(draw_buffer, vt_hide_cursor);
+  for (size_t i = 0; i < m->clients.length; i++) {
+    struct vte_host *h = vec_nth(m->clients, i);
+    vte_host_update_cwd(h);
+    vte_host_draw(h, false, draw_buffer);
+    vte_host_draw_border(h, draw_buffer, i == m->focus);
+  }
+
+  {
+    // move cursor to focused host
+    struct grid *g = focused->vte.active_grid;
+    struct cursor *c = &g->cursor;
+    int lineno = 1 + focused->rect.client.y + c->row;
+    int columnno = 1 + focused->rect.client.x + c->col;
+    string_push_csi(draw_buffer, INT_SLICE(lineno, columnno), "H");
+  }
+
+  // set the cursor style according to the focused client.
+  if (focused->vte.options.cursor.style != current_cursor_style) {
+    current_cursor_style = focused->vte.options.cursor.style;
+    string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
+  }
+
+  // Set cursor visibility according to the focused client.
+  if (focused->vte.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
+
+  render_func(m->draw_buffer.content, m->draw_buffer.len, context);
+  string_clear(&m->draw_buffer);
 }

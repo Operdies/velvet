@@ -43,7 +43,6 @@ static void install_signal_handlers(void) {
 
 struct app_context {
   struct multiplexer multiplexer;
-  struct string draw_buffer;
   bool quit;
 };
 
@@ -97,39 +96,9 @@ static void read_callback(struct io_source *src, uint8_t *buffer, int n) {
   }
 }
 
-static void render_frame(struct app_context *app, int target) {
-  if (app->multiplexer.clients.length == 0) return;
-  static enum cursor_style current_cursor_style = 0;
-  struct string *draw_buffer = &app->draw_buffer;
-  struct vte_host *focused = vec_nth(app->multiplexer.clients, app->multiplexer.focus);
-
-  string_push_slice(draw_buffer, vt_hide_cursor);
-  for (size_t i = 0; i < app->multiplexer.clients.length; i++) {
-    struct vte_host *h = vec_nth(app->multiplexer.clients, i);
-    vte_host_update_cwd(h);
-    vte_host_draw(h, false, draw_buffer);
-    vte_host_draw_border(h, draw_buffer, i == app->multiplexer.focus);
-  }
-
-  {
-    // move cursor to focused host
-    struct grid *g = focused->vte.active_grid;
-    struct cursor *c = &g->cursor;
-    int lineno = 1 + focused->rect.client.y + c->row;
-    int columnno = 1 + focused->rect.client.x + c->col;
-    string_push_csi(draw_buffer, INT_SLICE(lineno, columnno), "H");
-  }
-
-  // set the cursor style according to the focused client.
-  if (focused->vte.options.cursor.style != current_cursor_style) {
-    current_cursor_style = focused->vte.options.cursor.style;
-    string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
-  }
-
-  // Set cursor visibility according to the focused client.
-  if (focused->vte.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
-
-  string_flush(&app->draw_buffer, target, nullptr);
+static void render_func(const uint8_t *const buffer, size_t n, void *context) {
+  int fd = *(int*)context;
+  write(fd, buffer, n);
 }
 
 int main(int argc, char **argv) {
@@ -176,7 +145,7 @@ int main(int argc, char **argv) {
     multiplexer_arrange(&app.multiplexer);
 
     // Render the current app state
-    render_frame(&app, STDOUT_FILENO);
+    multiplexer_render(&app.multiplexer, render_func, &(int){STDOUT_FILENO});
   }
 
   terminal_reset();
