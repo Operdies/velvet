@@ -32,9 +32,9 @@ void vte_host_destroy(struct vte_host *vte_host) {
     if (result == -1) die("waitpid:");
   }
   vte_destroy(&vte_host->vte);
-  free(vte_host->process);
+  free(vte_host->cmdline);
   vte_host->pty = vte_host->pid = 0;
-  vte_host->process = nullptr;
+  vte_host->cmdline = nullptr;
 }
 
 struct vte_host *vte_host_from_pty(struct vte_host *p, int pty) {
@@ -81,12 +81,12 @@ void vte_host_update_cwd(struct vte_host *p) {
       if (strncmp(buf, p->cwd, MIN(sizeof(buf), sizeof(p->cwd)))) {
         p->border_dirty = true;
         strncpy(p->cwd, buf, MIN(sizeof(buf), sizeof(p->cwd)));
-        cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->process, " — ", p->cwd, NULL});
+        cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->cmdline, " — ", p->cwd, NULL});
       }
     }
   } else if (!p->title[0]) {
     // fallback to using the process as title
-    cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->process, NULL});
+    cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->cmdline, NULL});
   }
 }
 
@@ -383,7 +383,7 @@ void vte_host_start(struct vte_host *vte_host) {
   if (pid < 0) die("forkpty:");
 
   if (pid == 0) {
-    char *argv[] = {"sh", "-c", vte_host->process, NULL};
+    char *argv[] = {"sh", "-c", vte_host->cmdline, NULL};
     execvp("sh", argv);
     die("execlp:");
   }

@@ -168,7 +168,7 @@ void multiplexer_spawn_process(struct multiplexer *m, char *process) {
   assert(m->clients.element_size == sizeof(struct vte_host));
   logmsg("Spawn %s", process);
   struct vte_host *host = vec_new_element(&m->clients);
-  host->process = strdup(process);
+  host->cmdline = strdup(process);
   host->vte = vte_default;
   multiplexer_arrange(m);
   vte_host_start(host);

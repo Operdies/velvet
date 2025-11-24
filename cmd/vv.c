@@ -173,7 +173,7 @@ static void new_client() {
     if (vte_host_count(clients) < 6) {
       struct vte_host *new = calloc(1, sizeof(*new));
       // TODO: Start user's preferred shell
-      new->process = strdup("zsh");
+      new->cmdline = strdup("zsh");
       new->next = clients;
       new->vte = vte_default;
       clients = new;
@@ -380,7 +380,7 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
       struct vte_host *p = calloc(1, sizeof(*p));
       memcpy(&p->vte, &vte_default, sizeof(vte_default));
-      p->process = strdup(argv[i]);
+      p->cmdline = strdup(argv[i]);
       if (!prev) {
         // first element -- asign head
         clients = p;
@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
 
     if (argc < 2) {
       clients = calloc(1, sizeof(*clients));
-      clients->process = strdup("zsh");
+      clients->cmdline = strdup("zsh");
       memcpy(&clients->vte, &vte_default, sizeof(vte_default));
     }
   }
@@ -492,7 +492,7 @@ int main(int argc, char **argv) {
           iterations++;
         }
         if (n == -1 && errno != EAGAIN && errno != EINTR) {
-          die("read %s:", p->process);
+          die("read %s:", p->cmdline);
         } else if (n == 0) {
           vte_host_remove_and_destroy(p); // pipe closed -- destroy vte_host
         }
