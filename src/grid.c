@@ -13,6 +13,8 @@
  * Better dirty tracking (maybe that should happen entirely in the renderer)
  */
 
+static void grid_shuffle_rows_up(struct grid *g, int count, int top, int bottom);
+static void grid_shuffle_rows_down(struct grid *g, int count, int top, int bottom);
 
 void grid_clear_line(struct grid *g, int n) {
   struct grid_cell clear = { .symbol = utf8_blank, .style = g->cursor.brush };
@@ -71,20 +73,7 @@ void grid_insert_lines(struct grid *g, int n) {
   assert(g->scroll_top >= 0);
   assert(g->scroll_bottom < g->h);
   if (g->cursor.row < g->scroll_top || g->cursor.row > g->scroll_bottom) return;
-  int n_affected_rows = g->scroll_bottom - g->cursor.row + 1;
-  n = MIN(n, n_affected_rows);
-  // Shift the last `n` rows backwards one by one, starting from the back.
-  // This will result in all rows after the cursor being shifted forward `n` places,
-  // except for the last `n` rows which will be precisely at [row .. row + n],
-  // aka the blank lines we need to insert at the cursor.
-  for (int row = g->scroll_bottom; row >= g->cursor.row + n; row--) {
-    grid_swap_rows(g, row, row - n);
-  }
-
-  // clear the first `n` rows
-  for (int row = g->cursor.row; row < g->cursor.row + n; row++) {
-    grid_clear_line(g, row);
-  }
+  grid_shuffle_rows_down(g, n, g->cursor.row, g->scroll_bottom);
 }
 
 // If the cursor is outside the scroll region, this should do nothing.
@@ -94,18 +83,7 @@ void grid_delete_lines(struct grid *g, int n) {
   assert(g->scroll_top >= 0);
   assert(g->scroll_bottom < g->h);
   if (g->cursor.row < g->scroll_top || g->cursor.row > g->scroll_bottom) return;
-  int rows_after_cursor = g->scroll_bottom + 1;
-  int n_affected_rows = rows_after_cursor - g->cursor.row;
-  n = MIN(n, n_affected_rows);
-
-  for (int row = g->cursor.row; row < rows_after_cursor - n; row++) {
-    grid_swap_rows(g, row, row + n);
-  }
-
-  // clear the final `n` rows
-  for (int row = rows_after_cursor - n; row < rows_after_cursor; row++) {
-    grid_clear_line(g, row);
-  }
+  grid_shuffle_rows_up(g, n, g->cursor.row, g->scroll_bottom);
 }
 
 void grid_newline(struct grid *g, bool carriage) {
@@ -115,54 +93,26 @@ void grid_newline(struct grid *g, bool carriage) {
   grid_move_or_scroll_down(g);
 }
 
-static void grid_rotate_rows_forward(struct grid *g) {
-  struct grid_row last = g->rows[g->scroll_bottom];
-  last.dirty = true;
-  for (int i = g->scroll_bottom; i > g->scroll_top; i--) {
-    g->rows[i] = g->rows[i-1];
-    g->rows[i].dirty = true;
-  }
-  g->rows[g->scroll_top] = last;
-}
-
-/* Get a new row. Right now, that means reusing the first row, but when scrollback is implemented,
- * it will mean managing scrollback and somehow getting a new row. */
-static void grid_rotate_rows_reverse(struct grid *g) {
-  struct grid_row first = g->rows[g->scroll_top];
-  first.dirty = true;
-  for (int i = g->scroll_top; i < g->scroll_bottom; i++) {
-    g->rows[i] = g->rows[i + 1];
-    g->rows[i].dirty = true;
-  }
-  g->rows[g->scroll_bottom] = first;
-}
-
 void grid_scroll_content_down(struct grid *g, int count) {
-  for (int i = 0; i < count; i++) {
-    grid_rotate_rows_forward(g);
-    grid_clear_line(g, g->scroll_top);
-  }
+  grid_shuffle_rows_up(g, count, g->scroll_top, g->scroll_bottom);
 }
 
 void grid_move_or_scroll_up(struct grid *g) {
   if (g->cursor.row == g->scroll_top) {
-    grid_scroll_content_down(g, 1);
+    grid_scroll_content_up(g, 1);
   } else {
     grid_move_cursor(g, 0, -1);
   }
 }
 
 void grid_scroll_content_up(struct grid *g, int count) {
-  for (int i = 0; i < count; i++) {
-    grid_rotate_rows_reverse(g);
-    grid_clear_line(g, g->scroll_bottom);
-  }
+  grid_shuffle_rows_down(g, count, g->scroll_top, g->scroll_bottom);
 }
 
 void grid_move_or_scroll_down(struct grid *g) {
   struct cursor *c = &g->cursor;
   if (c->row == g->scroll_bottom) {
-    grid_scroll_content_up(g, 1);
+    grid_scroll_content_down(g, 1);
   } else {
     c->row = c->row + 1;
   }
@@ -389,3 +339,38 @@ bool cell_style_equals(const struct grid_cell_style *const a, const struct grid_
   return a->attr == b->attr && color_equals(&a->fg, &b->fg) && color_equals(&a->bg, &b->bg);
 }
 
+// Effectively scroll out the bottom `count` rows, leaving `count` clear rows at the top
+static void grid_shuffle_rows_down(struct grid *g, int count, int top, int bottom) {
+  assert(count > 0);
+  assert(top >= 0);
+  assert(bottom < g->h);
+  assert(top <= bottom);
+
+  int n_affected_rows = bottom - top + 1;
+  count = MIN(count, n_affected_rows);
+
+  for (int row = bottom; row >= top + count; row--) {
+    grid_swap_rows(g, row, row - count);
+  }
+
+  // clear the first `count` rows
+  for (int row = top; row < top + count; row++) grid_clear_line(g, row);
+}
+
+// Effectively scroll out the top `count` rows, leaving `count` clear rows at the bottom.
+static void grid_shuffle_rows_up(struct grid *g, int count, int top, int bottom) {
+  assert(count > 0);
+  assert(top >= 0);
+  assert(bottom < g->h);
+  assert(top <= bottom);
+
+  int n_affected_rows = (bottom + 1) - top;
+  count = MIN(count, n_affected_rows);
+
+  for (int row = top; row <= bottom - count; row++) {
+    grid_swap_rows(g, row, row + count);
+  }
+
+  // clear the final `count` rows
+  for (int i = 0; i < count; i++) grid_clear_line(g, bottom - i);
+}
