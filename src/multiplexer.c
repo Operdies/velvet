@@ -7,7 +7,7 @@
 
 static int nmaster = 1;
 static float factor = 0.5;
-static void multiplexer_arrange(struct multiplexer *m) {
+void multiplexer_arrange(struct multiplexer *m) {
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->columns, .ws_row = m->rows};
@@ -42,7 +42,7 @@ static void multiplexer_arrange(struct multiplexer *m) {
     my += mh;
   }
 
-  int stack_height_left = (float)ws.ws_row;
+  int stack_height_left = ws.ws_row;
   int stack_items_left = ns;
 
   for (; i < n; i++) {

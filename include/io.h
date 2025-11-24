@@ -28,6 +28,8 @@ static const struct io io_default = {
 };
 
 void io_flush(struct io *io);
+void io_add_source(struct io *io, struct io_source src);
+void io_clear_sources(struct io *io);
 
 #define IO_H
 #endif // IO_H

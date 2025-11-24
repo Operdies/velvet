@@ -9,23 +9,11 @@
 #include "platform.h"
 #include "virtual_terminal_sequences.h"
 
-#ifndef CTRL
-#define CTRL(x) ((x) & 037)
-#endif
-
-static struct {
-  union {
-    int pipes[2];
-    struct {
-      int read;
-      int write;
-    };
-  };
-} sigpipe;
-
+static int signal_write;
+static int signal_read;
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
-  size_t written = write(sigpipe.write, &sig, sizeof(sig));
+  size_t written = write(signal_write, &sig, sizeof(sig));
   if (written < sizeof(sig)) die("signal write:");
 }
 
@@ -43,10 +31,12 @@ static void install_signal_handlers(void) {
     die("sigaction:");
   }
 
-  if (pipe(sigpipe.pipes) < 0) {
+  int pipes[2];
+  if (pipe(pipes) < 0) {
     die("pipe:");
   }
-  set_nonblocking(sigpipe.read);
+  signal_read = pipes[0];
+  signal_write = pipes[1];
 }
 
 
@@ -108,6 +98,7 @@ static void read_callback(struct io_source *src, uint8_t *buffer, int n) {
 }
 
 static void render_frame(struct app_context *app, int target) {
+  if (app->multiplexer.clients.length == 0) return;
   static enum cursor_style current_cursor_style = 0;
   struct string *draw_buffer = &app->draw_buffer;
   struct vte_host *focused = vec_nth(app->multiplexer.clients, app->multiplexer.focus);
@@ -164,13 +155,13 @@ int main(int argc, char **argv) {
     // Set up IO
     vec_clear(&io.sources);
     struct io_source stdin_src = {.fd = STDIN_FILENO, .events = POLL_IN, .on_data = stdin_callback, .data = &app};
-    struct io_source signal_src = {.fd = sigpipe.read, .events = POLL_IN, .on_data = signal_callback, .data = &app};
-    vec_push(&io.sources, &signal_src);
-    vec_push(&io.sources, &stdin_src);
+    struct io_source signal_src = {.fd = signal_read, .events = POLL_IN, .on_data = signal_callback, .data = &app};
+    io_add_source(&io, signal_src);
+    io_add_source(&io, stdin_src);
     struct vte_host *h;
     vec_foreach(h, app.multiplexer.clients) {
       struct io_source src = {.fd = h->pty, .events = POLL_IN, .on_data = read_callback, .data = &app};
-      vec_push(&io.sources, &src);
+      io_add_source(&io, src);
     }
 
     // Dispatch all pending io
@@ -178,6 +169,9 @@ int main(int argc, char **argv) {
 
     // quit ?
     if (app.multiplexer.clients.length == 0 || app.quit) break;
+
+    // arrange
+    multiplexer_arrange(&app.multiplexer);
 
     // Render the current app state
     render_frame(&app, STDOUT_FILENO);
