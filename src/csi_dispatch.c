@@ -509,7 +509,11 @@ static bool VPA(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool VPR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("VPR"); return false; }
+bool VPR(struct vte *vte, struct csi *csi) {
+  int row = csi->params[0].primary ? csi->params[0].primary : 1;
+  grid_move_cursor(vte->active_grid, 0, row);
+  return true;
+}
 
 static bool HVP(struct vte *vte, struct csi *csi) { return CUP(vte, csi); }
 
