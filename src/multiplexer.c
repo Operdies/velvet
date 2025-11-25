@@ -74,9 +74,19 @@ static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
 
 static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   if (m->focus != focus) {
-    client(focus)->border_dirty = true;
-    client(m->focus)->border_dirty = true;
+    struct vte_host *current_focus = client(m->focus);
+    struct vte_host *new_focus = client(focus);
+    current_focus->border_dirty = true;
+    new_focus->border_dirty = true;
     m->focus = focus;
+
+    if (current_focus->vte.options.focus_reporting) {
+      // TODO: write(pty, FOCUS_OUT)
+    }
+
+    if (new_focus->vte.options.focus_reporting) {
+      // TODO: write(pty, FOCUS_IN)
+    }
   }
 }
 
