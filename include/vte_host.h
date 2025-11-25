@@ -21,6 +21,7 @@ struct vte_host {
     struct bounds window;
     struct bounds client;
   } rect;
+  // TODO: Delete this
   struct vte_host *next;
   struct vte vte;
 };
