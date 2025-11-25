@@ -14,11 +14,8 @@
 #include "collections.h"
 #include "vte.h"
 #include "utils.h"
-#include "virtual_terminal_sequences.h"
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-struct vte_host *clients = NULL;
-struct vte_host *focused = NULL;
 
 void vte_host_destroy(struct vte_host *vte_host) {
   if (vte_host->pty > 0) {
@@ -35,18 +32,6 @@ void vte_host_destroy(struct vte_host *vte_host) {
   free(vte_host->cmdline);
   vte_host->pty = vte_host->pid = 0;
   vte_host->cmdline = nullptr;
-}
-
-struct vte_host *vte_host_from_pty(struct vte_host *p, int pty) {
-  for (; p; p = p->next)
-    if (p->pty == pty) return p;
-  return nullptr;
-}
-
-struct vte_host *vte_host_from_pid(struct vte_host *p, int pid) {
-  for (; p; p = p->next)
-    if (p->pid == pid) return p;
-  return nullptr;
 }
 
 struct sgr_param {
@@ -252,14 +237,11 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
   p->border_dirty = false;
   bool topmost = p->rect.window.y == 0;
   bool leftmost = p->rect.window.x == 0;
-  bool has_right_neighbor = p->rect.window.x + p->rect.window.w < ws_current.ws_col;
 
   uint8_t *topleft_corner = NULL;
   uint8_t *topright_corner = u8"─";
   if (topmost && leftmost) {
-    // corner = "╭";
     topleft_corner = u8"─";
-    if (p->rect.window.w < ws_current.ws_col) topright_corner = u8"┬";
   } else if (topmost) {
     topleft_corner = u8"┬";
   } else if (leftmost) {
@@ -272,25 +254,6 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
     topleft_corner = u8"│";
   }
 
-  if (!topmost) {
-    bool before = true;
-    for (struct vte_host *c = clients; c; c = c->next) {
-      if (c == p) {
-        before = false;
-        continue;
-      }
-      if (c->rect.window.y == p->rect.window.y) {
-        if (before) {
-          topleft_corner = u8"┼";
-        } else {
-          topright_corner = u8"┼";
-        }
-        break;
-      }
-    }
-  }
-
-  // char *bottomleftcorner = "\n\b├";
   uint8_t *bottomleftcorner = u8"\n\b│";
   uint8_t *pipe = u8"\n\b│";
   uint8_t *dash = u8"─";
@@ -325,12 +288,6 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
       string_push(b, pipe);
     }
     string_push(b, bottomleftcorner);
-  }
-  if (has_right_neighbor) {
-    string_push_csi(b, INT_SLICE(top, right + 1), "H");
-    for (int row = top + 1; row < bottom; row++) {
-      string_push(b, pipe);
-    }
   }
   apply_style(&style_default, b);
 }
@@ -384,40 +341,4 @@ void vte_host_start(struct vte_host *vte_host) {
   }
   vte_host->pid = pid;
   set_nonblocking(vte_host->pty);
-}
-
-void vte_host_remove(struct vte_host **lst, struct vte_host *rem) {
-  assert(lst);
-  assert(*lst);
-  assert(rem);
-  if (*lst == rem) {
-    *lst = rem->next;
-    return;
-  }
-  struct vte_host *prev = *lst;
-  for (struct vte_host *p = prev->next; p; p = p->next) {
-    if (p == rem) {
-      prev->next = p->next;
-    }
-    prev = p;
-  }
-}
-
-void vte_host_notify_focus(struct vte_host *p, bool focused) {
-  if (p) {
-    p->border_dirty = true;
-    if (p->pty && p->vte.options.focus_reporting) {
-      if (focused) {
-        write(p->pty, vt_focus_in.content, vt_focus_in.len);
-      } else {
-        write(p->pty, vt_focus_out.content, vt_focus_out.len);
-      }
-    }
-  }
-}
-
-int vte_host_count(struct vte_host *vte_host) {
-  int n = 0;
-  for (; vte_host; vte_host = vte_host->next) n++;
-  return n;
 }

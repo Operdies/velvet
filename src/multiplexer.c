@@ -39,7 +39,6 @@ void multiplexer_arrange(struct multiplexer *m) {
     struct vte_host *p = vec_nth(m->clients, i);
     struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
     vte_host_resize(p, b);
-    p = p->next;
     my += mh;
   }
 
@@ -51,7 +50,6 @@ void multiplexer_arrange(struct multiplexer *m) {
     int height = (float)stack_height_left / stack_items_left;
     struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
     vte_host_resize(p, b);
-    p = p->next;
     sy += height;
     stack_items_left--;
     stack_height_left -= height;

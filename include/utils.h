@@ -13,7 +13,6 @@ void *erealloc(void *array, size_t nmemb, size_t size);
 void terminal_setup(void);
 void terminal_reset(void);
 void set_nonblocking(int fd);
-extern struct winsize ws_current;
 
 #ifdef RELEASE_BUILD
 

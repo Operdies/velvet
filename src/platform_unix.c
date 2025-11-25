@@ -13,7 +13,6 @@ static inline void disable_focus_reporting(void);
 
 struct termios original_terminfo;
 struct termios raw_term;
-struct winsize ws_current;
 
 static int write_slice(int fd, struct string_slice slice) { return write(fd, slice.content, slice.len); }
 
@@ -31,10 +30,6 @@ void exit_raw_mode(void) {
 }
 
 void enable_raw_mode(void) {
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws_current) == -1) {
-    die("ioctl TIOCGWINSZ:");
-  }
-
   // Save and configure raw terminal mode
   if (tcgetattr(STDIN_FILENO, &original_terminfo) == -1) {
     die("tcgetattr:");
