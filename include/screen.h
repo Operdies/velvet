@@ -84,7 +84,7 @@ struct screen_row {
 
 // 0-indexed screen coordinates. This cursor points at a raw cell
 struct cursor {
-  int col, row;
+  int column, row;
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
    * Used whenever a new character is emitted */
   struct screen_cell_style brush;
@@ -119,16 +119,14 @@ void screen_destroy(struct screen *screen);
 void screen_erase_between_cursors(struct screen *g, struct cursor from,
                                 struct cursor to);
 void screen_full_reset(struct screen *g);
-void screen_initialize(struct screen *g, int w, int h);
-void screen_invalidate(struct screen *g);
 void screen_insert(struct screen *g, struct screen_cell c, bool wrap);
 void screen_insert_blanks_at_cursor(struct screen *g, int n);
-void screen_move_cursor(struct screen *g, int x, int y);
-void screen_position_cursor(struct screen *g, int x, int y);
+void screen_move_cursor_relative(struct screen *g, int x, int y);
+void screen_set_cursor_position(struct screen *g, int x, int y);
 void screen_newline(struct screen *g, bool carriage);
 void screen_resize_if_needed(struct screen *g, int w, int h, bool reflow);
-void screen_position_cursor_row(struct screen *g, int y);
-void screen_position_cursor_column(struct screen *g, int x);
+void screen_set_cursor_row(struct screen *g, int y);
+void screen_set_cursor_column(struct screen *g, int x);
 void screen_reset_scroll_region(struct screen *g);
 void screen_set_scroll_region(struct screen *g, int top, int bottom);
 void screen_position_visual_cursor(struct screen *g, int x, int y);

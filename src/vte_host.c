@@ -366,8 +366,6 @@ void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
 
   // If anything changed about the window position / dimensions, do a full redraw
   if (!bounds_equal(&outer, &vte_host->rect.window) || !bounds_equal(&inner, &vte_host->rect.client)) {
-    struct screen *g = vte_get_current_screen(&vte_host->vte);
-    screen_invalidate(g);
     vte_host->border_dirty = true;
   }
   vte_host->rect.window = outer;

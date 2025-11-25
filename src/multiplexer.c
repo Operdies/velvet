@@ -321,7 +321,7 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
     struct screen *g = vte_get_current_screen(&focused->vte);
     struct cursor *c = &g->cursor;
     int lineno = 1 + focused->rect.client.y + c->row;
-    int columnno = 1 + focused->rect.client.x + c->col;
+    int columnno = 1 + focused->rect.client.x + c->column;
     string_push_csi(draw_buffer, INT_SLICE(lineno, columnno), "H");
   }
 

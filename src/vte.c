@@ -147,7 +147,7 @@ static void ground_vtab(struct vte *vte, uint8_t ch) {
 static void ground_tab(struct vte *vte, uint8_t ch) {
   (void)ch;
   const int tabwidth = 8;
-  int x = vte_get_current_screen(vte)->cursor.col;
+  int x = vte_get_current_screen(vte)->cursor.column;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
   struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .symbol = utf8_blank };
@@ -208,7 +208,7 @@ static void DISPATCH_IND(struct vte *vte) {
 
 static void DISPATCH_NEL(struct vte *vte) {
   screen_move_or_scroll_down(vte_get_current_screen(vte));
-  screen_position_cursor_column(vte_get_current_screen(vte), 0);
+  screen_set_cursor_column(vte_get_current_screen(vte), 0);
 }
 
 static void DISPATCH_HTS(struct vte *vte)   { (void)vte; TODO("HTS"); }
@@ -427,8 +427,8 @@ static void vte_init_alternate_screen(struct vte *vte) {
   // not be appended; the `m` rows in the alternate screen should be reused.
   // Leaving the alternate screen discards the `m` rows
   g->cursor = vte->primary.cursor;
-  struct cursor start = {.col = screen_left(g), .row = screen_top(g)};
-  struct cursor end = {.col = screen_right(g), .row = screen_bottom(g)};
+  struct cursor start = {.column = screen_left(g), .row = screen_top(g)};
+  struct cursor end = {.column = screen_right(g), .row = screen_bottom(g)};
   screen_erase_between_cursors(g, start, end);
 
   for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
