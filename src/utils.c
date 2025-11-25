@@ -34,7 +34,7 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
 
   // Ensure at least one space
   if (last == ':') {
-    n_buf += snprintf(buf + n_buf, bufsize - n_buf, " %s", strerror(errno));
+    n_buf += snprintf(buf + n_buf, bufsize - n_buf, " %s (%d)", strerror(errno), errno);
   }
 
   // replace non-printable characters with dots
