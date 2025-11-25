@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
     // Dispatch all pending io
     // TODO: if stdin_handler->state == PREFIX or stdin_handler->state == ESCAPE,
     // set a timeout of e.g. 1s and restore the state after the 
-    io_flush(&io, -1);
+    io_dispatch(&io, -1);
 
     // write pending output for each client
     vec_foreach(h, app.multiplexer.clients) {
@@ -159,6 +159,8 @@ int main(int argc, char **argv) {
     // Render the current app state
     multiplexer_render(&app.multiplexer, render_func, &(int){STDOUT_FILENO});
   }
+
+  io_destroy(&io);
 
   terminal_reset();
   printf("[exited]\n");

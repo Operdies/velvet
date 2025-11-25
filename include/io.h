@@ -27,9 +27,16 @@ static const struct io io_default = {
     .pollfds = vec(struct pollfd),
 };
 
-void io_flush(struct io *io, int poll_timeout);
+/* Dispatch all pending io.
+ * If no io is pending, poll for the specified timeout. A poll timeout of -1 will suspend the process until io is
+ * available. */
+void io_dispatch(struct io *io, int poll_timeout);
+/* Add an io source to the io object. This source will be polled and dispatched during io_dispatch. */
 void io_add_source(struct io *io, struct io_source src);
+/* Remove all previously added io sources. */
 void io_clear_sources(struct io *io);
+/* Free all resources held by this io instance. */
+void io_destroy(struct io *io);
 
 #define IO_H
 #endif // IO_H
