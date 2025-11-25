@@ -61,7 +61,10 @@ void io_flush(struct io *io, int poll_timeout) {
           if (errno == EINTR) break;
           // This is also ok. The fd was non-blocking was not ready for reading.
           if (errno == EAGAIN) break;
-          // Unexpected error; crash hard.
+          // As far as I can tell this is similar to EBADF.
+          // EBADF happens on MacOS, where EIO appears to be more common on Linux.
+          if (errno == EIO) break;
+          // Unexpected error; crash hard to make the error very visible, then determine how it should be handled.
           die("read:");
         }
         src->on_data(src, readbuffer, n);
