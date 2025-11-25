@@ -208,7 +208,7 @@ static bool csi_dispatch_omitted(struct vte *vte, struct csi *csi) {
   return false;
 }
 
-static char *csi_apply_sgr_from_params(struct grid_cell_style *style, int n, struct csi_param *params) {
+static char *csi_apply_sgr_from_params(struct screen_cell_style *style, int n, struct csi_param *params) {
   // Special case when the 0 is omitted
   if (n == 0) {
     style->attr = 0;
@@ -302,7 +302,7 @@ bool csi_dispatch(struct vte *vte, struct csi *csi) {
 
 static bool ICH(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_insert_blanks_at_cursor(vte_get_current_grid(vte), count);
+  screen_insert_blanks_at_cursor(vte_get_current_screen(vte), count);
   return true;
 }
 
@@ -310,7 +310,7 @@ bool SL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SL"); re
 
 static bool CUU(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), 0, -count);
+  screen_move_cursor(vte_get_current_screen(vte), 0, -count);
   return true;
 }
 
@@ -318,78 +318,78 @@ bool SR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SR"); re
 
 static bool CUD(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), 0, count);
+  screen_move_cursor(vte_get_current_screen(vte), 0, count);
   return true;
 }
 
 static bool CUF(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), count, 0);
+  screen_move_cursor(vte_get_current_screen(vte), count, 0);
   return true;
 }
 
 static bool CUB(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), -count, 0);
+  screen_move_cursor(vte_get_current_screen(vte), -count, 0);
   return true;
 }
 
 static bool CNL(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), 0, count);
-  grid_position_cursor_column(vte_get_current_grid(vte), 0);
+  screen_move_cursor(vte_get_current_screen(vte), 0, count);
+  screen_position_cursor_column(vte_get_current_screen(vte), 0);
   return true;
 }
 
 static bool CPL(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), 0, -count);
-  grid_position_cursor_column(vte_get_current_grid(vte), 0);
+  screen_move_cursor(vte_get_current_screen(vte), 0, -count);
+  screen_position_cursor_column(vte_get_current_screen(vte), 0);
   return true;
 }
 
 bool CHA(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_position_cursor_column(vte_get_current_grid(vte), count - 1);
+  screen_position_cursor_column(vte_get_current_screen(vte), count - 1);
   return true;
 }
 
 static bool CUP(struct vte *vte, struct csi *csi) {
   int col = csi->params[1].primary ? csi->params[1].primary : 1;
   int row = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_position_cursor(vte_get_current_grid(vte), col - 1, row - 1);
+  screen_position_cursor(vte_get_current_screen(vte), col - 1, row - 1);
   return true;
 }
 
 bool CHT(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("CHT"); return false; }
 
 static bool ED(struct vte *vte, struct csi *csi) {
-  struct grid *g = vte_get_current_grid(vte);
+  struct screen *g = vte_get_current_screen(vte);
   int mode = csi->params[0].primary;
   struct cursor start = g->cursor;
   struct cursor end = g->cursor;
 
   switch (mode) {
   case 1: // Erase from start of screen to cursor
-    start.col = grid_left(g);
-    start.row = grid_top(g);
+    start.col = screen_left(g);
+    start.row = screen_top(g);
     break;
   case 2: // Erase entire screen
-    start.col = grid_left(g);
-    start.row = grid_top(g);
-    end.col = grid_right(g);
-    end.row = grid_bottom(g);
+    start.col = screen_left(g);
+    start.row = screen_top(g);
+    end.col = screen_right(g);
+    end.row = screen_bottom(g);
     break;
   case 3: // erase scrollback
     return csi_dispatch_todo(vte, csi);
   case 0:
   default: // erase from cursor to end of screen
-    end.col = grid_right(g);
-    end.row = grid_bottom(g);
+    end.col = screen_right(g);
+    end.row = screen_bottom(g);
     break;
   }
 
-  grid_erase_between_cursors(g, start, end);
+  screen_erase_between_cursors(g, start, end);
 
   return true;
 }
@@ -398,19 +398,19 @@ bool DECSED(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECS
 
 static bool EL(struct vte *vte, struct csi *csi) {
   int mode = csi->params[0].primary;
-  struct grid *g = vte_get_current_grid(vte);
+  struct screen *g = vte_get_current_screen(vte);
   struct cursor start = g->cursor;
   struct cursor end = g->cursor;
   switch (mode) {
-  case 0: end.col = grid_right(g); break;     // erase from cursor to end
-  case 1: start.col = grid_left(g); break; // erase from start to cursor
+  case 0: end.col = screen_right(g); break;     // erase from cursor to end
+  case 1: start.col = screen_left(g); break; // erase from start to cursor
   case 2:                                   // erase entire line
-    start.col = grid_left(g);
-    end.col = grid_right(g);
+    start.col = screen_left(g);
+    end.col = screen_right(g);
     break;
   default: return csi_dispatch_todo(vte, csi);
   }
-  grid_erase_between_cursors(g, start, end);
+  screen_erase_between_cursors(g, start, end);
   return true;
 }
 
@@ -418,35 +418,35 @@ bool DECSEL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECS
 
 static bool IL(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_insert_lines(vte_get_current_grid(vte), count);
-  grid_position_cursor_column(vte_get_current_grid(vte), 0);
+  screen_insert_lines(vte_get_current_screen(vte), count);
+  screen_position_cursor_column(vte_get_current_screen(vte), 0);
   return true;
 }
 
 static bool DL(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_delete_lines(vte_get_current_grid(vte), count);
-  grid_position_cursor_column(vte_get_current_grid(vte), 0);
+  screen_delete_lines(vte_get_current_screen(vte), count);
+  screen_position_cursor_column(vte_get_current_screen(vte), 0);
   return true;
 }
 
 static bool DCH(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_shift_from_cursor(vte_get_current_grid(vte), count);
+  screen_shift_from_cursor(vte_get_current_screen(vte), count);
   return true;
 }
 
 bool SU(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct grid *g = vte_get_current_grid(vte);
-  grid_shuffle_rows_up(g, count, g->scroll_top, g->scroll_bottom);
+  struct screen *g = vte_get_current_screen(vte);
+  screen_shuffle_rows_up(g, count, g->scroll_top, g->scroll_bottom);
   return true;
 }
 
 bool SD(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct grid *g = vte_get_current_grid(vte);
-  grid_shuffle_rows_down(g, count, g->scroll_top, g->scroll_bottom);
+  struct screen *g = vte_get_current_screen(vte);
+  screen_shuffle_rows_down(g, count, g->scroll_top, g->scroll_bottom);
   return true;
 }
 
@@ -454,9 +454,9 @@ bool DECST8C(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DEC
 
 static bool ECH(struct vte *vte, struct csi *csi) {
   int clear = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct cursor start = vte_get_current_grid(vte)->cursor;
+  struct cursor start = vte_get_current_screen(vte)->cursor;
   struct cursor end = {.row = start.row, .col = start.col + clear};
-  grid_erase_between_cursors(vte_get_current_grid(vte), start, end);
+  screen_erase_between_cursors(vte_get_current_screen(vte), start, end);
   return true;
 }
 
@@ -467,12 +467,12 @@ bool HPA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("HPA"); 
 bool HPR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("HPR"); return false; }
 
 static bool REP(struct vte *vte, struct csi *csi) {
-  struct grid *g = vte_get_current_grid(vte);
+  struct screen *g = vte_get_current_screen(vte);
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct grid_cell repeat = { .symbol = vte->previous_symbol, .style = g->cursor.brush };
+  struct screen_cell repeat = { .symbol = vte->previous_symbol, .style = g->cursor.brush };
   if (utf8_equals(&repeat.symbol, &utf8_zero)) repeat.symbol = utf8_blank;
   for (int i = 0; i < count; i++) {
-    grid_insert(g, repeat, vte->options.auto_wrap_mode);
+    screen_insert(g, repeat, vte->options.auto_wrap_mode);
   }
   return true;
 }
@@ -507,13 +507,13 @@ bool DA_TERTIARY(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; OMITT
 static bool VPA(struct vte *vte, struct csi *csi) {
   // TODO: Same as HPV, this probably needs to respect 'origin'
   int row = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_position_cursor_row(vte_get_current_grid(vte), row - 1);
+  screen_position_cursor_row(vte_get_current_screen(vte), row - 1);
   return true;
 }
 
 bool VPR(struct vte *vte, struct csi *csi) {
   int row = csi->params[0].primary ? csi->params[0].primary : 1;
-  grid_move_cursor(vte_get_current_grid(vte), 0, row);
+  screen_move_cursor(vte_get_current_screen(vte), 0, row);
   return true;
 }
 
@@ -603,7 +603,7 @@ static bool RM(struct vte *vte, struct csi *csi) { return SM(vte, csi); }
 static bool DECRST(struct vte *vte, struct csi *csi) { return DECSET(vte, csi); }
 
 static bool SGR(struct vte *vte, struct csi *csi) {
-  char *error = csi_apply_sgr_from_params(&vte_get_current_grid(vte)->cursor.brush, csi->n_params, csi->params);
+  char *error = csi_apply_sgr_from_params(&vte_get_current_screen(vte)->cursor.brush, csi->n_params, csi->params);
   if (error) {
     logmsg("Error parsing SGR: %.*s: %s", vte->command_buffer.len - 1, vte->command_buffer.content + 1, error);
     return false;
@@ -645,10 +645,10 @@ static bool DECSTBM(struct vte *vte, struct csi *csi) {
   if (top > 0) top--;
   if (bottom > 0) bottom--;
 
-  struct grid *g = vte_get_current_grid(vte);
-  grid_set_scroll_region(g, top, bottom);
-  grid_position_cursor_column(g, 0);
-  grid_position_cursor_row(g, vte->options.origin_mode ? top : 0);
+  struct screen *g = vte_get_current_screen(vte);
+  screen_set_scroll_region(g, top, bottom);
+  screen_position_cursor_column(g, 0);
+  screen_position_cursor_row(g, vte->options.origin_mode ? top : 0);
   return true;
 }
 

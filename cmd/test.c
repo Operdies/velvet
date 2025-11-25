@@ -31,10 +31,10 @@
 #define FIVE(X) X, X, X, X, X
 
 static bool exit_on_failure = true;
-typedef char grid_5x8[5][8];
-typedef char grid_5x5[5][5];
+typedef char screen_5x8[5][8];
+typedef char screen_5x5[5][5];
 
-struct chargrid {
+struct dumb_screen {
   int rows;
   int cols;
   char cells[];
@@ -43,32 +43,32 @@ struct chargrid {
 struct bounds bsmall = {.w = 5, .h = 5};
 struct bounds blarge = {.w = 8, .h = 5};
 
-struct chargrid *make_chargrid(int rows, int cols, char g[rows][cols]) {
-  struct chargrid *grid = calloc(sizeof(*grid) + rows * cols, 1);
-  grid->rows = rows;
-  grid->cols = cols;
+struct dumb_screen *make_dumb_screen(int rows, int cols, char g[rows][cols]) {
+  struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols, 1);
+  screen->rows = rows;
+  screen->cols = cols;
   for (int row = 0; row < rows; row++)
     for (int col = 0; col < cols; col++) {
       char ch = g[row][col];
-      grid->cells[row * cols + col] = ch ? ch : ' ';
+      screen->cells[row * cols + col] = ch ? ch : ' ';
     }
-  return grid;
+  return screen;
 }
 
-static struct chargrid *grid_to_chargrid(const struct grid *const src) {
-  struct chargrid *grid = calloc(sizeof(*grid) + src->w * src->h, 1);
-  grid->cols = src->w;
-  grid->rows = src->h;
+static struct dumb_screen *screen_to_dumb_screen(const struct screen *const src) {
+  struct dumb_screen *screen = calloc(sizeof(*screen) + src->w * src->h, 1);
+  screen->cols = src->w;
+  screen->rows = src->h;
   for (int row = 0; row < src->h; row++) {
-    struct grid_row *grid_row = &src->rows[row];
+    struct screen_row *screen_row = &src->rows[row];
     for (int col = 0; col < src->w; col++) {
-      grid->cells[row * src->w + col] = grid_row->cells[col].symbol.utf8[0];
+      screen->cells[row * src->w + col] = screen_row->cells[col].symbol.utf8[0];
     }
   }
-  return grid;
+  return screen;
 }
 
-static void chargrid_print_diff(struct chargrid *left, struct chargrid *right, char *leftcolor, char *rightcolor) {
+static void dumb_screen_print_diff(struct dumb_screen *left, struct dumb_screen *right, char *leftcolor, char *rightcolor) {
   char *reset = "\x1b[39m";
   char *filled = "█";
   char *separator = "───────────────────";
@@ -121,11 +121,11 @@ static void chargrid_print_diff(struct chargrid *left, struct chargrid *right, c
   fflush(stdout);
 }
 
-static void print_diff(struct chargrid *a, struct chargrid *b) {
+static void print_diff(struct dumb_screen *a, struct dumb_screen *b) {
   static char *green = "\x1b[32m";
   static char *red = "\x1b[31m";
 
-  chargrid_print_diff(a, b, red, green);
+  dumb_screen_print_diff(a, b, red, green);
 }
 
 static int n_failures = 0;
@@ -146,15 +146,15 @@ static void assert_eq(int actual, int expected, const char *test_name, const cha
   fail();
 }
 
-static void assert_grid_equals(struct chargrid *expected, const struct grid *const g, const char *msg) {
+static void assert_screen_equals(struct dumb_screen *expected, const struct screen *const g, const char *msg) {
   bool equal = true;
   if (expected->cols != g->w || expected->rows != g->h) {
-    printf("Failed assertion: Grids are not even the same size! (%s)\n", msg);
+    printf("Failed assertion: screens are not even the same size! (%s)\n", msg);
     fail();
     return;
   }
 
-  struct chargrid *actual = grid_to_chargrid(g);
+  struct dumb_screen *actual = screen_to_dumb_screen(g);
   for (int row = 0; row < g->h; row++) {
     for (int col = 0; col < g->w; col++) {
       if (expected->cells[row * g->w + col] != actual->cells[row * g->w + col]) {
@@ -163,17 +163,17 @@ static void assert_grid_equals(struct chargrid *expected, const struct grid *con
     }
   }
   if (!equal) {
-    printf("Failed assertion: Grids are not equal! (%s)\n", msg);
+    printf("Failed assertion: screens are not equal! (%s)\n", msg);
     print_diff(expected, actual);
     fail();
   }
   free(actual);
 }
 
-static void test_grid_input_output(const char *const outer_test_name, const char *const input, grid_5x8 expected1) {
+static void test_screen_input_output(const char *const outer_test_name, const char *const input, screen_5x8 expected1) {
   char testname2[1024];
   const char *reset = "\x1b[2J\x1b[1;1H";
-  struct chargrid *expected = make_chargrid(5, 8, expected1);
+  struct dumb_screen *expected = make_dumb_screen(5, 8, expected1);
 
   struct vte_host p = {.vte = vte_default};
   vte_host_resize(&p, blarge);
@@ -184,23 +184,23 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     vte_host_process_output(&p, (uint8_t *)input, strlen(input));
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
-    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
     vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
-    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
   }
   {
     // 2. Clear the screen ensuring it is clean
     string_clear(&output);
     vte_host_process_output(&p, (uint8_t *)reset, strlen(reset));
     vte_host_draw(&p, false, &output);
-    struct chargrid *cleared = make_chargrid(5, 8, (grid_5x8){0});
+    struct dumb_screen *cleared = make_dumb_screen(5, 8, (screen_5x8){0});
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
-    assert_grid_equals(cleared, vte_get_current_grid(&p.vte), testname2);
+    assert_screen_equals(cleared, vte_get_current_screen(&p.vte), testname2);
 
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
@@ -209,7 +209,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
-    assert_grid_equals(cleared, vte_get_current_grid(&p.vte), outer_test_name);
+    assert_screen_equals(cleared, vte_get_current_screen(&p.vte), outer_test_name);
 
     assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
     free(cleared);
@@ -221,14 +221,14 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     vte_host_process_output(&p, (uint8_t *)input, strlen(input));
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
-    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
 
     // See 1.b
     vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
-    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
   }
   free(expected);
   string_destroy(&output);
@@ -236,9 +236,9 @@ static void test_grid_input_output(const char *const outer_test_name, const char
 }
 
 static void
-test_grid_reflow_grow(const char *const test_name, const char *const input, grid_5x5 small1, grid_5x8 large1) {
-  struct chargrid *small = make_chargrid(5, 5, small1);
-  struct chargrid *large = make_chargrid(5, 8, large1);
+test_screen_reflow_grow(const char *const test_name, const char *const input, screen_5x5 small1, screen_5x8 large1) {
+  struct dumb_screen *small = make_dumb_screen(5, 5, small1);
+  struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
   struct vte_host p = {.vte = vte_default};
   vte_host_resize(&p, bsmall);
@@ -247,20 +247,20 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
   {
     string_clear(&output);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(small, vte_get_current_grid(&p.vte), test_name);
+    assert_screen_equals(small, vte_get_current_screen(&p.vte), test_name);
   }
   {
     string_clear(&output);
     vte_host_resize(&p, blarge);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(large, vte_get_current_grid(&p.vte), test_name);
+    assert_screen_equals(large, vte_get_current_screen(&p.vte), test_name);
   }
   {
     string_clear(&output);
     vte_host_resize(&p, bsmall);
     vte_host_draw(&p, false, &output);
-    // It is always possibly to losslessly convert back to the initial grid, so let's verify that
-    assert_grid_equals(small, vte_get_current_grid(&p.vte), test_name);
+    // It is always possibly to losslessly convert back to the initial screen, so let's verify that
+    assert_screen_equals(small, vte_get_current_screen(&p.vte), test_name);
   }
 
   vte_host_destroy(&p);
@@ -268,9 +268,9 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
 }
 
 static void
-test_grid_reflow_shrink(const char *const test_name, const char *const input, grid_5x8 large1, grid_5x5 small1) {
-  struct chargrid *small = make_chargrid(5, 5, small1);
-  struct chargrid *large = make_chargrid(5, 8, large1);
+test_screen_reflow_shrink(const char *const test_name, const char *const input, screen_5x8 large1, screen_5x5 small1) {
+  struct dumb_screen *small = make_dumb_screen(5, 5, small1);
+  struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
   struct vte_host p = {.vte = vte_default};
   vte_host_resize(&p, blarge);
@@ -279,48 +279,48 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   {
     string_clear(&output);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(large, vte_get_current_grid(&p.vte), test_name);
+    assert_screen_equals(large, vte_get_current_screen(&p.vte), test_name);
   }
   {
     string_clear(&output);
     vte_host_resize(&p, bsmall);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(small, vte_get_current_grid(&p.vte), test_name);
+    assert_screen_equals(small, vte_get_current_screen(&p.vte), test_name);
   }
   vte_host_destroy(&p);
   free(small), free(large), string_destroy(&output);
 }
 
 static void test_input_output(void) {
-  test_grid_input_output("single character",
+  test_screen_input_output("single character",
                          "x",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"x"},
                          });
   // basic wrapping logic
-  test_grid_input_output("wrapping",
+  test_screen_input_output("wrapping",
                          "abcdefghijk",
-                         (grid_5x8){
+                         (screen_5x8){
                              {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' },
                              {'i', 'j', 'k'},
                          });
   // move cursor to extremes and type
-  test_grid_input_output("cursor movement",
+  test_screen_input_output("cursor movement",
                          CUU(123) CUB(123) CUF(1) CUD(1) "12" CUF(99) CUD(99) CUU(1) CUB(1) "3",
-                         (grid_5x8){
+                         (screen_5x8){
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', '1', '2', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', '3', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
-  test_grid_input_output("cursor movement virtual scroll",
+  test_screen_input_output("cursor movement virtual scroll",
                          "                 "
                          "                 "
                          "                 "
                          "                 " // keep
                          CUU(123) CUB(123) CUF(1) CUD(1) "12" CUF(99) CUD(99) CUU(1) CUB(1) "3",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"     "},
                              {" 12 "},
                              {"     "},
@@ -328,9 +328,9 @@ static void test_input_output(void) {
                              {"     "},
                          });
   // line 1 scrolls out of view
-  test_grid_input_output("scrolling 1",
+  test_screen_input_output("scrolling 1",
                          "line1   line2   line3   line4   line5   l",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"line2"},
                              {"line3"},
                              {"line4"},
@@ -338,165 +338,165 @@ static void test_input_output(void) {
                              {"l"},
                          });
   // line 1 and 2 scroll out of view
-  test_grid_input_output("scrolling 2",
+  test_screen_input_output("scrolling 2",
                          "line1   line2   line3   line4   line5   line6   ",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"line2"},
                              {"line3"},
                              {"line4"},
                              {"line5"},
                              {"line6"},
                          });
-  test_grid_input_output("E test command",
+  test_screen_input_output("E test command",
                          "\x1b#8",
-                         (grid_5x8){
+                         (screen_5x8){
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
-  test_grid_input_output("Clear Command",
+  test_screen_input_output("Clear Command",
                          "\x1b#8" ED(2),
-                         (grid_5x8){
+                         (screen_5x8){
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
-  test_grid_input_output(
+  test_screen_input_output(
       "Clear Command 2",
       "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ED(2),
-      (grid_5x8){
+      (screen_5x8){
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
           {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
       });
-  test_grid_input_output("Off by one",
+  test_screen_input_output("Off by one",
                          "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDDEEEEEEEE" SGR(0),
-                         (grid_5x8){
+                         (screen_5x8){
                              {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
                              {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
                              {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
                              {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
-  test_grid_input_output("Off by one 2",
+  test_screen_input_output("Off by one 2",
                          CUF(99) CUD(99) "Y" SGR(0) CUU(99) CUB(99) "X" SGR(0),
-                         (grid_5x8){
+                         (screen_5x8){
                              {'X', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'Y' },
                          });
-  test_grid_input_output("Normal Rendering",
+  test_screen_input_output("Normal Rendering",
                          "Hello!\r\n" EL(0)
                          "Second line\r\n" EL(0)
                          "Third line\r\n" EL(0),
-                         (grid_5x8){
+                         (screen_5x8){
                              {'S', 'e', 'c', 'o', 'n', 'd', ' ', 'l' },
                              {'i', 'n', 'e', ' ', ' ', ' ', ' ', ' ' },
                              {'T', 'h', 'i', 'r', 'd', ' ', 'l', 'i' },
                              {'n', 'e', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
-  test_grid_input_output("Carriage Return",
+  test_screen_input_output("Carriage Return",
                          "Hello!!\rworld",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"world!!"},
                          });
 
-  test_grid_input_output("Insert Lines",
+  test_screen_input_output("Insert Lines",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5" CUP(2, 1) IL(2),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line1"},
                              {"     "},
                              {"     "},
                              {"Line2"},
                              {"Line3"},
                          });
-  test_grid_input_output("Insert Lines Virtual",
+  test_screen_input_output("Insert Lines Virtual",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" CUP(2, 1) IL(2),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line3"},
                              {"     "},
                              {"     "},
                              {"Line4"},
                              {"Line5"},
                          });
-  test_grid_input_output("Delete Lines",
+  test_screen_input_output("Delete Lines",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line2"},
                              {"Line5"},
                              {"Line6"},
                          });
-  test_grid_input_output("Delete Many Lines",
+  test_screen_input_output("Delete Many Lines",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(10),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line2"},
                          });
-  test_grid_input_output("Delete Many Lines 2",
+  test_screen_input_output("Delete Many Lines 2",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(9, 1) DL(10),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line2"},
                              {"Line3"},
                              {"Line4"},
                              {"Line5"},
                              {"     "},
                          });
-  test_grid_input_output("Delete Lines All But Last",
+  test_screen_input_output("Delete Lines All But Last",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(1, 2) DL(4),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line6"},
                          });
-  test_grid_input_output("Insert Lines Then Delete",
+  test_screen_input_output("Insert Lines Then Delete",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2) IL(1),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line2"},
                              {"     "},
                              {"Line5"},
                              {"Line6"},
                          });
-  test_grid_input_output("Delete Lines Then Insert",
+  test_screen_input_output("Delete Lines Then Insert",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) IL(2) DL(1),
-                         (grid_5x8){
+                         (screen_5x8){
                              {"Line2"},
                              {"     "},
                              {"Line3"},
                              {"Line4"},
                          });
-  test_grid_input_output("Overflow Grid",
+  test_screen_input_output("Overflow screen",
                          "AAAAAAAA"
                          "BBBBBBBB"
                          "CCCCCCCC"
                          "DDDDDDDD"
                          "EEEEEEEEE",
-                         (grid_5x8){
+                         (screen_5x8){
                              { 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
                              {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
                              {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                              {'E'},
                          });
-  test_grid_input_output("Fill Grid",
+  test_screen_input_output("Fill screen",
                          "AAAAAAAA"
                          "BBBBBBBB"
                          "CCCCCCCC"
                          "DDDDDDDD"
                          "EEEEEEEE",
-                         (grid_5x8){
+                         (screen_5x8){
                              {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
                              {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
                              {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
@@ -504,10 +504,10 @@ static void test_input_output(void) {
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
 
-  // test_grid_input_output("Test Clear DECSTBM",
+  // test_screen_input_output("Test Clear DECSTBM",
   //                        "ABCDEFGHIJKLMNOP"
   //                        "ABCDEFGHIJKLMNOP" CUP(5,1) CSI "J",
-  //                        (grid_5x8){
+  //                        (screen_5x8){
   //                            {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
   //                            {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
   //                            {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
@@ -517,30 +517,30 @@ static void test_input_output(void) {
 }
 
 static void test_reflow(void) {
-  test_grid_reflow_grow("line lengths",
+  test_screen_reflow_grow("line lengths",
                         "AAAAA"
                         "BBBBB"
                         "CCCCC"
                         "DDDDD",
-                        (grid_5x5){
+                        (screen_5x5){
                             {'A', 'A', 'A', 'A', 'A' },
                             {'B', 'B', 'B', 'B', 'B' },
                             {'C', 'C', 'C', 'C', 'C' },
                             {'D', 'D', 'D', 'D', 'D' },
                             {' ', ' ', ' ', ' ', ' ' },
                         },
-                        (grid_5x8){
+                        (screen_5x8){
                             {'A', 'A', 'A', 'A', 'A', 'B', 'B', 'B' },
                             {'B', 'B', 'C', 'C', 'C', 'C', 'C', 'D' },
                             {'D', 'D', 'D', 'D', ' ', ' ', ' ', ' ' },
                         });
-  test_grid_reflow_shrink("shrink grid",
+  test_screen_reflow_shrink("shrink screen",
                           "AAAAAAAA"
                           "BBBBBBBB"
                           "CCCCCCCC"
                           "DDDDDDDD"
                           "EEEEEEEE",
-                          (grid_5x8){
+                          (screen_5x8){
                               {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
                               {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
                               {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
@@ -548,23 +548,23 @@ static void test_reflow(void) {
                               {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                           },
                           // We are displacing 3x5 characters, so we expect losing 8 A's and 7 B's
-                          (grid_5x5){
+                          (screen_5x5){
                               {'B', 'C', 'C', 'C', 'C' },
                               {'C', 'C', 'C', 'C', 'D' },
                               {'D', 'D', 'D', 'D', 'D' },
                               {'D', 'D', 'E', 'E', 'E' },
                               {'E', 'E', 'E', 'E', 'E' },
                           });
-  test_grid_reflow_shrink("shrink grid 2",
+  test_screen_reflow_shrink("shrink screen 2",
                           "AAAAAAA\r\n"
                           "BB\r\n"
                           "DDDDDDD",
-                          (grid_5x8){
+                          (screen_5x8){
                               {'A', 'A', 'A', 'A', 'A', 'A', 'A', ' ' },
                               {'B', 'B', ' ', ' ', ' ', ' ', ' ', ' ' },
                               {"DDDDDDD"},
                           },
-                          (grid_5x5){
+                          (screen_5x5){
                               {'A', 'A', 'A', 'A', 'A' },
                               {'A', 'A', ' ', ' ', ' ' },
                               {'B', 'B', ' ', ' ', ' ' },
@@ -580,12 +580,12 @@ static void test_erase(void) {
    * 2K: Entire line
    * [0]K: Cursor to end
    * */
-  test_grid_input_output("Line Delete",
+  test_screen_input_output("Line Delete",
                          "xxx" CUP(1, 2) EL(1) "\r\n"                  // Delete first two characters
                                              "xxxx" EL(2) "\r\n"       // Delete line
                                              "ababab" EL(0) "\r\n"      // Delete nothing
                                              "ababab" CUB(5) EL(0), // Delete all but first
-                         (grid_5x8){
+                         (screen_5x8){
                              {' ', ' ', 'x', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {'a', 'b', 'a', 'b', 'a', 'b', ' ', ' ' },
@@ -597,133 +597,133 @@ static void test_erase(void) {
    * 2J: Entire screen (clear)
    * [0]J: Cursor to end of screen
    */
-  test_grid_input_output("ED(1): Clear Start To Cursor (simple)", "www" ED(1), (grid_5x8){0});
-  test_grid_input_output("ED(2): Clear Screen (simple)", "xxx" ED(2), (grid_5x8){0});
-  test_grid_input_output("ED(0): Clear Cursor To End (simple)", "www" CUP(1, 1) ED(0), (grid_5x8){0});
-  test_grid_input_output(
-      "ED(1): Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ED(1), (grid_5x8){0});
-  test_grid_input_output("ED(1): Clear Start To Cursor 2",
+  test_screen_input_output("ED(1): Clear Start To Cursor (simple)", "www" ED(1), (screen_5x8){0});
+  test_screen_input_output("ED(2): Clear Screen (simple)", "xxx" ED(2), (screen_5x8){0});
+  test_screen_input_output("ED(0): Clear Cursor To End (simple)", "www" CUP(1, 1) ED(0), (screen_5x8){0});
+  test_screen_input_output(
+      "ED(1): Clear Start To Cursor", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" ED(1), (screen_5x8){0});
+  test_screen_input_output("ED(1): Clear Start To Cursor 2",
                          "wwwwwwww"
                          "wwwwwwww"
                          "wwwwwwww"
                          "wwwwwwww"
                          "wwwwwwww" CUP(5, 7) ED(1),
-                         (grid_5x8){
+                         (screen_5x8){
                              {""},
                              {""},
                              {""},
                              {""},
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
-  test_grid_input_output(
-      "ED(0): Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(0), (grid_5x8){0});
-  test_grid_input_output(
-      "ED(0): Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) ED(0), (grid_5x8){"w"});
-  test_grid_input_output(
-      "ED(2): Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(2), (grid_5x8){0});
+  test_screen_input_output(
+      "ED(0): Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(0), (screen_5x8){0});
+  test_screen_input_output(
+      "ED(0): Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) ED(0), (screen_5x8){"w"});
+  test_screen_input_output(
+      "ED(2): Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(2), (screen_5x8){0});
 
-  test_grid_input_output("Backspace 0",
+  test_screen_input_output("Backspace 0",
                          "w\b\bxy\b\bab",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"ab"},
                          });
-  test_grid_input_output("Backspace 1",
+  test_screen_input_output("Backspace 1",
                          "wwwww\b\b\bxxx\b\b\b\b\b\by",
-                         (grid_5x8){
+                         (screen_5x8){
                              {"ywxxx"},
                          });
-  test_grid_input_output("Insert Blanks 1",
+  test_screen_input_output("Insert Blanks 1",
                          "helloooooo" CUB(10) DCH(1),
-                         (grid_5x8){
+                         (screen_5x8){
                              {'h', 'e', 'l', 'l', 'o', 'o', 'o', 'o' },
                              {'o', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                          });
-  test_grid_input_output("Insert Blanks 2",
+  test_screen_input_output("Insert Blanks 2",
                          "www" CUB(3)
                          /* delete first w */ DCH(1)
                          /* displace last w past end of line */ ICH(7),
-                         (grid_5x8){
+                         (screen_5x8){
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
-  test_grid_input_output("Line Truncated",
+  test_screen_input_output("Line Truncated",
                          "abcd\r" ICH(2),
-                         (grid_5x8){
+                         (screen_5x8){
                              {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
 }
 
 void test_scrolling(void) {
-  test_grid_input_output("Line Truncated",
+  test_screen_input_output("Line Truncated",
                          "abcd\r" ICH(2),
-                         (grid_5x8){
+                         (screen_5x8){
                              {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
-  test_grid_input_output("Reverse Index (RI)",
+  test_screen_input_output("Reverse Index (RI)",
                          "\x1b#8" CUP(3,2) RI "xyz" RI RI,
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT(' ') },
                          { EIGHT('E') },
                          { 'E', 'x', 'y', 'z', 'E', 'E', 'E', 'E' },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          });
-  test_grid_input_output("Index (IND)",
+  test_screen_input_output("Index (IND)",
                          "\x1b#8" CUP(3,2) IND "xyz" IND IND IND RI "a",
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT('E') },
                          { 'E', 'x', 'y', 'z', 'E', 'E', 'E', 'E' },
                          { EIGHT('E') },
                          { ' ', ' ', ' ', ' ', 'a', ' ', ' ', ' ' },
                          { EIGHT(' ') },
                          });
-  test_grid_input_output("Scroll Down 1 (SD)",
+  test_screen_input_output("Scroll Down 1 (SD)",
                          "\x1b#8" SD(1),
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT(' ') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          });
-  test_grid_input_output("Scroll Down 2 (SD)",
+  test_screen_input_output("Scroll Down 2 (SD)",
                          "\x1b#8" SD(3),
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT(' ') },
                          { EIGHT(' ') },
                          { EIGHT(' ') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          });
-  test_grid_input_output("Scroll Down + Scroll Region (SD)",
+  test_screen_input_output("Scroll Down + Scroll Region (SD)",
                          DECSTBM(2,4) "\x1b#8" SD(2),
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT('E') },
                          { EIGHT(' ') },
                          { EIGHT(' ') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          });
-  test_grid_input_output("Scroll Up 1 (SU)",
+  test_screen_input_output("Scroll Up 1 (SU)",
                          "\x1b#8" SU(1),
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT(' ') },
                          });
-  test_grid_input_output("Scroll Up 2 (SU)",
+  test_screen_input_output("Scroll Up 2 (SU)",
                          "\x1b#8" SU(3),
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT(' ') },
                          { EIGHT(' ') },
                          { EIGHT(' ') },
                          });
-  test_grid_input_output("Scroll Up + Scroll Region (SU)",
+  test_screen_input_output("Scroll Up + Scroll Region (SU)",
                          DECSTBM(2,4) "\x1b#8" SU(2),
-                         (grid_5x8){
+                         (screen_5x8){
                          { EIGHT('E') },
                          { EIGHT('E') },
                          { EIGHT(' ') },

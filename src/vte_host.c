@@ -129,7 +129,7 @@ static void apply_color(const struct color *const col, bool fg, struct sgr_buffe
 /* Write the specified style attributes to the outbuffer, but only if they are different from what is currently stored.
  * Note that the use of statics means that this function is not thread safe or re-entrant. It should only be used for
  * streaming content to the screen. */
-static inline void apply_style(const struct grid_cell_style *const style, struct string *outbuffer) {
+static inline void apply_style(const struct screen_cell_style *const style, struct string *outbuffer) {
   static struct color fg = color_default;
   static struct color bg = color_default;
   struct sgr_buffer sgr = {.n = 0};
@@ -211,21 +211,21 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
 }
 
 void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuffer) {
-  // Ensure the grid content is in sync with the vte_host just-in-time
+  // Ensure the screen content is in sync with the vte_host just-in-time
   vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
 
-  struct grid *g = vte_get_current_grid(&vte_host->vte);
+  struct screen *g = vte_get_current_screen(&vte_host->vte);
   for (int row = 0; row < g->h; row++) {
-    struct grid_row *grid_row = &g->rows[row];
-    if (!redraw && !grid_row->dirty) continue;
-    grid_row->dirty = false;
+    struct screen_row *screen_row = &g->rows[row];
+    if (!redraw && !screen_row->dirty) continue;
+    screen_row->dirty = false;
     int columnno = 1 + vte_host->rect.client.x;
     int lineno = 1 + vte_host->rect.client.y + row;
-    int line_length = MIN(grid_row->eol, g->w);
+    int line_length = MIN(screen_row->eol, g->w);
     string_push_csi(outbuffer, INT_SLICE(lineno, columnno), "H");
 
     for (int col = 0; col < line_length; col++) {
-      struct grid_cell *c = &grid_row->cells[col];
+      struct screen_cell *c = &screen_row->cells[col];
       apply_style(&c->style, outbuffer);
       uint8_t n = 0;
       for (; n < 4 && c->symbol.utf8[n]; n++) string_push_char(outbuffer, c->symbol.utf8[n]);
@@ -247,8 +247,8 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
 // Then draw the borders, and style the borders touching the focused vte_host
 void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
   if (p->border_width == 0 || !p->border_dirty) return;
-  static const struct grid_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
-  static const struct grid_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
+  static const struct screen_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
+  static const struct screen_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
   p->border_dirty = false;
   bool topmost = p->rect.window.y == 0;
   bool leftmost = p->rect.window.x == 0;
@@ -336,7 +336,7 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
 }
 
 void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n) {
-  // Pass current size information to vte so it can determine if grids should be resized
+  // Pass current size information to vte so it can determine if screens should be resized
   vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
   vte_process(&vte_host->vte, buf, n);
   string_flush(&vte_host->vte.pending_output, vte_host->pty, nullptr);
@@ -366,8 +366,8 @@ void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
 
   // If anything changed about the window position / dimensions, do a full redraw
   if (!bounds_equal(&outer, &vte_host->rect.window) || !bounds_equal(&inner, &vte_host->rect.client)) {
-    struct grid *g = vte_get_current_grid(&vte_host->vte);
-    grid_invalidate(g);
+    struct screen *g = vte_get_current_screen(&vte_host->vte);
+    screen_invalidate(g);
     vte_host->border_dirty = true;
   }
   vte_host->rect.window = outer;

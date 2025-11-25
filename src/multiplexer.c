@@ -318,7 +318,7 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
 
   {
     // move cursor to focused host
-    struct grid *g = vte_get_current_grid(&focused->vte);
+    struct screen *g = vte_get_current_screen(&focused->vte);
     struct cursor *c = &g->cursor;
     int lineno = 1 + focused->rect.client.y + c->row;
     int columnno = 1 + focused->rect.client.x + c->col;

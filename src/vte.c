@@ -99,10 +99,10 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
   case '5': OMITTED("DECSWL"); break;
   case '6': OMITTED("DECDWL"); break;
   case '8': { /* DECALN */
-    struct grid_cell E = {.symbol = {.utf8 = {'E'}}};
-    struct grid *g = vte_get_current_grid(vte);
+    struct screen_cell E = {.symbol = {.utf8 = {'E'}}};
+    struct screen *g = vte_get_current_screen(vte);
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
-      struct grid_row *row = &g->rows[rowidx];
+      struct screen_row *row = &g->rows[rowidx];
       for (int col = 0; col < g->w; col++) {
         row->cells[col] = E;
       }
@@ -132,28 +132,28 @@ static void ground_enquiry(struct vte *vte, uint8_t ch) {
 
 static void ground_carriage_return(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_carriage_return(vte_get_current_grid(vte));
+  screen_carriage_return(vte_get_current_screen(vte));
 }
 
 static void ground_backspace(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_backspace(vte_get_current_grid(vte));
+  screen_backspace(vte_get_current_screen(vte));
 }
 static void ground_vtab(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_move_or_scroll_down(vte_get_current_grid(vte));
+  screen_move_or_scroll_down(vte_get_current_screen(vte));
 }
 
 static void ground_tab(struct vte *vte, uint8_t ch) {
   (void)ch;
   const int tabwidth = 8;
-  int x = vte_get_current_grid(vte)->cursor.col;
+  int x = vte_get_current_screen(vte)->cursor.col;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
-  struct grid_cell c = { .style = vte_get_current_grid(vte)->cursor.brush, .symbol = utf8_blank };
-  grid_insert(vte_get_current_grid(vte), c, vte->options.auto_wrap_mode);
+  struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .symbol = utf8_blank };
+  screen_insert(vte_get_current_screen(vte), c, vte->options.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
-    grid_insert(vte_get_current_grid(vte), c, false);
+    screen_insert(vte_get_current_screen(vte), c, false);
   }
 }
 
@@ -164,14 +164,14 @@ static void ground_bell(struct vte *vte, uint8_t ch) {
 
 static void ground_newline(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_newline(vte_get_current_grid(vte), vte->options.auto_return);
+  screen_newline(vte_get_current_screen(vte), vte->options.auto_return);
 }
 
 static void ground_accept(struct vte *vte) {
   struct utf8 clear = {0};
-  struct grid *g = vte_get_current_grid(vte);
-  struct grid_cell c = { .symbol = vte->pending_symbol, .style = vte_get_current_grid(vte)->cursor.brush };
-  grid_insert(g, c, vte->options.auto_wrap_mode);
+  struct screen *g = vte_get_current_screen(vte);
+  struct screen_cell c = { .symbol = vte->pending_symbol, .style = vte_get_current_screen(vte)->cursor.brush };
+  screen_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = vte->pending_symbol;
   vte->pending_symbol = clear;
 }
@@ -182,9 +182,9 @@ static void ground_reject(struct vte *vte) {
   vte->pending_symbol = clear;
   // If we are rejecting this symbol, we should
   // Render a replacement char for this sequence (U+FFFD)
-  struct grid_cell replacement = {.symbol = utf8_fffd};
-  struct grid *g = vte_get_current_grid(vte);
-  grid_insert(g, replacement, vte->options.auto_wrap_mode);
+  struct screen_cell replacement = {.symbol = utf8_fffd};
+  struct screen *g = vte_get_current_screen(vte);
+  screen_insert(g, replacement, vte->options.auto_wrap_mode);
   uint8_t n = utf8_length(copy);
   if (n > 1) vte_process(vte, &copy.utf8[1], n - 1);
 }
@@ -199,16 +199,16 @@ static void ground_process_shift_out(struct vte *vte, uint8_t ch) {
 }
 
 static void DISPATCH_RI(struct vte *vte) {
-  grid_move_or_scroll_up(vte_get_current_grid(vte));
+  screen_move_or_scroll_up(vte_get_current_screen(vte));
 }
 
 static void DISPATCH_IND(struct vte *vte) {
-  grid_move_or_scroll_down(vte_get_current_grid(vte));
+  screen_move_or_scroll_down(vte_get_current_screen(vte));
 }
 
 static void DISPATCH_NEL(struct vte *vte) {
-  grid_move_or_scroll_down(vte_get_current_grid(vte));
-  grid_position_cursor_column(vte_get_current_grid(vte), 0);
+  screen_move_or_scroll_down(vte_get_current_screen(vte));
+  screen_position_cursor_column(vte_get_current_screen(vte), 0);
 }
 
 static void DISPATCH_HTS(struct vte *vte)   { (void)vte; TODO("HTS"); }
@@ -295,7 +295,7 @@ static void vte_dispatch_utf8(struct vte *vte, uint8_t ch) {
 static void vte_full_reset(struct vte *vte) {
   vte->options = emulator_options_default;
   vte_enter_primary_screen(vte);
-  grid_full_reset(&vte->primary);
+  screen_full_reset(&vte->primary);
 }
 
 static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
@@ -305,8 +305,8 @@ static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
   case PCT: vte->state = vte_pct; break;
   case SPC: vte->state = vte_spc; break;
   case PND: vte->state = vte_pnd; break;
-  case '7': grid_save_cursor(vte_get_current_grid(vte)); break;
-  case '8': grid_restore_cursor(vte_get_current_grid(vte)); break;
+  case '7': screen_save_cursor(vte_get_current_screen(vte)); break;
+  case '8': screen_restore_cursor(vte_get_current_screen(vte)); break;
   case '=': vte->options.application_keypad_mode = true; break;
   case '>': vte->options.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
@@ -419,17 +419,17 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 }
 
 static void vte_init_alternate_screen(struct vte *vte) {
-  struct grid *g = &vte->alternate;
-  grid_resize_if_needed(g, vte->columns, vte->rows, false);
+  struct screen *g = &vte->alternate;
+  screen_resize_if_needed(g, vte->columns, vte->rows, false);
 
   // TODO: when scrollback is introduced, the scrollback buffer
   // should be accessible from the alternate screen, but new lines should
   // not be appended; the `m` rows in the alternate screen should be reused.
   // Leaving the alternate screen discards the `m` rows
   g->cursor = vte->primary.cursor;
-  struct cursor start = {.col = grid_left(g), .row = grid_top(g)};
-  struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
-  grid_erase_between_cursors(g, start, end);
+  struct cursor start = {.col = screen_left(g), .row = screen_top(g)};
+  struct cursor end = {.col = screen_right(g), .row = screen_bottom(g)};
+  screen_erase_between_cursors(g, start, end);
 
   for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
 }
@@ -442,8 +442,8 @@ void vte_enter_alternate_screen(struct vte *vte) {
 }
 
 static void vte_init_primary_screen(struct vte *vte) {
-  struct grid *g = &vte->primary;
-  grid_resize_if_needed(g, vte->columns, vte->rows, true);
+  struct screen *g = &vte->primary;
+  screen_resize_if_needed(g, vte->columns, vte->rows, true);
   for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
 }
 
@@ -454,7 +454,7 @@ void vte_enter_primary_screen(struct vte *vte) {
 }
 
 void vte_set_size(struct vte *vte, int w, int h) {
-  struct grid *g = vte_get_current_grid(vte);
+  struct screen *g = vte_get_current_screen(vte);
   vte->rows = h;
   vte->columns = w;
   if (g->_cells == nullptr || g->w != w || g->h != h) {
@@ -487,12 +487,12 @@ void vte_process(struct vte *vte, uint8_t *buf, int n) {
 }
 
 void vte_destroy(struct vte *vte) {
-  grid_destroy(&vte->primary);
-  grid_destroy(&vte->alternate);
+  screen_destroy(&vte->primary);
+  screen_destroy(&vte->alternate);
   string_destroy(&vte->pending_output);
   string_destroy(&vte->command_buffer);
 }
 
-struct grid *vte_get_current_grid(struct vte *vte) {
+struct screen *vte_get_current_screen(struct vte *vte) {
   return vte->options.alternate_screen ? &vte->alternate : &vte->primary;
 }

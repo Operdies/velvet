@@ -1,7 +1,7 @@
 #ifndef VTE_H
 #define VTE_H
 
-#include "grid.h"
+#include "screen.h"
 #include "text.h"
 #include "collections.h"
 #include <stdint.h>
@@ -173,8 +173,8 @@ struct vte {
   /* the current state of the machine */
   enum vte_state state;
   struct emulator_options options;
-  struct grid primary;
-  struct grid alternate;
+  struct screen primary;
+  struct screen alternate;
   struct string pending_output;
   struct string command_buffer;
   struct utf8 pending_symbol;
@@ -192,9 +192,8 @@ static const struct vte vte_default = {
 
 void vte_process(struct vte *vte, unsigned char *buf, int n);
 void vte_destroy(struct vte *vte);
-void vte_ensure_grid_initialized(struct vte *vte);
 void vte_send_device_attributes(struct vte *vte);
-struct grid *vte_get_current_grid(struct vte *vte);
+struct screen *vte_get_current_screen(struct vte *vte);
 void vte_enter_primary_screen(struct vte *vte);
 void vte_enter_alternate_screen(struct vte *vte);
 void vte_set_size(struct vte *vte, int w, int h);
