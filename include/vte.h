@@ -176,7 +176,9 @@ struct vte {
   struct grid primary;
   struct grid alternate;
   /* pointer to either primary or alternate */
-  struct grid *active_grid;
+  // TODO: delete this pointer. Having a pointer to an internal struct member is a no-go because this struct is stored in an array, meaning the structure itself can move.
+  // If the structure is moved, this can point to invalid memory, or another vte instance.
+  struct grid *active_grid; 
   struct string pending_output;
   struct string command_buffer;
   struct utf8 pending_symbol;
