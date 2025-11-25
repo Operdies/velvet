@@ -4,6 +4,7 @@
 #include "vte_host.h"
 #include <multiplexer.h>
 #include <string.h>
+#include <sys/wait.h>
 
 static int nmaster = 1;
 static float factor = 0.5;
@@ -98,7 +99,7 @@ static void multiplexer_focus_next(struct multiplexer *m) {
 }
 
 static void multiplexer_focus_previous(struct multiplexer *m) {
-  multiplexer_set_focus(m, (m->focus + m->clients.length + 1) % m->clients.length);
+  multiplexer_set_focus(m, (m->focus + m->clients.length - 1) % m->clients.length);
 }
 static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
   switch (ch) {
