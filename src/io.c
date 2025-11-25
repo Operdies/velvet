@@ -1,6 +1,7 @@
 #include <io.h>
 #include "utils.h"
 #include <errno.h>
+#include <sys/wait.h>
 
 static bool fd_hot(int fd) {
   const int poll_ms = 0;
