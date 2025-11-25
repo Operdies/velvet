@@ -86,11 +86,11 @@ static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
     m->focus = focus;
 
     if (current_focus->vte.options.focus_reporting) {
-      // TODO: write(pty, FOCUS_OUT)
+      string_push_slice(&current_focus->vte.pending_output, vt_focus_out);
     }
 
     if (new_focus->vte.options.focus_reporting) {
-      // TODO: write(pty, FOCUS_IN)
+      string_push_slice(&new_focus->vte.pending_output, vt_focus_in);
     }
   }
 }

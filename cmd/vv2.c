@@ -144,6 +144,12 @@ int main(int argc, char **argv) {
     // set a timeout of e.g. 1s and restore the state after the 
     io_flush(&io, -1);
 
+    // write pending output for each client
+    vec_foreach(h, app.multiplexer.clients) {
+      // TODO: perform these writes in parallel?
+      string_flush(&h->vte.pending_output, h->pty, nullptr);
+    }
+
     // quit ?
     if (app.multiplexer.clients.length == 0 || app.quit) break;
 
