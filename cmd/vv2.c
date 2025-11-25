@@ -102,12 +102,18 @@ static void render_func(const uint8_t *const buffer, size_t n, void *context) {
 }
 
 int main(int argc, char **argv) {
+  int rows, columns;
+  platform_get_winsize(&rows, &columns);
+
+  if (rows == 0 || columns == 0) {
+    fprintf(stderr, "Error getting terminal size. Exiting.\n");
+    return 1;
+  }
+
   terminal_setup();
   install_signal_handlers();
 
   struct app_context app = {.multiplexer = multiplexer_default};
-  int rows, columns;
-  platform_get_winsize(&rows, &columns);
   multiplexer_resize(&app.multiplexer, rows, columns);
 
   if (argc < 2) {
