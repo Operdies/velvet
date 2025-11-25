@@ -35,29 +35,6 @@
 // It can also contain a picture in sixel format, which can also be quite large.
 #define MAX_ESC_SEQ_LEN (1 << 16)
 
-void vte_set_active_grid(struct vte *vte, struct grid *g) {
-  assert(g == &vte->primary || g == &vte->alternate);
-  bool grid_changed = false;
-  if (vte->active_grid != g) {
-    grid_changed = true;
-    vte->active_grid = g;
-    for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
-  }
-  bool reflow_content = vte->active_grid == &vte->primary;
-  grid_resize_if_needed(vte->active_grid, vte->w, vte->h, reflow_content);
-
-  if (grid_changed && g == &vte->alternate) {
-    // TODO: when scrollback is introduced, the scrollback buffer
-    // should be accessible from the alternate screen, but new lines should
-    // not be appended; the `m` rows in the alternate screen should be reused.
-    // Leaving the alternate screen discards the `m` rows
-    g->cursor = vte->primary.cursor;
-    struct cursor start = {.col = grid_left(g), .row = grid_top(g)};
-    struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
-    grid_erase_between_cursors(g, start, end);
-  }
-}
-
 void vte_send_device_attributes(struct vte *vte) {
   // Advertise VT102 support (same as alacritty)
   // TODO: Figure out how to advertise exact supported features here.
@@ -123,7 +100,7 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
   case '6': OMITTED("DECDWL"); break;
   case '8': { /* DECALN */
     struct grid_cell E = {.symbol = {.utf8 = {'E'}}};
-    struct grid *g = vte->active_grid;
+    struct grid *g = vte_get_current_grid(vte);
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
       struct grid_row *row = &g->rows[rowidx];
       for (int col = 0; col < g->w; col++) {
@@ -137,11 +114,6 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
     logmsg("Unknown ESC # command: %x", ch);
   } break;
   }
-}
-
-void vte_ensure_grid_initialized(struct vte *vte) {
-  struct grid *g = vte->options.alternate_screen ? &vte->alternate : &vte->primary;
-  vte_set_active_grid(vte, g);
 }
 
 static void ground_esc(struct vte *vte, uint8_t ch) {
@@ -160,28 +132,28 @@ static void ground_enquiry(struct vte *vte, uint8_t ch) {
 
 static void ground_carriage_return(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_carriage_return(vte->active_grid);
+  grid_carriage_return(vte_get_current_grid(vte));
 }
 
 static void ground_backspace(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_backspace(vte->active_grid);
+  grid_backspace(vte_get_current_grid(vte));
 }
 static void ground_vtab(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_move_or_scroll_down(vte->active_grid);
+  grid_move_or_scroll_down(vte_get_current_grid(vte));
 }
 
 static void ground_tab(struct vte *vte, uint8_t ch) {
   (void)ch;
   const int tabwidth = 8;
-  int x = vte->active_grid->cursor.col;
+  int x = vte_get_current_grid(vte)->cursor.col;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
-  struct grid_cell c = { .style = vte->active_grid->cursor.brush, .symbol = utf8_blank };
-  grid_insert(vte->active_grid, c, vte->options.auto_wrap_mode);
+  struct grid_cell c = { .style = vte_get_current_grid(vte)->cursor.brush, .symbol = utf8_blank };
+  grid_insert(vte_get_current_grid(vte), c, vte->options.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
-    grid_insert(vte->active_grid, c, false);
+    grid_insert(vte_get_current_grid(vte), c, false);
   }
 }
 
@@ -192,13 +164,13 @@ static void ground_bell(struct vte *vte, uint8_t ch) {
 
 static void ground_newline(struct vte *vte, uint8_t ch) {
   (void)ch;
-  grid_newline(vte->active_grid, vte->options.auto_return);
+  grid_newline(vte_get_current_grid(vte), vte->options.auto_return);
 }
 
 static void ground_accept(struct vte *vte) {
   struct utf8 clear = {0};
-  struct grid *g = vte->active_grid;
-  struct grid_cell c = { .symbol = vte->pending_symbol, .style = vte->active_grid->cursor.brush };
+  struct grid *g = vte_get_current_grid(vte);
+  struct grid_cell c = { .symbol = vte->pending_symbol, .style = vte_get_current_grid(vte)->cursor.brush };
   grid_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = vte->pending_symbol;
   vte->pending_symbol = clear;
@@ -211,7 +183,7 @@ static void ground_reject(struct vte *vte) {
   // If we are rejecting this symbol, we should
   // Render a replacement char for this sequence (U+FFFD)
   struct grid_cell replacement = {.symbol = utf8_fffd};
-  struct grid *g = vte->active_grid;
+  struct grid *g = vte_get_current_grid(vte);
   grid_insert(g, replacement, vte->options.auto_wrap_mode);
   uint8_t n = utf8_length(copy);
   if (n > 1) vte_process(vte, &copy.utf8[1], n - 1);
@@ -227,16 +199,16 @@ static void ground_process_shift_out(struct vte *vte, uint8_t ch) {
 }
 
 static void DISPATCH_RI(struct vte *vte) {
-  grid_move_or_scroll_up(vte->active_grid);
+  grid_move_or_scroll_up(vte_get_current_grid(vte));
 }
 
 static void DISPATCH_IND(struct vte *vte) {
-  grid_move_or_scroll_down(vte->active_grid);
+  grid_move_or_scroll_down(vte_get_current_grid(vte));
 }
 
 static void DISPATCH_NEL(struct vte *vte) {
-  grid_move_or_scroll_down(vte->active_grid);
-  grid_position_cursor_column(vte->active_grid, 0);
+  grid_move_or_scroll_down(vte_get_current_grid(vte));
+  grid_position_cursor_column(vte_get_current_grid(vte), 0);
 }
 
 static void DISPATCH_HTS(struct vte *vte)   { (void)vte; TODO("HTS"); }
@@ -322,7 +294,7 @@ static void vte_dispatch_utf8(struct vte *vte, uint8_t ch) {
 
 static void vte_full_reset(struct vte *vte) {
   vte->options = emulator_options_default;
-  vte->active_grid = &vte->primary;
+  vte_enter_primary_screen(vte);
   grid_full_reset(&vte->primary);
 }
 
@@ -333,8 +305,8 @@ static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
   case PCT: vte->state = vte_pct; break;
   case SPC: vte->state = vte_spc; break;
   case PND: vte->state = vte_pnd; break;
-  case '7': grid_save_cursor(vte->active_grid); break;
-  case '8': grid_restore_cursor(vte->active_grid); break;
+  case '7': grid_save_cursor(vte_get_current_grid(vte)); break;
+  case '8': grid_restore_cursor(vte_get_current_grid(vte)); break;
   case '=': vte->options.application_keypad_mode = true; break;
   case '>': vte->options.application_keypad_mode = false; break;
   case ESC: /* Literal escape */
@@ -446,8 +418,56 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
   }
 }
 
+static void vte_init_alternate_screen(struct vte *vte) {
+  struct grid *g = &vte->alternate;
+  grid_resize_if_needed(g, vte->columns, vte->rows, false);
+
+  // TODO: when scrollback is introduced, the scrollback buffer
+  // should be accessible from the alternate screen, but new lines should
+  // not be appended; the `m` rows in the alternate screen should be reused.
+  // Leaving the alternate screen discards the `m` rows
+  g->cursor = vte->primary.cursor;
+  struct cursor start = {.col = grid_left(g), .row = grid_top(g)};
+  struct cursor end = {.col = grid_right(g), .row = grid_bottom(g)};
+  grid_erase_between_cursors(g, start, end);
+
+  for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
+}
+
+void vte_enter_alternate_screen(struct vte *vte) {
+  if (vte->options.alternate_screen) return;
+  vte->options.alternate_screen = true;
+
+  vte_init_alternate_screen(vte);
+}
+
+static void vte_init_primary_screen(struct vte *vte) {
+  struct grid *g = &vte->primary;
+  grid_resize_if_needed(g, vte->columns, vte->rows, true);
+  for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
+}
+
+void vte_enter_primary_screen(struct vte *vte) {
+  if (!vte->options.alternate_screen) return;
+  vte->options.alternate_screen = false;
+  vte_init_primary_screen(vte);
+}
+
+void vte_set_size(struct vte *vte, int w, int h) {
+  struct grid *g = vte_get_current_grid(vte);
+  vte->rows = h;
+  vte->columns = w;
+  if (g->_cells == nullptr || g->w != w || g->h != h) {
+    if (vte->options.alternate_screen) {
+      vte_init_alternate_screen(vte);
+    } else {
+      vte_init_primary_screen(vte);
+    }
+  }
+}
+
 void vte_process(struct vte *vte, uint8_t *buf, int n) {
-  vte_ensure_grid_initialized(vte);
+  assert(vte->rows); assert(vte->columns);
   for (int i = 0; i < n; i++) {
     uint8_t ch = buf[i];
     switch (vte->state) {
@@ -471,4 +491,8 @@ void vte_destroy(struct vte *vte) {
   grid_destroy(&vte->alternate);
   string_destroy(&vte->pending_output);
   string_destroy(&vte->command_buffer);
+}
+
+struct grid *vte_get_current_grid(struct vte *vte) {
+  return vte->options.alternate_screen ? &vte->alternate : &vte->primary;
 }

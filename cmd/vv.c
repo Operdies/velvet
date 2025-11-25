@@ -110,10 +110,10 @@ static void arrange(struct winsize ws, struct vte_host *p) {
 }
 
 static void move_cursor_to_vte_host(struct vte_host *vte_host, struct string *drawbuffer) {
-  if (vte_host && vte_host->vte.active_grid) {
+  if (vte_host && vte_get_current_grid(&vte_host->vte)) {
     focused = vte_host;
     // set cursor position within the vte_host
-    struct grid *g = vte_host->vte.active_grid;
+    struct grid *g = vte_get_current_grid(&vte_host->vte);
     struct cursor *c = &g->cursor;
     int lineno = 1 + vte_host->rect.client.y + c->row;
     int columnno = 1 + vte_host->rect.client.x + c->col;
@@ -335,7 +335,7 @@ void handle_sigwinch(struct string *draw_buffer) {
     die("ioctl TIOCGWINSZ:");
   }
   for (struct vte_host *p = clients; p; p = p->next) {
-    grid_invalidate(p->vte.active_grid);
+    grid_invalidate(vte_get_current_grid(&p->vte));
     p->border_dirty = true;
   }
   arrange(ws_current, clients);

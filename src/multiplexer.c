@@ -16,11 +16,6 @@ void multiplexer_arrange(struct multiplexer *m) {
 
   n = m->clients.length;
   struct vte_host *c;
-  vec_foreach(c, m->clients) {
-    // TODO: Remove this hack. This is needed because manipulating the order of elements
-    // in m->clients causes the active_grid reference to break.
-    c->vte.active_grid = c->vte.options.alternate_screen ? &c->vte.alternate : &c->vte.primary;
-  }
   vec_foreach(c, m->clients) c->border_width = 1;
 
   i = my = sy = mx = 0;
@@ -320,7 +315,7 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
 
   {
     // move cursor to focused host
-    struct grid *g = focused->vte.active_grid;
+    struct grid *g = vte_get_current_grid(&focused->vte);
     struct cursor *c = &g->cursor;
     int lineno = 1 + focused->rect.client.y + c->row;
     int columnno = 1 + focused->rect.client.x + c->col;

@@ -184,14 +184,14 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     vte_host_process_output(&p, (uint8_t *)input, strlen(input));
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
-    assert_grid_equals(expected, p.vte.active_grid, testname2);
+    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
     vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
-    assert_grid_equals(expected, p.vte.active_grid, testname2);
+    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
   }
   {
     // 2. Clear the screen ensuring it is clean
@@ -200,7 +200,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     vte_host_draw(&p, false, &output);
     struct chargrid *cleared = make_chargrid(5, 8, (grid_5x8){0});
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
-    assert_grid_equals(cleared, p.vte.active_grid, testname2);
+    assert_grid_equals(cleared, vte_get_current_grid(&p.vte), testname2);
 
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
@@ -209,7 +209,7 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
-    assert_grid_equals(cleared, p.vte.active_grid, outer_test_name);
+    assert_grid_equals(cleared, vte_get_current_grid(&p.vte), outer_test_name);
 
     assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
     free(cleared);
@@ -221,14 +221,14 @@ static void test_grid_input_output(const char *const outer_test_name, const char
     vte_host_process_output(&p, (uint8_t *)input, strlen(input));
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
-    assert_grid_equals(expected, p.vte.active_grid, testname2);
+    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
 
     // See 1.b
     vte_host_process_output(&p, output.content, output.len);
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
-    assert_grid_equals(expected, p.vte.active_grid, testname2);
+    assert_grid_equals(expected, vte_get_current_grid(&p.vte), testname2);
   }
   free(expected);
   string_destroy(&output);
@@ -247,20 +247,20 @@ test_grid_reflow_grow(const char *const test_name, const char *const input, grid
   {
     string_clear(&output);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(small, p.vte.active_grid, test_name);
+    assert_grid_equals(small, vte_get_current_grid(&p.vte), test_name);
   }
   {
     string_clear(&output);
     vte_host_resize(&p, blarge);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(large, p.vte.active_grid, test_name);
+    assert_grid_equals(large, vte_get_current_grid(&p.vte), test_name);
   }
   {
     string_clear(&output);
     vte_host_resize(&p, bsmall);
     vte_host_draw(&p, false, &output);
     // It is always possibly to losslessly convert back to the initial grid, so let's verify that
-    assert_grid_equals(small, p.vte.active_grid, test_name);
+    assert_grid_equals(small, vte_get_current_grid(&p.vte), test_name);
   }
 
   vte_host_destroy(&p);
@@ -279,13 +279,13 @@ test_grid_reflow_shrink(const char *const test_name, const char *const input, gr
   {
     string_clear(&output);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(large, p.vte.active_grid, test_name);
+    assert_grid_equals(large, vte_get_current_grid(&p.vte), test_name);
   }
   {
     string_clear(&output);
     vte_host_resize(&p, bsmall);
     vte_host_draw(&p, false, &output);
-    assert_grid_equals(small, p.vte.active_grid, test_name);
+    assert_grid_equals(small, vte_get_current_grid(&p.vte), test_name);
   }
   vte_host_destroy(&p);
   free(small), free(large), string_destroy(&output);

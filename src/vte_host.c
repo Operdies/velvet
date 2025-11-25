@@ -212,11 +212,9 @@ static inline void apply_style(const struct grid_cell_style *const style, struct
 
 void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuffer) {
   // Ensure the grid content is in sync with the vte_host just-in-time
-  vte_host->vte.w = vte_host->rect.client.w;
-  vte_host->vte.h = vte_host->rect.client.h;
-  vte_ensure_grid_initialized(&vte_host->vte);
+  vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
 
-  struct grid *g = vte_host->vte.active_grid;
+  struct grid *g = vte_get_current_grid(&vte_host->vte);
   for (int row = 0; row < g->h; row++) {
     struct grid_row *grid_row = &g->rows[row];
     if (!redraw && !grid_row->dirty) continue;
@@ -339,9 +337,7 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
 
 void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n) {
   // Pass current size information to vte so it can determine if grids should be resized
-  vte_host->vte.w = vte_host->rect.client.w;
-  vte_host->vte.h = vte_host->rect.client.h;
-  // if (vte_host->logfile > 0) write(vte_host->logfile, buf, n);
+  vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
   vte_process(&vte_host->vte, buf, n);
   string_flush(&vte_host->vte.pending_output, vte_host->pty, nullptr);
 }
@@ -370,7 +366,8 @@ void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
 
   // If anything changed about the window position / dimensions, do a full redraw
   if (!bounds_equal(&outer, &vte_host->rect.window) || !bounds_equal(&inner, &vte_host->rect.client)) {
-    grid_invalidate(vte_host->vte.active_grid);
+    struct grid *g = vte_get_current_grid(&vte_host->vte);
+    grid_invalidate(g);
     vte_host->border_dirty = true;
   }
   vte_host->rect.window = outer;

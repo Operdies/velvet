@@ -169,16 +169,12 @@ struct emulator_options {
 
 /* finite state machine for parsing ansi escape codes */
 struct vte {
-  int w, h;
+  int rows, columns;
   /* the current state of the machine */
   enum vte_state state;
   struct emulator_options options;
   struct grid primary;
   struct grid alternate;
-  /* pointer to either primary or alternate */
-  // TODO: delete this pointer. Having a pointer to an internal struct member is a no-go because this struct is stored in an array, meaning the structure itself can move.
-  // If the structure is moved, this can point to invalid memory, or another vte instance.
-  struct grid *active_grid; 
   struct string pending_output;
   struct string command_buffer;
   struct utf8 pending_symbol;
@@ -197,7 +193,10 @@ static const struct vte vte_default = {
 void vte_process(struct vte *vte, unsigned char *buf, int n);
 void vte_destroy(struct vte *vte);
 void vte_ensure_grid_initialized(struct vte *vte);
-void vte_set_active_grid(struct vte *vte, struct grid *grid);
 void vte_send_device_attributes(struct vte *vte);
+struct grid *vte_get_current_grid(struct vte *vte);
+void vte_enter_primary_screen(struct vte *vte);
+void vte_enter_alternate_screen(struct vte *vte);
+void vte_set_size(struct vte *vte, int w, int h);
 
 #endif /*  VTE_H */
