@@ -17,6 +17,8 @@ VT(enable_line_wrapping, CSI "?7h");
 VT(focus_out, CSI "O");
 VT(focus_in, CSI "I");
 VT(clear, CSI "2J");
+VT(synchronized_rendering_on, CSI "?2026h");
+VT(synchronized_rendering_off, CSI "?2026l");
 
 #undef VT
 #undef ESC
