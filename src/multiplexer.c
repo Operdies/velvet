@@ -260,6 +260,10 @@ void multiplexer_spawn_process(struct multiplexer *m, char *process) {
 }
 
 void multiplexer_destroy(struct multiplexer *m) {
+  struct vte_host *h;
+  vec_foreach(h, m->clients) {
+    vte_host_destroy(h);
+  }
   vec_destroy(&m->clients);
   string_destroy(&m->draw_buffer);
 }

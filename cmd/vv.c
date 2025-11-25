@@ -160,6 +160,7 @@ int main(int argc, char **argv) {
     multiplexer_render(&app.multiplexer, render_func, &(int){STDOUT_FILENO});
   }
 
+  multiplexer_destroy(&app.multiplexer);
   io_destroy(&io);
 
   terminal_reset();
