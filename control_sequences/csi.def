@@ -125,6 +125,7 @@ CSI(___,    ___,  't', XTWINOPS,                   "CSI Ps ; Ps ; Ps t Window ma
 
 // Kitty {{{1
 CSI(___,    '?',  'u', KITTY_KEYBOARD_QUERY,       "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
+CSI(___,    '+',  'T', KITTY_UNSCROLL,             "CSI Ps + T https://sw.kovidgoyal.net/kitty/unscroll/")
 
 #undef ___
 

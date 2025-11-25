@@ -127,6 +127,8 @@ static bool SCORC(struct vte *vte, struct csi *csi);
 static bool DECRQUPSS(struct vte *vte, struct csi *csi);
 /* CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
 static bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi);
+/* CSI Ps + T https://sw.kovidgoyal.net/kitty/unscroll/ */
+static bool KITTY_UNSCROLL(struct vte *vte, struct csi *csi);
 /* CSI Ps SP u Set margin-bell volume (DECSMBV), VT520. */
 static bool DECSMBV(struct vte *vte, struct csi *csi);
 /* CSI " v   Request Displayed Extent (DECRQDE), VT340, VT420. */
@@ -677,6 +679,8 @@ bool SCORC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SCORC
 bool DECRQUPSS(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECRQUPSS"); return false; }
 
 bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("KITTY_KEYBOARD_QUERY"); return false; }
+
+bool KITTY_UNSCROLL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("KITTY_UNSCROLL"); return false; }
 
 bool DECSMBV(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECSMBV"); return false; }
 
