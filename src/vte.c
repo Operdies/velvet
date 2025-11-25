@@ -496,3 +496,9 @@ void vte_destroy(struct vte *vte) {
 struct screen *vte_get_current_screen(struct vte *vte) {
   return vte->options.alternate_screen ? &vte->alternate : &vte->primary;
 }
+
+void vte_invalidate_screen(struct vte *vte) {
+  struct screen *s = vte_get_current_screen(vte);
+  for (int i = 0; i < s->h; i++)
+    s->rows[i].dirty = true;
+}

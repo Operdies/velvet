@@ -197,5 +197,6 @@ struct screen *vte_get_current_screen(struct vte *vte);
 void vte_enter_primary_screen(struct vte *vte);
 void vte_enter_alternate_screen(struct vte *vte);
 void vte_set_size(struct vte *vte, int w, int h);
+void vte_invalidate_screen(struct vte *vte);
 
 #endif /*  VTE_H */

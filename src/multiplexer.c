@@ -292,9 +292,16 @@ void multiplexer_remove_exited(struct multiplexer *m) {
 }
 
 void multiplexer_resize(struct multiplexer *m, int rows, int columns) {
-  m->rows = rows;
-  m->columns = columns;
-  multiplexer_arrange(m);
+  if (m->rows != rows || m->columns != columns) {
+    m->rows = rows;
+    m->columns = columns;
+    multiplexer_arrange(m);
+    struct vte_host *h;
+    vec_foreach(h, m->clients) {
+      h->border_dirty = true;
+      vte_invalidate_screen(&h->vte);
+    }
+  }
 }
 
 void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void *context) {
