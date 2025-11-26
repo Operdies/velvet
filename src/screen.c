@@ -270,7 +270,6 @@ void screen_destroy(struct screen *screen) {
 void screen_copy(struct screen *restrict dst, const struct screen *const restrict src, bool wrap) {
   bool fullscreen = !wrap;
   for (int row = 0; row < src->h; row++) {
-
     struct screen_row *screen_row = &src->rows[row];
 
     int col = 0;

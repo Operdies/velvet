@@ -449,24 +449,22 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 static void vte_init_alternate_screen(struct vte *vte) {
   struct screen *g = &vte->alternate;
   screen_resize_if_needed(g, vte->columns, vte->rows, false);
-
-  // TODO: when scrollback is introduced, the scrollback buffer
-  // should be accessible from the alternate screen, but new lines should
-  // not be appended; the `m` rows in the alternate screen should be reused.
-  // Leaving the alternate screen discards the `m` rows
-  g->cursor = vte->primary.cursor;
-  struct cursor start = {.column = screen_left(g), .row = screen_top(g)};
-  struct cursor end = {.column = screen_right(g), .row = screen_bottom(g)};
-  screen_erase_between_cursors(g, start, end);
-
   for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
 }
 
 void vte_enter_alternate_screen(struct vte *vte) {
   if (vte->options.alternate_screen) return;
   vte->options.alternate_screen = true;
-
   vte_init_alternate_screen(vte);
+  struct screen *g = &vte->alternate;
+  // TODO: when scrollback is introduced, the scrollback buffer
+  // should be accessible from the alternate screen, but new lines should
+  // not be appended; the `m` rows in the alternate screen should be reused.
+  // Leaving the alternate screen discards the `m` rows
+  struct cursor start = {.column = screen_left(g), .row = screen_top(g)};
+  struct cursor end = {.column = screen_right(g), .row = screen_bottom(g)};
+  screen_erase_between_cursors(g, start, end);
+  vte->alternate.cursor = vte->primary.cursor;
 }
 
 static void vte_init_primary_screen(struct vte *vte) {
