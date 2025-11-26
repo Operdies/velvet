@@ -822,7 +822,7 @@ void done() {
 }
 
 static void test_hash() {
-  const uint8_t characters[8] = u8"\x1b[200~\0\0";
+  const uint8_t characters[] = u8"\x1b[200~\0\0";
   const struct running_hash paste_start = {.characters = u8"\x1b[200~"};
   struct running_hash running_hash = {0};
 
@@ -942,6 +942,7 @@ void test_hashmap_collisions() {
     uint32_t k = i * 13;
     assertf(hashmap_remove(&h, k, nullptr), "Error removing element at index %d", k);
   }
+  hashmap_destroy(&h);
 }
 
 int main(void) {

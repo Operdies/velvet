@@ -4,11 +4,18 @@
 #include "osc.h"
 #include "text.h"
 #include "utils.h"
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+// Commented charsets are not supported and will be treated as ASCII (0)
+static enum charset charset_lookup[] = {
+    ['0'] = CHARSET_DEC_SPECIAL, ['B'] = CHARSET_ASCII,
+    // ['2'] = CHARSET_TURKISH, ['4'] = CHARSET_DUTCH, ['5'] = CHARSET_FINNISH, ['6'] = CHARSET_NORDIC, ['<'] = CHARSET_USER_PREFERRED,
+    // ['='] = CHARSET_SWISS, ['>'] = CHARSET_DEC_TECHNICAL, ['A'] = CHARSET_UNITED_KINGDOM, ['C'] = CHARSET_FINNISH, ['E'] = CHARSET_NORDIC,
+    // ['H'] = CHARSET_SWEDISH, ['I'] = CHARSET_JIS_KATAKANA, ['J'] = CHARSET_JIS_ROMAN, ['K'] = CHARSET_GERMAN, ['Q'] = CHARSET_FRENCH_CANADIAN,
+    // ['R'] = CHARSET_FRENCH, ['Y'] = CHARSET_ITALIAN, ['Z'] = CHARSET_SPANISH, ['`'] = CHARSET_NORDIC, ['f'] = CHARSET_FRENCH,
+};
+
 
 #define NUL 0
 #define BELL '\a'

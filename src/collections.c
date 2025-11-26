@@ -223,7 +223,6 @@ static void hashmap_add_unchecked(struct hashmap *h, uint32_t key, void *value) 
     h->metadata[slot] = HASHMAP_SLOT_OCCUPIED;
     return;
   }
-  assert(!"Unreachable");
 }
 
 static void hashmap_maybe_enlarge(struct hashmap *h) {
@@ -257,21 +256,20 @@ bool hashmap_add(struct hashmap *h, uint32_t key, void *value) {
     hashmap_add_unchecked(h, key, value);
     return true;
   }
-  assert(!"Unreachable");
 }
 
 void *hashmap_set(struct hashmap *h, uint32_t key, void *value) {
   uint32_t slot;
+  void *ret = nullptr;
   if (hashmap_find_key(h, key, &slot)) {
     void *removed = h->values[slot];
     h->values[slot] = value;
-    return removed;
+    ret = removed;
   } else {
     hashmap_maybe_enlarge(h);
     hashmap_add_unchecked(h, key, value);
-    return nullptr;
   }
-  assert(!"Unreachable");
+  return ret;
 }
 
 void *hashmap_get(const struct hashmap *h, uint32_t key) {
@@ -315,8 +313,8 @@ bool hashmap_remove(struct hashmap *h, uint32_t key, void **removed) {
 }
 
 void vec_swap(struct vec *v, size_t i, size_t j) {
-  assert(i >= 0 && i < v->length);
-  assert(j >= 0 && j < v->length);
+  assert(i < v->length);
+  assert(j < v->length);
   void *tmp = vec_new_element(v);
   v->length--;
   void *x = vec_nth(*v, i);
