@@ -224,10 +224,11 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
       bool is_control = CTRL(ch) == ch;
       if (ch == m->prefix) {
         string_push_char(&writebuffer, m->prefix);
+        s = normal;
       } else {
         handle_keybinds(m, ch);
+        s = is_control ? prefix_cont : normal;
       }
-      s = is_control ? prefix_cont : normal;
     } break;
     }
   }
