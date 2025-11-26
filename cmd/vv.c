@@ -3,11 +3,9 @@
 #include <vte_host.h>
 #include <collections.h>
 #include <poll.h>
-#include <errno.h>
 #include <io.h>
 #include <multiplexer.h>
 #include "platform.h"
-#include "virtual_terminal_sequences.h"
 
 static int signal_write;
 static int signal_read;
@@ -22,6 +20,9 @@ static void install_signal_handlers(void) {
   sa.sa_sigaction = &signal_handler;
   sa.sa_flags = SA_SIGINFO;
   if (sigaction(SIGWINCH, &sa, NULL) == -1) {
+    die("sigaction:");
+  }
+  if (sigaction(SIGTERM, &sa, NULL) == -1) {
     die("sigaction:");
   }
   if (sigaction(SIGINT, &sa, NULL) == -1) {
@@ -39,11 +40,10 @@ static void install_signal_handlers(void) {
   signal_write = pipes[1];
 }
 
-
-
 struct app_context {
   struct multiplexer multiplexer;
   bool quit;
+  char *quit_reason;
 };
 
 static void signal_callback(struct io_source *src, uint8_t *buffer, int n) {
@@ -51,10 +51,14 @@ static void signal_callback(struct io_source *src, uint8_t *buffer, int n) {
   // 1. Dispatch any pending signals
   bool did_resize = false;
   bool did_sigchld = false;
-  int *signals = (int*)buffer;
+  int *signals = (int *)buffer;
   for (int i = 0; i < (int)(n / sizeof(int)); i++) {
     int signal = signals[i];
     switch (signal) {
+    case SIGTERM: {
+      app->quit = true;
+      app->quit_reason = "shutdown signal received";
+    } break;
     case SIGWINCH: {
       did_resize = true;
     } break;
@@ -160,11 +164,18 @@ int main(int argc, char **argv) {
     multiplexer_render(&app.multiplexer, render_func, &(int){STDOUT_FILENO});
   }
 
+  if (app.multiplexer.clients.length == 0)
+    app.quit_reason = "last window closed";
+
   multiplexer_destroy(&app.multiplexer);
   io_destroy(&io);
 
   terminal_reset();
-  printf("[exited]\n");
+  if (app.quit_reason) {
+    printf("[exited: %s]\n", app.quit_reason);
+  } else {
+    printf("[exited]\n");
+  }
 
   return 0;
 }
