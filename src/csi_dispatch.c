@@ -455,10 +455,15 @@ bool SD(struct vte *vte, struct csi *csi) {
 bool DECST8C(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECST8C"); return false; }
 
 static bool ECH(struct vte *vte, struct csi *csi) {
-  int clear = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct cursor start = vte_get_current_screen(vte)->cursor;
-  struct cursor end = {.row = start.row, .column = start.column + clear};
-  screen_erase_between_cursors(vte_get_current_screen(vte), start, end);
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  struct screen *s = vte_get_current_screen(vte);
+  int first_column, last_column;
+  first_column = s->cursor.column;
+  // subtract 1 from last column because the erase function is inclusive
+  last_column = first_column + count - 1;
+  struct cursor start = {.row = s->cursor.row, .column = first_column};
+  struct cursor end = {.row = s->cursor.row, .column = last_column};
+  screen_erase_between_cursors(s, start, end);
   return true;
 }
 

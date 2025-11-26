@@ -26,6 +26,7 @@
 #define IND "\x1b" "D"
 #define SD(x) CSI #x "T"
 #define SU(x) CSI #x "S"
+#define ECH(x) CSI #x "X"
 
 #define EIGHT(X) X, X, X, X, X, X, X, X
 #define FIVE(X) X, X, X, X, X
@@ -650,6 +651,11 @@ static void test_erase(void) {
                          (screen_5x8){
                              {' ', ' ', 'a', 'b', 'c', 'd', ' ', ' ' },
                          });
+  test_screen_input_output("ECH",
+                           "wwwww" CUP(1, 2) ECH(2),
+                           (screen_5x8){
+                               {'w', ' ', ' ', 'w', 'w'},
+                           });
 }
 
 void test_scrolling(void) {
