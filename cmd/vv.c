@@ -92,7 +92,7 @@ static void stdin_callback(struct io_source *src, uint8_t *buffer, int n) {
 static void read_callback(struct io_source *src, uint8_t *buffer, int n) {
   struct app_context *m = src->data;
   struct vte_host *vte;
-  vec_foreach(vte, m->multiplexer.hosts_vec) {
+  vec_foreach(vte, m->multiplexer.hosts) {
     if (vte->pty == src->fd) {
       vte_host_process_output(vte, buffer, n);
       break;
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
     io_add_source(&io, signal_src);
     io_add_source(&io, stdin_src);
     struct vte_host *h;
-    vec_foreach(h, app.multiplexer.hosts_vec) {
+    vec_foreach(h, app.multiplexer.hosts) {
       struct io_source src = {.fd = h->pty, .events = POLL_IN, .on_data = read_callback, .data = &app};
       io_add_source(&io, src);
     }
@@ -149,13 +149,13 @@ int main(int argc, char **argv) {
     io_dispatch(&io, -1);
 
     // write pending output for each client
-    vec_foreach(h, app.multiplexer.hosts_vec) {
+    vec_foreach(h, app.multiplexer.hosts) {
       // TODO: perform these writes in parallel?
       string_flush(&h->vte.pending_output, h->pty, nullptr);
     }
 
     // quit ?
-    if (app.multiplexer.n_hosts == 0 || app.quit) break;
+    if (app.multiplexer.hosts.length == 0 || app.quit) break;
 
     // arrange
     multiplexer_arrange(&app.multiplexer);
@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
     multiplexer_render(&app.multiplexer, render_func, &(int){STDOUT_FILENO});
   }
 
-  if (app.multiplexer.n_hosts == 0)
+  if (app.multiplexer.hosts.length == 0)
     app.quit_reason = "last window closed";
 
   multiplexer_destroy(&app.multiplexer);
