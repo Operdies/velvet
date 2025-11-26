@@ -66,6 +66,8 @@ void string_push_char(struct string *str, uint8_t ch) {
 }
 
 void string_memset(struct string *str, uint8_t ch, size_t len) {
+  // Some big number. This would most likely be caused by an overflow, and not some legitimate allocation.
+  assert(len < (1 << 30));
   size_t required = str->len + len;
   string_ensure_capacity(str, required);
   memset(str->content + str->len, ch, len);

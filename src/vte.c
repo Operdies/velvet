@@ -491,6 +491,7 @@ void vte_set_size(struct vte *vte, int w, int h) {
     } else {
       vte_init_primary_screen(vte);
     }
+    vte_invalidate_screen(vte);
   }
 }
 

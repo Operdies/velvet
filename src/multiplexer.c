@@ -306,8 +306,7 @@ void multiplexer_resize(struct multiplexer *m, int rows, int columns) {
     multiplexer_arrange(m);
     struct vte_host *h;
     vec_foreach(h, m->clients) {
-      h->border_dirty = true;
-      vte_invalidate_screen(&h->vte);
+      vte_host_invalidate(h);
     }
   }
 }
