@@ -60,22 +60,25 @@ void multiplexer_arrange(struct multiplexer *m) {
 #define CTRL(x) ((x) & 037)
 #endif
 
-#define client(n) ((struct vte_host *)(vec_nth(m->clients, n)))
+static void vte_host_invalidate(struct vte_host *h) {
+  h->border_dirty = true;
+  vte_invalidate_screen(&h->vte);
+}
 
 static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
   if (c1 != c2) {
     vec_swap(&m->clients, c1, c2);
-    client(c1)->border_dirty = true;
-    client(c2)->border_dirty = true;
+    vte_host_invalidate(vec_nth(m->clients, c1));
+    vte_host_invalidate(vec_nth(m->clients, c2));
   }
 }
 
 static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   if (m->focus != focus) {
-    struct vte_host *current_focus = client(m->focus);
-    struct vte_host *new_focus = client(focus);
-    current_focus->border_dirty = true;
-    new_focus->border_dirty = true;
+    struct vte_host *current_focus = vec_nth(m->clients, m->focus);
+    struct vte_host *new_focus = vec_nth(m->clients, focus);
+    vte_host_invalidate(current_focus);
+    vte_host_invalidate(new_focus);
     m->focus = focus;
 
     if (current_focus->vte.options.focus_reporting) {
@@ -115,7 +118,7 @@ static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
   case 'j': multiplexer_swap_next(m); break;
   case CTRL('k'): multiplexer_focus_previous(m); break;
   case CTRL('j'): multiplexer_focus_next(m); break;
-  case 'c': multiplexer_spawn_process(m, "zsh"); break;
+  case 'c': multiplexer_spawn_process(m, "zsh"); multiplexer_set_focus(m, m->clients.length - 1); break;
   default: return false;
   };
   return true;
