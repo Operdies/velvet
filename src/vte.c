@@ -49,6 +49,27 @@ void vte_send_device_attributes(struct vte *vte) {
   string_push(&vte->pending_output, u8"\x1b[?6c");
 }
 
+void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
+  switch (n) {
+  case VTE_DSR_OPERATING_STATUS: {
+    // no malfunction
+    string_push_csi(&vte->pending_output, INT_SLICE(0), "n");
+  } break;
+  case VTE_DSR_CURSOR_POSITION: {
+      int x, y;
+      struct screen *s = vte_get_current_screen(vte);
+      x = s->cursor.column;
+      y = s->cursor.row;
+      // respect origin mode
+      if (vte->options.origin_mode)
+        y -= s->scroll_top;
+      if (y < 0) y = 0;
+      string_push_csi(&vte->pending_output, INT_SLICE(y + 1, x + 1), "R");
+  } break;
+  default: break;
+  }
+}
+
 static void vte_dispatch_charset(struct vte *vte, uint8_t ch) {
   assert(vte->command_buffer.len > 1);
   string_push_char(&vte->command_buffer, ch);

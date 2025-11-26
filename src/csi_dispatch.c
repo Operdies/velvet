@@ -614,7 +614,11 @@ static bool SGR(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool DSR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DSR"); return false; }
+bool DSR(struct vte *vte, struct csi *csi) {
+  int n = csi->params[0].primary;
+  vte_send_status_report(vte, n);
+  return true;
+}
 
 bool DECDSR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECDSR"); return false; }
 
