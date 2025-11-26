@@ -114,6 +114,17 @@ void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
 
+/* Helper macro for providing a typed
+ * accessor to a generic vector */
+#define vec_member(type, name)                                                                                         \
+  union {                                                                                                              \
+    struct vec name##_vec;                                                                                             \
+    struct {                                                                                                           \
+      size_t n_##name;                                                                                                 \
+      type *name;                                                                                                      \
+    };                                                                                                                 \
+  }
+
 #define vec(type) (struct vec){.element_size = sizeof(type)}
 #define vec_nth(vec, n)                                                        \
   (void *)((char *)(vec).content + ((n) * (vec).element_size))
