@@ -1,1 +1,3 @@
-type filter add vec --child content --child length --child capacity
+type summary add vte_host --summary-string "[${var.rect.client.h}x${var.rect.client.w}] ${var.title%s}"
+
+command script import ./debugging/display.py 

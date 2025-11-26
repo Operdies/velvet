@@ -19,7 +19,6 @@ void io_dispatch(struct io *io, int poll_timeout) {
   constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
 
   static uint8_t readbuffer[BUFSIZE];
-  io->pollfds.element_size = sizeof(struct pollfd);
   vec_clear(&io->pollfds);
   struct io_source *src;
   vec_foreach(src, io->sources) {
@@ -74,7 +73,6 @@ void io_dispatch(struct io *io, int poll_timeout) {
 }
 
 void io_add_source(struct io *io, struct io_source src) {
-  io->sources.element_size = sizeof(src);
   vec_push(&io->sources, &src);
 }
 

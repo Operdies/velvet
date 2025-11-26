@@ -49,6 +49,9 @@ struct vec {
     };
   };
   size_t capacity;
+#ifndef RELEASE_BUILD
+  const char *typename;
+#endif
 };
 
 struct running_hash {
@@ -114,7 +117,12 @@ void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
 
-#define vec(type) (struct vec){.element_size = sizeof(type)}
+#ifdef RELEASE_BUILD
+#define vec(type) .element_size = sizeof(type) }
+#else
+#define vec(type) (struct vec) { .element_size = sizeof(type), .typename = #type }
+#endif
+
 #define vec_nth(vec, n)                                                        \
   (void *)((char *)(vec).content + ((n) * (vec).element_size))
 #define vec_foreach(item, vec)                                                 \
