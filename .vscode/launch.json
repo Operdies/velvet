@@ -7,37 +7,23 @@
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
       "args": [ "zsh" ],
-      "cwd": "${fileDirname}",
+      "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
-      "console": "externalTerminal"
-    },
-    {
-      "name": "Debug lazygit",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
-      "args": [ "lazygit" ],
-      "cwd": "${fileDirname}",
-      "preLaunchTask": "make all",
-      "console": "externalTerminal"
-    },
-    {
-      "name": "nvim quit",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
-      "args": [ "nvim --clean --cmd ':qa'" ],
-      "cwd": "${fileDirname}",
-      "preLaunchTask": "make all",
-      "console": "externalTerminal"
+      "console": "externalTerminal",
+      "initCommands": [
+        "command source ${workspaceFolder}/.lldbinit"
+      ]
     },
     {
       "name": "Debug tests",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/test",
+      "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
-      "cwd": "${fileDirname}",
+      "initCommands": [
+        "command source ${workspaceFolder}/.lldbinit"
+      ]
     }
   ]
 }
