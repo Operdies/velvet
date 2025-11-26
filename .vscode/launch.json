@@ -11,7 +11,7 @@
       "preLaunchTask": "make all",
       "console": "externalTerminal",
       "initCommands": [
-        "command source ${workspaceFolder}/.lldbinit"
+        "command source ${workspaceFolder}/lldb-config"
       ]
     },
     {
@@ -22,7 +22,7 @@
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "initCommands": [
-        "command source ${workspaceFolder}/.lldbinit"
+        "command source ${workspaceFolder}/lldb-config"
       ]
     }
   ]
