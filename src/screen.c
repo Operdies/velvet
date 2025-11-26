@@ -269,6 +269,12 @@ void screen_destroy(struct screen *screen) {
  * and counts on the final screen to be accurate */
 void screen_copy(struct screen *restrict dst, const struct screen *const restrict src, bool wrap) {
   bool fullscreen = !wrap;
+
+  // Preserve the cursor position after the copying operation.
+  // This gets a bit complex because it depends how the content was wrapped or truncated.
+  // The easiest way is to just put the cursor wherever it is when the cursor from the source screen is encountered.
+  struct cursor source_cursor = src->cursor;
+  struct cursor dst_cursor = {.row = -1, .column = -1};
   for (int row = 0; row < src->h; row++) {
     struct screen_row *screen_row = &src->rows[row];
 
@@ -276,6 +282,9 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
     for (; col < src->w && col < screen_row->eol; col++) {
       struct screen_cell c = screen_row->cells[col];
       screen_insert(dst, c, wrap);
+      if (row == source_cursor.row && col == source_cursor.column) {
+        dst_cursor = dst->cursor;
+      }
     }
 
     // If wrapping is not enabled, pad the line with blank cells.
@@ -286,13 +295,23 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
       c.symbol = utf8_blank;
       for (; col < dst->w; col++) {
         screen_insert(dst, c, false);
+        if (row == source_cursor.row && col == source_cursor.column) {
+          dst_cursor = dst->cursor;
+        }
       }
     }
     if (screen_row->has_newline) {
       screen_newline(dst, true);
     }
+    if (row == source_cursor.row && col == source_cursor.column) {
+      dst_cursor = dst->cursor;
+    }
   }
   for (int i = 0; i < dst->h; i++) dst->rows[i].dirty = true;
+
+  if (dst_cursor.column != -1 && dst_cursor.row != -1) {
+    dst->cursor = dst_cursor;
+  }
 }
 
 void screen_backspace(struct screen *g) {
