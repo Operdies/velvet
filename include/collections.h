@@ -118,7 +118,7 @@ void vec_destroy(struct vec *v);
 void *vec_new_element(struct vec *v);
 
 #ifdef RELEASE_BUILD
-#define vec(type) .element_size = sizeof(type) }
+#define vec(type) (struct vec) { .element_size = sizeof(type) }
 #else
 #define vec(type) (struct vec) { .element_size = sizeof(type), .typename = #type }
 #endif
