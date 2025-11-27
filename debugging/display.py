@@ -7,6 +7,12 @@ def num(obj, name):
 def summarize(debugger, type):
     debugger.HandleCommand(f'type summary add -F display.{type}_summary {type}')
 
+def get_string(valobj):
+    deref = valobj.GetPointeeData(0, 0xFF)
+    error = lldb.SBError()
+    strval = deref.GetString(error, 0)
+    return strval
+
 def multiplexer_summary(valobj, internal_dict, options):
     height_val = valobj.GetChildMemberWithName('rows')
     width_val = valobj.GetChildMemberWithName('columns')
@@ -27,7 +33,7 @@ def vec_summary(valobj, x, y):
     raw = valobj.GetNonSyntheticValue()
     prov = vector_SynthProvider(raw, None)
     prov.update()
-    return f'{prov.get_typename()}[{prov.num_children()}]'
+    return f'vec<{prov.typename}>[{prov.num_children()}]'
 
 def screen_row_summary(valobj, x, y):
     dirty = valobj.GetChildMemberWithName('dirty').GetValueAsUnsigned(0)
@@ -98,49 +104,43 @@ class vector_SynthProvider:
         self.o = o
 
     def num_children(self):
-        return self.length.GetValueAsUnsigned(0)
+        return len(self.children)
+
+    def add_child(self, value):
+        index = self.num_children()
+        self.child_lookup[value.name] = index
+        self.children[index] = value
 
     def get_child_index(self, name):
-        try:
-            return int(name.lstrip("[").rstrip("]"))
-        except:
-            return -1
+        if name in self.child_lookup:
+            return self.child_lookup[name]
+        return -1
 
     def get_child_at_index(self, index):
         if index < 0:
             return None
-        if index >= self.num_children():
+        if index >= len(self.children):
             return None
-        try:
-            offset = index * self.element_size.GetValueAsUnsigned(0)
-            return self.content.CreateChildAtOffset(
-                "[" + str(index) + "]", offset, self.element_type
-            )
-        except:
-            return None
-
-    def get_typename(self):
-        return self.typename
-
-    def calc_typename(self):
-        member = self.o.GetChildMemberWithName('typename')
-        error = lldb.SBError()
-        data = member.GetPointeeData(0, 0xFF)
-        strval = data.GetString(error, 0)
-        return strval
+        return self.children[index]
 
     def update(self):
-        try:
-            self.length = self.o.GetChildMemberWithName("length")
-            self.content = self.o.GetChildMemberWithName("content")
-            self.element_size = self.o.GetChildMemberWithName("element_size")
-            self.typename = self.calc_typename()
-            self.element_type = self.o.target.FindFirstType(self.typename)
-        except e:
-            print(f'error updating vector: {e}')
+        self.children = {}
+        self.child_lookup = {}
+        length = self.o.GetChildMemberWithName('length')
+        capacity = self.o.GetChildMemberWithName('capacity')
+        content = self.o.GetChildMemberWithName('content')
+        typename = self.o.GetChildMemberWithName('typename')
 
-    def has_children(self):
-        return True
+        contained_type = get_string(typename)
+        self.typename = contained_type
+        expr = f"""
+        *({contained_type} (*)[{length.GetValueAsUnsigned(0)}])((void*){content.GetValueAsUnsigned(0)});
+        """
+        elements = self.o.CreateValueFromExpression("content", expr)
+
+        self.add_child(length)
+        self.add_child(capacity)
+        self.add_child(elements)
 
 class intslice_SynthProvider:
     def __init__(self, valobj, dict):
