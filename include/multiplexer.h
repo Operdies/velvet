@@ -12,8 +12,7 @@ struct multiplexer {
   struct string draw_buffer;
 };
 
-static const struct multiplexer multiplexer_default = {.hosts = vec(struct vte_host),
-                                                       .prefix = ('x' & 037 /* CTRL-B */)};
+static const struct multiplexer multiplexer_default = {.prefix = ('x' & 037), .hosts = vec(struct vte_host)};
 
 void multiplexer_feed_input(struct multiplexer *m, uint8_t *input, int n);
 void multiplexer_spawn_process(struct multiplexer *m, char *process);

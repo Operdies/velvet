@@ -112,19 +112,43 @@ static void multiplexer_focus_next(struct multiplexer *m) {
 static void multiplexer_focus_previous(struct multiplexer *m) {
   multiplexer_set_focus(m, (m->focus + m->hosts.length - 1) % m->hosts.length);
 }
+
+static void multiplexer_zoom(struct multiplexer *m) {
+  if (m->hosts.length < 2) return;
+  if (m->focus == 0) {
+    multiplexer_swap_clients(m, 0, 1);
+    multiplexer_set_focus(m, 0);
+  } else {
+    multiplexer_swap_clients(m, 0, m->focus);
+    multiplexer_set_focus(m, 0);
+  }
+}
+
+static void multiplexer_spawn_and_focus(struct multiplexer *m, char *cmdline) {
+  multiplexer_spawn_process(m, cmdline);
+  multiplexer_set_focus(m, m->hosts.length - 1);
+}
+
 static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
   switch (ch) {
-  case 'k': multiplexer_swap_previous(m); break;
+  case 'c': multiplexer_spawn_and_focus(m, "zsh"); break;
   case 'j': multiplexer_swap_next(m); break;
-  case CTRL('k'): multiplexer_focus_previous(m); break;
+  case 'k': multiplexer_swap_previous(m); break;
+  case 'v': multiplexer_spawn_and_focus(m, "nvim"); break;
+  case CTRL('q'): nmaster = MIN(10, nmaster + 1); break;
+  case CTRL('e'): nmaster = MAX(0, nmaster - 1); break;
+  case CTRL('g'): multiplexer_zoom(m); break;
+  case CTRL('h'): factor = MAX(0.1f, factor - 0.05f); break;
   case CTRL('j'): multiplexer_focus_next(m); break;
-  case 'c': multiplexer_spawn_process(m, "zsh"); multiplexer_set_focus(m, m->hosts.length - 1); break;
+  case CTRL('k'): multiplexer_focus_previous(m); break;
+  case CTRL('l'): factor = MIN(0.9f, factor + 0.05f); break;
   default: return false;
   };
   return true;
 }
 
 void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
+  const char ESC = 0x1b;
   static struct string writebuffer = {0};
   static struct string pastebuffer = {0};
   static enum stdin_state {
@@ -167,7 +191,7 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
     switch (s) {
     case bracketed_paste: string_push_char(&pastebuffer, ch); break;
     case normal: {
-      if (ch == 0x1b) {
+      if (ch == ESC) {
         s = esc;
       } else if (ch == m->prefix) {
         s = prefix;
@@ -180,14 +204,14 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
         s = csi;
       } else {
         // escape next char
-        string_push_char(&writebuffer, 0x1b);
+        string_push_char(&writebuffer, ESC);
         string_push_char(&writebuffer, ch);
         s = normal;
       }
     } break;
     case csi: {
       if (ch >= 'A' && ch <= 'D' && focused->vte.options.application_mode) {
-        string_push_char(&writebuffer, 0x1b);
+        string_push_char(&writebuffer, ESC);
         string_push_char(&writebuffer, 'O');
         string_push_char(&writebuffer, ch);
       } else if (ch == 'O' || ch == 'I') {
@@ -237,11 +261,11 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
   // TODO: Implement timing mechanism for escapes.
   // For now, flush before return to restore state machine to normal input mode
   if (s == csi) {
-    string_push_char(&writebuffer, 0x1b);
+    string_push_char(&writebuffer, ESC);
     string_push_char(&writebuffer, '[');
     s = normal;
   } else if (s == esc) {
-    string_push_char(&writebuffer, 0x1b);
+    string_push_char(&writebuffer, ESC);
     s = normal;
   }
 
