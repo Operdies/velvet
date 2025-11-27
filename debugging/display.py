@@ -29,6 +29,70 @@ def vec_summary(valobj, x, y):
     prov.update()
     return f'{prov.get_typename()}[{prov.num_children()}]'
 
+def screen_row_summary(valobj, x, y):
+    dirty = valobj.GetChildMemberWithName('dirty').GetValueAsUnsigned(0)
+    eol = valobj.GetChildMemberWithName('eol').GetValueAsUnsigned(0)
+    dirty_string = 'dirty' if dirty else 'clean'
+    return f'{dirty_string}, eol={eol}'
+
+# struct screen {
+#   int w, h;
+#   /* scroll region is local to the screen and is not persisted when the window /
+#    * vte_host is resized or alternate screen is entered */
+#   int scroll_top, scroll_bottom;
+#   struct screen_cell *_cells; // cells[w*h]
+#   struct screen_row *rows;   // rows[h]
+#   struct cursor cursor;
+#   struct cursor saved_cursor;
+# };
+# objective: expand row to reveal `h` rows
+class screen_SynthProvider:
+    def __init__(self, o, dict):
+        self.o = o
+
+    def num_children(self):
+        return len(self.children)
+
+    def add_child(self, index, value):
+        self.child_lookup[value.name] = index
+        self.children[index] = value
+
+    def get_child_index(self, name):
+        if name in self.child_lookup:
+            return self.child_lookup[name]
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0:
+            return None
+        if index >= len(self.children):
+            return None
+        return self.children[index]
+
+    def update(self):
+        self.children = {}
+        self.child_lookup = {}
+        index = 0
+        for chld in self.o.children:
+            if chld.name != 'rows':
+                self.add_child(index, chld)
+                index = index + 1
+
+        rows = self.o.GetChildMemberWithName('rows')
+        rows_address = rows.GetValueAsUnsigned(0)
+        row_type = rows.GetType().GetPointeeType()
+        num_rows = self.o.GetChildMemberWithName('h').GetValueAsUnsigned(0)
+
+        expr = f"""
+        *({row_type.name} (*)[{num_rows}])((void*){rows_address});
+        """
+
+        static_rows = self.o.CreateValueFromExpression("rows", expr)
+        self.add_child(index, static_rows)
+
+    def has_children(self):
+        return True
+
 class vector_SynthProvider:
     def __init__(self, o, dict):
         self.o = o
@@ -101,7 +165,7 @@ class intslice_SynthProvider:
         if index >= self.num_children():
             return None
         try:
-            offset = index * 4
+            offset = index * slice_type.size
             return self.slice.CreateChildAtOffset(
                 "[" + str(index) + "]", offset, slice_type
             )
@@ -123,17 +187,18 @@ def int_slice_summary(valobj, _1, _2):
 def configure_string(debugger):
     summarize(debugger, "string")
 
+
 def configure(debugger):
     configure_multiplexer(debugger)
     configure_string(debugger)
     summarize(debugger, 'int_slice')
+    summarize(debugger, "screen_row")
     debugger.HandleCommand(f'type synthetic add int_slice --python-class display.intslice_SynthProvider')
     debugger.HandleCommand(f'type synthetic add vec --python-class display.vector_SynthProvider')
-    # debugger.HandleCommand('type summary add -F display.vec_summary vec')
+    debugger.HandleCommand(f'type synthetic add screen --python-class display.screen_SynthProvider')
     debugger.HandleCommand(
         'type summary add -F display.vec_summary -e -x "^vec$"'
     )
-    # type synthetic add Foo --python-class Foo_Tools.Foo_Provider
 
 
 def __lldb_init_module(debugger, dict):
