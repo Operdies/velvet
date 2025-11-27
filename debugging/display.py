@@ -58,12 +58,19 @@ class vector_SynthProvider:
     def get_typename(self):
         return self.typename
 
+    def calc_typename(self):
+        member = self.o.GetChildMemberWithName('typename')
+        error = lldb.SBError()
+        data = member.GetPointeeData(0, 0xFF)
+        strval = data.GetString(error, 0)
+        return strval
+
     def update(self):
         try:
             self.length = self.o.GetChildMemberWithName("length")
             self.content = self.o.GetChildMemberWithName("content")
             self.element_size = self.o.GetChildMemberWithName("element_size")
-            self.typename = self.o.GetChildMemberWithName('typename').GetSummary().strip('"')
+            self.typename = self.calc_typename()
             self.element_type = self.o.target.FindFirstType(self.typename)
         except e:
             print(f'error updating vector: {e}')
