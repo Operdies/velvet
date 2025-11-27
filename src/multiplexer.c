@@ -73,6 +73,12 @@ static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
   }
 }
 
+static void host_notify_focus(struct vte_host *host, bool focus) {
+  if (host->pty && host->vte.options.focus_reporting) {
+    string_push_slice(&host->vte.pending_output, focus ? vt_focus_in : vt_focus_out);
+  }
+}
+
 static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   if (m->focus != focus) {
     struct vte_host *current_focus = vec_nth(m->hosts, m->focus);
@@ -80,14 +86,8 @@ static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
     vte_host_invalidate(current_focus);
     vte_host_invalidate(new_focus);
     m->focus = focus;
-
-    if (current_focus->vte.options.focus_reporting) {
-      string_push_slice(&current_focus->vte.pending_output, vt_focus_out);
-    }
-
-    if (new_focus->vte.options.focus_reporting) {
-      string_push_slice(&new_focus->vte.pending_output, vt_focus_in);
-    }
+    host_notify_focus(current_focus, false);
+    host_notify_focus(new_focus, true);
   }
 }
 
@@ -296,6 +296,27 @@ void multiplexer_destroy(struct multiplexer *m) {
   string_destroy(&m->draw_buffer);
 }
 
+static void multiplexer_remove_host(struct multiplexer *m, size_t index) {
+  vec_remove(&m->hosts, index);
+
+  if (m->hosts.length == 0) return;
+
+  // Update focus
+  if (m->focus > index) {
+    // if the focus was after the removed index, decrement it.
+    m->focus -= 1;
+  } else if (m->focus == index) {
+    // if the removed host was focused, keep the same focus index if possible.
+    size_t next_focus = index;
+    // If the removed host was the last host, set the focus to the new last host.
+    if (next_focus >= m->hosts.length)
+      next_focus = m->hosts.length - 1;
+    m->focus = next_focus;
+    struct vte_host *new_focus = vec_nth(m->hosts, next_focus);
+    host_notify_focus(new_focus, true);
+  }
+}
+
 void multiplexer_remove_exited(struct multiplexer *m) {
   int status;
   pid_t pid;
@@ -309,17 +330,11 @@ void multiplexer_remove_exited(struct multiplexer *m) {
           // otherwise the process will be reaped in vte_host_destroy
           h->pid = 0;
           vte_host_destroy(h);
-          vec_remove(&m->hosts, i);
+          multiplexer_remove_host(m, i);
           break;
         }
       }
     }
-  }
-
-  // Ensure focus is within
-  if (m->hosts.length) {
-    if (m->focus >= m->hosts.length) m->focus = m->hosts.length - 1;
-    multiplexer_arrange(m);
   }
 }
 
