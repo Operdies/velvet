@@ -37,8 +37,8 @@ void io_dispatch(struct io *io, int poll_timeout) {
   }
 
   for (size_t i = 0; polled && i < io->pollfds.length; i++) {
-    struct pollfd *pfd = vec_nth(io->pollfds, i);
-    struct io_source *src = vec_nth(io->sources, i);
+    struct pollfd *pfd = vec_nth(&io->pollfds, i);
+    struct io_source *src = vec_nth(&io->sources, i);
     assert(src->on_data);
     if (pfd->revents & POLL_IN) {
       polled--;

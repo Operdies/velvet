@@ -116,6 +116,7 @@ void vec_clear(struct vec *v);
 void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
+void *vec_nth(const struct vec *const v, size_t i);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }
@@ -123,8 +124,6 @@ void *vec_new_element(struct vec *v);
 #define vec(type) (struct vec) { .element_size = sizeof(type), .typename = #type }
 #endif
 
-#define vec_nth(vec, n)                                                        \
-  (void *)((char *)(vec).content + ((n) * (vec).element_size))
 #define vec_foreach(item, vec)                                                 \
   assert(sizeof(*(item)) == (vec).element_size);                               \
   for ((item) = vec.content;                                                   \

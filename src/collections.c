@@ -163,7 +163,7 @@ void vec_destroy(struct vec *v) {
 
 void *vec_new_element(struct vec *v) {
   vec_push(v, nullptr);
-  return vec_nth(*v, v->length - 1);
+  return vec_nth(v, v->length - 1);
 }
 
 void running_hash_append(struct running_hash *hash, uint8_t ch) {
@@ -319,11 +319,18 @@ void vec_swap(struct vec *v, size_t i, size_t j) {
   assert(j < v->length);
   void *tmp = vec_new_element(v);
   v->length--;
-  void *x = vec_nth(*v, i);
-  void *y = vec_nth(*v, j); 
+  void *x = vec_nth(v, i);
+  void *y = vec_nth(v, j); 
   memcpy(tmp, x, v->element_size);
   memcpy(x, y, v->element_size);
   memcpy(y, tmp, v->element_size);
+}
+
+void *vec_nth(const struct vec *const v, size_t i) {
+  assert(i < v->length);
+  const char *const base = v->content;
+  size_t offset = i * v->element_size;
+  return (void*)base + offset;
 }
 
 void hashmap_destroy(struct hashmap *h) {

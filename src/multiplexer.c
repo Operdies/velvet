@@ -36,7 +36,7 @@ void multiplexer_arrange(struct multiplexer *m) {
   }
 
   for (; i < nmaster && i < n; i++) {
-    struct vte_host *p = vec_nth(m->hosts, i);
+    struct vte_host *p = vec_nth(&m->hosts, i);
     struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
     vte_host_resize(p, b);
     my += mh;
@@ -46,7 +46,7 @@ void multiplexer_arrange(struct multiplexer *m) {
   int stack_items_left = ns;
 
   for (; i < n; i++) {
-    struct vte_host *p = vec_nth(m->hosts, i);
+    struct vte_host *p = vec_nth(&m->hosts, i);
     int height = (float)stack_height_left / stack_items_left;
     struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
     vte_host_resize(p, b);
@@ -68,8 +68,8 @@ static void vte_host_invalidate(struct vte_host *h) {
 static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
   if (c1 != c2) {
     vec_swap(&m->hosts, c1, c2);
-    vte_host_invalidate(vec_nth(m->hosts, c1));
-    vte_host_invalidate(vec_nth(m->hosts, c2));
+    vte_host_invalidate(vec_nth(&m->hosts, c1));
+    vte_host_invalidate(vec_nth(&m->hosts, c2));
   }
 }
 
@@ -81,8 +81,8 @@ static void host_notify_focus(struct vte_host *host, bool focus) {
 
 static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   if (m->focus != focus) {
-    struct vte_host *current_focus = vec_nth(m->hosts, m->focus);
-    struct vte_host *new_focus = vec_nth(m->hosts, focus);
+    struct vte_host *current_focus = vec_nth(&m->hosts, m->focus);
+    struct vte_host *new_focus = vec_nth(&m->hosts, focus);
     vte_host_invalidate(current_focus);
     vte_host_invalidate(new_focus);
     m->focus = focus;
@@ -167,7 +167,7 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
   string_clear(&writebuffer);
 
   for (int i = 0; i < n; i++) {
-    struct vte_host *focused = vec_nth(m->hosts, m->focus);
+    struct vte_host *focused = vec_nth(&m->hosts, m->focus);
     uint8_t ch = buf[i];
     running_hash_append(&running_hash, ch);
     if (s == normal && running_hash_match(running_hash, paste_start, 6)) {
@@ -256,7 +256,7 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
     } break;
     }
   }
-  struct vte_host *focused = vec_nth(m->hosts, m->focus);
+  struct vte_host *focused = vec_nth(&m->hosts, m->focus);
 
   // TODO: Implement timing mechanism for escapes.
   // For now, flush before return to restore state machine to normal input mode
@@ -312,7 +312,7 @@ static void multiplexer_remove_host(struct multiplexer *m, size_t index) {
     if (next_focus >= m->hosts.length)
       next_focus = m->hosts.length - 1;
     m->focus = next_focus;
-    struct vte_host *new_focus = vec_nth(m->hosts, next_focus);
+    struct vte_host *new_focus = vec_nth(&m->hosts, next_focus);
     host_notify_focus(new_focus, true);
   }
 }
@@ -324,7 +324,7 @@ void multiplexer_remove_exited(struct multiplexer *m) {
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     if (WIFEXITED(status)) {
       for (size_t i = 0; i < m->hosts.length; i++) {
-        struct vte_host *h = vec_nth(m->hosts, i);
+        struct vte_host *h = vec_nth(&m->hosts, i);
         if (h->pid == pid) {
           // zero the pid to indicate the process exited.
           // otherwise the process will be reaped in vte_host_destroy
@@ -354,14 +354,14 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
   if (m->hosts.length == 0) return;
   static enum cursor_style current_cursor_style = 0;
   struct string *draw_buffer = &m->draw_buffer;
-  struct vte_host *focused = vec_nth(m->hosts, m->focus);
+  struct vte_host *focused = vec_nth(&m->hosts, m->focus);
 
   // if the host supports synchronized rendering, make use of it to ensure
   // the full frame is written before it is rendered.
   string_push_slice(draw_buffer, vt_synchronized_rendering_on);
   string_push_slice(draw_buffer, vt_hide_cursor);
   for (size_t i = 0; i < m->hosts.length; i++) {
-    struct vte_host *h = vec_nth(m->hosts, i);
+    struct vte_host *h = vec_nth(&m->hosts, i);
     vte_host_update_cwd(h);
     vte_host_draw(h, false, draw_buffer);
     vte_host_draw_border(h, draw_buffer, i == m->focus);
