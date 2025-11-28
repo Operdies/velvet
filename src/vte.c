@@ -493,9 +493,33 @@ void vte_set_size(struct vte *vte, int w, int h) {
   }
 }
 
+static bool is_ascii_printable(uint8_t ch) {
+  return ch >= 0x20 && ch < 0x80;
+}
+
+static int consume_printables(struct vte *vte, int i, uint8_t *buf, int n) {
+  struct screen *s = vte_get_current_screen(vte);
+  struct screen_cell_style style = s->cursor.brush;
+  bool wrap = vte->options.auto_wrap_mode;
+  struct screen_cell c = {.style = style };
+  for (; is_ascii_printable(buf[i]) && i < n; i++) {
+    c.symbol.utf8[0] = buf[i];
+    screen_insert(s, c, wrap);
+  }
+  vte->pending_symbol = (struct utf8){0};
+  vte->previous_symbol = c.symbol;
+  return i;
+}
+
 void vte_process(struct vte *vte, uint8_t *buf, int n) {
-  assert(vte->rows); assert(vte->columns);
+  assert(vte->rows);
+  assert(vte->columns);
   for (int i = 0; i < n; i++) {
+    // performance optimization for bulk processing ascii characters, which is fairly common
+    if (vte->state == vte_ground && is_ascii_printable(buf[i])) {
+      i = consume_printables(vte, i, buf, n);
+      if (i >= n) break;
+    }
     uint8_t ch = buf[i];
     switch (vte->state) {
     case vte_ground: vte_dispatch_ground(vte, ch); break;
