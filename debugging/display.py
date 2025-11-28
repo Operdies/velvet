@@ -89,9 +89,7 @@ class screen_SynthProvider:
         row_type = rows.GetType().GetPointeeType()
         num_rows = self.o.GetChildMemberWithName('h').GetValueAsUnsigned(0)
 
-        expr = f"""
-        *({row_type.name} (*)[{num_rows}])((void*){rows_address});
-        """
+        expr = f'*({row_type.name} (*)[{num_rows}])((void*){rows_address})'
 
         static_rows = self.o.CreateValueFromExpression("rows", expr)
         self.add_child(index, static_rows)
@@ -132,9 +130,7 @@ class string_SynthProvider:
 
         length_num = length.GetValueAsUnsigned(0)
         contained_type = "uint8_t";
-        expr = f"""
-        *({contained_type} (*)[{length_num}])((void*){content.GetValueAsUnsigned(0)});
-        """
+        expr = f'*({contained_type} (*)[{length_num}])((void*){content.GetValueAsUnsigned(0)})'
         elements = self.o.CreateValueFromExpression(f"u8[{length_num}]", expr)
 
         self.add_child(length)
@@ -176,9 +172,7 @@ class vector_SynthProvider:
 
         contained_type = get_string(typename)
         self.typename = contained_type
-        expr = f"""
-        *({contained_type} (*)[{length.GetValueAsUnsigned(0)}])((void*){content.GetValueAsUnsigned(0)});
-        """
+        expr = f'*({contained_type} (*)[{length.GetValueAsUnsigned(0)}])((void*){content.GetValueAsUnsigned(0)})'
         elements = self.o.CreateValueFromExpression("content", expr)
 
         self.add_child(length)

@@ -1,5 +1,5 @@
-#ifndef screen_H
-#define screen_H
+#ifndef SCREEN_H
+#define SCREEN_H
 
 #include "text.h"
 
@@ -139,4 +139,4 @@ void screen_scroll_content_up(struct screen *g, int count);
 void screen_scroll_content_down(struct screen *g, int count);
 void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom);
 void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
-#endif /*  screen_H */
+#endif /*  SCREEN_H */
