@@ -226,16 +226,52 @@ def int_slice_summary(valobj, _1, _2):
     prov = intslice_SynthProvider(valobj, None)
     return "size=" + str(prov.num_children())
 
+def u8_slice_summary(valobj, _1, _2):
+    o2 = valobj.GetNonSyntheticValue()
+    n = o2.GetChildMemberWithName('len').GetValueAsUnsigned(0)
+    ptr = o2.GetChildMemberWithName('content')
+
+    def escape_control_chars(s: str) -> str:
+        table = { }
+        for i in range(0x20):
+            table[i] = '^' + chr(i+64)
+        for i in range(0x80, 0x100):
+            table[i] = f"\\x{i:02x}"
+        table[0x1b] = '\x1b'
+        table[0x0d] = '\\r'
+        table[0x0a] = '\\n'
+        table[9] = '\\t'
+        table[127] = '<DEL>'
+        table[8] = '<BS>'
+
+        s = s.translate(table)
+        import re
+        # replace 5 or more consecutive spaces with <spaces:x>
+        s = re.sub(r" {5,}", lambda m: f"<spaces:{len(m.group(0))}>", s)
+        # replace remaining spaces with ␠ symbol
+        s = re.sub(r" ", lambda m: "␠" * len(m.group(0)), s)
+        s = s.replace("\x1b[", " CSI ").replace("\x1b]", " OSC ").replace("\x1b", " ESC ").strip()
+        return s
+
+
+    bytes = ptr.GetPointeeData(0, n).uint8
+    summary = ""
+    for i in range(n):
+        summary += chr(bytes[i])
+
+    summary = escape_control_chars(summary)
+
+    return f'u8[{n}] "{summary}"'
 
 def configure_string(debugger):
     summarize(debugger, "string")
-
 
 def configure(debugger):
     configure_multiplexer(debugger)
     configure_string(debugger)
     summarize(debugger, 'int_slice')
     summarize(debugger, "screen_row")
+    summarize(debugger, 'u8_slice')
     debugger.HandleCommand(f'type synthetic add int_slice --python-class display.intslice_SynthProvider')
     debugger.HandleCommand(f'type synthetic add vec --python-class display.vector_SynthProvider')
     debugger.HandleCommand(f'type synthetic add string --python-class display.string_SynthProvider')
