@@ -1,4 +1,5 @@
 #include <signal.h>
+#include <string.h>
 #include <utils.h>
 #include <vte_host.h>
 #include <collections.h>
@@ -105,8 +106,36 @@ static void render_func(const uint8_t *const buffer, size_t n, void *context) {
   write(fd, buffer, n);
 }
 
+static void add_bindir_to_path(char *arg0) {
+  if (!arg0 || !*arg0) return;
+  char *path_var = getenv("PATH");
+  if (!path_var) return;
+
+  struct string new_path = {0};
+
+  bool is_abs = *arg0 == '/';
+
+  if (!is_abs) {
+    char bindir[1024] = {0};
+    getcwd(bindir, sizeof(bindir) - 1);
+    string_push(&new_path, (uint8_t *)bindir);
+    string_push_char(&new_path, '/');
+  }
+
+  char *last_slash = strrchr(arg0, '/');
+  if (last_slash)
+    string_push_range(&new_path, (uint8_t*)arg0, last_slash - arg0);
+
+  string_push_char(&new_path, ':');
+  string_push(&new_path, (uint8_t*)path_var);
+  string_push_char(&new_path, 0);
+  setenv("PATH", (char*)new_path.content, true);
+  string_destroy(&new_path);
+}
+
 int main(int argc, char **argv) {
   int rows, columns;
+  add_bindir_to_path(argv[0]);
   platform_get_winsize(&rows, &columns);
 
   if (rows == 0 || columns == 0) {
