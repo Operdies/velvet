@@ -314,6 +314,14 @@ bool hashmap_remove(struct hashmap *h, uint32_t key, void **removed) {
 #undef prev
 }
 
+struct string_slice string_slice_from_cstr(const char *const str) {
+  return (struct string_slice) { .len = strlen(str), .content = (uint8_t*)str };
+}
+
+struct string_slice string_as_slice(struct string *s) {
+  return (struct string_slice) { .len = s->len, .content = s->content };
+}
+
 void vec_swap(struct vec *v, size_t i, size_t j) {
   assert(i < v->length);
   assert(j < v->length);

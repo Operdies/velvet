@@ -27,7 +27,7 @@ struct string {
 };
 
 struct string_slice {
-  size_t len;
+  const size_t len;
   const uint8_t *const content;
 };
 
@@ -117,6 +117,8 @@ void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
 void *vec_nth(const struct vec *const v, size_t i);
+struct string_slice string_as_slice(struct string *s);
+struct string_slice string_slice_from_cstr(const char *const str);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }
