@@ -7,6 +7,7 @@
 #include <io.h>
 #include <multiplexer.h>
 #include "platform.h"
+#include "velvet_input.h"
 
 static int signal_write;
 static int signal_read;
@@ -43,6 +44,7 @@ static void install_signal_handlers(void) {
 
 struct app_context {
   struct multiplexer multiplexer;
+  struct velvet_input input_handler;
   bool quit;
   char *quit_reason;
 };
@@ -81,13 +83,14 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
   }
 }
 
+
 static void stdin_callback(struct io_source *src, struct u8_slice str) {
   struct app_context *m = src->data;
   if (str.len == 0) {
     m->quit = true;
     return;
   }
-  multiplexer_feed_input(&m->multiplexer, str);
+  velvet_input_process(&m->input_handler, str);
 }
 
 static void read_callback(struct io_source *src, struct u8_slice str) {
@@ -147,6 +150,7 @@ int main(int argc, char **argv) {
   install_signal_handlers();
 
   struct app_context app = {.multiplexer = multiplexer_default};
+  app.input_handler = (struct velvet_input) { .m = &app.multiplexer };
   multiplexer_resize(&app.multiplexer, ws);
 
   if (argc < 2) {
