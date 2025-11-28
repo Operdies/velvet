@@ -26,8 +26,8 @@ struct string {
   size_t len, cap;
 };
 
-struct string_slice {
-  size_t len;
+struct u8_slice {
+  const size_t len;
   const uint8_t *const content;
 };
 
@@ -94,7 +94,7 @@ bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
 bool running_hash_match(struct running_hash running, struct running_hash item,
                         int count);
 void running_hash_append(struct running_hash *hash, uint8_t ch);
-void string_push_slice(struct string *str, struct string_slice slice);
+void string_push_slice(struct string *str, struct u8_slice slice);
 void string_push_range(struct string *str, const uint8_t *const src,
                        size_t len);
 void string_push(struct string *str, const uint8_t *const src);
@@ -117,6 +117,8 @@ void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
 void *vec_nth(const struct vec *const v, size_t i);
+struct u8_slice string_as_u8_slice(struct string *s);
+struct u8_slice u8_slice_from_cstr(const char *const str);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }

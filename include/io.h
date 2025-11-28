@@ -4,7 +4,7 @@
 #include <poll.h>
 
 struct io_source;
-typedef void (*io_callback)(struct io_source *src, uint8_t *buffer, int n);
+typedef void (*io_callback)(struct io_source *src, struct u8_slice str);
 
 struct io_source {
   /* file descriptor */

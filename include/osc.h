@@ -42,7 +42,7 @@ struct osc {
   int n_parameters;
 };
 
-int osc_parse(struct osc *c, const uint8_t *buffer, int len, const uint8_t *st);
+int osc_parse(struct osc *c, struct u8_slice str, const uint8_t *st);
 bool osc_dispatch(struct vte *vte, struct osc *osc);
 
 #endif /*  OSC_H */

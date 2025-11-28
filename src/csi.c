@@ -86,15 +86,15 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
   return true;
 }
 
-int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
-  if (len < 1) {
+int csi_parse(struct csi *c, struct u8_slice str) {
+  if (str.len < 1) {
     c->state = CSI_REJECT;
     return 0;
   }
-  bool is_sgr = buffer[len - 1] == 'm';
-  int i = 0;
-  for (; i < len;) {
-    char ch = buffer[i];
+  bool is_sgr = str.content[str.len - 1] == 'm';
+  size_t i = 0;
+  for (; i < str.len;) {
+    char ch = str.content[i];
     switch (c->state) {
     case CSI_GROUND: {
       c->state = PARAMETER(ch) ? CSI_PARAMETER : INTERMEDIATE(ch) ? CSI_LEADING : ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
@@ -109,14 +109,14 @@ int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
       struct csi_param *param = &c->params[c->n_params];
       c->n_params++;
       int read;
-      if (!csi_read_parameter(param, buffer + i, &read, is_sgr)) {
+      if (!csi_read_parameter(param, str.content + i, &read, is_sgr)) {
         logmsg("Reject CSI: Error parsing parameter");
         c->state = CSI_REJECT;
         return i + read;
       }
       i += read;
 
-      ch = buffer[i];
+      ch = str.content[i];
       c->state = PARAMETER(ch)      ? CSI_PARAMETER
                  : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
                  : ACCEPT(ch)       ? CSI_ACCEPT
@@ -124,7 +124,7 @@ int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
     } break;
     case CSI_LEADING: {
       c->leading = ch;
-      ch = buffer[++i];
+      ch = str.content[++i];
       c->state = PARAMETER(ch)      ? CSI_PARAMETER
                  : INTERMEDIATE(ch) ? CSI_INTERMEDIATE
                  : ACCEPT(ch)       ? CSI_ACCEPT
@@ -132,7 +132,7 @@ int csi_parse(struct csi *c, const uint8_t *buffer, int len) {
     } break;
     case CSI_INTERMEDIATE: {
       c->intermediate = ch;
-      ch = buffer[++i];
+      ch = str.content[++i];
       c->state = ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
     } break;
     case CSI_ACCEPT: {

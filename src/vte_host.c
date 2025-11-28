@@ -292,10 +292,10 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
   apply_style(&style_default, b);
 }
 
-void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n) {
+void vte_host_process_output(struct vte_host *vte_host, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
   vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
-  vte_process(&vte_host->vte, buf, n);
+  vte_process(&vte_host->vte, str);
   string_flush(&vte_host->vte.pending_output, vte_host->pty, nullptr);
 }
 

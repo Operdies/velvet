@@ -14,7 +14,7 @@ static inline void disable_focus_reporting(void);
 struct termios original_terminfo;
 struct termios raw_term;
 
-static int write_slice(int fd, struct string_slice slice) { return write(fd, slice.content, slice.len); }
+static int write_slice(int fd, struct u8_slice slice) { return write(fd, slice.content, slice.len); }
 
 void leave_alternate_screen(void) {
   write_slice(STDOUT_FILENO, vt_leave_alternate_screen);

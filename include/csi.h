@@ -29,7 +29,7 @@ struct csi {
   uint8_t final;
 };
 
-int csi_parse(struct csi *c, const uint8_t *buffer, int len);
+int csi_parse(struct csi *c, struct u8_slice str);
 bool csi_dispatch(struct vte *vte, struct csi *csi);
 
 #endif /*  CSI_H */

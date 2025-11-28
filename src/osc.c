@@ -121,27 +121,27 @@ static int osc_parse_parameters(struct osc *o, const uint8_t *buffer, int len) {
 // The terminator does not affect semantics of the command,
 // but should be stored for queries so the response can use the same terminator used by the query as this is likely what
 // the client expects.
-int osc_parse(struct osc *o, const uint8_t *buffer, int len, const uint8_t *st) {
+int osc_parse(struct osc *o, struct u8_slice str, const uint8_t *st) {
   int ps = 0;
   o->st = st;
 
-  int i = 0;
-  for (; i < len && isdigit(buffer[i]); i++) {
+  size_t i = 0;
+  for (; i < str.len && isdigit(str.content[i]); i++) {
     ps *= 10;
-    ps += buffer[i] - '0';
+    ps += str.content[i] - '0';
   }
 
   o->ps = ps;
 
   if (ps == 8) {
     // OSC 8 can have optional parameters and thus use ane extra semicolon.
-    i += osc_parse_parameters(o, buffer + i, len - i);
+    i += osc_parse_parameters(o, str.content + i, str.len - i);
     if (o->state == OSC_REJECT) {
       return i;
     }
   }
 
-  if (buffer[i] != ';') {
+  if (str.content[i] != ';') {
     // These particular OSC commands to not require a Pt argument
     if (ps == 110 || ps == 111 || ps == 112) {
       o->state = OSC_ACCEPT;
@@ -152,9 +152,9 @@ int osc_parse(struct osc *o, const uint8_t *buffer, int len, const uint8_t *st) 
     return i;
   }
   i++;
-  const uint8_t *pt = &buffer[i];
+  const uint8_t *pt = &str.content[i];
   o->state = OSC_ACCEPT;
-  o->pt = (struct osc_pt){.len = len - i, .text = pt};
+  o->pt = (struct osc_pt){.len = str.len - i, .text = pt};
 
   return i;
 }

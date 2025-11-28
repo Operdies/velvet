@@ -47,14 +47,14 @@ struct app_context {
   char *quit_reason;
 };
 
-static void signal_callback(struct io_source *src, uint8_t *buffer, int n) {
+static void signal_callback(struct io_source *src, struct u8_slice str) {
   struct app_context *app = src->data;
   // 1. Dispatch any pending signals
   bool did_resize = false;
   bool did_sigchld = false;
-  int *signals = (int *)buffer;
-  for (int i = 0; i < (int)(n / sizeof(int)); i++) {
-    int signal = signals[i];
+  struct int_slice signals = { .content = (int*)str.content, .n = str.len / 4 };
+  for (int i = 0; i < signals.n; i++) {
+    int signal = signals.content[i];
     switch (signal) {
     case SIGTERM: {
       app->quit = true;
@@ -81,29 +81,29 @@ static void signal_callback(struct io_source *src, uint8_t *buffer, int n) {
   }
 }
 
-static void stdin_callback(struct io_source *src, uint8_t *buffer, int n) {
+static void stdin_callback(struct io_source *src, struct u8_slice str) {
   struct app_context *m = src->data;
-  if (n == 0) {
+  if (str.len == 0) {
     m->quit = true;
     return;
   }
-  multiplexer_feed_input(&m->multiplexer, buffer, n);
+  multiplexer_feed_input(&m->multiplexer, str);
 }
 
-static void read_callback(struct io_source *src, uint8_t *buffer, int n) {
+static void read_callback(struct io_source *src, struct u8_slice str) {
   struct app_context *m = src->data;
   struct vte_host *vte;
   vec_foreach(vte, m->multiplexer.hosts) {
     if (vte->pty == src->fd) {
-      vte_host_process_output(vte, buffer, n);
+      vte_host_process_output(vte, str);
       break;
     }
   }
 }
 
-static void render_func(const uint8_t *const buffer, size_t n, void *context) {
+static void render_func(struct u8_slice str, void *context) {
   int fd = *(int*)context;
-  write(fd, buffer, n);
+  write(fd, str.content, str.len);
 }
 
 static void add_bindir_to_path(char *arg0) {

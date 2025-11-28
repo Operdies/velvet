@@ -46,7 +46,7 @@ void string_push_csi(struct string *str, struct int_slice params, const char *co
   string_push(str, (uint8_t *)c);
 }
 
-void string_push_slice(struct string *str, struct string_slice slice) {
+void string_push_slice(struct string *str, struct u8_slice slice) {
   string_push_range(str, slice.content, slice.len);
 }
 
@@ -312,6 +312,14 @@ bool hashmap_remove(struct hashmap *h, uint32_t key, void **removed) {
   return false;
 #undef next
 #undef prev
+}
+
+struct u8_slice u8_slice_from_cstr(const char *const str) {
+  return (struct u8_slice) { .len = strlen(str), .content = (uint8_t*)str };
+}
+
+struct u8_slice string_as_u8_slice(struct string *s) {
+  return (struct u8_slice) { .len = s->len, .content = s->content };
 }
 
 void vec_swap(struct vec *v, size_t i, size_t j) {

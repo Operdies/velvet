@@ -130,14 +130,16 @@ class string_SynthProvider:
         capacity = self.o.GetChildMemberWithName('cap')
         content = self.o.GetChildMemberWithName('content')
 
+        length_num = length.GetValueAsUnsigned(0)
         contained_type = "uint8_t";
         expr = f"""
-        *({contained_type} (*)[{length.GetValueAsUnsigned(0)}])((void*){content.GetValueAsUnsigned(0)});
+        *({contained_type} (*)[{length_num}])((void*){content.GetValueAsUnsigned(0)});
         """
-        elements = self.o.CreateValueFromExpression("content", expr)
+        elements = self.o.CreateValueFromExpression(f"u8[{length_num}]", expr)
 
         self.add_child(length)
-        self.add_child(capacity)
+        if (capacity != None):
+            self.add_child(capacity)
         self.add_child(elements)
 
 class vector_SynthProvider:
@@ -237,6 +239,7 @@ def configure(debugger):
     debugger.HandleCommand(f'type synthetic add int_slice --python-class display.intslice_SynthProvider')
     debugger.HandleCommand(f'type synthetic add vec --python-class display.vector_SynthProvider')
     debugger.HandleCommand(f'type synthetic add string --python-class display.string_SynthProvider')
+    debugger.HandleCommand(f'type synthetic add u8_slice --python-class display.string_SynthProvider')
     debugger.HandleCommand(f'type synthetic add screen --python-class display.screen_SynthProvider')
     debugger.HandleCommand(
         'type summary add -F display.vec_summary -e -x "^vec$"'

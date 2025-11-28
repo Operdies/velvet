@@ -173,7 +173,8 @@ static void assert_screen_equals(struct dumb_screen *expected, const struct scre
 
 static void test_screen_input_output(const char *const outer_test_name, const char *const input, screen_5x8 expected1) {
   char testname2[1024];
-  const char *reset = "\x1b[2J\x1b[1;1H";
+  const uint8_t *reset = u8"\x1b[2J\x1b[1;1H";
+  struct u8_slice reset_slice = { .content = reset, .len = strlen((char*)reset) };
   struct dumb_screen *expected = make_dumb_screen(5, 8, expected1);
 
   struct vte_host p = {.vte = vte_default};
@@ -182,13 +183,13 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   {
     string_clear(&output);
     // 1. Write the input and verify the output
-    vte_host_process_output(&p, (uint8_t *)input, strlen(input));
+    vte_host_process_output(&p, u8_slice_from_cstr(input));
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
     assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
-    vte_host_process_output(&p, output.content, output.len);
+    vte_host_process_output(&p, string_as_u8_slice(&output));
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
@@ -197,7 +198,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   {
     // 2. Clear the screen ensuring it is clean
     string_clear(&output);
-    vte_host_process_output(&p, (uint8_t *)reset, strlen(reset));
+    vte_host_process_output(&p, reset_slice);
     vte_host_draw(&p, false, &output);
     struct dumb_screen *cleared = make_dumb_screen(5, 8, (screen_5x8){0});
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
@@ -206,7 +207,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
     // See 1.b
-    vte_host_process_output(&p, output.content, output.len);
+    vte_host_process_output(&p, string_as_u8_slice(&output));
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
@@ -218,14 +219,14 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   {
     // 3. Redraw the screen and verify output
     string_clear(&output);
-    vte_host_process_output(&p, (uint8_t *)reset, strlen(reset));
-    vte_host_process_output(&p, (uint8_t *)input, strlen(input));
+    vte_host_process_output(&p, reset_slice);
+    vte_host_process_output(&p, u8_slice_from_cstr(input));
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
     assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
 
     // See 1.b
-    vte_host_process_output(&p, output.content, output.len);
+    vte_host_process_output(&p, string_as_u8_slice(&output));
     string_clear(&output);
     vte_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
@@ -243,7 +244,7 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
 
   struct vte_host p = {.vte = vte_default};
   vte_host_resize(&p, bsmall);
-  vte_host_process_output(&p, (uint8_t *)input, strlen(input));
+  vte_host_process_output(&p, u8_slice_from_cstr(input));
   struct string output = {0};
   {
     string_clear(&output);
@@ -275,7 +276,7 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
 
   struct vte_host p = {.vte = vte_default};
   vte_host_resize(&p, blarge);
-  vte_host_process_output(&p, (uint8_t *)input, strlen(input));
+  vte_host_process_output(&p, u8_slice_from_cstr(input));
   struct string output = {0};
   {
     string_clear(&output);
@@ -761,11 +762,12 @@ void assert_csi_equals(const char *testname, struct csi *expected, struct csi *a
     assert_csi_param_equals(testname, exp, act, i);
   }
 }
+
 void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected) {
-  int n = strlen((char *)input);
+  struct u8_slice input_slice = u8_slice_from_cstr((char *)input);
   struct csi actual = {0};
-  int count = csi_parse(&actual, input, n);
-  if (expected.state == CSI_ACCEPT) assert(count == n);
+  size_t count = csi_parse(&actual, input_slice);
+  if (expected.state == CSI_ACCEPT) assert(count == input_slice.len);
   assert_csi_equals(testname, &expected, &actual);
 }
 

@@ -171,13 +171,13 @@ enum vte_dsr {
 };
 
 
-void vte_process(struct vte *vte, unsigned char *buf, int n);
+void vte_process(struct vte *vte, struct u8_slice str);
 void vte_destroy(struct vte *vte);
 void vte_send_device_attributes(struct vte *vte);
 struct screen *vte_get_current_screen(struct vte *vte);
 void vte_enter_primary_screen(struct vte *vte);
 void vte_enter_alternate_screen(struct vte *vte);
-void vte_set_size(struct vte *vte, int w, int h);
+void vte_set_size(struct vte *vte, int columns, int rows);
 void vte_invalidate_screen(struct vte *vte);
 void vte_send_status_report(struct vte *vte, enum vte_dsr n);
 

@@ -147,7 +147,7 @@ static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
   return true;
 }
 
-void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
+void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
   const char ESC = 0x1b;
   static struct string writebuffer = {0};
   static struct string pastebuffer = {0};
@@ -166,9 +166,9 @@ void multiplexer_feed_input(struct multiplexer *m, uint8_t *buf, int n) {
 
   string_clear(&writebuffer);
 
-  for (int i = 0; i < n; i++) {
+  for (size_t i = 0; i < str.len; i++) {
     struct vte_host *focused = vec_nth(&m->hosts, m->focus);
-    uint8_t ch = buf[i];
+    uint8_t ch = str.content[i];
     running_hash_append(&running_hash, ch);
     if (s == normal && running_hash_match(running_hash, paste_start, 6)) {
       writebuffer.len -= 5;
@@ -386,6 +386,7 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
   if (focused->vte.options.cursor.visible) string_push_slice(draw_buffer, vt_show_cursor);
   string_push_slice(draw_buffer, vt_synchronized_rendering_off);
 
-  render_func(m->draw_buffer.content, m->draw_buffer.len, context);
+  struct u8_slice s = { .content = m->draw_buffer.content, .len = m->draw_buffer.len };
+  render_func(s, context);
   string_clear(&m->draw_buffer);
 }

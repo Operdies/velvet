@@ -66,7 +66,8 @@ void io_dispatch(struct io *io, int poll_timeout) {
           // Unexpected error; crash hard to make the error very visible, then determine how it should be handled.
           die("read:");
         }
-        src->on_data(src, readbuffer, n);
+        struct u8_slice s = { .len = n, .content = readbuffer };
+        src->on_data(src, s);
       } while (n > 0 && num_reads < MAX_IT && fd_hot(pfd->fd));
     }
   }

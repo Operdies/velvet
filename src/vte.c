@@ -214,7 +214,8 @@ static void ground_reject(struct vte *vte) {
   struct screen *g = vte_get_current_screen(vte);
   screen_insert(g, replacement, vte->options.auto_wrap_mode);
   uint8_t n = utf8_length(copy);
-  if (n > 1) vte_process(vte, &copy.utf8[1], n - 1);
+  struct u8_slice s = { .len = n - 1, .content = &copy.utf8[1] };
+  if (n > 1) vte_process(vte, s);
 }
 
 static void ground_process_shift_in(struct vte *vte, uint8_t ch) {
@@ -392,7 +393,7 @@ static void vte_dispatch_csi(struct vte *vte, uint8_t ch) {
     // Strip the leading escape sequence
     uint8_t *buffer = vte->command_buffer.content + 2;
     int len = vte->command_buffer.len - 2;
-    int parsed = csi_parse(&csi, buffer, len);
+    int parsed = csi_parse(&csi, (struct u8_slice) { .len = len, .content = buffer });
     if (csi.state == CSI_ACCEPT) {
       assert(len == parsed);
       csi_dispatch(vte, &csi);
@@ -419,7 +420,7 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
     uint8_t *buffer = vte->command_buffer.content + 2;
     int len = vte->command_buffer.len - strlen((char*)st) - 2;
     struct osc osc = {0};
-    osc_parse(&osc, buffer, len, (uint8_t*)st);
+    osc_parse(&osc, (struct u8_slice) { .len = len, .content = buffer }, (uint8_t*)st);
     if (osc.state == OSC_ACCEPT) {
       osc_dispatch(vte, &osc);
     }
@@ -497,13 +498,13 @@ static bool is_ascii_printable(uint8_t ch) {
   return ch >= 0x20 && ch < 0x80;
 }
 
-static int consume_printables(struct vte *vte, int i, uint8_t *buf, int n) {
+static int consume_printables(struct vte *vte, size_t i, struct u8_slice str) {
   struct screen *s = vte_get_current_screen(vte);
   struct screen_cell_style style = s->cursor.brush;
   bool wrap = vte->options.auto_wrap_mode;
   struct screen_cell c = {.style = style };
-  for (; is_ascii_printable(buf[i]) && i < n; i++) {
-    c.symbol.utf8[0] = buf[i];
+  for (; is_ascii_printable(str.content[i]) && i < str.len; i++) {
+    c.symbol.utf8[0] = str.content[i];
     screen_insert(s, c, wrap);
   }
   vte->pending_symbol = (struct utf8){0};
@@ -511,16 +512,16 @@ static int consume_printables(struct vte *vte, int i, uint8_t *buf, int n) {
   return i;
 }
 
-void vte_process(struct vte *vte, uint8_t *buf, int n) {
+void vte_process(struct vte *vte, struct u8_slice str) {
   assert(vte->rows);
   assert(vte->columns);
-  for (int i = 0; i < n; i++) {
+  for (size_t i = 0; i < str.len; i++) {
     // performance optimization for bulk processing ascii characters, which is fairly common
-    if (vte->state == vte_ground && is_ascii_printable(buf[i])) {
-      i = consume_printables(vte, i, buf, n);
-      if (i >= n) break;
+    if (vte->state == vte_ground && is_ascii_printable(str.content[i])) {
+      i = consume_printables(vte, i, str);
+      if (i >= str.len) break;
     }
-    uint8_t ch = buf[i];
+    uint8_t ch = str.content[i];
     switch (vte->state) {
     case vte_ground: vte_dispatch_ground(vte, ch); break;
     case vte_utf8: vte_dispatch_utf8(vte, ch); break;

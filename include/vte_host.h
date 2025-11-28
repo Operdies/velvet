@@ -30,7 +30,7 @@ extern struct vte_host *focused;
 void vte_host_destroy(struct vte_host *vte_host);
 void vte_host_resize(struct vte_host *vte_host, struct bounds outer);
 void vte_host_start(struct vte_host *vte_host);
-void vte_host_process_output(struct vte_host *vte_host, uint8_t *buf, int n);
+void vte_host_process_output(struct vte_host *vte_host, struct u8_slice str);
 void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *buffer);
 void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused);
 void vte_host_update_cwd(struct vte_host *p);
