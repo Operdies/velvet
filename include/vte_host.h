@@ -5,7 +5,7 @@
 #include "collections.h"
 
 struct bounds {
-  int x, y, w, h;
+  int x, y, w, h, x_pixel, y_pixel;
 };
 
 struct vte_host {

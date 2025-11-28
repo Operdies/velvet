@@ -75,9 +75,9 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
 
   if (did_sigchld) multiplexer_remove_exited(&app->multiplexer);
   if (did_resize) {
-    int rows, columns;
-    platform_get_winsize(&rows, &columns);
-    multiplexer_resize(&app->multiplexer, rows, columns);
+    struct platform_winsize w = {0};
+    platform_get_winsize(&w);
+    multiplexer_resize(&app->multiplexer, w);
   }
 }
 
@@ -134,11 +134,11 @@ static void add_bindir_to_path(char *arg0) {
 }
 
 int main(int argc, char **argv) {
-  int rows, columns;
+  struct platform_winsize ws = {0};
   add_bindir_to_path(argv[0]);
-  platform_get_winsize(&rows, &columns);
+  platform_get_winsize(&ws);
 
-  if (rows == 0 || columns == 0) {
+  if (ws.rows == 0 || ws.colums == 0) {
     fprintf(stderr, "Error getting terminal size. Exiting.\n");
     return 1;
   }
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
   install_signal_handlers();
 
   struct app_context app = {.multiplexer = multiplexer_default};
-  multiplexer_resize(&app.multiplexer, rows, columns);
+  multiplexer_resize(&app.multiplexer, ws);
 
   if (argc < 2) {
     multiplexer_spawn_process(&app.multiplexer, "zsh");

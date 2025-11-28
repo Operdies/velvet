@@ -3,10 +3,11 @@
 
 #include "collections.h"
 #include "vte_host.h"
+#include "platform.h"
 
 struct multiplexer {
   struct vec /*vte_host*/ hosts;
-  int rows, columns;
+  struct platform_winsize ws;
   size_t focus;
   uint8_t prefix;
   struct string draw_buffer;
@@ -17,7 +18,7 @@ static const struct multiplexer multiplexer_default = {.prefix = ('x' & 037), .h
 void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str);
 void multiplexer_spawn_process(struct multiplexer *m, char *process);
 void multiplexer_remove_exited(struct multiplexer *m);
-void multiplexer_resize(struct multiplexer *m, int rows, int columns);
+void multiplexer_resize(struct multiplexer *m, struct platform_winsize w);
 void multiplexer_arrange(struct multiplexer *m);
 void multiplexer_destroy(struct multiplexer *m);
 

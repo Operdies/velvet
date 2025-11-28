@@ -42,13 +42,12 @@ void enable_raw_mode(void) {
   }
 }
 
-void platform_get_winsize(int *rows, int *columns) {
+void platform_get_winsize(struct platform_winsize *w) {
   struct winsize ws;
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     die("TIOCGWINSZ:");
   }
-  *rows = ws.ws_row;
-  *columns = ws.ws_col;
+  *w = (struct platform_winsize) { .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel };
 }
 
 static void disable_line_wrapping(void) {

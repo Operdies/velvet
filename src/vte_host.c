@@ -308,14 +308,20 @@ void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
   if (outer.w < 2) outer.w = 2;
   if (outer.h < 2) outer.h = 2;
 
+  int pixels_per_column = (int)((float)outer.x_pixel / (float)outer.w);
+  int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.h);
+
   bool leftmost = outer.x == 0;
 
   struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : vte_host->border_width),
                                         .y = outer.y + vte_host->border_width,
                                         .w = outer.w - (leftmost ? 0 : vte_host->border_width),
                                         .h = outer.h - vte_host->border_width};
+  inner.x_pixel = inner.w * pixels_per_column;
+  inner.y_pixel = inner.h * pixels_per_row;
+
   if (vte_host->rect.window.w != outer.w || vte_host->rect.window.h != outer.h) {
-    struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h};
+    struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
     if (vte_host->pty) ioctl(vte_host->pty, TIOCSWINSZ, &ws);
     if (vte_host->pid) kill(vte_host->pid, SIGWINCH);
     if (vte_host->border_width) vte_host->border_dirty = true;

@@ -11,8 +11,10 @@ static float factor = 0.5;
 void multiplexer_arrange(struct multiplexer *m) {
   struct {
     int ws_col, ws_row;
-  } ws = {.ws_col = m->columns, .ws_row = m->rows};
+  } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.rows};
   int mh, mx, mw, my, sy, sw, nm, ns, i, n;
+  int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.colums);
+  int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.rows);
 
   n = m->hosts.length;
   struct vte_host *c;
@@ -38,6 +40,8 @@ void multiplexer_arrange(struct multiplexer *m) {
   for (; i < nmaster && i < n; i++) {
     struct vte_host *p = vec_nth(&m->hosts, i);
     struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
+    b.x_pixel = b.w * pixels_per_column;
+    b.y_pixel = b.h * pixels_per_row;
     vte_host_resize(p, b);
     my += mh;
   }
@@ -49,6 +53,8 @@ void multiplexer_arrange(struct multiplexer *m) {
     struct vte_host *p = vec_nth(&m->hosts, i);
     int height = (float)stack_height_left / stack_items_left;
     struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
+    b.x_pixel = b.w * pixels_per_column;
+    b.y_pixel = b.h * pixels_per_row;
     vte_host_resize(p, b);
     sy += height;
     stack_items_left--;
@@ -338,10 +344,9 @@ void multiplexer_remove_exited(struct multiplexer *m) {
   }
 }
 
-void multiplexer_resize(struct multiplexer *m, int rows, int columns) {
-  if (m->rows != rows || m->columns != columns) {
-    m->rows = rows;
-    m->columns = columns;
+void multiplexer_resize(struct multiplexer *m, struct platform_winsize w) {
+  if (m->ws.colums != w.colums || m->ws.rows != w.rows || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
+    m->ws = w;
     multiplexer_arrange(m);
     struct vte_host *h;
     vec_foreach(h, m->hosts) {
