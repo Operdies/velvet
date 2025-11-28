@@ -99,6 +99,47 @@ class screen_SynthProvider:
     def has_children(self):
         return True
 
+class string_SynthProvider:
+    def __init__(self, o, dict):
+        self.o = o
+
+    def num_children(self):
+        return len(self.children)
+
+    def add_child(self, value):
+        index = self.num_children()
+        self.child_lookup[value.name] = index
+        self.children[index] = value
+
+    def get_child_index(self, name):
+        if name in self.child_lookup:
+            return self.child_lookup[name]
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0:
+            return None
+        if index >= len(self.children):
+            return None
+        return self.children[index]
+
+    def update(self):
+        self.children = {}
+        self.child_lookup = {}
+        length = self.o.GetChildMemberWithName('len')
+        capacity = self.o.GetChildMemberWithName('cap')
+        content = self.o.GetChildMemberWithName('content')
+
+        contained_type = "uint8_t";
+        expr = f"""
+        *({contained_type} (*)[{length.GetValueAsUnsigned(0)}])((void*){content.GetValueAsUnsigned(0)});
+        """
+        elements = self.o.CreateValueFromExpression("content", expr)
+
+        self.add_child(length)
+        self.add_child(capacity)
+        self.add_child(elements)
+
 class vector_SynthProvider:
     def __init__(self, o, dict):
         self.o = o
@@ -195,6 +236,7 @@ def configure(debugger):
     summarize(debugger, "screen_row")
     debugger.HandleCommand(f'type synthetic add int_slice --python-class display.intslice_SynthProvider')
     debugger.HandleCommand(f'type synthetic add vec --python-class display.vector_SynthProvider')
+    debugger.HandleCommand(f'type synthetic add string --python-class display.string_SynthProvider')
     debugger.HandleCommand(f'type synthetic add screen --python-class display.screen_SynthProvider')
     debugger.HandleCommand(
         'type summary add -F display.vec_summary -e -x "^vec$"'
