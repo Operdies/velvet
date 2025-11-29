@@ -535,13 +535,6 @@ static bool HVP(struct vte *vte, struct csi *csi) { return CUP(vte, csi); }
 
 bool TBC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("TBC"); return false; }
 
-static int query_ansi_mode(struct vte *vte, int mode) {
-  struct emulator_options o = vte->options;
-  switch (mode) {
-    default: 
-  }
-}
-
 static bool SM(struct vte *vte, struct csi *csi) {
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
@@ -577,9 +570,17 @@ static void set_cursor_blinking(struct vte *vte, bool blinking) {
   }
 }
 
+#define resp(x) ((x) ? DECRQM_SET : DECRQM_RESET)
+static enum DECRQM_QUERY_RESPONSE query_ansi_mode(struct vte *vte, int mode) {
+  struct emulator_options o = vte->options;
+  switch (mode) {
+  case 20: return resp(vte->options.auto_return);
+  default: return DECRQM_NOT_RECOGNIZED;
+  }
+}
+
 static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) {
   struct emulator_options o = vte->options;
-#define resp(x) ((x) ? DECRQM_SET : DECRQM_RESET)
   switch (mode) {
   case 1: return resp(o.application_mode);
   case 6: return resp(o.origin_mode);
@@ -600,8 +601,8 @@ static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) 
   case 1007: return resp(o.mouse.alternate_scroll_mode);
   default: return DECRQM_NOT_RECOGNIZED;
   }
-#undef resp
 }
+#undef resp
 
 static bool DECSET(struct vte *vte, struct csi *csi) {
   struct mouse_options *m = &vte->options.mouse;
