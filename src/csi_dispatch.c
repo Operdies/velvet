@@ -579,27 +579,29 @@ static void set_cursor_blinking(struct vte *vte, bool blinking) {
 
 static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) {
   struct emulator_options o = vte->options;
-  #define resp(x) ((x) ? DECRQM_SET : DECRQM_RESET)
+#define resp(x) ((x) ? DECRQM_SET : DECRQM_RESET)
   switch (mode) {
-    case 1: return resp(o.application_mode);
-    case 6: return resp(o.origin_mode);
-    case 7: return resp(o.auto_wrap_mode);
-    case 12: return resp(o.cursor.style & 1);
-    case 25: return resp(o.cursor.visible);
-    case 1004: return resp(o.focus_reporting);
-    case 1049: return resp(o.alternate_screen);
-    case 2004: return resp(o.bracketed_paste);
-    case 1000: return resp(o.mouse.mouse_tracking);
-    case 1002: return resp(o.mouse.cell_motion);
-    case 1003: return resp(o.mouse.all_motion);
-    case 1005: return resp(o.mouse.utf8_mouse_mode);
-    case 1006: return resp(o.mouse.sgr_mouse_mode);
-    case 1007: return resp(o.mouse.alternate_scroll_mode);
-    default: return DECRQM_NOT_RECOGNIZED;
+  case 1: return resp(o.application_mode);
+  case 6: return resp(o.origin_mode);
+  case 7: return resp(o.auto_wrap_mode);
+  case 12: return resp(o.cursor.style & 1);
+  case 25: return resp(o.cursor.visible);
+  case 1004: return resp(o.focus_reporting);
+  case 1049: return resp(o.alternate_screen);
+  case 2004: return resp(o.bracketed_paste);
+  case 9:
+  case 1000:
+  case 1002:
+  case 1003: return resp((int)o.mouse.tracking == mode);
+  case 1005:
+  case 1006:
+  case 1015:
+  case 1016: return resp((int)o.mouse.mode == mode);
+  case 1007: return resp(o.mouse.alternate_scroll_mode);
+  default: return DECRQM_NOT_RECOGNIZED;
   }
-  #undef resp
+#undef resp
 }
-
 
 static bool DECSET(struct vte *vte, struct csi *csi) {
   struct mouse_options *m = &vte->options.mouse;
@@ -607,7 +609,9 @@ static bool DECSET(struct vte *vte, struct csi *csi) {
   bool off = csi->final == 'l';
   assert(on || off);
 
-  switch (csi->params[0].primary) {
+  int mode = csi->params[0].primary;
+
+  switch (mode) {
   case 1: vte->options.application_mode = on; break;
   case 6: vte->options.origin_mode = on; break;
   case 7: vte->options.auto_wrap_mode = on; break;
@@ -621,16 +625,35 @@ static bool DECSET(struct vte *vte, struct csi *csi) {
       vte_enter_primary_screen(vte);
   } break;
   case 2004: vte->options.bracketed_paste = on; break;
-  case 1000: m->mouse_tracking = on; break;
-  case 1002: m->cell_motion = on; break;
-  case 1003: m->all_motion = on; break;
-  case 1005: m->utf8_mouse_mode = on; /* m->utf8_mouse_mode = on; */ break;
-  case 1006: m->sgr_mouse_mode = on; /* m->sgr_mouse_mode = on; */ break;
   case 1007: m->alternate_scroll_mode = on; break;
-  case 1016: OMITTED("SGR Pixel Mouse Tracking"); return false;
-  case 1001: OMITTED("Hilite mouse tracking"); return false;
-  case 1015: OMITTED("urxvt mouse mode"); return false;
-  case 9: OMITTED("X10 mouse reporting"); return false;
+  case 9:
+  case 1000:
+  case 1001:
+  case 1002:
+  case 1003: {
+    if (on) {
+      m->tracking = mode;
+    } else {
+      // mouse tracking should only reset if the specified mode was active
+      if ((int)m->tracking == mode) {
+        m->tracking = MOUSE_TRACKING_OFF;
+        m->mode = MOUSE_MODE_DEFAULT;
+      }
+    }
+  }
+    return false;
+  case 1005:
+  case 1006:
+  case 1015:
+  case 1016: {
+    if (on) {
+      m->mode = mode;
+    } else {
+      if ((int)m->mode == mode) {
+        m->mode = MOUSE_MODE_DEFAULT;
+      }
+    }
+  } break;
   case 2026:
     TODO("Synchronized rendering: "
          "https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md");

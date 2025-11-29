@@ -99,17 +99,27 @@ struct cursor_options {
   enum cursor_style style;
 };
 
+enum mouse_tracking {
+  MOUSE_TRACKING_OFF         = 0,
+  MOUSE_TRACKING_LEGACY      = 9,    // figure out if this is worth supporting.
+  MOUSE_TRACKING_CLICK       = 1000, // send mouse events on click.
+  MOUSE_TRACKING_CELL_MOTION = 1002, // send mouse events while mouse is held
+  MOUSE_TRACKING_ALL_MOTION  = 1003, // send mouse events whenever the mouse moves
+};
+
+enum mouse_mode {
+  MOUSE_MODE_DEFAULT   = 0,
+  MOUSE_MODE_UTF8      = 1005,
+  MOUSE_MODE_SGR       = 1006,
+  MOUSE_MODE_URXVT     = 1015,
+  MOUSE_MODE_SGR_PIXEL = 1016,
+};
+
 struct mouse_options {
-  bool send_x_and_y;          // 9    -- X10 implementation (?)
-  bool mouse_tracking;        // 1000 -- X11 implementation
-  bool hilite_mouse_tracking; // 1001
-  bool cell_motion;           // 1002
-  bool all_motion;            // 1003
-  bool utf8_mouse_mode;       // 1005
-  bool sgr_mouse_mode;        // 1006
+  enum mouse_tracking tracking;
+  enum mouse_mode mode;
   bool alternate_scroll_mode; // 1007
   bool urxv5;                 // 1015
-  bool sgr_pixel;             // 1016
   bool readline_mouse1;       // 2001
   bool readline_mouse2;       // 2002
   bool readline_mouse3;       // 2003
