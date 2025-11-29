@@ -3,6 +3,15 @@
 #include "utils.h"
 #include <ctype.h>
 
+enum DECRQM_QUERY_RESPONSE {
+  DECRQM_NOT_RECOGNIZED = 0,
+  DECRQM_SET = 1,
+  DECRQM_RESET = 2,
+  DECRQM_PERMANENTLY_SET = 3,
+  DECRQM_PERMANENTLY_RESET = 4,
+};
+
+
 /* CSI Ps @  Insert Ps (Blank) Character(s) (default = 1) (ICH). */
 static bool ICH(struct vte *vte, struct csi *csi);
 /* CSI Ps SP @ Shift left Ps columns(s) (default = 1) (SL), ECMA-48. */
@@ -99,8 +108,6 @@ static bool DECSTR(struct vte *vte, struct csi *csi);
 /* CSI Pl ; Pc " p Set conformance level (DECSCL), VT220 and up. */
 static bool DECSCL(struct vte *vte, struct csi *csi);
 /* CSI Ps $ p Request ANSI mode (DECRQM). */
-/* CSI ? Ps $ p Request DEC private mode (DECRQM).   */
-static bool DECRQM(struct vte *vte, struct csi *csi);
 /* CSI ? Ps $ p Request DEC private mode (DECRQM).   */
 static bool DECRQM(struct vte *vte, struct csi *csi);
 /* CSI Ps q  Load LEDs (DECLL), VT100. */
@@ -528,17 +535,25 @@ static bool HVP(struct vte *vte, struct csi *csi) { return CUP(vte, csi); }
 
 bool TBC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("TBC"); return false; }
 
+static int query_ansi_mode(struct vte *vte, int mode) {
+  struct emulator_options o = vte->options;
+  switch (mode) {
+    default: 
+  }
+}
+
 static bool SM(struct vte *vte, struct csi *csi) {
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
   assert(on || off);
 
-  switch (csi->params[0].primary) {
+  int mode = csi->params[0].primary;
+  switch (mode) {
   case 2: TODO("Keyboard Action Mode (KAM)"); return false;
   case 4: TODO("Insert Mode (IRM)"); return false;
   case 12: OMITTED("Send/receive (SRM)"); return false;
   case 20: vte->options.auto_return = on; return true;
-  default: TODO("Set Mode %d", csi->params[0].primary); return false;
+  default: TODO("Set Mode %d", mode); return false;
   }
 }
 
@@ -561,6 +576,30 @@ static void set_cursor_blinking(struct vte *vte, bool blinking) {
     }
   }
 }
+
+static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) {
+  struct emulator_options o = vte->options;
+  #define resp(x) ((x) ? DECRQM_SET : DECRQM_RESET)
+  switch (mode) {
+    case 1: return resp(o.application_mode);
+    case 6: return resp(o.origin_mode);
+    case 7: return resp(o.auto_wrap_mode);
+    case 12: return resp(o.cursor.style & 1);
+    case 25: return resp(o.cursor.visible);
+    case 1004: return resp(o.focus_reporting);
+    case 1049: return resp(o.alternate_screen);
+    case 2004: return resp(o.bracketed_paste);
+    case 1000: return resp(o.mouse.mouse_tracking);
+    case 1002: return resp(o.mouse.cell_motion);
+    case 1003: return resp(o.mouse.all_motion);
+    case 1005: return resp(o.mouse.utf8_mouse_mode);
+    case 1006: return resp(o.mouse.sgr_mouse_mode);
+    case 1007: return resp(o.mouse.alternate_scroll_mode);
+    default: return DECRQM_NOT_RECOGNIZED;
+  }
+  #undef resp
+}
+
 
 static bool DECSET(struct vte *vte, struct csi *csi) {
   struct mouse_options *m = &vte->options.mouse;
@@ -585,8 +624,8 @@ static bool DECSET(struct vte *vte, struct csi *csi) {
   case 1000: m->mouse_tracking = on; break;
   case 1002: m->cell_motion = on; break;
   case 1003: m->all_motion = on; break;
-  case 1005: TODO("UTF8 Mouse Mode"); /* m->utf8_mouse_mode = on; */ break;
-  case 1006: TODO("SGR Mouse Mode"); /* m->sgr_mouse_mode = on; */ break;
+  case 1005: m->utf8_mouse_mode = on; /* m->utf8_mouse_mode = on; */ break;
+  case 1006: m->sgr_mouse_mode = on; /* m->sgr_mouse_mode = on; */ break;
   case 1007: m->alternate_scroll_mode = on; break;
   case 1016: OMITTED("SGR Pixel Mouse Tracking"); return false;
   case 1001: OMITTED("Hilite mouse tracking"); return false;
@@ -631,7 +670,15 @@ bool DECSTR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECS
 
 bool DECSCL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECSCL"); return false; }
 
-bool DECRQM(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECRQM"); return false; }
+bool DECRQM(struct vte *vte, struct csi *csi) { 
+  int mode = csi->params[0].primary;
+  enum DECRQM_QUERY_RESPONSE r = csi->leading == '?' ? query_private_mode(vte, mode) : query_ansi_mode(vte, mode);
+  string_push_csi2(&vte->pending_output, csi->leading, INT_SLICE(mode, r), "$y");
+  if (r == DECRQM_NOT_RECOGNIZED) {
+    TODO("Query unrecognized mode: %d", mode);
+  }
+  return true;
+}
 
 bool DECLL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECLL"); return false; }
 

@@ -35,15 +35,20 @@ void string_push_int(struct string *str, int n) {
   string_push_range(str, buf + idx, max - idx);
 }
 
-void string_push_csi(struct string *str, struct int_slice params, const char *const c) {
+void string_push_csi2(struct string *str, char leading, struct int_slice params, const char *const final) {
   const uint8_t *csi = u8"\x1b[";
   string_push(str, csi);
+  if (leading) string_push_char(str, leading);
   for (int i = 0; i < params.n; i++) {
     assert(params.content[i] >= 0);
     if (i) string_push_char(str, ';');
     if (params.content[i]) string_push_int(str, params.content[i]);
   }
-  string_push(str, (uint8_t *)c);
+  string_push(str, (uint8_t *)final);
+}
+
+void string_push_csi(struct string *str, struct int_slice params, const char *const c) {
+  string_push_csi2(str, 0, params, c);
 }
 
 void string_push_slice(struct string *str, struct u8_slice slice) {
