@@ -503,7 +503,7 @@ static int consume_printables(struct vte *vte, size_t i, struct u8_slice str) {
   struct screen_cell_style style = s->cursor.brush;
   bool wrap = vte->options.auto_wrap_mode;
   struct screen_cell c = {.style = style };
-  for (; is_ascii_printable(str.content[i]) && i < str.len; i++) {
+  for (; i < str.len && is_ascii_printable(str.content[i]); i++) {
     c.symbol.utf8[0] = str.content[i];
     screen_insert(s, c, wrap);
   }
