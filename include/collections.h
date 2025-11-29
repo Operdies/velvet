@@ -105,8 +105,7 @@ void string_clear(struct string *str);
 void string_destroy(struct string *str);
 /* flush the string instance to the specified file descriptor */
 bool string_flush(struct string *str, int fd, int *total_written);
-void string_push_csi2(struct string *str, char leading, struct int_slice params, const char *const final);
-void string_push_csi(struct string *str, struct int_slice params, const char *const c);
+void string_push_csi(struct string *str, char leading, struct int_slice params, const char *const final);
 
 void vec_push(struct vec *v, const void *elem);
 /* remove the nth element from the vector */

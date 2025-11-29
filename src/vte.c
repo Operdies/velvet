@@ -53,7 +53,7 @@ void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
   switch (n) {
   case VTE_DSR_OPERATING_STATUS: {
     // no malfunction
-    string_push_csi(&vte->pending_output, INT_SLICE(0), "n");
+    string_push_csi(&vte->pending_output, 0, INT_SLICE(0), "n");
   } break;
   case VTE_DSR_CURSOR_POSITION: {
       int x, y;
@@ -64,7 +64,7 @@ void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
       if (vte->options.origin_mode)
         y -= s->scroll_top;
       if (y < 0) y = 0;
-      string_push_csi(&vte->pending_output, INT_SLICE(y + 1, x + 1), "R");
+      string_push_csi(&vte->pending_output, 0, INT_SLICE(y + 1, x + 1), "R");
   } break;
   default: break;
   }

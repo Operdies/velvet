@@ -207,7 +207,7 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
     int columnno = 1 + vte_host->rect.client.x;
     int lineno = 1 + vte_host->rect.client.y + row;
     int line_length = MIN(screen_row->eol, g->w);
-    string_push_csi(outbuffer, INT_SLICE(lineno, columnno), "H");
+    string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
 
     for (int col = 0; col < line_length; col++) {
       struct screen_cell *c = &screen_row->cells[col];
@@ -219,7 +219,7 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
     int num_blanks = g->w - line_length;
     if (num_blanks > 4) { /* CSI Pn X -- Erase Pn characters after cursor */
       apply_style(&style_default, outbuffer);
-      string_push_csi(outbuffer, INT_SLICE(num_blanks), "X");
+      string_push_csi(outbuffer, 0, INT_SLICE(num_blanks), "X");
     } else { /* Micro optimization. Insert spaces if the number of blanks is very small */
       apply_style(&style_default, outbuffer);
       string_memset(outbuffer, ' ', num_blanks);
@@ -267,7 +267,7 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
   apply_style(focused ? &focused_style : &normal_style, b);
 
   // top left corner
-  string_push_csi(b, INT_SLICE(top, left), "H");
+  string_push_csi(b, 0, INT_SLICE(top, left), "H");
   string_push(b, topleft_corner);
   // top line
   {
@@ -283,7 +283,7 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
     string_push(b, topright_corner);
   }
   if (!leftmost) {
-    string_push_csi(b, INT_SLICE(top, left + 1), "H");
+    string_push_csi(b, 0, INT_SLICE(top, left + 1), "H");
     for (int row = top + 1; row < bottom - 1; row++) {
       string_push(b, pipe);
     }

@@ -231,7 +231,7 @@ void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
         }
         // If the vte_host does not have the feature enabled, ignore it.
       } else {
-        string_push_csi(&writebuffer, (struct int_slice){0}, (char[]){ch, 0});
+        string_push_csi(&writebuffer, 0, (struct int_slice){0}, (char[]){ch, 0});
       }
       s = normal;
     } break;
@@ -378,13 +378,13 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
     struct cursor *c = &g->cursor;
     int lineno = 1 + focused->rect.client.y + c->row;
     int columnno = 1 + focused->rect.client.x + c->column;
-    string_push_csi(draw_buffer, INT_SLICE(lineno, columnno), "H");
+    string_push_csi(draw_buffer, 0, INT_SLICE(lineno, columnno), "H");
   }
 
   // set the cursor style according to the focused client.
   if (focused->vte.options.cursor.style != current_cursor_style) {
     current_cursor_style = focused->vte.options.cursor.style;
-    string_push_csi(draw_buffer, INT_SLICE(current_cursor_style), " q");
+    string_push_csi(draw_buffer, 0, INT_SLICE(current_cursor_style), " q");
   }
 
   // Set cursor visibility according to the focused client.

@@ -697,7 +697,7 @@ bool DECSCL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECS
 bool DECRQM(struct vte *vte, struct csi *csi) { 
   int mode = csi->params[0].primary;
   enum DECRQM_QUERY_RESPONSE r = csi->leading == '?' ? query_private_mode(vte, mode) : query_ansi_mode(vte, mode);
-  string_push_csi2(&vte->pending_output, csi->leading, INT_SLICE(mode, r), "$y");
+  string_push_csi(&vte->pending_output, csi->leading, INT_SLICE(mode, r), "$y");
   if (r == DECRQM_NOT_RECOGNIZED) {
     TODO("Query unrecognized mode: %d", mode);
   }
