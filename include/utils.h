@@ -66,10 +66,10 @@ void set_nonblocking(int fd);
 #define OMITTED(...)                                                           \
   DIAG("[" __FILE__ ":" LINE_STR "] "                                          \
        "OMITTED: " __VA_ARGS__)
-#define FAIL_ASSERT(cond)                                                      \
-  terminal_reset();                                                            \
-  ERROR("Assertion failed: %s, file %s, line %d\n", #cond, __FILE__,           \
-        __LINE__);                                                             \
+#define FAIL_ASSERT(cond)                                                                                              \
+  terminal_reset();                                                                                                    \
+  ERROR("Assertion failed: %s, file %s, line %d\r\n", #cond, __FILE__, __LINE__);                                      \
+  fprintf(stderr, "Assertion failed: %s, file %s, line %d\r\n", #cond, __FILE__, __LINE__);                            \
   exit(EXIT_FAILURE);
 #endif /* RELEASE_BUILD */
 

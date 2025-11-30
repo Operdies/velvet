@@ -11,7 +11,8 @@ static inline void enter_alternate_screen(void);
 static inline void enable_focus_reporting(void);
 static inline void disable_focus_reporting(void);
 
-struct termios original_terminfo;
+bool terminfo_initialized = false;
+struct termios original_terminfo = { 0 };
 struct termios raw_term;
 
 static int write_slice(struct u8_slice slice) {
@@ -93,14 +94,18 @@ void terminal_setup(void) {
   enable_focus_reporting();
   enable_bracketed_paste();
   enable_mouse_mode();
+  terminfo_initialized = true;
 }
+
 void terminal_reset(void) {
-  disable_mouse_mode();
-  disable_bracketed_paste();
-  disable_focus_reporting();
-  enable_line_wrapping();
-  exit_raw_mode();
-  leave_alternate_screen();
+  if (terminfo_initialized) {
+    disable_mouse_mode();
+    disable_bracketed_paste();
+    disable_focus_reporting();
+    enable_line_wrapping();
+    exit_raw_mode();
+    leave_alternate_screen();
+  }
 }
 
 void set_nonblocking(int fd) {
