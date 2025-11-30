@@ -91,7 +91,7 @@ int csi_parse(struct csi *c, struct u8_slice str) {
     c->state = CSI_REJECT;
     return 0;
   }
-  bool is_sgr = str.content[str.len - 1] == 'm';
+  bool is_sgr = c->leading == 0 && str.content[str.len - 1] == 'm';
   size_t i = 0;
   for (; i < str.len;) {
     char ch = str.content[i];
