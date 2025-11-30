@@ -160,7 +160,7 @@ struct vte {
   struct emulator_options options;
   struct screen primary;
   struct screen alternate;
-  struct string pending_output;
+  struct string pending_input;
   struct string command_buffer;
   struct utf8 pending_symbol;
   struct utf8 previous_symbol;

@@ -509,7 +509,7 @@ bool DA_SECONDARY(struct vte *vte, struct csi *csi) {
       // Pp = terminal type, where '1' means VT220
       // Pv = firmware version. Ghostty responds with 10, so it must be good.
       // Pc indicates the ROM cartridge registration number and is always zero
-    string_push(&vte->pending_output, u8"\x1b[>1;10;0c");
+    string_push(&vte->pending_input, u8"\x1b[>1;10;0c");
     return true;
   } break;
   default: return csi_dispatch_todo(vte, csi);
@@ -697,7 +697,7 @@ bool DECSCL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECS
 bool DECRQM(struct vte *vte, struct csi *csi) { 
   int mode = csi->params[0].primary;
   enum DECRQM_QUERY_RESPONSE r = csi->leading == '?' ? query_private_mode(vte, mode) : query_ansi_mode(vte, mode);
-  string_push_csi(&vte->pending_output, csi->leading, INT_SLICE(mode, r), "$y");
+  string_push_csi(&vte->pending_input, csi->leading, INT_SLICE(mode, r), "$y");
   if (r == DECRQM_NOT_RECOGNIZED) {
     TODO("Query unrecognized mode: %d", mode);
   }

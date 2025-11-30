@@ -46,14 +46,14 @@ void vte_send_device_attributes(struct vte *vte) {
   // Advertise VT102 support (same as alacritty)
   // TODO: Figure out how to advertise exact supported features here.
   // Step 0: find good documentation.
-  string_push(&vte->pending_output, u8"\x1b[?6c");
+  string_push(&vte->pending_input, u8"\x1b[?6c");
 }
 
 void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
   switch (n) {
   case VTE_DSR_OPERATING_STATUS: {
     // no malfunction
-    string_push_csi(&vte->pending_output, 0, INT_SLICE(0), "n");
+    string_push_csi(&vte->pending_input, 0, INT_SLICE(0), "n");
   } break;
   case VTE_DSR_CURSOR_POSITION: {
       int x, y;
@@ -64,7 +64,7 @@ void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
       if (vte->options.origin_mode)
         y -= s->scroll_top;
       if (y < 0) y = 0;
-      string_push_csi(&vte->pending_output, 0, INT_SLICE(y + 1, x + 1), "R");
+      string_push_csi(&vte->pending_input, 0, INT_SLICE(y + 1, x + 1), "R");
   } break;
   default: break;
   }
@@ -539,7 +539,7 @@ void vte_process(struct vte *vte, struct u8_slice str) {
 void vte_destroy(struct vte *vte) {
   screen_destroy(&vte->primary);
   screen_destroy(&vte->alternate);
-  string_destroy(&vte->pending_output);
+  string_destroy(&vte->pending_input);
   string_destroy(&vte->command_buffer);
 }
 

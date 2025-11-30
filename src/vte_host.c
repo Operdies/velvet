@@ -296,7 +296,6 @@ void vte_host_process_output(struct vte_host *vte_host, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
   vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
   vte_process(&vte_host->vte, str);
-  string_flush(&vte_host->vte.pending_output, vte_host->pty, nullptr);
 }
 
 static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {

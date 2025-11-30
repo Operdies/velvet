@@ -81,7 +81,7 @@ static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
 
 static void host_notify_focus(struct vte_host *host, bool focus) {
   if (host->pty && host->vte.options.focus_reporting) {
-    string_push_slice(&host->vte.pending_output, focus ? vt_focus_in : vt_focus_out);
+    string_push_slice(&host->vte.pending_input, focus ? vt_focus_in : vt_focus_out);
   }
 }
 

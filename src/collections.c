@@ -80,6 +80,17 @@ bool string_ends_with(struct string *str, struct u8_slice slice) {
   return memcmp(str->content + str->len - slice.len, slice.content, slice.len) == 0;
 }
 
+void string_drop_left(struct string *str, size_t n) {
+  assert(n >= 0);
+  assert(n <= str->len);
+  size_t copy = str->len - n;
+  if (n && copy) {
+    memmove(str->content, str->content + n, copy);
+  }
+  str->len -= n;
+}
+
+
 void string_memset(struct string *str, uint8_t ch, size_t len) {
   // Some big number. This would most likely be caused by an overflow, and not some legitimate allocation.
   assert(len < (1 << 30));
@@ -342,7 +353,7 @@ struct u8_slice string_as_u8_slice(struct string *s) {
  * Strip first and last: string_range(s, 1, -2)
  * Last 10: string_range(s, -11, -1)
  * */
-struct u8_slice string_range(struct string *s, ssize_t start, ssize_t end) {
+struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end) {
   if (end < 0) {
     end = s->len + end + 1;
   }

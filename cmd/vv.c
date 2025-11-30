@@ -206,14 +206,8 @@ int main(int argc, char **argv) {
 
     // Dispatch all pending io
     // TODO: if stdin_handler->state == PREFIX or stdin_handler->state == ESCAPE,
-    // set a timeout of e.g. 1s and restore the state after the 
+    // set a timeout of e.g. 1s and restore the state if no other keys were pressed.
     io_dispatch(&io, -1);
-
-    // write pending output for each client
-    vec_foreach(h, app.multiplexer.hosts) {
-      // TODO: perform these writes in parallel?
-      string_flush(&h->vte.pending_output, h->pty, nullptr);
-    }
 
     // quit ?
     if (app.multiplexer.hosts.length == 0 || app.quit) break;

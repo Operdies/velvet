@@ -4,15 +4,22 @@
 #include <poll.h>
 
 struct io_source;
-typedef void (*io_callback)(struct io_source *src, struct u8_slice str);
+typedef void (*io_read_callback)(struct io_source *src, struct u8_slice str);
+typedef void (*io_write_callback)(struct io_source *src);
+
+enum IO_SOURCE_EVENT {
+  IO_SOURCE_POLLIN = POLLIN,
+  IO_SOURCE_POLLOUT = POLLOUT,
+};
 
 struct io_source {
   /* file descriptor */
   int fd;
   /* pollfd events */
-  short events;
+  enum IO_SOURCE_EVENT events;
   /* called when data is read from the file descriptor */
-  io_callback on_data;
+  io_read_callback read_callback;
+  io_write_callback write_callback;
   /* user data */
   void *data;
 };
@@ -37,6 +44,7 @@ void io_add_source(struct io *io, struct io_source src);
 void io_clear_sources(struct io *io);
 /* Free all resources held by this io instance. */
 void io_destroy(struct io *io);
+size_t io_write(struct io_source *io, struct u8_slice content);
 
 #define IO_H
 #endif // IO_H

@@ -3,9 +3,9 @@
 #include <errno.h>
 #include <sys/wait.h>
 
-static bool fd_hot(int fd) {
+static bool fd_can_read(int fd) {
   const int poll_ms = 0;
-  return poll(&(struct pollfd){ .fd = fd, .events = POLL_IN }, 1, poll_ms) == 1;
+  return poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, poll_ms) == 1;
 }
 
 void io_dispatch(struct io *io, int poll_timeout) {
@@ -28,47 +28,39 @@ void io_dispatch(struct io *io, int poll_timeout) {
 
   int polled = poll(io->pollfds.content, io->pollfds.length, poll_timeout);
   if (polled == -1) {
-    // In case of unexpected errors, fail hard immediately.
-    if (errno != EAGAIN && errno != EINTR) {
-      die("poll %d:", errno);
-    }
     // EAGAIN / EINTR are expected. In this case we should just return.
+    // For other errors, log them for visibility. although they are usually not serious.
+    if (errno != EAGAIN && errno != EINTR) {
+      ERROR("poll:");
+    }
     return;
   }
 
-  for (size_t i = 0; polled && i < io->pollfds.length; i++) {
+  for (size_t i = 0; i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(&io->pollfds, i);
     struct io_source *src = vec_nth(&io->sources, i);
-    assert(src->on_data);
-    if (pfd->revents & POLL_IN) {
-      polled--;
+    if (pfd->revents & POLLIN) {
+      assert(src->read_callback);
       int n = 0;
       int num_reads = 0;
       do {
         n = read(pfd->fd, readbuffer, sizeof(readbuffer));
         num_reads++;
         if (n == -1) {
-          if (errno == EBADF) {
-            // this happens if the file descriptor was closed.
-            // We can safely ignore this. (Unfortunately it can also
-            // be a more serious issue, but that is hard to detect.)
-            // The file descriptor may be closed because a the owning process
-            break;
-          }
           // A signal was raised during the read. This is okay.
           // We can just break and read it later.
           if (errno == EINTR) break;
           // This is also ok. The fd was non-blocking was not ready for reading.
           if (errno == EAGAIN) break;
-          // As far as I can tell this is similar to EBADF.
-          // EBADF happens on MacOS, where EIO appears to be more common on Linux.
-          if (errno == EIO) break;
-          // Unexpected error; crash hard to make the error very visible, then determine how it should be handled.
-          die("read:");
+          // Log other read errors for visibility
+          ERROR("read:");
         }
-        struct u8_slice s = { .len = n, .content = readbuffer };
-        src->on_data(src, s);
-      } while (n > 0 && num_reads < MAX_IT && fd_hot(pfd->fd));
+        struct u8_slice s = {.len = n, .content = readbuffer};
+        src->read_callback(src, s);
+      } while (n > 0 && num_reads < MAX_IT && fd_can_read(pfd->fd));
+    }
+    if (pfd->revents & POLLOUT) {
+      src->write_callback(src);
     }
   }
 }
@@ -79,6 +71,24 @@ void io_add_source(struct io *io, struct io_source src) {
 
 void io_clear_sources(struct io *io) {
   vec_clear(&io->sources);
+}
+
+size_t io_write(struct io_source *io, struct u8_slice s) {
+  size_t written = 0;
+  while (s.len > written) {
+    ssize_t w = write(io->fd, s.content + written, s.len - written);
+    if (w == -1) {
+      if (errno == EAGAIN || errno == EINTR) {
+        break;
+      }
+      ERROR("write:");
+    }
+    if (w == 0) {
+      break;
+    }
+    written += w;
+  }
+  return written;
 }
 
 void io_destroy(struct io *io) {

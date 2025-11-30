@@ -13,8 +13,8 @@ static bool osc_dispatch_todo(struct vte *vte, struct osc *osc) {
 
 static bool osc_dispatch_foreground_color(struct vte *vte, struct osc *osc) {
   if (osc->pt.len && osc->pt.text[0] == '?') {
-    string_push(&vte->pending_output, u8"\x1b]10;rgb:ffff/ffff/ffff");
-    string_push(&vte->pending_output, osc->st);
+    string_push(&vte->pending_input, u8"\x1b]10;rgb:ffff/ffff/ffff");
+    string_push(&vte->pending_input, osc->st);
     return true;
   }
   return osc_dispatch_todo(vte, osc);
@@ -22,8 +22,8 @@ static bool osc_dispatch_foreground_color(struct vte *vte, struct osc *osc) {
 
 static bool osc_dispatch_background_color(struct vte *vte, struct osc *osc) {
   if (osc->pt.len && osc->pt.text[0] == '?') {
-    string_push(&vte->pending_output, u8"\x1b]11;rgb:0000/0000/0000");
-    string_push(&vte->pending_output, osc->st);
+    string_push(&vte->pending_input, u8"\x1b]11;rgb:0000/0000/0000");
+    string_push(&vte->pending_input, osc->st);
     return true;
   }
   return osc_dispatch_todo(vte, osc);
