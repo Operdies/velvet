@@ -1,7 +1,6 @@
 #include "csi.h"
 #include "vte.h"
 #include "utils.h"
-#include <ctype.h>
 
 enum DECRQM_QUERY_RESPONSE {
   DECRQM_NOT_RECOGNIZED = 0,

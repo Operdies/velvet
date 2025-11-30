@@ -223,6 +223,7 @@ int main(int argc, char **argv) {
     app.quit_reason = "last window closed";
 
   multiplexer_destroy(&app.multiplexer);
+  velvet_input_destroy(&app.input_handler);
   io_destroy(&io);
 
   terminal_reset();

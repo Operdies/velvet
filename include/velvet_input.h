@@ -22,5 +22,6 @@ struct velvet_input {
 
 
 void velvet_input_process(struct velvet_input *in, struct u8_slice str);
+void velvet_input_destroy(struct velvet_input *in);
 
 #endif // VELVET_INPUT_H
