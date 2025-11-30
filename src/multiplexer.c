@@ -361,11 +361,14 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
   struct string *draw_buffer = &m->draw_buffer;
   struct vte_host *focused = vec_nth(&m->hosts, m->focus);
 
-  // if the host supports synchronized rendering, make use of it to ensure
-  // the full frame is written before it is rendered.
-  if (m->host_features.synchronized_rendering)
+  if (m->host_features.synchronized_rendering) {
+    // if the host supports synchronized rendering, make use of it to ensure
+    // the full frame is written before it is rendered.
     string_push_slice(draw_buffer, vt_synchronized_rendering_on);
-  string_push_slice(draw_buffer, vt_cursor_visible_off);
+  } else {
+    // if the host does not advertise support, hide the cursor while drawing instead
+    string_push_slice(draw_buffer, vt_cursor_visible_off);
+  }
   for (size_t i = 0; i < m->hosts.length; i++) {
     struct vte_host *h = vec_nth(&m->hosts, i);
     vte_host_update_cwd(h);
@@ -390,10 +393,9 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
 
   // Set cursor visibility according to the focused client.
   if (focused->vte.options.cursor.visible) string_push_slice(draw_buffer, vt_cursor_visible_on);
-  if (m->host_features.synchronized_rendering)
-    string_push_slice(draw_buffer, vt_synchronized_rendering_off);
+  if (m->host_features.synchronized_rendering) string_push_slice(draw_buffer, vt_synchronized_rendering_off);
 
-  struct u8_slice s = { .content = m->draw_buffer.content, .len = m->draw_buffer.len };
+  struct u8_slice s = {.content = m->draw_buffer.content, .len = m->draw_buffer.len};
   render_func(s, context);
   string_clear(&m->draw_buffer);
 }

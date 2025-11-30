@@ -3,10 +3,8 @@
 #include <errno.h>
 #include <sys/wait.h>
 
-static bool fd_can_read(int fd) {
-  const int poll_ms = 0;
-  return poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, poll_ms) == 1;
-}
+#define mB(x) ((x) << 20)
+#define kB(x) ((x) << 10)
 
 void io_dispatch(struct io *io, int poll_timeout) {
   // These values are somewhat arbitrarily chosen;
@@ -14,8 +12,8 @@ void io_dispatch(struct io *io, int poll_timeout) {
   // from the same file descriptor in high-throughput scenarios,
   // but we don't want the same file descriptor to indefinitely block
   // the main thread.
-  constexpr int BUFSIZE = 2048;      // 2kb
-  constexpr int MAX_BYTES = 1 << 19; // 512kb
+  constexpr int BUFSIZE = kB(2);      // 2kB
+  constexpr int MAX_BYTES = mB(1); // 1mB
   constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
 
   static uint8_t readbuffer[BUFSIZE];
@@ -39,13 +37,11 @@ void io_dispatch(struct io *io, int poll_timeout) {
   for (size_t i = 0; i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(&io->pollfds, i);
     struct io_source *src = vec_nth(&io->sources, i);
-    if (pfd->revents & POLLIN) {
-      assert(src->read_callback);
-      int n = 0;
-      int num_reads = 0;
-      do {
-        n = read(pfd->fd, readbuffer, sizeof(readbuffer));
-        num_reads++;
+    for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < MAX_IT; repeats++) {
+      const int poll_ms = 0;
+      // Read output
+      if (pfd->revents & POLLIN) {
+        int n = read(pfd->fd, readbuffer, sizeof(readbuffer));
         if (n == -1) {
           // A signal was raised during the read. This is okay.
           // We can just break and read it later.
@@ -57,10 +53,14 @@ void io_dispatch(struct io *io, int poll_timeout) {
         }
         struct u8_slice s = {.len = n, .content = readbuffer};
         src->read_callback(src, s);
-      } while (n > 0 && num_reads < MAX_IT && fd_can_read(pfd->fd));
-    }
-    if (pfd->revents & POLLOUT) {
-      src->write_callback(src);
+      }
+      // write input
+      if (pfd->revents & POLLOUT) {
+        src->write_callback(src);
+      }
+      pfd->revents = 0;
+      int poll_ret = poll(pfd, 1, poll_ms);
+      if (poll_ret < 1) break;
     }
   }
 }
