@@ -8,6 +8,7 @@
 #include <multiplexer.h>
 #include "platform.h"
 #include "velvet_input.h"
+#include "virtual_terminal_sequences.h"
 
 static int signal_write;
 static int signal_read;
@@ -136,6 +137,15 @@ static void add_bindir_to_path(char *arg0) {
   string_destroy(&new_path);
 }
 
+static void query_features(void) {
+  struct u8_slice features[] = {
+    vt_synchronized_rendering_query,
+  };
+
+  for (size_t i = 0; i < LENGTH(features); i++)
+    write(STDOUT_FILENO, features[i].content, features[i].len);
+}
+
 int main(int argc, char **argv) {
   struct platform_winsize ws = {0};
   add_bindir_to_path(argv[0]);
@@ -147,6 +157,7 @@ int main(int argc, char **argv) {
   }
 
   terminal_setup();
+  query_features();
   install_signal_handlers();
 
   struct app_context app = {.multiplexer = multiplexer_default};
