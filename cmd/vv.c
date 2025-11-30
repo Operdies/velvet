@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
   install_signal_handlers();
 
   struct app_context app = {.multiplexer = multiplexer_default};
-  app.input_handler = (struct velvet_input) { .m = &app.multiplexer };
+  app.input_handler = (struct velvet_input) { .m = &app.multiplexer, .prefix = ('x' & 0x1f) };
   multiplexer_resize(&app.multiplexer, ws);
 
   if (argc < 2) {

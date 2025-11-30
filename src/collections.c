@@ -66,6 +66,18 @@ void string_push_char(struct string *str, uint8_t ch) {
   string_push_range(str, &ch, 1);
 }
 
+bool string_starts_with(struct string *str, struct u8_slice slice) {
+  if (!str->content || !slice.content) return false;
+  if (str->len < slice.len) return false;
+  return memcmp(str->content, slice.content, slice.len) == 0;
+}
+
+bool string_ends_with(struct string *str, struct u8_slice slice) {
+  if (!str->content || !slice.content) return false;
+  if (str->len < slice.len) return false;
+  return memcmp(str->content - slice.len, slice.content, slice.len) == 0;
+}
+
 void string_memset(struct string *str, uint8_t ch, size_t len) {
   // Some big number. This would most likely be caused by an overflow, and not some legitimate allocation.
   assert(len < (1 << 30));
