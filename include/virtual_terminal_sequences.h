@@ -6,19 +6,24 @@
 #define ESC u8"\x1b"
 #define CSI ESC "["
 
-#define VT(name, command) static const struct u8_slice vt_##name = { .content = command, .len = sizeof(command) - 1 }
+#define VT(name, command) static const struct u8_slice vt_##name = {.content = command, .len = sizeof(command) - 1}
 
-VT(hide_cursor, CSI "?25l");
-VT(show_cursor, CSI "?25h");
+#define VT_MODE(name, mode)                                                                                            \
+  static const struct u8_slice vt_##name##_on = {.content = CSI "?" #mode "h", .len = sizeof(CSI "?" #mode "h") - 1};    \
+  static const struct u8_slice vt_##name##_off = {.content = CSI "?" #mode "l", .len = sizeof(CSI "?" #mode "l") - 1};   \
+  static const struct u8_slice vt_##name##_query = {.content = CSI "?" #mode "$p", .len = sizeof(CSI "?" #mode "$p") - 1};
+
 VT(leave_alternate_screen, CSI "2J" CSI "H" CSI "?1049l");
 VT(enter_alternate_screen, CSI "?1049h" CSI "2J" CSI "H");
-VT(disable_line_wrapping, CSI "?7l");
-VT(enable_line_wrapping, CSI "?7h");
 VT(focus_out, CSI "O");
 VT(focus_in, CSI "I");
 VT(clear, CSI "2J");
-VT(synchronized_rendering_on, CSI "?2026h");
-VT(synchronized_rendering_off, CSI "?2026l");
+
+VT_MODE(synchronized_rendering, 2026);
+VT_MODE(mouse_mode_sgr, 1016);
+VT_MODE(mouse_tracking, 1003);
+VT_MODE(line_wrapping, 7);
+VT_MODE(cursor_visible, 7);
 
 #undef VT
 #undef ESC

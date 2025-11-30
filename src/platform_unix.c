@@ -25,7 +25,7 @@ void enter_alternate_screen(void) {
 }
 
 void exit_raw_mode(void) {
-  write_slice(STDOUT_FILENO, vt_show_cursor);
+  write_slice(STDOUT_FILENO, vt_cursor_visible_on);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
 }
 
@@ -51,10 +51,10 @@ void platform_get_winsize(struct platform_winsize *w) {
 }
 
 static void disable_line_wrapping(void) {
-  write_slice(STDOUT_FILENO, vt_disable_line_wrapping);
+  write_slice(STDOUT_FILENO, vt_line_wrapping_off);
 }
 static void enable_line_wrapping(void) {
-  write_slice(STDOUT_FILENO, vt_enable_line_wrapping);
+  write_slice(STDOUT_FILENO, vt_line_wrapping_on);
 }
 
 static void disable_focus_reporting(void) {
@@ -75,6 +75,16 @@ static void enable_bracketed_paste(void) {
 static void disable_bracketed_paste(void) {
   char buf[] = "\x1b[?2004l";
   write(STDOUT_FILENO, buf, sizeof(buf));
+}
+
+static void disable_mouse_mode(void) {
+  write_slice(STDOUT_FILENO, vt_mouse_mode_sgr_off);
+  write_slice(STDOUT_FILENO, vt_mouse_tracking_off);
+}
+
+static void enable_mouse_mode(void) {
+  write_slice(STDOUT_FILENO, vt_mouse_tracking_on);
+  write_slice(STDOUT_FILENO, vt_mouse_mode_sgr_on);
 }
 
 void terminal_setup(void) {
