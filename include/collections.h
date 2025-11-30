@@ -28,8 +28,8 @@ struct string {
 };
 
 struct u8_slice {
-  const size_t len;
-  const uint8_t *const content;
+  size_t len;
+  const uint8_t *content;
 };
 
 // A view into a vector
@@ -109,6 +109,7 @@ bool string_flush(struct string *str, int fd, int *total_written);
 void string_push_csi(struct string *str, char leading, struct int_slice params, const char *const final);
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
+void string_drop_left(struct string *str, size_t n);
 
 void vec_push(struct vec *v, const void *elem);
 /* remove the nth element from the vector */
@@ -122,6 +123,7 @@ void *vec_new_element(struct vec *v);
 void *vec_nth(const struct vec *const v, size_t i);
 struct u8_slice string_as_u8_slice(struct string *s);
 struct u8_slice u8_slice_from_cstr(const char *const str);
+struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }

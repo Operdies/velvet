@@ -94,15 +94,17 @@ static void stdin_callback(struct io_source *src, struct u8_slice str) {
   velvet_input_process(&m->input_handler, str);
 }
 
-static void read_callback(struct io_source *src, struct u8_slice str) {
-  struct app_context *m = src->data;
-  struct vte_host *vte;
-  vec_foreach(vte, m->multiplexer.hosts) {
-    if (vte->pty == src->fd) {
-      vte_host_process_output(vte, str);
-      break;
-    }
+static void vte_write_callback(struct io_source *src) {
+  struct vte_host *vte = src->data;
+  if (vte->vte.pending_input.len) {
+    size_t written = io_write(src, string_as_u8_slice(&vte->vte.pending_input));
+    if (written > 0) string_drop_left(&vte->vte.pending_input, written);
   }
+}
+
+static void vte_read_callback(struct io_source *src, struct u8_slice str) {
+  struct vte_host *vte = src->data;
+  vte_host_process_output(vte, str);
 }
 
 static void render_func(struct u8_slice str, void *context) {
@@ -177,15 +179,30 @@ int main(int argc, char **argv) {
   for (;;) {
     // Set up IO
     vec_clear(&io.sources);
-    struct io_source stdin_src = {.fd = STDIN_FILENO, .events = POLL_IN, .on_data = stdin_callback, .data = &app};
-    struct io_source signal_src = {.fd = signal_read, .events = POLL_IN, .on_data = signal_callback, .data = &app};
-    io_add_source(&io, signal_src);
-    io_add_source(&io, stdin_src);
+    struct io_source stdin_src = {
+        .fd = STDIN_FILENO, .events = IO_SOURCE_POLLIN, .read_callback = stdin_callback, .data = &app};
+    struct io_source signal_src = {
+        .fd = signal_read, .events = IO_SOURCE_POLLIN, .read_callback = signal_callback, .data = &app};
+    /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
+     * This is because the signal handler will remove closed clients, and the stdin handler
+     * processes hotkeys which can rearrange the order of the pointers.
+     * */
     struct vte_host *h;
     vec_foreach(h, app.multiplexer.hosts) {
-      struct io_source src = {.fd = h->pty, .events = POLL_IN, .on_data = read_callback, .data = &app};
-      io_add_source(&io, src);
+      struct io_source read_src = {
+          .data = h,
+          .fd = h->pty,
+          .events = IO_SOURCE_POLLIN,
+          .read_callback = vte_read_callback,
+          .write_callback = vte_write_callback,
+      };
+      if (h->vte.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
+      
+      io_add_source(&io, read_src);
     }
+
+    io_add_source(&io, signal_src);
+    io_add_source(&io, stdin_src);
 
     // Dispatch all pending io
     // TODO: if stdin_handler->state == PREFIX or stdin_handler->state == ESCAPE,

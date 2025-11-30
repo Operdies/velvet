@@ -5,7 +5,9 @@
 #include <string.h>
 
 static size_t next_size(size_t min) {
-  return MAX(min * 2, 1024);
+  size_t next = 4;
+  while (next < min) next = next * 2;
+  return next;
 }
 
 static void string_ensure_capacity(struct string *str, size_t required) {
@@ -75,7 +77,7 @@ bool string_starts_with(struct string *str, struct u8_slice slice) {
 bool string_ends_with(struct string *str, struct u8_slice slice) {
   if (!str->content || !slice.content) return false;
   if (str->len < slice.len) return false;
-  return memcmp(str->content - slice.len, slice.content, slice.len) == 0;
+  return memcmp(str->content + str->len - slice.len, slice.content, slice.len) == 0;
 }
 
 void string_memset(struct string *str, uint8_t ch, size_t len) {
@@ -332,7 +334,28 @@ struct u8_slice u8_slice_from_cstr(const char *const str) {
 }
 
 struct u8_slice string_as_u8_slice(struct string *s) {
-  return (struct u8_slice) { .len = s->len, .content = s->content };
+  return string_range(s, 0, -1);
+}
+
+/* whole string: string_range(s, 0, s->len)
+ * Also while string: string_range(s, 0, -1)
+ * Strip first and last: string_range(s, 1, -2)
+ * Last 10: string_range(s, -11, -1)
+ * */
+struct u8_slice string_range(struct string *s, ssize_t start, ssize_t end) {
+  if (end < 0) {
+    end = s->len + end + 1;
+  }
+  if (start < 0) {
+    start = s->len + start + 1;
+  }
+  size_t length = end - start;
+  assert(start >= 0);
+  assert(end <= (ssize_t)s->len);
+  assert(length > 0);
+  assert(start + length <= s->len);
+  struct u8_slice slice = { .content = s->content + start, .len = length };
+  return slice;
 }
 
 void vec_swap(struct vec *v, size_t i, size_t j) {

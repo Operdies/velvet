@@ -953,6 +953,26 @@ void test_hashmap_collisions() {
   hashmap_destroy(&h);
 }
 
+void test_string() {
+  struct string s = {0};
+  string_push(&s, u8"Hello!");
+  struct u8_slice middle = string_range(&s, 1, -2);
+  struct u8_slice start = string_range(&s, 0, 3);
+  struct u8_slice end = string_range(&s, 2, s.len);
+  assert(middle.len == 4);
+  assert(middle.content[0] == 'e');
+  assert(middle.content[3] == 'o');
+  assert(string_starts_with(&s, start));
+  assert(string_ends_with(&s, end));
+  string_drop_left(&s, 1);
+  assert(s.len == 5);
+  assert(string_starts_with(&s, u8_slice_from_cstr("ello!")));
+  string_drop_left(&s, 2);
+  assert(s.len == 3);
+  assert(string_starts_with(&s, u8_slice_from_cstr("lo!")));
+  string_destroy(&s);
+}
+
 int main(void) {
   atexit(done);
   test_input_output();
@@ -963,5 +983,6 @@ int main(void) {
   test_hash();
   test_hashmap();
   test_hashmap_collisions();
+  test_string();
   return n_failures;
 }
