@@ -539,14 +539,17 @@ static bool SM(struct vte *vte, struct csi *csi) {
   bool off = csi->final == 'l';
   assert(on || off);
 
-  int mode = csi->params[0].primary;
-  switch (mode) {
-  case 2: TODO("Keyboard Action Mode (KAM)"); return false;
-  case 4: TODO("Insert Mode (IRM)"); return false;
-  case 12: OMITTED("Send/receive (SRM)"); return false;
-  case 20: vte->options.auto_return = on; return true;
-  default: TODO("Set Mode %d", mode); return false;
+  for (int i = 0; i < csi->n_params; i++) {
+    int mode = csi->params[i].primary;
+    switch (mode) {
+    case 2: TODO("Keyboard Action Mode (KAM)"); break;
+    case 4: TODO("Insert Mode (IRM)"); break;
+    case 12: OMITTED("Send/receive (SRM)"); break;
+    case 20: vte->options.auto_return = on; break;
+    default: TODO("Set Mode %d", mode); break;
+    }
   }
+  return true;
 }
 
 static void set_cursor_blinking(struct vte *vte, bool blinking) {
@@ -609,56 +612,56 @@ static bool DECSET(struct vte *vte, struct csi *csi) {
   bool off = csi->final == 'l';
   assert(on || off);
 
-  int mode = csi->params[0].primary;
-
-  switch (mode) {
-  case 1: vte->options.application_mode = on; break;
-  case 6: vte->options.origin_mode = on; break;
-  case 7: vte->options.auto_wrap_mode = on; break;
-  case 12: set_cursor_blinking(vte, on); break;
-  case 25: vte->options.cursor.visible = on; break;
-  case 1004: vte->options.focus_reporting = on; break;
-  case 1049: {
-    if (on)
-      vte_enter_alternate_screen(vte);
-    else
-      vte_enter_primary_screen(vte);
-  } break;
-  case 2004: vte->options.bracketed_paste = on; break;
-  case 1007: m->alternate_scroll_mode = on; break;
-  case 9:
-  case 1000:
-  case 1001:
-  case 1002:
-  case 1003: {
-    if (on) {
-      m->tracking = mode;
-    } else {
-      // mouse tracking should only reset if the specified mode was active
-      if ((int)m->tracking == mode) {
-        m->tracking = MOUSE_TRACKING_OFF;
-        m->mode = MOUSE_MODE_DEFAULT;
+  for (int i = 0; i < csi->n_params; i++) {
+    int mode = csi->params[i].primary;
+    switch (mode) {
+    case 1: vte->options.application_mode = on; break;
+    case 6: vte->options.origin_mode = on; break;
+    case 7: vte->options.auto_wrap_mode = on; break;
+    case 12: set_cursor_blinking(vte, on); break;
+    case 25: vte->options.cursor.visible = on; break;
+    case 1004: vte->options.focus_reporting = on; break;
+    case 1049: {
+      if (on)
+        vte_enter_alternate_screen(vte);
+      else
+        vte_enter_primary_screen(vte);
+    } break;
+    case 2004: vte->options.bracketed_paste = on; break;
+    case 1007: m->alternate_scroll_mode = on; break;
+    case 9:
+    case 1000:
+    case 1001:
+    case 1002:
+    case 1003: {
+      if (on) {
+        m->tracking = mode;
+      } else {
+        // mouse tracking should only reset if the specified mode was active
+        if ((int)m->tracking == mode) {
+          m->tracking = MOUSE_TRACKING_OFF;
+          m->mode = MOUSE_MODE_DEFAULT;
+        }
       }
-    }
-  }
-    return false;
-  case 1005:
-  case 1006:
-  case 1015:
-  case 1016: {
-    if (on) {
-      m->mode = mode;
-    } else {
-      if ((int)m->mode == mode) {
-        m->mode = MOUSE_MODE_DEFAULT;
+    } break;
+    case 1005:
+    case 1006:
+    case 1015:
+    case 1016: {
+      if (on) {
+        m->mode = mode;
+      } else {
+        if ((int)m->mode == mode) {
+          m->mode = MOUSE_MODE_DEFAULT;
+        }
       }
+    } break;
+    case 2026:
+      TODO("Synchronized rendering: "
+           "https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md");
+      break;
+    default: csi_dispatch_todo(vte, csi); break;
     }
-  } break;
-  case 2026:
-    TODO("Synchronized rendering: "
-         "https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md");
-    return false;
-  default: return csi_dispatch_todo(vte, csi);
   }
   return true;
 }
