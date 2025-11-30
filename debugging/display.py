@@ -1,6 +1,11 @@
 import sys
 import lldb
 
+# If a collection is larger than this, it is most likely not initialized.
+# Regardless, the debugger will lag if we try to display it, so mark it as
+# suspicious instead,
+SUSPICIOUS_SIZE = 1 << 30
+
 def num(obj, name):
     return obj.GetChildMemberWithName(name).GetValueAsUnsigned(0)
 
@@ -129,14 +134,17 @@ class string_SynthProvider:
         content = self.o.GetChildMemberWithName('content')
 
         length_num = length.GetValueAsUnsigned(0)
-        contained_type = "uint8_t";
-        expr = f'*({contained_type} (*)[{length_num}])((void*){content.GetValueAsUnsigned(0)})'
-        elements = self.o.CreateValueFromExpression(f"u8[{length_num}]", expr)
+        if length_num < SUSPICIOUS_SIZE:
+            contained_type = "uint8_t";
+            expr = f'*({contained_type} (*)[{length_num}])((void*){content.GetValueAsUnsigned(0)})'
+            elements = self.o.CreateValueFromExpression(f"u8[{length_num}]", expr)
 
-        self.add_child(length)
-        if (capacity != None):
-            self.add_child(capacity)
-        self.add_child(elements)
+            self.add_child(length)
+            if (capacity != None):
+                self.add_child(capacity)
+            self.add_child(elements)
+        else:
+            seld.add_child(self.o.CreateValueFromExpression("content", f"<suspicious[{length_num}]>"))
 
 class vector_SynthProvider:
     def __init__(self, o, dict):
@@ -224,6 +232,8 @@ def u8_slice_summary(valobj, _1, _2):
     o2 = valobj.GetNonSyntheticValue()
     n = o2.GetChildMemberWithName('len').GetValueAsUnsigned(0)
     ptr = o2.GetChildMemberWithName('content')
+    if n > SUSPICIOUS_SIZE:
+        return f'<suspicious[{n}]>'
 
     def escape_control_chars(s: str) -> str:
         table = { }
