@@ -24,6 +24,8 @@ VT_MODE(mouse_mode_sgr, 1016);
 VT_MODE(mouse_tracking, 1003);
 VT_MODE(line_wrapping, 7);
 VT_MODE(cursor_visible, 7);
+VT_MODE(focus_reporting, 1004);
+VT_MODE(bracketed_paste, 2004);
 
 #undef VT
 #undef ESC

@@ -574,7 +574,7 @@ static void set_cursor_blinking(struct vte *vte, bool blinking) {
 static enum DECRQM_QUERY_RESPONSE query_ansi_mode(struct vte *vte, int mode) {
   struct emulator_options o = vte->options;
   switch (mode) {
-  case 20: return resp(vte->options.auto_return);
+  case 20: return resp(o.auto_return);
   default: return DECRQM_NOT_RECOGNIZED;
   }
 }

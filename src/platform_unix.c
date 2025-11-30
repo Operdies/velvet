@@ -1,9 +1,9 @@
 #include "platform.h"
 #include "utils.h"
-#include <termios.h>
-#include <unistd.h>
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 #include <virtual_terminal_sequences.h>
 
 static inline void leave_alternate_screen(void);
@@ -14,18 +14,20 @@ static inline void disable_focus_reporting(void);
 struct termios original_terminfo;
 struct termios raw_term;
 
-static int write_slice(int fd, struct u8_slice slice) { return write(fd, slice.content, slice.len); }
+static int write_slice(struct u8_slice slice) {
+  return write(STDOUT_FILENO, slice.content, slice.len);
+}
 
 void leave_alternate_screen(void) {
-  write_slice(STDOUT_FILENO, vt_leave_alternate_screen);
+  write_slice(vt_leave_alternate_screen);
 }
 
 void enter_alternate_screen(void) {
-  write_slice(STDOUT_FILENO, vt_enter_alternate_screen);
+  write_slice(vt_enter_alternate_screen);
 }
 
 void exit_raw_mode(void) {
-  write_slice(STDOUT_FILENO, vt_cursor_visible_on);
+  write_slice(vt_cursor_visible_on);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
 }
 
@@ -47,44 +49,41 @@ void platform_get_winsize(struct platform_winsize *w) {
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     die("TIOCGWINSZ:");
   }
-  *w = (struct platform_winsize) { .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel };
+  *w = (struct platform_winsize){
+      .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
 }
 
 static void disable_line_wrapping(void) {
-  write_slice(STDOUT_FILENO, vt_line_wrapping_off);
+  write_slice(vt_line_wrapping_off);
 }
 static void enable_line_wrapping(void) {
-  write_slice(STDOUT_FILENO, vt_line_wrapping_on);
+  write_slice(vt_line_wrapping_on);
 }
 
 static void disable_focus_reporting(void) {
-  char buf[] = "\x1b[?1004l";
-  write(STDOUT_FILENO, buf, sizeof(buf));
+  write_slice(vt_focus_reporting_off);
 }
 
 static void enable_focus_reporting(void) {
-  char buf[] = "\x1b[?1004h";
-  write(STDOUT_FILENO, buf, sizeof(buf));
+  write_slice(vt_focus_reporting_on);
 }
 
 static void enable_bracketed_paste(void) {
-  char buf[] = "\x1b[?2004h";
-  write(STDOUT_FILENO, buf, sizeof(buf));
+  write_slice(vt_bracketed_paste_on);
 }
 
 static void disable_bracketed_paste(void) {
-  char buf[] = "\x1b[?2004l";
-  write(STDOUT_FILENO, buf, sizeof(buf));
+  write_slice(vt_bracketed_paste_off);
 }
 
 static void disable_mouse_mode(void) {
-  write_slice(STDOUT_FILENO, vt_mouse_mode_sgr_off);
-  write_slice(STDOUT_FILENO, vt_mouse_tracking_off);
+  write_slice(vt_mouse_mode_sgr_off);
+  write_slice(vt_mouse_tracking_off);
 }
 
 static void enable_mouse_mode(void) {
-  write_slice(STDOUT_FILENO, vt_mouse_tracking_on);
-  write_slice(STDOUT_FILENO, vt_mouse_mode_sgr_on);
+  write_slice(vt_mouse_tracking_on);
+  write_slice(vt_mouse_mode_sgr_on);
 }
 
 void terminal_setup(void) {
