@@ -5,12 +5,17 @@
 #include "vte_host.h"
 #include "platform.h"
 
+struct host_features {
+  bool synchronized_rendering;
+};
+
 struct multiplexer {
   struct vec /*vte_host*/ hosts;
   struct platform_winsize ws;
   size_t focus;
   uint8_t prefix;
   struct string draw_buffer;
+  struct host_features host_features;
 };
 
 static const struct multiplexer multiplexer_default = {.prefix = ('x' & 037), .hosts = vec(struct vte_host)};
