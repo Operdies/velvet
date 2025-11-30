@@ -20,7 +20,8 @@ VT(focus_in, CSI "I");
 VT(clear, CSI "2J");
 
 VT_MODE(synchronized_rendering, 2026);
-VT_MODE(mouse_mode_sgr, 1016);
+VT_MODE(mouse_mode_sgr, 1006);
+VT_MODE(mouse_mode_sgr_pixel, 1016);
 VT_MODE(mouse_tracking, 1003);
 VT_MODE(line_wrapping, 7);
 VT_MODE(cursor_visible, 7);
