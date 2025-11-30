@@ -93,8 +93,10 @@ void terminal_setup(void) {
   disable_line_wrapping();
   enable_focus_reporting();
   enable_bracketed_paste();
+  enable_mouse_mode();
 }
 void terminal_reset(void) {
+  disable_mouse_mode();
   disable_bracketed_paste();
   disable_focus_reporting();
   enable_line_wrapping();

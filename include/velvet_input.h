@@ -4,9 +4,20 @@
 #include "collections.h"
 #include "multiplexer.h"
 
+enum velvet_input_state {
+  VELVET_INPUT_STATE_NORMAL,
+  VELVET_INPUT_STATE_ESC,
+  VELVET_INPUT_STATE_CSI,
+  VELVET_INPUT_STATE_PREFIX,
+  VELVET_INPUT_STATE_PREFIX_CONT,
+  VELVET_INPUT_STATE_BRACKETED_PASTE,
+};
+
 struct velvet_input {
   struct multiplexer *m;
-  int state;
+  uint8_t prefix;
+  enum velvet_input_state state;
+  struct string command_buffer;
 };
 
 
