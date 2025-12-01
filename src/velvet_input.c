@@ -80,7 +80,7 @@ static void send_csi_todo(struct velvet_input *in) {
   string_clear(&in->command_buffer);
 }
 
-static void mouse_debug_logging( struct mouse_sgr sgr) {
+static void mouse_debug_logging(struct mouse_sgr sgr) {
   char *mousebuttons[] = {"left", "middle", "right", "none"};
   char *mousebutton = mousebuttons[sgr.button_state];
   char *scrolldirs[] = {"up", "down", "left", "right"};
@@ -176,11 +176,10 @@ static void dispatch_csi(struct velvet_input *in, uint8_t ch) {
     if (c.state == CSI_ACCEPT) {
       assert(len == s.len);
       switch (c.final) {
-      case 'I': {
-        send(in, vt_focus_in);
-      } break;
+      case 'I':
       case 'O': {
-        send(in, vt_focus_out);
+        struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
+        if (focus->vte.options.focus_reporting) send(in, c.final == 'O' ? vt_focus_out : vt_focus_in);
       } break;
       case 'm':
       case 'M': {
