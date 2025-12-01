@@ -85,7 +85,7 @@ static void host_notify_focus(struct vte_host *host, bool focus) {
   }
 }
 
-static void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
+void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   if (m->focus != focus) {
     struct vte_host *current_focus = vec_nth(&m->hosts, m->focus);
     struct vte_host *new_focus = vec_nth(&m->hosts, focus);

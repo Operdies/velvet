@@ -13,11 +13,16 @@ enum velvet_input_state {
   VELVET_INPUT_STATE_BRACKETED_PASTE,
 };
 
+struct velvet_input_options {
+  bool focus_follows_mouse;
+};
+
 struct velvet_input {
   struct multiplexer *m;
   uint8_t prefix;
   enum velvet_input_state state;
   struct string command_buffer;
+  struct velvet_input_options options;
 };
 
 

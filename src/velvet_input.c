@@ -129,10 +129,20 @@ static void send_csi_mouse(struct velvet_input *in, struct csi c) {
 
   mouse_debug_logging(sgr);
 
+  if (in->options.focus_follows_mouse) {
+    if (sgr.event_type & mouse_move && sgr.button_state == mouse_none) {
+      for (size_t i = 0; i < in->m->hosts.length; i++) {
+        struct vte_host *h = vec_nth(&in->m->hosts, i);
+        struct bounds b = h->rect.window;
+        if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
+          multiplexer_set_focus(in->m, i);
+          break;
+        }
+      }
+    }
   }
 
-  if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) 
-    return;
+  if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
 
   switch (m.tracking) {
   case MOUSE_TRACKING_OFF:
