@@ -29,7 +29,7 @@ VT_PRIVATE_MODE(mouse_mode_sgr, 1006);
 VT_PRIVATE_MODE(mouse_mode_sgr_pixel, 1016);
 VT_PRIVATE_MODE(mouse_tracking, 1003);
 VT_PRIVATE_MODE(line_wrapping, 7);
-VT_PRIVATE_MODE(cursor_visible, 7);
+VT_PRIVATE_MODE(cursor_visible, 25);
 VT_PRIVATE_MODE(focus_reporting, 1004);
 VT_PRIVATE_MODE(bracketed_paste, 2004);
 
