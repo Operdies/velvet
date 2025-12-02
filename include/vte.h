@@ -125,6 +125,16 @@ struct mouse_options {
   bool readline_mouse3;       // 2003
 };
 
+// CSI ? Ps u
+enum kitty_keyboard_options {
+  KITTY_KEYBOARD_NONE = 0,
+  KITTY_KEYBOARD_DISAMBIGUATE_ESCAPE_CODES = 1,
+  KITTY_KEYBOARD_REPORT_EVENT_TYPES = 2,
+  KITTY_KEYBOARD_REPORT_ALTERNATE_KEYS = 4,
+  KITTY_KEYBOARD_REPORT_ALL_KEYS = 8,
+  KITTY_KEYBOARD_REPORT_ASSOCIATED_TEXT = 16,
+};
+
 struct emulator_options {
   /* if wrapping, we should return the cursor to the beginning of the line when
    * inserting a character which would cause an overflow. Otherwise, the cursor
@@ -150,6 +160,7 @@ struct emulator_options {
   struct charset_options charset;
   struct cursor_options cursor;
   struct mouse_options mouse;
+  enum kitty_keyboard_options kitty_keyboard_options;
 };
 
 /* finite state machine for parsing ansi escape codes */
