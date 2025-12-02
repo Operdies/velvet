@@ -47,8 +47,8 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
   }
   param->primary = num;
 
-  // Only parse subparameters in SGR sequences
   if (is_sgr) {
+    // If this is an sgr sequence, we do special validation, and additionally allow subparameters to be delimited by ';'
     int n_subparameters = 0;
     int value, length, color_type;
     value = length = color_type = 0;
@@ -80,10 +80,41 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
       return false;
     }
     param->n_sub = n_subparameters;
+  } else if (buffer[i] == ':') {
+    // otherwise parse subparameter sequences only if they are delimited by ':'
+    int value, length;
+    value = length = 0;
+    int n_subparameters = 0;
+    uint8_t separator = ':';
+    int subparameter_max = LENGTH(param->sub);
+    while (n_subparameters < subparameter_max && csi_read_subparameter(buffer + i, separator, &value, &length)) {
+      i += length;
+      param->sub[n_subparameters] = value;
+      n_subparameters++;
+    }
+    if (csi_read_subparameter(buffer + i, ':', &value, &length)) {
+      logmsg("Reject CSI: Too many subparameters");
+      *read = i;
+      return false;
+    }
+    param->n_sub = n_subparameters;
   }
 
   *read = i;
   return true;
+}
+
+// TODO: eww
+static bool looks_like_sgr(struct u8_slice str) {
+  if (str.len < 1) return false;
+  bool could_be = str.content[str.len - 1] == 'm';
+  if (could_be && str.len > 1) {
+    uint8_t leading = str.content[0];
+    uint8_t intermediate = str.content[str.len - 2];
+    could_be = (leading >= '0' && leading <= '9') || leading == ';';
+    could_be = could_be && ((intermediate >= '0' && intermediate <= '9') || intermediate == ';' || intermediate == ':');
+  }
+  return could_be;
 }
 
 int csi_parse(struct csi *c, struct u8_slice str) {
@@ -91,7 +122,7 @@ int csi_parse(struct csi *c, struct u8_slice str) {
     c->state = CSI_REJECT;
     return 0;
   }
-  bool is_sgr = c->leading == 0 && str.content[str.len - 1] == 'm';
+  bool is_sgr = looks_like_sgr(str);
   size_t i = 0;
   for (; i < str.len;) {
     char ch = str.content[i];
