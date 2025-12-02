@@ -279,7 +279,7 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
     string_push(b, beforetitle);
     string_push(b, (uint8_t *)p->title);
     string_push(b, aftertitle);
-    for (; i < right; i++) string_push(b, dash);
+    for (; i < right - 1; i++) string_push(b, dash);
     string_push(b, topright_corner);
   }
   if (!leftmost) {
