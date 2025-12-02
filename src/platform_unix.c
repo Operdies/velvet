@@ -87,6 +87,16 @@ static void enable_mouse_mode(void) {
   write_slice(vt_mouse_mode_sgr_on);
 }
 
+static void disable_kitty_keyboard(void) {
+  write_slice(vt_kitty_keyboard_off);
+}
+
+
+static void enable_kitty_keyboard(void) {
+  write_slice(vt_kitty_keyboard_on);
+}
+
+
 void terminal_setup(void) {
   enter_alternate_screen();
   enable_raw_mode();
