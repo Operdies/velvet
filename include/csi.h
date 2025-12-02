@@ -15,9 +15,9 @@ enum csi_vte_state {
 };
 
 struct csi_param {
-  uint32_t primary;
+  int primary;
   uint8_t n_sub;
-  uint8_t sub[5];
+  int sub[5];
 };
 
 struct csi {

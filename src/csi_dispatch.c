@@ -293,6 +293,14 @@ static char *csi_apply_sgr_from_params(struct screen_cell_style *style, int n, s
 
 bool csi_dispatch(struct vte *vte, struct csi *csi) {
   assert(csi->state == CSI_ACCEPT);
+  for (int i = 0; i < csi->n_params; i++) {
+    if (csi->params[i].primary < 0) {
+      // The parser accepts negative parameter values because some very specific input CSIs
+      // can be negative. No CSI commands I am aware of support it, so we should reject such requests immediately.
+      logmsg("Negative csi encountered: %.*s", vte->command_buffer.len, vte->command_buffer.content);
+      return false;
+    }
+  }
 
   // convert the three byte values into a single u32 value
 #define KEY(leading, intermediate, final)                                                                              \
