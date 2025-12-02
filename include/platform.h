@@ -5,8 +5,6 @@ struct platform_winsize {
   int rows, colums, x_pixel, y_pixel;
 };
 
-void exit_raw_mode(void);
-void enable_raw_mode(void);
 void platform_get_winsize(struct platform_winsize *w);
 
 extern const struct PLATFORM_IMPL {

@@ -6,44 +6,15 @@
 #include <unistd.h>
 #include <virtual_terminal_sequences.h>
 
-static inline void leave_alternate_screen(void);
-static inline void enter_alternate_screen(void);
-static inline void enable_focus_reporting(void);
-static inline void disable_focus_reporting(void);
-
 bool terminfo_initialized = false;
-struct termios original_terminfo = { 0 };
+struct termios original_terminfo = {0};
 struct termios raw_term;
 
-static int write_slice(struct u8_slice slice) {
-  return write(STDOUT_FILENO, slice.content, slice.len);
-}
-
-void leave_alternate_screen(void) {
-  write_slice(vt_leave_alternate_screen);
-}
-
-void enter_alternate_screen(void) {
-  write_slice(vt_enter_alternate_screen);
-}
-
-void exit_raw_mode(void) {
-  write_slice(vt_cursor_visible_on);
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
-}
-
-void enable_raw_mode(void) {
-  // Save and configure raw terminal mode
-  if (tcgetattr(STDIN_FILENO, &original_terminfo) == -1) {
-    die("tcgetattr:");
-  }
-
-  raw_term = original_terminfo;
-  cfmakeraw(&raw_term);
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
-    die("tcsetattr:");
-  }
-}
+typedef void (*setup_func)(void);
+struct setup_pair {
+  setup_func enable;
+  setup_func disable;
+};
 
 void platform_get_winsize(struct platform_winsize *w) {
   struct winsize ws;
@@ -54,11 +25,35 @@ void platform_get_winsize(struct platform_winsize *w) {
       .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
 }
 
-static void disable_line_wrapping(void) {
-  write_slice(vt_line_wrapping_off);
+
+static int write_slice(struct u8_slice slice) {
+  return write(STDOUT_FILENO, slice.content, slice.len);
 }
-static void enable_line_wrapping(void) {
-  write_slice(vt_line_wrapping_on);
+
+static void disable_alternate_screen(void) {
+  write_slice(vt_leave_alternate_screen);
+}
+
+static void enable_alternate_screen(void) {
+  write_slice(vt_enter_alternate_screen);
+}
+
+static void disable_raw_mode(void) {
+  write_slice(vt_cursor_visible_on);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
+}
+
+static void enable_raw_mode(void) {
+  // Save and configure raw terminal mode
+  if (tcgetattr(STDIN_FILENO, &original_terminfo) == -1) {
+    die("tcgetattr:");
+  }
+
+  raw_term = original_terminfo;
+  cfmakeraw(&raw_term);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
+    die("tcsetattr:");
+  }
 }
 
 static void disable_focus_reporting(void) {
@@ -91,31 +86,35 @@ static void disable_kitty_keyboard(void) {
   write_slice(vt_kitty_keyboard_off);
 }
 
-
 static void enable_kitty_keyboard(void) {
   write_slice(vt_kitty_keyboard_on);
 }
 
+#define SETUP(name)                                                                                                    \
+  {                                                                                                                    \
+      .enable = enable_##name,                                                                                         \
+      .disable = disable_##name,                                                                                       \
+  }
+
+static const struct setup_pair setup_functions[] = {
+    SETUP(alternate_screen),
+    SETUP(raw_mode),
+    SETUP(focus_reporting),
+    SETUP(bracketed_paste),
+    SETUP(mouse_mode),
+    // SETUP(kitty_keyboard),
+};
 
 void terminal_setup(void) {
-  enter_alternate_screen();
-  enable_raw_mode();
-  disable_line_wrapping();
-  enable_focus_reporting();
-  enable_bracketed_paste();
-  enable_mouse_mode();
+  for (int i = 0; i < LENGTH(setup_functions); i++) setup_functions[i].enable();
   terminfo_initialized = true;
 }
 
 void terminal_reset(void) {
-  if (terminfo_initialized) {
-    disable_mouse_mode();
-    disable_bracketed_paste();
-    disable_focus_reporting();
-    enable_line_wrapping();
-    exit_raw_mode();
-    leave_alternate_screen();
-  }
+  if (terminfo_initialized)
+    for (int i = LENGTH(setup_functions) - 1; i >= 0; i--)  {
+      setup_functions[i].disable();
+    }
 }
 
 void set_nonblocking(int fd) {

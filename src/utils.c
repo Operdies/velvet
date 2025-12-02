@@ -84,7 +84,7 @@ void *ecalloc(size_t sz, size_t count) {
 }
 
 _Noreturn void die(char *fmt, ...) {
-  exit_raw_mode();
+  terminal_reset();
   va_list ap;
   va_start(ap, fmt);
   vflogmsg(stderr, fmt, ap);

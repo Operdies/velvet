@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+#define LENGTH(x) ((int)(sizeof(x) / sizeof((x)[0])))
 #define INT_SLICE(...) ((struct int_slice) { .n = LENGTH(((int[]){ __VA_ARGS__ })), .content = ((int[]){ __VA_ARGS__ }) })
 #define STRING_SLICE(slc) ((struct u8_slice) { .len = sizeof(slc) - 1, .content = slc })
 
