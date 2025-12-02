@@ -59,7 +59,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
       separator = ';';
       bool did_read = csi_read_subparameter(buffer + i, separator, &color_type, &length);
       i += length;
-      if (!did_read || (color_type != 2 && color_type != 5)) {
+      if (!did_read) { 
         logmsg("Reject SGR %d: Missing color parameter", num);
         *read = i;
         return false;

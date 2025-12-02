@@ -12,29 +12,29 @@ static const struct u8_slice bracketed_paste_start = STRING_SLICE(u8"\x1b[200~")
 static const struct u8_slice bracketed_paste_end = STRING_SLICE(u8"\x1b[201~");
 
 enum scroll_direction {
-    scroll_up = 0,
-    scroll_down = 1,
-    scroll_left = 2,
-    scroll_right = 3,
-  };
+  scroll_up = 0,
+  scroll_down = 1,
+  scroll_left = 2,
+  scroll_right = 3,
+};
 
 enum mouse_state {
-    mouse_left = 0,
-    mouse_middle = 1,
-    mouse_right = 2,
-    mouse_none = 3,
-  };
+  mouse_left = 0,
+  mouse_middle = 1,
+  mouse_right = 2,
+  mouse_none = 3,
+};
 enum mouse_modifiers {
-    modifier_none = 0,
-    modifier_shift = 0x04,
-    modifier_alt = 0x08,
-    modifier_ctrl = 0x10,
-  };
+  modifier_none = 0,
+  modifier_shift = 0x04,
+  modifier_alt = 0x08,
+  modifier_ctrl = 0x10,
+};
 enum mouse_event {
-    mouse_click = 0,
-    mouse_move = 0x20,
-    mouse_scroll = 0x40,
-  };
+  mouse_click = 0,
+  mouse_move = 0x20,
+  mouse_scroll = 0x40,
+};
 enum mouse_trigger {
   mouse_down,
   mouse_up,
@@ -101,6 +101,18 @@ static void mouse_debug_logging(struct mouse_sgr sgr) {
   }
 }
 
+struct vte_host *coord_to_client(struct velvet_input *in, struct mouse_sgr sgr) {
+  for (size_t i = 0; i < in->m->hosts.length; i++) {
+    struct vte_host *h = vec_nth(&in->m->hosts, i);
+    struct bounds b = h->rect.window;
+    if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
+      return h;
+      break;
+    }
+  }
+  return nullptr;
+}
+
 struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
   int btn = c.params[0].primary;
   int col = c.params[1].primary;
@@ -121,10 +133,23 @@ struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
   return sgr;
 }
 
-static void send_csi_mouse(struct velvet_input *in, struct csi c) {
-  struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
-  struct mouse_options m = focus->vte.options.mouse;
+static void send_mouse_sgr(struct vte_host *target, struct mouse_sgr sgr) {
+  struct mouse_sgr trans = sgr;
+  trans.row = sgr.row - target->rect.client.y;
+  trans.column = sgr.column - target->rect.client.x;
 
+  int btn = trans.button_state | trans.modifiers | trans.event_type;
+  int start = target->vte.pending_input.len;
+  string_push_csi(&target->vte.pending_input,
+                  '<',
+                  INT_SLICE(btn, trans.column, trans.row),
+                  trans.trigger == mouse_down ? "M" : "m");
+  int end = target->vte.pending_input.len;
+  struct u8_slice s = string_range(&target->vte.pending_input, start, end);
+  logmsg("send sgr: %.*s", s.len, s.content);
+}
+
+static void send_csi_mouse(struct velvet_input *in, struct csi c) {
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
 
   mouse_debug_logging(sgr);
@@ -142,14 +167,23 @@ static void send_csi_mouse(struct velvet_input *in, struct csi c) {
     }
   }
 
-  if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
+  struct vte_host *target = coord_to_client(in, sgr);
+  if (!target) return;
 
-  switch (m.tracking) {
-  case MOUSE_TRACKING_OFF:
-  case MOUSE_TRACKING_LEGACY: return;
-  case MOUSE_TRACKING_CLICK: break;
-  case MOUSE_TRACKING_CELL_MOTION: break;
-  case MOUSE_TRACKING_ALL_MOTION: break;
+  struct mouse_options m = target->vte.options.mouse;
+  logmsg("Target: %s", target->title);
+  logmsg("Target tracking: %d", m.tracking);
+  logmsg("Target mode: %d", m.mode);
+  if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
+  if (m.mode != MOUSE_MODE_SGR) return;
+
+  bool do_send =
+      (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
+      ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) && sgr.event_type == mouse_click) ||
+      (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none);
+  // TODO: scroll
+  if (do_send) {
+    send_mouse_sgr(target, sgr);
   }
 }
 
@@ -183,6 +217,7 @@ static void dispatch_csi(struct velvet_input *in, uint8_t ch) {
       } break;
       case 'm':
       case 'M': {
+        logmsg("%.*s", s.len, s.content);
         send_csi_mouse(in, c);
       } break;
       default: send_csi_todo(in); break;
@@ -254,6 +289,11 @@ void velvet_input_process(struct velvet_input *in, struct u8_slice str) {
     case VELVET_INPUT_STATE_PREFIX_CONT: dispatch_prefix(in, ch); break;
     case VELVET_INPUT_STATE_BRACKETED_PASTE: dispatch_bracketed_paste(in, ch); break;
     }
+  }
+  if (in->state == VELVET_INPUT_STATE_ESC) {
+    in->state = VELVET_INPUT_STATE_NORMAL;
+    string_clear(&in->command_buffer);
+    send_byte(in, ESC);
   }
 }
 

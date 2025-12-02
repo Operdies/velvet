@@ -44,7 +44,7 @@ void string_push_csi(struct string *str, char leading, struct int_slice params, 
   for (int i = 0; i < params.n; i++) {
     assert(params.content[i] >= 0);
     if (i) string_push_char(str, ';');
-    if (params.content[i]) string_push_int(str, params.content[i]);
+    string_push_int(str, params.content[i]);
   }
   string_push(str, (uint8_t *)final);
 }
