@@ -55,10 +55,14 @@ static void send(struct velvet_input *in, struct u8_slice s) {
   struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
   string_push_slice(&focus->vte.pending_input, s);
 }
+
 static void send_byte(struct velvet_input *in, uint8_t ch) {
   struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
   string_push_char(&focus->vte.pending_input, ch);
 }
+
+#define send_bytes(in, ...)                                                                                            \
+  send(in, (struct u8_slice){.len = sizeof((uint8_t[]){__VA_ARGS__}), .content = (uint8_t[]){__VA_ARGS__}})
 
 static void dispatch_normal(struct velvet_input *in, uint8_t ch) {
   assert(in->command_buffer.len == 0);
@@ -204,15 +208,26 @@ static void dispatch_csi(struct velvet_input *in, uint8_t ch) {
 
   // TODO: Is this accurate?
   if (ch >= 0x40 && ch <= 0x7E) {
+    if (!in->m->hosts.length) return;
+    struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
     struct csi c = {0};
     struct u8_slice s = string_range(&in->command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
     if (c.state == CSI_ACCEPT) {
       assert(len == s.len);
       switch (c.final) {
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D': {
+        if (focus->vte.options.application_mode) {
+          send_bytes(in, ESC, 'O', c.final);
+        } else {
+          send(in, string_as_u8_slice(&in->command_buffer));
+        }
+      } break;
       case 'I':
       case 'O': {
-        struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
         if (focus->vte.options.focus_reporting) send(in, c.final == 'O' ? vt_focus_out : vt_focus_in);
       } break;
       case 'm':
@@ -235,8 +250,7 @@ static void dispatch_esc(struct velvet_input *in, uint8_t ch) {
     in->state = VELVET_INPUT_STATE_CSI;
   } break;
   default: {
-    send_byte(in, ESC);
-    send_byte(in, ch);
+    send_bytes(in, ESC, ch);
   } break;
   }
 }

@@ -24,9 +24,6 @@ struct vte_host {
   struct vte vte;
 };
 
-extern struct vte_host *clients;
-extern struct vte_host *focused;
-
 void vte_host_destroy(struct vte_host *vte_host);
 void vte_host_resize(struct vte_host *vte_host, struct bounds outer);
 void vte_host_start(struct vte_host *vte_host);
