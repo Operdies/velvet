@@ -41,14 +41,9 @@ struct vec_slice {
 
 // generically sized vector
 struct vec {
-  union {
-    struct vec_slice slice;
-    struct {
-      size_t length;
-      void *content;
-      size_t element_size;
-    };
-  };
+  size_t length;
+  void *content;
+  size_t element_size;
   size_t capacity;
 #ifndef RELEASE_BUILD
   const char *typename;
