@@ -1,0 +1,19 @@
+#define ___ 0
+
+#ifndef CSI 
+// avoid syntax errors while viewing this file, but warn at include sites
+#warning "CSI macro not defined."
+#define CSI(leading, intermdiate, final, command, description)
+#endif
+
+CSI('<', ___, 'M', SGR_MOUSE, "")
+CSI('<', ___, 'm', SGR_MOUSE, "")
+CSI(___, ___, 'I', FOCUS_IN, "")
+CSI(___, ___, 'O', FOCUS_OUT, "")
+CSI(___, ___, 'A', ARROW_KEY_UP, "")
+CSI(___, ___, 'B', ARROW_KEY_DOWN, "")
+CSI(___, ___, 'C', ARROW_KEY_RIGHT, "")
+CSI(___, ___, 'D', ARROW_KEY_LEFT, "")
+
+// modeline {{{1
+// vim: ft=c fdm=marker

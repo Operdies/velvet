@@ -4,7 +4,6 @@
 #include "virtual_terminal_sequences.h"
 
 #define ESC 0x1b
-#define CSI '['
 #define BRACKETED_PASTE_MAX (1 << 20)
 #define CSI_BUFFER_MAX (256)
 
@@ -64,7 +63,6 @@ static void send_byte(struct velvet_input *in, uint8_t ch) {
   send_bytes(in, ch);
 }
 
-
 static void dispatch_normal(struct velvet_input *in, uint8_t ch) {
   assert(in->command_buffer.len == 0);
   if (ch == in->prefix) {
@@ -84,6 +82,14 @@ static void send_csi_todo(struct velvet_input *in) {
   TODO("Input CSI: %.*s", in->command_buffer.len, in->command_buffer.content);
   string_clear(&in->command_buffer);
 }
+
+static void DISPATCH_FOCUS_OUT(struct velvet_input *in, const struct csi *const c);
+static void DISPATCH_FOCUS_IN(struct velvet_input *in, const struct csi *const c);
+static void DISPATCH_SGR_MOUSE(struct velvet_input *in, const struct csi *const c);
+static void DISPATCH_ARROW_KEY_UP(struct velvet_input *in, const struct csi *const c);
+static void DISPATCH_ARROW_KEY_DOWN(struct velvet_input *in, const struct csi *const c);
+static void DISPATCH_ARROW_KEY_LEFT(struct velvet_input *in, const struct csi *const c);
+static void DISPATCH_ARROW_KEY_RIGHT(struct velvet_input *in, const struct csi *const c);
 
 static void mouse_debug_logging(struct mouse_sgr sgr) {
   char *mousebuttons[] = {"left", "middle", "right", "none"};
@@ -118,10 +124,10 @@ struct vte_host *coord_to_client(struct velvet_input *in, struct mouse_sgr sgr) 
   return nullptr;
 }
 
-struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
-  int btn = c.params[0].primary;
-  int col = c.params[1].primary;
-  int row = c.params[2].primary;
+struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
+  int btn = c->params[0].primary;
+  int col = c->params[1].primary;
+  int row = c->params[2].primary;
 
   enum mouse_state mouse_button = btn & 0x03;
   enum mouse_modifiers modifiers = btn & (0x04 | 0x08 | 0x10);
@@ -133,7 +139,7 @@ struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
       .event_type = event_type,
       .row = row,
       .column = col,
-      .trigger = c.final == 'M' ? mouse_down : mouse_up,
+      .trigger = c->final == 'M' ? mouse_down : mouse_up,
   };
   return sgr;
 }
@@ -154,7 +160,7 @@ static void send_mouse_sgr(struct vte_host *target, struct mouse_sgr sgr) {
   logmsg("send sgr: %.*s", s.len, s.content);
 }
 
-static void send_csi_mouse(struct velvet_input *in, struct csi c) {
+static void send_csi_mouse(struct velvet_input *in, const struct csi *const c) {
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
 
   mouse_debug_logging(sgr);
@@ -184,7 +190,8 @@ static void send_csi_mouse(struct velvet_input *in, struct csi c) {
 
   bool do_send =
       (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
-      ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) && sgr.event_type == mouse_click) ||
+      ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
+       sgr.event_type == mouse_click) ||
       (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none);
   // TODO: scroll
   if (do_send) {
@@ -210,32 +217,21 @@ static void dispatch_csi(struct velvet_input *in, uint8_t ch) {
   // TODO: Is this accurate?
   if (ch >= 0x40 && ch <= 0x7E) {
     if (!in->m->hosts.length) return;
-    struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
     struct csi c = {0};
     struct u8_slice s = string_range(&in->command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
     if (c.state == CSI_ACCEPT) {
+      logmsg("Dispatch csi %.*s", s.len, s.content);
       assert(len == s.len);
-      switch (c.final) {
-      case 'A':
-      case 'B':
-      case 'C':
-      case 'D': {
-        if (focus->vte.options.application_mode) {
-          send_bytes(in, ESC, 'O', c.final);
-        } else {
-          send(in, string_as_u8_slice(&in->command_buffer));
-        }
-      } break;
-      case 'I':
-      case 'O': {
-        if (focus->vte.options.focus_reporting) send(in, c.final == 'O' ? vt_focus_out : vt_focus_in);
-      } break;
-      case 'm':
-      case 'M': {
-        logmsg("%.*s", s.len, s.content);
-        send_csi_mouse(in, c);
-      } break;
+
+
+#define KEY(leading, intermediate, final)                                                                              \
+  ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
+
+      switch (KEY(c.leading, c.intermediate, c.final)) {
+#define CSI(l, i, f, fn, _)                                                                                            \
+  case KEY(l, i, f): DISPATCH_##fn(in, &c); break;
+#include "input_csi.def"
       default: send_csi_todo(in); break;
       }
     }
@@ -246,7 +242,7 @@ static void dispatch_csi(struct velvet_input *in, uint8_t ch) {
 
 static void dispatch_esc(struct velvet_input *in, uint8_t ch) {
   switch (ch) {
-  case CSI: {
+  case '[': {
     string_push_char(&in->command_buffer, ch);
     in->state = VELVET_INPUT_STATE_CSI;
   } break;
@@ -314,4 +310,39 @@ void velvet_input_process(struct velvet_input *in, struct u8_slice str) {
 
 void velvet_input_destroy(struct velvet_input *in) {
   string_destroy(&in->command_buffer);
+}
+
+static void dispatch_focus(struct velvet_input *in, const struct csi *const c) {
+  struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
+  if (focus->vte.options.focus_reporting) send(in, c->final == 'O' ? vt_focus_out : vt_focus_in);
+}
+
+void DISPATCH_FOCUS_OUT(struct velvet_input *in, const struct csi *const c) {
+  dispatch_focus(in, c);
+}
+void DISPATCH_FOCUS_IN(struct velvet_input *in, const struct csi *const c) {
+  dispatch_focus(in, c);
+}
+void DISPATCH_SGR_MOUSE(struct velvet_input *in, const struct csi *const c) {
+  send_csi_mouse(in, c);
+}
+static void dispatch_arrow_key(struct velvet_input *in, const struct csi *const c) {
+  struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
+  if (focus->vte.options.application_mode) {
+    send_bytes(in, ESC, 'O', c->final);
+  } else {
+    send(in, string_as_u8_slice(&in->command_buffer));
+  }
+}
+void DISPATCH_ARROW_KEY_UP(struct velvet_input *in, const struct csi *const c) {
+  dispatch_arrow_key(in, c);
+}
+void DISPATCH_ARROW_KEY_DOWN(struct velvet_input *in, const struct csi *const c) {
+  dispatch_arrow_key(in, c);
+}
+void DISPATCH_ARROW_KEY_LEFT(struct velvet_input *in, const struct csi *const c) {
+  dispatch_arrow_key(in, c);
+}
+void DISPATCH_ARROW_KEY_RIGHT(struct velvet_input *in, const struct csi *const c) {
+  dispatch_arrow_key(in, c);
 }
