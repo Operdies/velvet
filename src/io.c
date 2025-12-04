@@ -73,21 +73,10 @@ void io_clear_sources(struct io *io) {
   vec_clear(&io->sources);
 }
 
-size_t io_write(struct io_source *io, struct u8_slice s) {
-  size_t written = 0;
-  while (s.len > written) {
-    ssize_t w = write(io->fd, s.content + written, s.len - written);
-    if (w == -1) {
-      if (errno == EAGAIN || errno == EINTR) {
-        break;
-      }
-      ERROR("write:");
-    }
-    if (w == 0) {
-      break;
-    }
-    written += w;
-  }
+ssize_t io_write(int fd, struct u8_slice s) {
+  ssize_t written = write(fd, s.content, s.len);
+  if (written == -1 && errno != EAGAIN && errno != EINTR)
+    ERROR("io_write:");
   return written;
 }
 

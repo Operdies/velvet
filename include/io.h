@@ -44,7 +44,10 @@ void io_add_source(struct io *io, struct io_source src);
 void io_clear_sources(struct io *io);
 /* Free all resources held by this io instance. */
 void io_destroy(struct io *io);
-size_t io_write(struct io_source *io, struct u8_slice content);
+ssize_t io_write(int fd, struct u8_slice content);
+
+#define io_write_literal(fd, str)                                                                                        \
+  io_write(fd, (struct u8_slice){.len = sizeof(str) - 1, .content = (uint8_t*)str})
 
 #define IO_H
 #endif // IO_H

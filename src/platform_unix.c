@@ -5,6 +5,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <virtual_terminal_sequences.h>
+#include "io.h"
 
 bool terminfo_initialized = false;
 struct termios original_terminfo = {0};
@@ -25,21 +26,16 @@ void platform_get_winsize(struct platform_winsize *w) {
       .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
 }
 
-
-static int write_slice(struct u8_slice slice) {
-  return write(STDOUT_FILENO, slice.content, slice.len);
-}
-
 static void disable_alternate_screen(void) {
-  write_slice(vt_leave_alternate_screen);
+  io_write(STDOUT_FILENO, vt_leave_alternate_screen);
 }
 
 static void enable_alternate_screen(void) {
-  write_slice(vt_enter_alternate_screen);
+  io_write(STDOUT_FILENO, vt_enter_alternate_screen);
 }
 
 static void disable_raw_mode(void) {
-  write_slice(vt_cursor_visible_on);
+  io_write(STDOUT_FILENO, vt_cursor_visible_on);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
 }
 
@@ -57,37 +53,37 @@ static void enable_raw_mode(void) {
 }
 
 static void disable_focus_reporting(void) {
-  write_slice(vt_focus_reporting_off);
+  io_write(STDOUT_FILENO, vt_focus_reporting_off);
 }
 
 static void enable_focus_reporting(void) {
-  write_slice(vt_focus_reporting_on);
+  io_write(STDOUT_FILENO, vt_focus_reporting_on);
 }
 
 static void enable_bracketed_paste(void) {
-  write_slice(vt_bracketed_paste_on);
+  io_write(STDOUT_FILENO, vt_bracketed_paste_on);
 }
 
 static void disable_bracketed_paste(void) {
-  write_slice(vt_bracketed_paste_off);
+  io_write(STDOUT_FILENO, vt_bracketed_paste_off);
 }
 
 static void disable_mouse_mode(void) {
-  write_slice(vt_mouse_mode_sgr_off);
-  write_slice(vt_mouse_tracking_off);
+  io_write(STDOUT_FILENO, vt_mouse_mode_sgr_off);
+  io_write(STDOUT_FILENO, vt_mouse_tracking_off);
 }
 
 static void enable_mouse_mode(void) {
-  write_slice(vt_mouse_tracking_on);
-  write_slice(vt_mouse_mode_sgr_on);
+  io_write(STDOUT_FILENO, vt_mouse_tracking_on);
+  io_write(STDOUT_FILENO, vt_mouse_mode_sgr_on);
 }
 
 static void disable_kitty_keyboard(void) {
-  write_slice(vt_kitty_keyboard_off);
+  io_write(STDOUT_FILENO, vt_kitty_keyboard_off);
 }
 
 static void enable_kitty_keyboard(void) {
-  write_slice(vt_kitty_keyboard_on);
+  io_write(STDOUT_FILENO, vt_kitty_keyboard_on);
 }
 
 #define SETUP(name)                                                                                                    \

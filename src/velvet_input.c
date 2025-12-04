@@ -51,18 +51,19 @@ struct mouse_sgr {
   int row, column;
 };
 
+#define send_bytes(in, ...)                                                                                            \
+  send(in, (struct u8_slice){.len = sizeof((uint8_t[]){__VA_ARGS__}), .content = (uint8_t[]){__VA_ARGS__}})
+
 static void send(struct velvet_input *in, struct u8_slice s) {
+  assert(in->m->hosts.length > 0);
   struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
   string_push_slice(&focus->vte.pending_input, s);
 }
 
 static void send_byte(struct velvet_input *in, uint8_t ch) {
-  struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
-  string_push_char(&focus->vte.pending_input, ch);
+  send_bytes(in, ch);
 }
 
-#define send_bytes(in, ...)                                                                                            \
-  send(in, (struct u8_slice){.len = sizeof((uint8_t[]){__VA_ARGS__}), .content = (uint8_t[]){__VA_ARGS__}})
 
 static void dispatch_normal(struct velvet_input *in, uint8_t ch) {
   assert(in->command_buffer.len == 0);
