@@ -4,6 +4,7 @@
 #include <poll.h>
 
 struct io_source;
+typedef void (*io_ready_callback)(struct io_source *src);
 typedef void (*io_read_callback)(struct io_source *src, struct u8_slice str);
 typedef void (*io_write_callback)(struct io_source *src);
 
@@ -19,6 +20,8 @@ struct io_source {
   enum IO_SOURCE_EVENT events;
   /* called when data is read from the file descriptor */
   io_read_callback read_callback;
+  /* called in lieu of read_callback in case the client needs to manually read */
+  io_ready_callback ready_callback;
   io_write_callback write_callback;
   /* user data */
   void *data;

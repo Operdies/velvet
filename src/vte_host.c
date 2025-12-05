@@ -203,11 +203,11 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
   for (int row = 0; row < g->h; row++) {
     struct screen_row *screen_row = &g->rows[row];
     if (!redraw && !screen_row->dirty) continue;
-    screen_row->dirty = false;
+    if (!redraw) screen_row->dirty = false;
     int columnno = 1 + vte_host->rect.client.x;
     int lineno = 1 + vte_host->rect.client.y + row;
     int line_length = MIN(screen_row->eol, g->w);
-    string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
+    string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), u8"H");
 
     for (int col = 0; col < line_length; col++) {
       struct screen_cell *c = &screen_row->cells[col];

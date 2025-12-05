@@ -2,11 +2,37 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug zsh",
+      "name": "attach to new session",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "zsh" ],
+      "args": [  ],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "make all",
+      "console": "externalTerminal",
+      "initCommands": [
+        "command source ${workspaceFolder}/lldb-config"
+      ]
+    },
+    {
+      "name": "attach",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [ "attach" ],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "make all",
+      "console": "externalTerminal",
+      "initCommands": [
+        "command source ${workspaceFolder}/lldb-config"
+      ]
+    },
+    {
+      "name": "headless",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/vv",
+      "args": [ "--headless" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "console": "externalTerminal",

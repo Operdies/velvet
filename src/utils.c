@@ -95,12 +95,7 @@ _Noreturn void die(char *fmt, ...) {
 #ifndef NDEBUG
 
 static void vlogmsg(char *fmt, va_list ap) {
-  static FILE *f;
-  if (!f) {
-    f = fopen("/tmp/vv.log", "w");
-  }
-
-  vflogmsg(f, fmt, ap);
+  vflogmsg(stdout, fmt, ap);
 }
 
 void logmsg(char *fmt, ...) {

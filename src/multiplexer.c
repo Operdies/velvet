@@ -6,13 +6,14 @@
 #include <string.h>
 #include <sys/wait.h>
 
-static int nmaster = 1;
+static size_t nmaster = 1;
 static float factor = 0.5;
 void multiplexer_arrange(struct multiplexer *m) {
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.rows};
-  int mh, mx, mw, my, sy, sw, nm, ns, i, n;
+  size_t i, n;
+  int mh, mx, mw, my, sy, sw, nm, ns;
   int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.colums);
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.rows);
 
@@ -71,7 +72,7 @@ static void vte_host_invalidate(struct vte_host *h) {
   vte_invalidate_screen(&h->vte);
 }
 
-static void multiplexer_swap_clients(struct multiplexer *m, int c1, int c2) {
+static void multiplexer_swap_clients(struct multiplexer *m, size_t c1, size_t c2) {
   if (c1 != c2) {
     vec_swap(&m->hosts, c1, c2);
     vte_host_invalidate(vec_nth(&m->hosts, c1));
@@ -329,14 +330,14 @@ void multiplexer_remove_exited(struct multiplexer *m) {
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     if (WIFEXITED(status)) {
-      for (size_t i = 0; i < m->hosts.length; i++) {
-        struct vte_host *h = vec_nth(&m->hosts, i);
+      struct vte_host *h;
+      vec_foreach(h, m->hosts) {
         if (h->pid == pid) {
           // zero the pid to indicate the process exited.
           // otherwise the process will be reaped in vte_host_destroy
           h->pid = 0;
           vte_host_destroy(h);
-          multiplexer_remove_host(m, i);
+          multiplexer_remove_host(m, vec_index(h, m->hosts));
           break;
         }
       }
@@ -355,7 +356,7 @@ void multiplexer_resize(struct multiplexer *m, struct platform_winsize w) {
   }
 }
 
-void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void *context) {
+void multiplexer_render(struct multiplexer *m, render_func_t *render_func, bool full_draw, void *context) {
   if (m->hosts.length == 0) return;
   static enum cursor_style current_cursor_style = 0;
   struct string *draw_buffer = &m->draw_buffer;
@@ -372,8 +373,11 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void 
   for (size_t i = 0; i < m->hosts.length; i++) {
     struct vte_host *h = vec_nth(&m->hosts, i);
     vte_host_update_cwd(h);
-    vte_host_draw(h, false, draw_buffer);
+    vte_host_draw(h, full_draw, draw_buffer);
+    bool stored = h->border_dirty;
+    if (full_draw) h->border_dirty = true;
     vte_host_draw_border(h, draw_buffer, i == m->focus);
+    h->border_dirty = stored;
   }
 
   {

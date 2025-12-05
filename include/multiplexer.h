@@ -29,6 +29,6 @@ void multiplexer_destroy(struct multiplexer *m);
 void multiplexer_set_focus(struct multiplexer *m, size_t focus);
 
 typedef void (render_func_t)(struct u8_slice str, void *context);
-void multiplexer_render(struct multiplexer *m, render_func_t *render_func, void *context);
+void multiplexer_render(struct multiplexer *m, render_func_t *render_func, bool full_redraw, void *context);
 
 #endif // MULTIPLEXER_H

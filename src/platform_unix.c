@@ -34,6 +34,15 @@ static void enable_alternate_screen(void) {
   io_write(STDOUT_FILENO, vt_enter_alternate_screen);
 }
 
+static void enable_no_line_wrapping(void) {
+  io_write(STDOUT_FILENO, vt_line_wrapping_off);
+}
+
+static void disable_no_line_wrapping(void) {
+  io_write(STDOUT_FILENO, vt_line_wrapping_on);
+}
+
+
 static void disable_raw_mode(void) {
   io_write(STDOUT_FILENO, vt_cursor_visible_on);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminfo);
@@ -95,6 +104,7 @@ static void enable_kitty_keyboard(void) {
 static const struct setup_pair setup_functions[] = {
     SETUP(alternate_screen),
     SETUP(raw_mode),
+    SETUP(no_line_wrapping),
     SETUP(focus_reporting),
     SETUP(bracketed_paste),
     SETUP(mouse_mode),
