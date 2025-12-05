@@ -154,7 +154,7 @@ static void send_mouse_sgr(struct vte_host *target, struct mouse_sgr sgr) {
   string_push_csi(&target->vte.pending_input,
                   '<',
                   INT_SLICE(btn, trans.column, trans.row),
-                  trans.trigger == mouse_down ? "M" : "m");
+                  trans.trigger == mouse_down ? u8"M" : u8"m");
   int end = target->vte.pending_input.len;
   struct u8_slice s = string_range(&target->vte.pending_input, start, end);
   logmsg("send sgr: %.*s", s.len, s.content);

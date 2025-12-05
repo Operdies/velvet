@@ -19,7 +19,7 @@
 
 struct int_slice {
   int *content;
-  int n;
+  size_t n;
 };
 
 struct string {
@@ -101,7 +101,7 @@ void string_clear(struct string *str);
 void string_destroy(struct string *str);
 /* flush the string instance to the specified file descriptor */
 bool string_flush(struct string *str, int fd, int *total_written);
-void string_push_csi(struct string *str, char leading, struct int_slice params, const char *const final);
+void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const uint8_t *const final);
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_drop_left(struct string *str, size_t n);
@@ -126,11 +126,35 @@ struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_
 #define vec(type) (struct vec) { .element_size = sizeof(type), .typename = #type }
 #endif
 
-#define vec_foreach(item, vec)                                                 \
-  assert(sizeof(*(item)) == (vec).element_size);                               \
-  for ((item) = vec.content;                                                   \
-       ((char *)(item)) <                                                      \
-       ((char *)(vec).content + (vec).length * (vec).element_size);            \
-       (item)++)
+#define vec_rforeach(item, vec)                                                                                        \
+  assert(sizeof(*(item)) == (vec).element_size);                                                                       \
+  for ((item) = ((vec).length == 0)                                                                                    \
+                    ? nullptr                                                                                          \
+                    : (void *)((char *)(vec).content + (vec).length * (vec).element_size - (vec).element_size);        \
+       ((vec).length) && (((char *)(item)) >= (char *)(vec).content);                                                  \
+       (item)--)
+
+#define vec_foreach(item, vec)                                                                                         \
+  assert(sizeof(*(item)) == (vec).element_size);                                                                       \
+  for ((item) = (vec).content; (((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size)); (item)++)
+
+#define vec_index(item, vec)                                                                                           \
+  ((char *)item) >= ((char *)(vec).content) &&                                                                         \
+          ((char *)item) < (((char *)(vec).content) + (vec).length * (vec).element_size)                               \
+      ? ((ssize_t)(((char *)(item)) - ((char *)(vec).content)) / (vec).element_size)                                   \
+      : -1
+
+#define vec_find(item, vec, expr)                                                                                      \
+  do {                                                                                                                 \
+    assert(sizeof(*(item)) == (vec).element_size);                                                                     \
+    item = nullptr;                                                                                                    \
+    for ((item) = vec.content; (item) && !(expr);) {                                                                   \
+      item++; /* go next */                                                                                            \
+      if (!(((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size))) {                         \
+        item = nullptr; /* set item to nullptr if not found */                                                         \
+        break;                                                                                                         \
+      }                                                                                                                \
+    }                                                                                                                  \
+  } while (0)
 
 #endif /*  COLLECTIONS_H */

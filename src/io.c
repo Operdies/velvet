@@ -40,7 +40,9 @@ void io_dispatch(struct io *io, int poll_timeout) {
     for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < MAX_IT; repeats++) {
       const int poll_ms = 0;
       // Read output
-      if (pfd->revents & POLLIN) {
+      if (pfd->revents & POLLIN && src->ready_callback) {
+        src->ready_callback(src);
+      } else if (pfd->revents & POLLIN) {
         int n = read(pfd->fd, readbuffer, sizeof(readbuffer));
         if (n == -1) {
           // A signal was raised during the read. This is okay.
@@ -49,10 +51,18 @@ void io_dispatch(struct io *io, int poll_timeout) {
           // This is also ok. The fd was non-blocking was not ready for reading.
           if (errno == EAGAIN) break;
           // Log other read errors for visibility
+          if (errno == EIO) {
+            ERROR("EIO:");
+            // assume this error is non-recoverable and close.
+            struct u8_slice s = {0};
+            src->read_callback(src, s);
+            break;
+          }
           ERROR("read:");
+        } else {
+          struct u8_slice s = {.len = (size_t)n, .content = readbuffer};
+          src->read_callback(src, s);
         }
-        struct u8_slice s = {.len = n, .content = readbuffer};
-        src->read_callback(src, s);
       }
       // write input
       if (pfd->revents & POLLOUT) {

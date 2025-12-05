@@ -973,6 +973,60 @@ void test_string() {
   string_destroy(&s);
 }
 
+void test_vec() {
+  int *item;
+  struct vec v = vec(int);
+  assert(vec_index(&item, v) == -1);
+  vec_foreach(item, v) {
+    assert(!"foreach: Vec should be empty!");
+  }
+  vec_rforeach(item, v) {
+    assert(!"rforeach: Vec should be empty!");
+  }
+  vec_find(item, v, *item == 1);
+  assert(item == nullptr);
+  int expected[] = {3, 6, 7, 8, 0, 1, 3, 5, 1};
+  for (int i = 0; i < LENGTH(expected); i++) {
+    vec_push(&v, expected + i);
+  }
+  vec_find(item, v, *item == 1);
+  assert(item != nullptr);
+  assert(*item == 1);
+  assert(vec_index(item, v) == 5);
+  ssize_t index = 0;
+  vec_foreach(item, v) {
+    int actual = *item;
+    int exp = expected[index];
+    int actual_index = vec_index(item, v);
+    assert(index == actual_index);
+    assert(actual == exp);
+    index++;
+  }
+  assert((size_t)index == v.length);
+  index = v.length - 1;
+  vec_rforeach(item, v) {
+    int actual = *item;
+    int exp = expected[index];
+    int actual_index = vec_index(item, v);
+    assert(index == actual_index);
+    assert(actual == exp);
+    index--;
+  }
+  assert(index == -1);
+  vec_rforeach(item, v) {
+    vec_remove(&v, vec_index(item, v));
+  }
+  vec_foreach(item, v) {
+    assert(!"foreach: Vec should be empty!");
+  }
+  vec_rforeach(item, v) {
+    assert(!"rforeach: Vec should be empty!");
+  }
+  vec_find(item, v, *item == 1);
+  assert(item == nullptr);
+  vec_destroy(&v);
+}
+
 int main(void) {
   atexit(done);
   test_input_output();
@@ -984,5 +1038,6 @@ int main(void) {
   test_hashmap();
   test_hashmap_collisions();
   test_string();
+  test_vec();
   return n_failures;
 }
