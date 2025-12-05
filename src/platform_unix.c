@@ -111,6 +111,7 @@ void terminal_reset(void) {
     for (int i = LENGTH(setup_functions) - 1; i >= 0; i--)  {
       setup_functions[i].disable();
     }
+  terminfo_initialized = false;
 }
 
 void set_nonblocking(int fd) {

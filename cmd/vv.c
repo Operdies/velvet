@@ -48,6 +48,8 @@ struct app_context {
   struct velvet_input input_handler;
   bool quit;
   char *quit_reason;
+  struct vec /* int */ inputs;
+  struct vec /* int */ outputs;
 };
 
 static void signal_callback(struct io_source *src, struct u8_slice str) {
@@ -108,8 +110,11 @@ static void vte_read_callback(struct io_source *src, struct u8_slice str) {
 }
 
 static void render_func(struct u8_slice str, void *context) {
-  int fd = *(int*)context;
-  write(fd, str.content, str.len);
+  struct app_context *a = context;
+  int *fd;
+  vec_foreach(fd, a->outputs) {
+    io_write(*fd, str);
+  }
 }
 
 static void add_bindir_to_path(char *arg0) {
@@ -145,7 +150,14 @@ static void query_features(void) {
   };
 
   for (size_t i = 0; i < LENGTH(features); i++)
-    write(STDOUT_FILENO, features[i].content, features[i].len);
+    io_write(STDOUT_FILENO, features[i]);
+}
+
+static void app_destroy(struct app_context *app) {
+  multiplexer_destroy(&app->multiplexer);
+  velvet_input_destroy(&app->input_handler);
+  vec_destroy(&app->inputs);
+  vec_destroy(&app->outputs);
 }
 
 int main(int argc, char **argv) {
@@ -162,12 +174,25 @@ int main(int argc, char **argv) {
   query_features();
   install_signal_handlers();
 
-  struct app_context app = {.multiplexer = multiplexer_default};
-  app.input_handler = (struct velvet_input){
-      .m = &app.multiplexer,
-      .prefix = ('x' & 0x1f),
-      .options = {.focus_follows_mouse = true},
+  struct app_context app = {
+      .multiplexer = multiplexer_default,
+      .input_handler =
+          (struct velvet_input){
+              .m = &app.multiplexer,
+              .prefix = ('x' & 0x1f),
+              .options = {.focus_follows_mouse = true},
+          },
+      .inputs = vec(int),
+      .outputs = vec(int),
   };
+
+  {
+    int fd_stdin = STDIN_FILENO;
+    vec_push(&app.inputs, &fd_stdin);
+    int fd_stdout = STDOUT_FILENO;
+    vec_push(&app.outputs, &fd_stdout);
+  }
+
   multiplexer_resize(&app.multiplexer, ws);
 
   if (argc < 2) {
@@ -183,8 +208,6 @@ int main(int argc, char **argv) {
   for (;;) {
     // Set up IO
     vec_clear(&io.sources);
-    struct io_source stdin_src = {
-        .fd = STDIN_FILENO, .events = IO_SOURCE_POLLIN, .read_callback = stdin_callback, .data = &app};
     struct io_source signal_src = {
         .fd = signal_read, .events = IO_SOURCE_POLLIN, .read_callback = signal_callback, .data = &app};
     /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
@@ -206,7 +229,13 @@ int main(int argc, char **argv) {
     }
 
     io_add_source(&io, signal_src);
-    io_add_source(&io, stdin_src);
+
+    int *fildes;
+    vec_foreach(fildes, app.inputs) {
+      struct io_source stdin_src = { .fd = *fildes, .events = IO_SOURCE_POLLIN, .read_callback = stdin_callback, .data = &app};
+      io_add_source(&io, stdin_src);
+    }
+
 
     // Dispatch all pending io
     // TODO: if stdin_handler->state == PREFIX or stdin_handler->state == ESCAPE,
@@ -220,14 +249,13 @@ int main(int argc, char **argv) {
     multiplexer_arrange(&app.multiplexer);
 
     // Render the current app state
-    multiplexer_render(&app.multiplexer, render_func, &(int){STDOUT_FILENO});
+    multiplexer_render(&app.multiplexer, render_func, &app);
   }
 
   if (app.multiplexer.hosts.length == 0)
     app.quit_reason = "last window closed";
 
-  multiplexer_destroy(&app.multiplexer);
-  velvet_input_destroy(&app.input_handler);
+  app_destroy(&app);
   io_destroy(&io);
 
   terminal_reset();
