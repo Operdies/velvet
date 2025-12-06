@@ -322,23 +322,23 @@ static void draw_no_mans_land(struct app_context *app) {
   vec_foreach(sesh, app->sessions) {
     if (sesh->ws.colums && sesh->ws.rows) {
       string_clear(&scratch);
-      string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), u8"m");
+      string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
       // 1. Draw the empty space to the right of this client
       if (sesh->ws.colums > active->ws.colums) {
         int draw_count = sesh->ws.colums - active->ws.colums;
         for (int i = 0; i < active->ws.rows; i++) {
-          string_push_csi(&scratch, 0, INT_SLICE(i + 1, active->ws.colums + 1), u8"H");
+          string_push_csi(&scratch, 0, INT_SLICE(i + 1, active->ws.colums + 1), "H");
           string_push_slice(&scratch, u8_slice_from_cstr("·"));
-          if (draw_count > 1) string_push_csi(&scratch, 0, INT_SLICE(draw_count - 1), u8"b");
+          if (draw_count > 1) string_push_csi(&scratch, 0, INT_SLICE(draw_count - 1), "b");
         }
       }
       // 2. Draw the empty space below this client
       for (int i = active->ws.rows; i < sesh->ws.rows; i++) {
-        string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), u8"H");
+        string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
         string_push_slice(&scratch, u8_slice_from_cstr("·"));
-        string_push_csi(&scratch, 0, INT_SLICE(sesh->ws.colums - 1), u8"b");
+        string_push_csi(&scratch, 0, INT_SLICE(sesh->ws.colums - 1), "b");
       }
-      string_push_csi(&scratch, 0, INT_SLICE(0), u8"m");
+      string_push_csi(&scratch, 0, INT_SLICE(0), "m");
       string_push_slice(&sesh->pending_output, string_as_u8_slice(&scratch));
     }
   }
@@ -432,23 +432,26 @@ static void start_server(struct app_context *app) {
 
 static void vv_attach(char *SOCKET_PATH);
 
+static int get_flag(int argc, char **argv, char *flag) {
+  for (int i = 1; i < argc; i++) if (strcmp(argv[i], flag) == 0) return i;
+  return 0;
+}
+
 int main(int argc, char **argv) {
+#define FLAG(name) get_flag(argc, argv, name)
 #define ARGUMENT(long, present, next, default)                                                                         \
   do {                                                                                                                 \
     present = false;                                                                                                   \
-    if (next) *((char **)next) = default;                                                                              \
-    for (int i = 1; i < argc; i++) {                                                                                   \
-      if (strcmp(long, argv[i]) == 0) {                                                                                \
-        present = true;                                                                                                \
-        if (next && i < argc - 1) *((char **)next) = argv[i + 1];                                                      \
-        break;                                                                                                         \
-      }                                                                                                                \
+    next = default;                                                                                                    \
+    if (FLAG(long) && FLAG(long) < argc - 1) {                                                                         \
+      present = true;                                                                                                  \
+      next = argv[FLAG(long) + 1];                                                                                     \
     }                                                                                                                  \
   } while (0)
 
   bool attach = false;
   char *server;
-  ARGUMENT("attach", attach, &server, nullptr);
+  ARGUMENT("attach", attach, server, nullptr);
   if (attach) {
     if (getenv("VELVET")) {
       fprintf(stderr, "Unable to attach; terminal is already in a velvet session.");
@@ -459,8 +462,7 @@ int main(int argc, char **argv) {
   }
 
   // in headless mode, the server starts with no GUI on
-  bool headless = false;
-  ARGUMENT("--headless", headless, 0, 0);
+  bool headless = FLAG("--headless");
 
   int sock_fd = create_socket();
 

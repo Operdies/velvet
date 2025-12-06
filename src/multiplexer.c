@@ -232,7 +232,7 @@ void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
         }
         // If the vte_host does not have the feature enabled, ignore it.
       } else {
-        string_push_csi(&writebuffer, 0, (struct int_slice){0}, (uint8_t[]){ch, 0});
+        string_push_csi(&writebuffer, 0, (struct int_slice){0}, (char[]){ch, 0});
       }
       s = normal;
     } break;

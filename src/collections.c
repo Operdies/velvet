@@ -37,7 +37,7 @@ void string_push_int(struct string *str, int n) {
   string_push_range(str, buf + idx, max - idx);
 }
 
-void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const uint8_t *const final) {
+void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const char *const final) {
   const uint8_t *csi = u8"\x1b[";
   string_push(str, csi);
   if (leading) string_push_char(str, leading);
@@ -85,7 +85,6 @@ bool string_ends_with(struct string *str, struct u8_slice slice) {
 }
 
 void string_drop_left(struct string *str, size_t n) {
-  assert(n >= 0);
   assert(n <= str->len);
   size_t copy = str->len - n;
   if (n && copy) {
