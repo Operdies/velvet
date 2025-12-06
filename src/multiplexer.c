@@ -6,13 +6,13 @@
 #include <string.h>
 #include <sys/wait.h>
 
-static size_t nmaster = 1;
+static int nmaster = 1;
 static float factor = 0.5;
 void multiplexer_arrange(struct multiplexer *m) {
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.rows};
-  size_t i, n;
+  int i, n;
   int mh, mx, mw, my, sy, sw, nm, ns;
   int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.colums);
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.rows);
@@ -232,7 +232,7 @@ void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
         }
         // If the vte_host does not have the feature enabled, ignore it.
       } else {
-        string_push_csi(&writebuffer, 0, (struct int_slice){0}, (char[]){ch, 0});
+        string_push_csi(&writebuffer, 0, (struct int_slice){0}, (uint8_t[]){ch, 0});
       }
       s = normal;
     } break;

@@ -291,15 +291,13 @@ static int create_socket() {
   int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) die("socket:");
   char *base = "/tmp/velvet_sock";
-  struct sockaddr_un addr = { 0 };
+  struct sockaddr_un addr = {.sun_family = AF_UNIX};
   struct stat buf;
   bool success = false;
   for (int i = 1; i < 100 && !success; i++) {
     snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
     success = stat(addr.sun_path, &buf) == -1;
   }
-
-  addr.sun_len = strlen(addr.sun_path);
 
   if (!success) die("No free socket.");
   if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
@@ -489,8 +487,6 @@ int main(int argc, char **argv) {
       // new child. exiting this process causes the server process to be detached
       return 0;
     }
-
-    terminal_setup();
   }
 
   install_signal_handlers();
@@ -580,7 +576,7 @@ static void vv_attach(char *vv_socket) {
     struct stat buf;
     bool connected = false;
     for (int i = 1; i < 100 && !connected; i++) {
-      addr.sun_len = snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
+      snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
       bool exists = stat(addr.sun_path, &buf) == 0;
       if (exists) {
         if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
@@ -605,7 +601,6 @@ static void vv_attach(char *vv_socket) {
   }
 
   terminal_setup();
-
   vv_attach_send_message(sockfd, ws, true);
 
   // Block until EOF on the socket
@@ -639,5 +634,9 @@ static void vv_attach(char *vv_socket) {
   close(sockfd);
   terminal_reset();
 
-  io_write(STDOUT_FILENO, detach ? u8_slice_from_cstr("[Detached]\n") : u8_slice_from_cstr("[Shutdown]\n"));
+  if (detach) {
+    printf("[Detached]\n");
+  } else {
+    printf("[Shutdown]\n");
+  }
 }
