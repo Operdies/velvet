@@ -433,31 +433,22 @@ static void start_server(struct app_context *app) {
 static void vv_attach(char *SOCKET_PATH);
 
 static int get_flag(int argc, char **argv, char *flag) {
-  for (int i = 1; i < argc; i++) if (strcmp(argv[i], flag) == 0) return i;
+  for (int i = 1; i < argc; i++)
+    if (strcmp(argv[i], flag) == 0) return i;
   return 0;
 }
 
 int main(int argc, char **argv) {
-#define FLAG(name) get_flag(argc, argv, name)
-#define ARGUMENT(long, present, next, default)                                                                         \
-  do {                                                                                                                 \
-    present = false;                                                                                                   \
-    next = default;                                                                                                    \
-    if (FLAG(long) && FLAG(long) < argc - 1) {                                                                         \
-      present = true;                                                                                                  \
-      next = argv[FLAG(long) + 1];                                                                                     \
-    }                                                                                                                  \
-  } while (0)
+#define FLAG(name) (get_flag(argc, argv, name))
+#define ARGUMENT(name) (FLAG(name) && FLAG(name) < (argc - 1) ? argv[FLAG(name) + 1] : nullptr)
 
-  bool attach = false;
-  char *server;
-  ARGUMENT("attach", attach, server, nullptr);
-  if (attach) {
+  char *attach = ARGUMENT("attach");
+  if (attach || FLAG("attach")) {
     if (getenv("VELVET")) {
       fprintf(stderr, "Unable to attach; terminal is already in a velvet session.");
       return 1;
     }
-    vv_attach(server);
+    vv_attach(attach);
     return 0;
   }
 
