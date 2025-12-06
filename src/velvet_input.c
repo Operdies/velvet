@@ -248,6 +248,8 @@ static void dispatch_esc(struct velvet_input *in, uint8_t ch) {
   } break;
   default: {
     send_bytes(in, ESC, ch);
+    in->state = VELVET_INPUT_STATE_NORMAL;
+    string_clear(&in->command_buffer);
   } break;
   }
 }
