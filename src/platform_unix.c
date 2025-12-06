@@ -95,21 +95,15 @@ static void enable_kitty_keyboard(void) {
   io_write(STDOUT_FILENO, vt_kitty_keyboard_on);
 }
 
-#define SETUP(name)                                                                                                    \
-  {                                                                                                                    \
-      .enable = enable_##name,                                                                                         \
-      .disable = disable_##name,                                                                                       \
-  }
-
 static const struct setup_pair setup_functions[] = {
-    SETUP(alternate_screen),
-    SETUP(raw_mode),
-    SETUP(no_line_wrapping),
-    SETUP(focus_reporting),
-    SETUP(bracketed_paste),
-    SETUP(mouse_mode),
-    // SETUP(kitty_keyboard),
-};
+    {.enable = enable_alternate_screen, .disable = disable_alternate_screen },
+    {.enable = enable_raw_mode,         .disable = disable_raw_mode         },
+    {.enable = enable_no_line_wrapping, .disable = disable_no_line_wrapping },
+    {.enable = enable_focus_reporting,  .disable = disable_focus_reporting  },
+    {.enable = enable_bracketed_paste,  .disable = disable_bracketed_paste  },
+    {.enable = enable_mouse_mode,       .disable = disable_mouse_mode       },
+    // {.enable = enable_kitty_keyboard,   .disable = disable_kitty_keyboard   },
+                                                                            };
 
 void terminal_setup(void) {
   for (int i = 0; i < LENGTH(setup_functions); i++) setup_functions[i].enable();
