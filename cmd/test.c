@@ -822,13 +822,6 @@ void test_csi_parsing(void) {
       .leading = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
 }
 
-void test_osc(void) {
-}
-
-void done() {
-  logmsg("[Test Exit]");
-}
-
 static void test_hash() {
   const uint8_t characters[] = u8"\x1b[200~\0\0";
   const struct running_hash paste_start = {.characters = u8"\x1b[200~"};
@@ -1028,7 +1021,6 @@ void test_vec() {
 }
 
 int main(void) {
-  atexit(done);
   test_input_output();
   test_reflow();
   test_erase();
