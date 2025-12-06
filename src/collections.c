@@ -49,6 +49,10 @@ void string_push_csi(struct string *str, uint8_t leading, struct int_slice param
   string_push(str, (uint8_t *)final);
 }
 
+void string_push_cstr(struct string *str, char *cstr) {
+  string_push_slice(str, u8_slice_from_cstr(cstr));
+}
+
 void string_push_slice(struct string *str, struct u8_slice slice) {
   string_push_range(str, slice.content, slice.len);
 }

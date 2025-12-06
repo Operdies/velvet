@@ -322,6 +322,8 @@ static void draw_no_mans_land(struct app_context *app) {
   vec_foreach(sesh, app->sessions) {
     if (sesh->ws.colums && sesh->ws.rows) {
       string_clear(&scratch);
+      // save cursor position
+      string_push_cstr(&scratch, "\x1b" "7");
       string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), u8"m");
       // 1. Draw the empty space to the right of this client
       if (sesh->ws.colums > active->ws.colums) {
@@ -339,6 +341,8 @@ static void draw_no_mans_land(struct app_context *app) {
         string_push_csi(&scratch, 0, INT_SLICE(sesh->ws.colums - 1), u8"b");
       }
       string_push_csi(&scratch, 0, INT_SLICE(0), u8"m");
+      // restore cursor position
+      string_push_cstr(&scratch, "\x1b" "8");
       string_push_slice(&sesh->pending_output, string_as_u8_slice(&scratch));
     }
   }
