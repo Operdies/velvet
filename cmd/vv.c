@@ -462,20 +462,19 @@ int main(int argc, char **argv) {
   bool headless = false;
   ARGUMENT("--headless", headless, 0, 0);
 
-  add_bindir_to_path();
-  struct platform_winsize ws = {0};
-  platform_get_winsize(&ws);
-  if (ws.rows == 0 || ws.colums == 0) {
-    fprintf(stderr, "Error getting terminal size. Exiting.\n");
-    return 1;
-  }
-
   int sock_fd = create_socket();
 
   // Since we are not connecting to a server, that means we are creating a new server.
   // The server should be detached from the current process hierarchy.
   // We do this with a classic double fork()
   if (!headless) {
+    struct platform_winsize ws = {0};
+    platform_get_winsize(&ws);
+    if (ws.rows == 0 || ws.colums == 0) {
+      fprintf(stderr, "Error getting terminal size. Exiting.\n");
+      return 1;
+    }
+
     if (fork()) {
       // original process
       close(sock_fd);
@@ -489,6 +488,7 @@ int main(int argc, char **argv) {
     }
   }
 
+  add_bindir_to_path();
   install_signal_handlers();
   // detached child process of exited parent
 
