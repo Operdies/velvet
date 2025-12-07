@@ -364,6 +364,7 @@ static void start_server(struct app_context *app) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct platform_winsize ws = {.colums = 80, .rows = 24, .x_pixel = 800, .y_pixel = 240};
 
+  velvet_input_add_default_binds(&app->input_handler);
   struct io *const loop = &app->event_loop;
 
   multiplexer_resize(&app->multiplexer, ws);

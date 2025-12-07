@@ -63,21 +63,6 @@ static void send_byte(struct velvet_input *in, uint8_t ch) {
   send_bytes(in, ch);
 }
 
-static void dispatch_normal(struct velvet_input *in, uint8_t ch) {
-  assert(in->command_buffer.len == 0);
-  if (ch == in->prefix) {
-    in->state = VELVET_INPUT_STATE_PREFIX;
-    return;
-  }
-  switch (ch) {
-  case ESC: {
-    string_push_char(&in->command_buffer, ch);
-    in->state = VELVET_INPUT_STATE_ESC;
-  } break;
-  default: send_byte(in, ch); break;
-  }
-}
-
 static void send_csi_todo(struct velvet_input *in) {
   TODO("Input CSI: %.*s", in->command_buffer.len, in->command_buffer.content);
   string_clear(&in->command_buffer);
@@ -199,68 +184,6 @@ static void send_csi_mouse(struct velvet_input *in, const struct csi *const c) {
   }
 }
 
-static void dispatch_csi(struct velvet_input *in, uint8_t ch) {
-  string_push_char(&in->command_buffer, ch);
-  if (in->command_buffer.len > CSI_BUFFER_MAX) {
-    ERROR("CSI max exceeded!!");
-    string_clear(&in->command_buffer);
-    in->state = VELVET_INPUT_STATE_NORMAL;
-    return;
-  }
-
-  if (in->command_buffer.len == bracketed_paste_start.len &&
-      string_starts_with(&in->command_buffer, bracketed_paste_start)) {
-    in->state = VELVET_INPUT_STATE_BRACKETED_PASTE;
-    return;
-  }
-
-  // TODO: Is this accurate?
-  if (ch >= 0x40 && ch <= 0x7E) {
-    if (!in->m->hosts.length) return;
-    struct csi c = {0};
-    struct u8_slice s = string_range(&in->command_buffer, 2, -1);
-    size_t len = csi_parse(&c, s);
-    if (c.state == CSI_ACCEPT) {
-      logmsg("Dispatch csi %.*s", s.len, s.content);
-      assert(len == s.len);
-
-
-#define KEY(leading, intermediate, final)                                                                              \
-  ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
-
-      switch (KEY(c.leading, c.intermediate, c.final)) {
-#define CSI(l, i, f, fn, _)                                                                                            \
-  case KEY(l, i, f): DISPATCH_##fn(in, &c); break;
-#include "input_csi.def"
-      default: send_csi_todo(in); break;
-      }
-    }
-    string_clear(&in->command_buffer);
-    in->state = VELVET_INPUT_STATE_NORMAL;
-  }
-}
-
-static void dispatch_esc(struct velvet_input *in, uint8_t ch) {
-  switch (ch) {
-  case '[': {
-    string_push_char(&in->command_buffer, ch);
-    in->state = VELVET_INPUT_STATE_CSI;
-  } break;
-  default: {
-    send_bytes(in, ESC, ch);
-    in->state = VELVET_INPUT_STATE_NORMAL;
-    string_clear(&in->command_buffer);
-  } break;
-  }
-}
-
-static void dispatch_prefix(struct velvet_input *in, uint8_t ch) {
-  in->state = VELVET_INPUT_STATE_NORMAL;
-  switch (ch) {
-  default: break;
-  }
-}
-
 static void send_bracketed_paste(struct velvet_input *in) {
   struct vte_host *focus = vec_nth(&in->m->hosts, in->m->focus);
   bool enclose = focus->vte.options.bracketed_paste;
@@ -275,38 +198,20 @@ static void send_bracketed_paste(struct velvet_input *in) {
   string_clear(&in->command_buffer);
 }
 
-static void dispatch_bracketed_paste(struct velvet_input *in, uint8_t ch) {
-  string_push_char(&in->command_buffer, ch);
-
-  if (in->command_buffer.len > BRACKETED_PASTE_MAX) {
-    ERROR("Bracketed Paste max exceeded!!");
-    string_clear(&in->command_buffer);
-    in->state = VELVET_INPUT_STATE_NORMAL;
-    return;
-  }
-
-  if (string_ends_with(&in->command_buffer, bracketed_paste_end)) {
-    send_bracketed_paste(in);
-    in->state = VELVET_INPUT_STATE_NORMAL;
-  }
-}
-
 void velvet_input_process(struct velvet_input *in, struct u8_slice str) {
   for (size_t i = 0; i < str.len; i++) {
     uint8_t ch = str.content[i];
-    switch (in->state) {
-    case VELVET_INPUT_STATE_NORMAL: dispatch_normal(in, ch); break;
-    case VELVET_INPUT_STATE_ESC: dispatch_esc(in, ch); break;
-    case VELVET_INPUT_STATE_CSI: dispatch_csi(in, ch); break;
-    case VELVET_INPUT_STATE_PREFIX:
-    case VELVET_INPUT_STATE_PREFIX_CONT: dispatch_prefix(in, ch); break;
-    case VELVET_INPUT_STATE_BRACKETED_PASTE: dispatch_bracketed_paste(in, ch); break;
+    struct velvet_keymap *k = in->keymap->chain;
+    for (; k; k = k->next)
+      if (k->key == ch) break;
+    if (k) in->keymap = k;
+    k = in->keymap;
+    // If either of these are not set, we are 100% stuck
+    assert(k->chain || k->on_key);
+    if (k->on_key) {
+      bool reset = in->keymap->on_key(k, ch);
+      if (reset) in->keymap = k->root;
     }
-  }
-  if (in->state == VELVET_INPUT_STATE_ESC) {
-    in->state = VELVET_INPUT_STATE_NORMAL;
-    string_clear(&in->command_buffer);
-    send_byte(in, ESC);
   }
 }
 
@@ -348,3 +253,167 @@ void DISPATCH_ARROW_KEY_LEFT(struct velvet_input *in, const struct csi *const c)
 void DISPATCH_ARROW_KEY_RIGHT(struct velvet_input *in, const struct csi *const c) {
   dispatch_arrow_key(in, c);
 }
+
+
+static bool keymap_dispatch_normal(struct velvet_keymap *k, uint8_t ch) {
+  struct velvet_input *in = k->data;
+  send_byte(in, ch);
+  return true;
+}
+
+static bool keymap_dispatch_csi(struct velvet_keymap *k, uint8_t ch) {
+  struct velvet_input *in = k->data;
+  if (in->command_buffer.len == 0) {
+    string_push_cstr(&in->command_buffer, "\x1b[");
+    return false;
+  } else {
+    string_push_char(&in->command_buffer, ch);
+  }
+
+  if (string_starts_with(&in->command_buffer, bracketed_paste_start)) {
+    if (in->command_buffer.len > BRACKETED_PASTE_MAX) {
+      ERROR("Bracketed Paste max exceeded!!");
+      string_clear(&in->command_buffer);
+      return true;
+    }
+
+    if (string_ends_with(&in->command_buffer, bracketed_paste_end)) {
+      send_bracketed_paste(in);
+      return true;
+    }
+    return false;
+  }
+
+  if (in->command_buffer.len > CSI_BUFFER_MAX) {
+    ERROR("CSI max exceeded!!");
+    string_clear(&in->command_buffer);
+    return true;
+  }
+
+  // TODO: Is this accurate?
+  if (ch >= 0x40 && ch <= 0x7E) {
+    if (!in->m->hosts.length) return true;
+    struct csi c = {0};
+    struct u8_slice s = string_range(&in->command_buffer, 2, -1);
+    size_t len = csi_parse(&c, s);
+    if (c.state == CSI_ACCEPT) {
+      logmsg("Dispatch csi %.*s", s.len, s.content);
+      assert(len == s.len);
+
+
+#define KEY(leading, intermediate, final)                                                                              \
+  ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
+
+      switch (KEY(c.leading, c.intermediate, c.final)) {
+#define CSI(l, i, f, fn, _)                                                                                            \
+  case KEY(l, i, f): DISPATCH_##fn(in, &c); break;
+#include "input_csi.def"
+      default: send_csi_todo(in); break;
+      }
+    }
+    string_clear(&in->command_buffer);
+    return true;
+  }
+
+  return false;
+}
+
+// normal
+//   -> esc
+//     -> csi
+//       -> bracketed paste
+//       -> mouse
+//       -> .....
+//   -> prefix
+//     -> focus next
+//     -> focus prev
+//     -> spawn new
+//     -> user defined
+static struct velvet_keymap *
+velvet_keymap_add(struct velvet_keymap *root, struct u8_slice keys, on_key *callback, void *data) {
+  struct velvet_keymap *prev, *chain, *parent;
+  uint8_t ch;
+  assert(root);
+  assert(keys.len);
+
+  parent = root;
+  for (size_t i = 0; i < keys.len; i++) {
+    ch = keys.content[i];
+    prev = nullptr;
+    for (chain = parent->chain; chain && chain->key != ch; prev = chain, chain = chain->next);
+    if (!chain) {
+      chain = ecalloc(1, sizeof(*parent));
+      chain->key = ch;
+      if (prev) {
+        chain->next = prev->next;
+        prev->next = chain;
+      } else {
+        parent->chain = chain;
+      }
+    }
+    parent = chain;
+  }
+  parent->data = data;
+  parent->on_key = callback;
+  parent->root = root->root ? root->root : root;
+  return parent;
+}
+
+static bool echo(struct velvet_keymap *k, uint8_t ch) {
+  struct velvet_input *in = k->data;
+  send_byte(in, ch);
+  return true;
+}
+
+static void multiplexer_spawn_and_focus(struct multiplexer *m, char *cmdline) {
+  multiplexer_spawn_process(m, cmdline);
+  multiplexer_set_focus(m, m->hosts.length - 1);
+}
+
+#ifndef CTRL
+#define CTRL(x) ((x) & 037)
+#endif
+
+static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
+  switch (ch) {
+  case 'c': multiplexer_spawn_and_focus(m, "zsh"); break;
+  case 'j': multiplexer_swap_next(m); break;
+  case 'k': multiplexer_swap_previous(m); break;
+  case 'v': multiplexer_spawn_and_focus(m, "nvim"); break;
+  case CTRL('q'): multiplexer_incnmaster(m); break;
+  case CTRL('e'): multiplexer_decnmaster(m); break;
+  case CTRL('g'): multiplexer_zoom(m); break;
+  case CTRL('h'): multiplexer_decfactor(m); break;
+  case CTRL('j'): multiplexer_focus_next(m); break;
+  case CTRL('k'): multiplexer_focus_previous(m); break;
+  case CTRL('l'): multiplexer_incfactor(m); break;
+  case CTRL('x'): return true; break;
+  default: return false;
+  };
+  return true;
+}
+
+static bool keymap_dispatch_prefix(struct velvet_keymap *k, uint8_t ch) {
+  struct velvet_input *in = k->data;
+  if (!handle_keybinds(in->m, ch)) {
+    send_bytes(in, ch);
+    return true;
+  }
+  return false;
+}
+
+void velvet_input_add_default_binds(struct velvet_input *in) {
+  struct velvet_keymap *root = in->keymap;
+  if (!root) {
+    in->keymap = root = ecalloc(sizeof(*root), 1);
+    root->data = in;
+    root->root = root;
+    root->on_key = keymap_dispatch_normal;
+  }
+  velvet_keymap_add(root, u8_slice_from_cstr("\x1b["), keymap_dispatch_csi, in);
+
+  uint8_t prefix_key = 'X' & 0x1f;
+  struct velvet_keymap *prefix = velvet_keymap_add(root, (struct u8_slice){ .content = &prefix_key, .len = 1 }, keymap_dispatch_prefix, in);
+  velvet_keymap_add(prefix, (struct u8_slice){ .content = &prefix_key, .len = 1 }, echo, in);
+}
+

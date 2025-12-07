@@ -98,29 +98,29 @@ void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   }
 }
 
-static void multiplexer_swap_previous(struct multiplexer *m) {
+void multiplexer_swap_previous(struct multiplexer *m) {
   if (m->focus > 0 && m->hosts.length > 1) {
     multiplexer_swap_clients(m, m->focus, m->focus - 1);
     multiplexer_set_focus(m, m->focus - 1);
   }
 }
 
-static void multiplexer_swap_next(struct multiplexer *m) {
+void multiplexer_swap_next(struct multiplexer *m) {
   if (m->focus < m->hosts.length - 1 && m->hosts.length > 1) {
     multiplexer_swap_clients(m, m->focus, m->focus + 1);
     multiplexer_set_focus(m, m->focus + 1);
   }
 }
 
-static void multiplexer_focus_next(struct multiplexer *m) {
+void multiplexer_focus_next(struct multiplexer *m) {
   multiplexer_set_focus(m, (m->focus + 1) % m->hosts.length);
 }
 
-static void multiplexer_focus_previous(struct multiplexer *m) {
+void multiplexer_focus_previous(struct multiplexer *m) {
   multiplexer_set_focus(m, (m->focus + m->hosts.length - 1) % m->hosts.length);
 }
 
-static void multiplexer_zoom(struct multiplexer *m) {
+void multiplexer_zoom(struct multiplexer *m) {
   if (m->hosts.length < 2) return;
   if (m->focus == 0) {
     multiplexer_swap_clients(m, 0, 1);
@@ -128,159 +128,6 @@ static void multiplexer_zoom(struct multiplexer *m) {
   } else {
     multiplexer_swap_clients(m, 0, m->focus);
     multiplexer_set_focus(m, 0);
-  }
-}
-
-static void multiplexer_spawn_and_focus(struct multiplexer *m, char *cmdline) {
-  multiplexer_spawn_process(m, cmdline);
-  multiplexer_set_focus(m, m->hosts.length - 1);
-}
-
-static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
-  switch (ch) {
-  case 'c': multiplexer_spawn_and_focus(m, "zsh"); break;
-  case 'j': multiplexer_swap_next(m); break;
-  case 'k': multiplexer_swap_previous(m); break;
-  case 'v': multiplexer_spawn_and_focus(m, "nvim"); break;
-  case CTRL('q'): nmaster = MIN(10, nmaster + 1); break;
-  case CTRL('e'): nmaster = MAX(0, nmaster - 1); break;
-  case CTRL('g'): multiplexer_zoom(m); break;
-  case CTRL('h'): factor = MAX(0.1f, factor - 0.05f); break;
-  case CTRL('j'): multiplexer_focus_next(m); break;
-  case CTRL('k'): multiplexer_focus_previous(m); break;
-  case CTRL('l'): factor = MIN(0.9f, factor + 0.05f); break;
-  default: return false;
-  };
-  return true;
-}
-
-void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
-  const char ESC = 0x1b;
-  static struct string writebuffer = {0};
-  static struct string pastebuffer = {0};
-  static enum stdin_state {
-    normal,
-    esc,
-    csi,
-    prefix,
-    prefix_cont,
-    bracketed_paste,
-  } s;
-
-  static const struct running_hash paste_start = {.characters = "\x1b[200~"};
-  static const struct running_hash paste_end = {.characters = "\x1b[201~"};
-  static struct running_hash running_hash = {0};
-
-  string_clear(&writebuffer);
-
-  for (size_t i = 0; i < str.len; i++) {
-    struct vte_host *focused = vec_nth(&m->hosts, m->focus);
-    uint8_t ch = str.content[i];
-    running_hash_append(&running_hash, ch);
-    if (s == normal && running_hash_match(running_hash, paste_start, 6)) {
-      writebuffer.len -= 5;
-      s = bracketed_paste;
-      continue;
-    } else if (s == bracketed_paste && running_hash_match(running_hash, paste_end, 6)) {
-      pastebuffer.len -= 5;
-      s = normal;
-      if (focused && focused->vte.options.bracketed_paste) {
-        string_push(&writebuffer, paste_start.characters);
-        string_push_range(&writebuffer, pastebuffer.content, pastebuffer.len);
-        string_push(&writebuffer, paste_end.characters);
-      } else {
-        string_push_range(&writebuffer, pastebuffer.content, pastebuffer.len);
-      }
-      string_clear(&pastebuffer);
-      continue;
-    }
-  regret:
-    switch (s) {
-    case bracketed_paste: string_push_char(&pastebuffer, ch); break;
-    case normal: {
-      if (ch == ESC) {
-        s = esc;
-      } else if (ch == m->prefix) {
-        s = prefix;
-      } else {
-        string_push_char(&writebuffer, ch);
-      }
-    } break;
-    case esc: {
-      if (ch == '[') {
-        s = csi;
-      } else {
-        // escape next char
-        string_push_char(&writebuffer, ESC);
-        string_push_char(&writebuffer, ch);
-        s = normal;
-      }
-    } break;
-    case csi: {
-      if (ch >= 'A' && ch <= 'D' && focused->vte.options.application_mode) {
-        string_push_char(&writebuffer, ESC);
-        string_push_char(&writebuffer, 'O');
-        string_push_char(&writebuffer, ch);
-      } else if (ch == 'O' || ch == 'I') {
-        // Focus event. Forward it if the focused vte_host has the feature enabled
-        bool did_focus = ch == 'I';
-        if (focused->vte.options.focus_reporting) {
-          if (did_focus)
-            string_push_slice(&writebuffer, vt_focus_in);
-          else
-            string_push_slice(&writebuffer, vt_focus_out);
-        }
-        // If the vte_host does not have the feature enabled, ignore it.
-      } else {
-        string_push_csi(&writebuffer, 0, (struct int_slice){0}, (char[]){ch, 0});
-      }
-      s = normal;
-    } break;
-    case prefix_cont: {
-      bool is_control = CTRL(ch) == ch;
-      if (!is_control) {
-        s = normal;
-        goto regret;
-      }
-      if (ch == m->prefix) {
-        s = prefix;
-        continue;
-      }
-      if (!handle_keybinds(m, ch)) {
-        s = normal;
-        goto regret;
-      }
-    } break;
-    case prefix: {
-      bool is_control = CTRL(ch) == ch;
-      if (ch == m->prefix) {
-        string_push_char(&writebuffer, m->prefix);
-        s = normal;
-      } else {
-        handle_keybinds(m, ch);
-        s = is_control ? prefix_cont : normal;
-      }
-    } break;
-    }
-  }
-  struct vte_host *focused = vec_nth(&m->hosts, m->focus);
-
-  // TODO: Implement timing mechanism for escapes.
-  // For now, flush before return to restore state machine to normal input mode
-  if (s == csi) {
-    string_push_char(&writebuffer, ESC);
-    string_push_char(&writebuffer, '[');
-    s = normal;
-  } else if (s == esc) {
-    string_push_char(&writebuffer, ESC);
-    s = normal;
-  }
-
-  // TODO: Push this to focused->vte->pending_output instead?
-  // To consolidate pty writing and avoid blocking the main loop / other clients
-  // in cases where a single client is slow
-  if (writebuffer.len) {
-    string_flush(&writebuffer, focused->pty, nullptr);
   }
 }
 
@@ -402,4 +249,17 @@ void multiplexer_render(struct multiplexer *m, render_func_t *render_func, bool 
   struct u8_slice s = {.content = m->draw_buffer.content, .len = m->draw_buffer.len};
   render_func(s, context);
   string_clear(&m->draw_buffer);
+}
+
+void multiplexer_decfactor(struct multiplexer *m) {
+  factor = MAX(0.1f, factor - 0.05f);
+}
+void multiplexer_incfactor(struct multiplexer *m) {
+  factor = MIN(0.9f, factor + 0.05f);
+}
+void multiplexer_decnmaster(struct multiplexer *m) {
+  nmaster = MAX(0, nmaster - 1);
+}
+void multiplexer_incnmaster(struct multiplexer *m) {
+  nmaster = MIN(10, nmaster + 1);
 }
