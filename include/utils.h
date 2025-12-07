@@ -16,15 +16,7 @@ void set_nonblocking(int fd);
 
 #ifdef RELEASE_BUILD
 
-// Experimental performance optimization?
-// Mark assertions as unreachable on the assumption that this would have been
-// caught during development. Can lead to some extra spicy bugs because failed
-// asserts are now undefined behavior instead of an unhandled edge case
-#ifdef ASSERTS_UNREACHABLE
-#define FAIL_ASSERT(cond) __builtin_unreachable();
-#else
-#define FAIL_ASSERT(cond) (void)(cond);
-#endif
+#define FAIL_ASSERT(cond) __builtin_trap();
 
 // Mark variables used in logging macros as unused in release builds to silence
 // bogus warnings but still keep warnings for legitimately unued variables
@@ -69,8 +61,7 @@ void set_nonblocking(int fd);
 #define FAIL_ASSERT(cond)                                                                                              \
   terminal_reset();                                                                                                    \
   ERROR("Assertion failed: %s, file %s, line %d\r\n", #cond, __FILE__, __LINE__);                                      \
-  fprintf(stderr, "Assertion failed: %s, file %s, line %d\r\n", #cond, __FILE__, __LINE__);                            \
-  exit(EXIT_FAILURE);
+  __builtin_trap();
 #endif /* RELEASE_BUILD */
 
 #define assert(cond)                                                           \

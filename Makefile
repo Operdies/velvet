@@ -45,7 +45,7 @@ LDFLAGS =
 DEBUG_CFLAGS = -O0 -g -fsanitize=address
 DEBUG_LDFLAGS = -fsanitize=address
 
-RELEASE_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD -DASSERTS_UNREACHABLE
+RELEASE_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD
 RELEASE_LDFLAGS = -flto
 
 PROFILE_CFLAGS = -fprofile-instr-generate -fcoverage-mapping
