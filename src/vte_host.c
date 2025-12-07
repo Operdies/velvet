@@ -335,7 +335,12 @@ void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
 }
 
 void vte_host_start(struct vte_host *vte_host) {
-  struct winsize vte_hostsize = {.ws_col = vte_host->rect.client.w, .ws_row = vte_host->rect.client.h};
+  struct winsize vte_hostsize = {
+      .ws_col = vte_host->rect.client.w,
+      .ws_row = vte_host->rect.client.h,
+      .ws_xpixel = vte_host->rect.client.x_pixel,
+      .ws_ypixel = vte_host->rect.client.y_pixel,
+  };
   pid_t pid = forkpty(&vte_host->pty, NULL, NULL, &vte_hostsize);
   if (pid < 0) die("forkpty:");
 
