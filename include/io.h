@@ -27,20 +27,26 @@ struct io_source {
   void *data;
 };
 
+struct io_schedule {
+  void (*callback)(void *data);
+  void *data;
+  uint64_t when;
+};
+
 struct io {
   struct vec /* io_source */ sources;
   struct vec /* pollfd */ pollfds;
+  struct vec /* scheduled callbacks */ scheduled;
 };
 
 static const struct io io_default = {
     .sources = vec(struct io_source),
     .pollfds = vec(struct pollfd),
+    .scheduled = vec(struct io_schedule),
 };
 
-/* Dispatch all pending io.
- * If no io is pending, poll for the specified timeout. A poll timeout of -1 will suspend the process until io is
- * available. */
-void io_dispatch(struct io *io, int poll_timeout);
+/* Dispatch all pending io. */
+void io_dispatch(struct io *io);
 /* Add an io source to the io object. This source will be polled and dispatched during io_dispatch. */
 void io_add_source(struct io *io, struct io_source src);
 /* Remove all previously added io sources. */
@@ -48,6 +54,7 @@ void io_clear_sources(struct io *io);
 /* Free all resources held by this io instance. */
 void io_destroy(struct io *io);
 ssize_t io_write(int fd, struct u8_slice content);
+void io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data);
 
 #define io_write_literal(fd, str)                                                                                        \
   io_write(fd, (struct u8_slice){.len = sizeof(str) - 1, .content = (uint8_t*)str})

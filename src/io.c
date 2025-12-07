@@ -1,12 +1,43 @@
 #include <io.h>
+#include "collections.h"
 #include "utils.h"
 #include <errno.h>
 #include <sys/wait.h>
+#include <time.h>
 
 #define mB(x) ((x) << 20)
 #define kB(x) ((x) << 10)
 
-void io_dispatch(struct io *io, int poll_timeout) {
+static uint64_t get_ms_since_startup(void) {
+  static struct timespec initial = {0};
+  struct timespec now = {0};
+  if (initial.tv_sec == 0 && initial.tv_nsec == 0) {
+    clock_gettime(CLOCK_MONOTONIC_RAW, &initial);
+  }
+  clock_gettime(CLOCK_MONOTONIC_RAW, &now);
+  uint64_t ms = (now.tv_sec - initial.tv_sec) * 1000;
+  if (now.tv_nsec > initial.tv_nsec) {
+    ms += (now.tv_nsec - initial.tv_nsec) / 1e6;
+  } else {
+    ms -= (initial.tv_nsec - now.tv_nsec) / 1e6;
+  }
+  return ms;
+}
+
+
+static void io_dispatch_scheduled(struct io *io) {
+  uint64_t now = get_ms_since_startup();
+  struct io_schedule *schedule;
+  // Execute schedules in reverse so we can safely remove them from the vector.
+  vec_rforeach(schedule, io->scheduled) {
+    if (schedule->when <= now) {
+      schedule->callback(schedule->data);
+      vec_remove(&io->scheduled, vec_index(schedule, io->scheduled));
+    }
+  }
+}
+
+void io_dispatch(struct io *io) {
   // These values are somewhat arbitrarily chosen;
   // The key idea is that we want to continually read
   // from the same file descriptor in high-throughput scenarios,
@@ -24,7 +55,17 @@ void io_dispatch(struct io *io, int poll_timeout) {
     vec_push(&io->pollfds, &fd);
   }
 
-  int polled = poll(io->pollfds.content, io->pollfds.length, poll_timeout);
+  io_dispatch_scheduled(io);
+  struct io_schedule *next_schedule = nullptr;
+  struct io_schedule *schedule;
+  vec_foreach(schedule, io->scheduled) {
+    if (!next_schedule) next_schedule = schedule;
+    else next_schedule = next_schedule->when < schedule->when ? next_schedule : schedule;
+  }
+  uint64_t now = get_ms_since_startup();
+  int timeout = next_schedule ? next_schedule->when - now : -1;
+  if (next_schedule && timeout < 0) timeout = 0;
+  int polled = poll(io->pollfds.content, io->pollfds.length, timeout);
   if (polled == -1) {
     // EAGAIN / EINTR are expected. In this case we should just return.
     // For other errors, log them for visibility. although they are usually not serious.
@@ -90,7 +131,13 @@ ssize_t io_write(int fd, struct u8_slice s) {
   return written;
 }
 
+void io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
+  struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms };
+  vec_push(&io->scheduled, &schedule);
+}
+
 void io_destroy(struct io *io) {
   vec_destroy(&io->pollfds);
   vec_destroy(&io->sources);
+  vec_destroy(&io->scheduled);
 }

@@ -143,7 +143,10 @@ bool string_flush(struct string *str, int fd, int *total_written) {
 void vec_ensure_capacity(struct vec *v, size_t c) {
   assert(v->element_size && "Element size cannot be 0");
   if (v->capacity >= c) return;
-  if (v->capacity <= 0) v->capacity = 100;
+  // For the initial allocation, try to allocate at least one page. Failing that, just allocate a couple of elements.
+  size_t min_capacity = MAX(4, 4096 / (int)v->element_size);
+  if (v->capacity <= 0) 
+    v->capacity = min_capacity;
   while (v->capacity < c) {
     v->capacity *= 2;
     if (v->capacity <= 0) {

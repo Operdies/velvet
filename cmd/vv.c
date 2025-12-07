@@ -59,6 +59,7 @@ struct session {
 struct app_context {
   struct multiplexer multiplexer;
   struct velvet_input input_handler;
+  struct io event_loop;
   struct vec /* struct session */ sessions;
   /* this is modified by events such as receiving focus IN/OUT events, new sessions attaching, etc */
   size_t active_session;
@@ -282,6 +283,7 @@ static void add_bindir_to_path(void) {
 }
 
 static void app_destroy(struct app_context *app) {
+  io_destroy(&app->event_loop);
   multiplexer_destroy(&app->multiplexer);
   velvet_input_destroy(&app->input_handler);
   vec_destroy(&app->sessions);
@@ -359,7 +361,8 @@ static void start_server(struct app_context *app) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct platform_winsize ws = {.colums = 80, .rows = 24, .x_pixel = 800, .y_pixel = 240};
 
-  struct io io = io_default;
+  struct io *const loop = &app->event_loop;
+
   multiplexer_resize(&app->multiplexer, ws);
   multiplexer_spawn_process(&app->multiplexer, "zsh");
   multiplexer_arrange(&app->multiplexer);
@@ -388,7 +391,7 @@ static void start_server(struct app_context *app) {
     }
 
     // Set up IO
-    vec_clear(&io.sources);
+    vec_clear(&loop->sources);
 
     struct io_source signal_src = { .fd = signal_read, .events = IO_SOURCE_POLLIN, .read_callback = signal_callback, .data = app};
     /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
@@ -406,28 +409,28 @@ static void start_server(struct app_context *app) {
       };
       if (h->vte.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
 
-      io_add_source(&io, read_src);
+      io_add_source(loop, read_src);
     }
 
-    io_add_source(&io, signal_src);
+    io_add_source(loop, signal_src);
 
     struct io_source socket_src = { .fd = app->socket, .events = IO_SOURCE_POLLIN, .ready_callback = socket_connect_callback, .data = app };
-    io_add_source(&io, socket_src);
+    io_add_source(loop, socket_src);
 
     struct session *session;
     vec_foreach(session, app->sessions) {
       struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .ready_callback = session_socket_callback, .data = app };
-      io_add_source(&io, socket_src);
+      io_add_source(loop, socket_src);
       struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .read_callback = session_input_callback, .data = app};
-      io_add_source(&io, input_src);
+      io_add_source(loop, input_src);
       if (session->pending_output.len) {
         struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .write_callback = session_output_callback, .data = app};
-        io_add_source(&io, output_src);
+        io_add_source(loop, output_src);
       }
     }
 
     // Dispatch all pending io
-    io_dispatch(&io, -1);
+    io_dispatch(loop);
 
     // quit ?
     if (app->multiplexer.hosts.length == 0 || app->quit) break;
@@ -438,7 +441,6 @@ static void start_server(struct app_context *app) {
   if (sockpath) {
     unlink(sockpath);
   }
-  io_destroy(&io);
 }
 
 static void vv_attach(char *SOCKET_PATH);
@@ -506,15 +508,11 @@ int main(int argc, char **argv) {
   close(STDIN_FILENO);
 
   struct app_context app = {
-    .multiplexer = multiplexer_default,
-    .input_handler =
-    (struct velvet_input){
-      .m = &app.multiplexer,
-      .prefix = ('x' & 0x1f),
-      .options = {.focus_follows_mouse = true},
-    },
-    .sessions = vec(struct session),
-    .socket = sock_fd,
+      .multiplexer = multiplexer_default,
+      .input_handler = (struct velvet_input){.m = &app.multiplexer, .options = {.focus_follows_mouse = true}},
+      .sessions = vec(struct session),
+      .socket = sock_fd,
+      .event_loop = io_default,
   };
 
   start_server(&app);
@@ -586,7 +584,6 @@ static void vv_attach(char *vv_socket) {
         if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
           // if the socket exists but we cannot connect,
           // delete it. This is likely from a dead server which did not shut down correctly.
-          logmsg("Deleting dead server: %s", addr.sun_path);
           unlink(addr.sun_path);
         } else {
           connected = true;

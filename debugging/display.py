@@ -38,7 +38,7 @@ def vec_summary(valobj, x, y):
     raw = valobj.GetNonSyntheticValue()
     prov = vector_SynthProvider(raw, None)
     prov.update()
-    return f'vec<{prov.typename}>[{prov.num_children()}]'
+    return f'vec<{prov.typename}>[{prov.num_elements}]'
 
 def screen_row_summary(valobj, x, y):
     dirty = valobj.GetChildMemberWithName('dirty').GetValueAsUnsigned(0)
@@ -178,9 +178,11 @@ class vector_SynthProvider:
         content = self.o.GetChildMemberWithName('content')
         typename = self.o.GetChildMemberWithName('typename')
 
+        self.num_elements = length.GetValueAsUnsigned(0)
+
         contained_type = get_string(typename)
         self.typename = contained_type
-        expr = f'*({contained_type} (*)[{length.GetValueAsUnsigned(0)}])((void*){content.GetValueAsUnsigned(0)})'
+        expr = f'*({contained_type} (*)[{self.num_elements}])((void*){content.GetValueAsUnsigned(0)})'
         elements = self.o.CreateValueFromExpression("content", expr)
 
         self.add_child(length)
