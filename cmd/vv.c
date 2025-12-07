@@ -499,13 +499,16 @@ int main(int argc, char **argv) {
   // detached child process of exited parent
 
   // redirect all input/output and close handles.
+  // load bearing closing of stdin.
+  // We have other logic expecting fd 0 to mean unset, so freeing up fd 0 is problematic.
+  // In this instance, opening the log files will occupy fd 0 which is fine, but order matters.
+  close(STDIN_FILENO);
   char *outpath = "/tmp/velvet.stdout";
   char *errpath = "/tmp/velvet.stderr";
   int new_stderr = open(errpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
   int new_stdout = open(outpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
   dup2(new_stderr, STDERR_FILENO);
   dup2(new_stdout, STDOUT_FILENO);
-  close(STDIN_FILENO);
 
   struct app_context app = {
       .multiplexer = multiplexer_default,
