@@ -319,24 +319,35 @@ static void draw_no_mans_land(struct app_context *app) {
   static struct string scratch = {0};
   struct session *active = vec_nth(&app->sessions, app->active_session);
   struct session *sesh;
+  char *pipe = "│";
+  char *dash = "─";
+  char *corner = "┘";
   vec_foreach(sesh, app->sessions) {
     if (sesh->ws.colums && sesh->ws.rows) {
       string_clear(&scratch);
       string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
       // 1. Draw the empty space to the right of this client
       if (sesh->ws.colums > active->ws.colums) {
-        int draw_count = sesh->ws.colums - active->ws.colums;
         for (int i = 0; i < active->ws.rows; i++) {
           string_push_csi(&scratch, 0, INT_SLICE(i + 1, active->ws.colums + 1), "H");
-          string_push_slice(&scratch, u8_slice_from_cstr("·"));
-          if (draw_count > 1) string_push_csi(&scratch, 0, INT_SLICE(draw_count - 1), "b");
+          int draw_count = sesh->ws.colums - active->ws.colums;
+          string_push_slice(&scratch, u8_slice_from_cstr(pipe));
+          if (--draw_count) string_push_slice(&scratch, u8_slice_from_cstr("·"));
+          if (--draw_count) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
         }
       }
       // 2. Draw the empty space below this client
       for (int i = active->ws.rows; i < sesh->ws.rows; i++) {
+        int draw_count = sesh->ws.colums;
         string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
-        string_push_slice(&scratch, u8_slice_from_cstr("·"));
-        string_push_csi(&scratch, 0, INT_SLICE(sesh->ws.colums - 1), "b");
+        if (i == active->ws.rows) {
+          string_push_slice(&scratch, u8_slice_from_cstr(dash));
+          string_push_csi(&scratch, 0, INT_SLICE(active->ws.colums - 1), "b");
+          string_push_slice(&scratch, u8_slice_from_cstr(corner));
+          draw_count = draw_count - active->ws.colums - 1;
+        }
+        if (--draw_count) string_push_slice(&scratch, u8_slice_from_cstr("·"));
+        if (--draw_count) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
       }
       string_push_csi(&scratch, 0, INT_SLICE(0), "m");
       string_push_slice(&sesh->pending_output, string_as_u8_slice(&scratch));
