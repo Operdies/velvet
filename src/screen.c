@@ -214,19 +214,26 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
   struct screen_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
 
   for (int r = from.row; r <= to.row; r++) {
+    struct screen_row *row = &g->rows[r];
     int col_start = r == from.row ? from.column : 0;
     int col_end = r == to.row ? to.column : screen_right(g);
+    // We subtract 1 from eol because it refers to the number of significant characters.
+    // So if there is 1 significant characters, eol is at 0.
+    int eol = MAX(0, row->eol - 1);
     col_end = MIN(col_end, screen_right(g));
 
-    struct screen_row *row = &g->rows[r];
 
-    for (; col_start <= col_end; col_start++) {
-      row->cells[col_start] = template;
+    for (int i = col_start; i <= col_end; i++) {
+      row->cells[i] = template;
     }
 
     // If eol was in the range we just erased, update it to be at most the start of the range.
-    if (row->eol <= col_end && row->eol >= col_start) {
-      row->eol = MIN(row->eol, col_start);
+    if (eol >= col_start) {
+      // Since col_start was erased, the new eol should
+      // at least be the cell preceding it.
+      if (eol <= col_end) {
+        row->eol = MAX(0, col_start);
+      }
     }
     row->dirty = true;
   }
