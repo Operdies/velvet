@@ -334,8 +334,8 @@ static void draw_no_mans_land(struct app_context *app) {
           string_push_csi(&scratch, 0, INT_SLICE(i + 1, active->ws.colums + 1), "H");
           int draw_count = sesh->ws.colums - active->ws.colums;
           string_push_slice(&scratch, u8_slice_from_cstr(pipe));
-          if (--draw_count) string_push_slice(&scratch, u8_slice_from_cstr("·"));
-          if (--draw_count) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
+          if (--draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr("·"));
+          if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
         }
       }
       // 2. Draw the empty space below this client
@@ -344,12 +344,15 @@ static void draw_no_mans_land(struct app_context *app) {
         string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
         if (i == active->ws.rows) {
           string_push_slice(&scratch, u8_slice_from_cstr(dash));
-          string_push_csi(&scratch, 0, INT_SLICE(active->ws.colums - 1), "b");
-          string_push_slice(&scratch, u8_slice_from_cstr(corner));
-          draw_count = draw_count - active->ws.colums - 1;
+          draw_count--;
+          int n_dashes = MIN(draw_count, active->ws.colums - 1);
+          string_push_csi(&scratch, 0, INT_SLICE(n_dashes), "b");
+          draw_count -= n_dashes;
+          if (draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr(corner));
+          draw_count--;
         }
-        if (--draw_count) string_push_slice(&scratch, u8_slice_from_cstr("·"));
-        if (--draw_count) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
+        if (draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr("·"));
+        if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
       }
       string_push_csi(&scratch, 0, INT_SLICE(0), "m");
       string_push_slice(&sesh->pending_output, string_as_u8_slice(&scratch));
