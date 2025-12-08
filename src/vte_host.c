@@ -195,6 +195,10 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
   }
 }
 
+static inline bool cell_style_eol_equals(struct screen_cell_style c1, struct screen_cell_style c2) {
+  return color_equals(c1.bg, c2.bg) && c1.attr == c2.attr;
+}
+
 void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuffer) {
   // Ensure the screen content is in sync with the vte_host just-in-time
   vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
@@ -208,30 +212,28 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
     int lineno = 1 + vte_host->rect.client.y + row;
     string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
 
-    for (int col = 0; col < screen_row->eol; col++) {
+    for (int col = 0; col < g->w; col++) {
       struct screen_cell *c = &screen_row->cells[col];
       apply_style(&c->style, outbuffer);
-      uint8_t n = 0;
-      for (; n < 4 && c->symbol.utf8[n]; n++) string_push_char(outbuffer, c->symbol.utf8[n]);
-    }
+      uint8_t utf8_len = 0;
+      struct utf8 sym = c->symbol;
+      for (; utf8_len < 4 && sym.utf8[utf8_len]; utf8_len++);
+      struct u8_slice text = { .content = sym.utf8, .len = utf8_len };
+      string_push_slice(outbuffer, text);
 
-    int remaining = g->w - screen_row->eol;
-    while (remaining) {
-      struct screen_cell *c = &screen_row->cells[g->w - remaining];
       int repeats = 1;
-      for (; repeats < remaining && cell_style_equals(&c->style, &(c + repeats)->style); repeats++);
-      apply_style(&c->style, outbuffer);
-      string_push_char(outbuffer, ' ');
+      int remaining = g->w - col;
+      for (; repeats < remaining && cell_equals(c[0], c[repeats]); repeats++);
       repeats--;
-      if (repeats) {
-        if (repeats < 4) {
-          struct u8_slice s = {.content = u8"    ", .len = repeats};
-          string_push_slice(outbuffer, s);
+      if (repeats > 0) {
+        if (utf8_len * repeats < 4) {
+          for (int i = 0; i < repeats; i++)
+            string_push_slice(outbuffer, text);
         } else {
           string_push_csi(outbuffer, 0, INT_SLICE(repeats), "b");
         }
+        col += repeats;
       }
-      remaining = remaining - repeats - 1;
     }
   }
 }
