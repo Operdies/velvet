@@ -335,22 +335,22 @@ void screen_full_reset(struct screen *g) {
   screen_erase_between_cursors(g, start, end);
 }
 
-bool color_equals(const struct color *const a, const struct color *const b) {
-  if (a->cmd != b->cmd) return false;
-  switch (a->cmd) {
+bool color_equals(struct color a, struct color b) {
+  if (a.cmd != b.cmd) return false;
+  switch (a.cmd) {
   case COLOR_RESET: return true;
-  case COLOR_RGB: return a->r == b->r && a->g == b->g && a->b == b->b;
-  case COLOR_TABLE: return a->table == b->table;
+  case COLOR_RGB: return a.r == b.r && a.g == b.g && a.b == b.b;
+  case COLOR_TABLE: return a.table == b.table;
   }
   return false;
 }
 
-bool cell_equals(const struct screen_cell *const a, const struct screen_cell *const b) {
-  return utf8_equals(&a->symbol, &b->symbol) && cell_style_equals(&a->style, &b->style);
+bool cell_equals(struct screen_cell a, struct screen_cell b) {
+  return utf8_equals(a.symbol, b.symbol) && cell_style_equals(a.style, b.style);
 }
 
-bool cell_style_equals(const struct screen_cell_style *const a, const struct screen_cell_style *const b) {
-  return a->attr == b->attr && color_equals(&a->fg, &b->fg) && color_equals(&a->bg, &b->bg);
+bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b) {
+  return a.attr == b.attr && color_equals(a.fg, b.fg) && color_equals(a.bg, b.bg);
 }
 
 // Effectively scroll out the bottom `count` rows, leaving `count` clear rows at the top

@@ -20,6 +20,6 @@ int utf8_strlen(char *str);
 uint8_t utf8_expected_length(uint8_t ch);
 uint8_t utf8_length(struct utf8 u);
 void utf8_push(struct utf8 *u, uint8_t byte);
-bool utf8_equals(const struct utf8 *const a, const struct utf8 *const b);
+bool utf8_equals(struct utf8 a, struct utf8 b);
 
 #endif /*  TEXT_H */

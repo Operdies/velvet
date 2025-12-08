@@ -89,25 +89,25 @@ static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
   p->n_sub++;
 }
 
-static void apply_color(const struct color *const col, bool fg, struct sgr_buffer *sgr) {
-  if (col->cmd == COLOR_RESET) {
+static void apply_color(struct color col, bool fg, struct sgr_buffer *sgr) {
+  if (col.cmd == COLOR_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
-  } else if (col->cmd == COLOR_TABLE) {
-    if (col->table <= 7) {
-      sgr_buffer_push(sgr, (fg ? 30 : 40) + col->table);
-    } else if (col->table <= 15) {
-      sgr_buffer_push(sgr, (fg ? 90 : 100) + col->table - 8);
+  } else if (col.cmd == COLOR_TABLE) {
+    if (col.table <= 7) {
+      sgr_buffer_push(sgr, (fg ? 30 : 40) + col.table);
+    } else if (col.table <= 15) {
+      sgr_buffer_push(sgr, (fg ? 90 : 100) + col.table - 8);
     } else {
       sgr_buffer_push(sgr, fg ? 38 : 48);
       sgr_buffer_add_param(sgr, 5);
-      sgr_buffer_add_param(sgr, col->table);
+      sgr_buffer_add_param(sgr, col.table);
     }
-  } else if (col->cmd == COLOR_RGB) {
+  } else if (col.cmd == COLOR_RGB) {
     sgr_buffer_push(sgr, fg ? 38 : 48);
     sgr_buffer_add_param(sgr, 2);
-    sgr_buffer_add_param(sgr, col->r);
-    sgr_buffer_add_param(sgr, col->g);
-    sgr_buffer_add_param(sgr, col->b);
+    sgr_buffer_add_param(sgr, col.r);
+    sgr_buffer_add_param(sgr, col.g);
+    sgr_buffer_add_param(sgr, col.b);
   }
 }
 
@@ -158,11 +158,11 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
     }
   }
 
-  if (!color_equals(&fg, &style->fg)) {
-    apply_color(&style->fg, true, &sgr);
+  if (!color_equals(fg, style->fg)) {
+    apply_color(style->fg, true, &sgr);
   }
-  if (!color_equals(&bg, &style->bg)) {
-    apply_color(&style->bg, false, &sgr);
+  if (!color_equals(bg, style->bg)) {
+    apply_color(style->bg, false, &sgr);
   }
 
   attr = style->attr;
