@@ -73,6 +73,8 @@ static void session_render(struct u8_slice str, void *context) {
 }
 
 static void app_detach_session(struct app_context *app, struct session *s) {
+  uint8_t cmd = 'D';
+  write(s->socket, &cmd, 1);
   close(s->socket);
   close(s->input);
   close(s->output);
@@ -206,6 +208,18 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
   }
   redraw_needed = true;
   velvet_input_process(&m->input_handler, str);
+
+  if (strncmp((char*)str.content, "\x1b[I", 3) == 0) {
+    struct session *sesh;
+    vec_find(sesh, m->sessions, sesh->input == src->fd);
+    if (sesh) m->active_session = vec_index(sesh, m->sessions);
+  }
+
+  if (str.len == 2 && strncmp((char*)str.content, "\x1b]", 2) == 0) {
+    struct session *sesh;
+    vec_find(sesh, m->sessions, sesh->input == src->fd);
+    if (sesh) app_detach_session(m, sesh);
+  }
 }
 
 static ssize_t session_write_pending(struct session *sesh) {
