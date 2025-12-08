@@ -206,23 +206,13 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
     if (!redraw) screen_row->dirty = false;
     int columnno = 1 + vte_host->rect.client.x;
     int lineno = 1 + vte_host->rect.client.y + row;
-    int line_length = MIN(screen_row->eol, g->w);
     string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
 
-    for (int col = 0; col < line_length; col++) {
+    for (int col = 0; col < g->w; col++) {
       struct screen_cell *c = &screen_row->cells[col];
       apply_style(&c->style, outbuffer);
       uint8_t n = 0;
       for (; n < 4 && c->symbol.utf8[n]; n++) string_push_char(outbuffer, c->symbol.utf8[n]);
-    }
-
-    int num_blanks = g->w - line_length;
-    if (num_blanks > 4) { /* CSI Pn X -- Erase Pn characters after cursor */
-      apply_style(&style_default, outbuffer);
-      string_push_csi(outbuffer, 0, INT_SLICE(num_blanks), "X");
-    } else { /* Micro optimization. Insert spaces if the number of blanks is very small */
-      apply_style(&style_default, outbuffer);
-      string_memset(outbuffer, ' ', num_blanks);
     }
   }
 }
