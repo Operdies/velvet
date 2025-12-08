@@ -208,11 +208,30 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
     int lineno = 1 + vte_host->rect.client.y + row;
     string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
 
-    for (int col = 0; col < g->w; col++) {
+    for (int col = 0; col < screen_row->eol; col++) {
       struct screen_cell *c = &screen_row->cells[col];
       apply_style(&c->style, outbuffer);
       uint8_t n = 0;
       for (; n < 4 && c->symbol.utf8[n]; n++) string_push_char(outbuffer, c->symbol.utf8[n]);
+    }
+
+    int remaining = g->w - screen_row->eol;
+    while (remaining) {
+      struct screen_cell *c = &screen_row->cells[g->w - remaining];
+      int repeats = 1;
+      for (; repeats < remaining && cell_style_equals(&c->style, &(c + repeats)->style); repeats++);
+      apply_style(&c->style, outbuffer);
+      string_push_char(outbuffer, ' ');
+      repeats--;
+      if (repeats) {
+        if (repeats < 4) {
+          struct u8_slice s = {.content = u8"    ", .len = repeats};
+          string_push_slice(outbuffer, s);
+        } else {
+          string_push_csi(outbuffer, 0, INT_SLICE(repeats), "b");
+        }
+      }
+      remaining = remaining - repeats - 1;
     }
   }
 }
