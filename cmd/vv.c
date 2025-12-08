@@ -546,18 +546,12 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
 }
 
 static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool send_fds) {
-  struct msghdr msg = {0};
-  struct iovec iov = {0};
-
   int fds[2] = {STDIN_FILENO, STDOUT_FILENO};
-  char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
-
   char payload[100] = {0};
   int n_payload = snprintf(payload, 99, "\x1b[%d;%d;%d;%dW", ws.rows, ws.colums, ws.y_pixel, ws.x_pixel);
-  iov.iov_base = payload;
-  iov.iov_len = n_payload;
-  msg.msg_iov = &iov;
-  msg.msg_iovlen = 1;
+  char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
+
+  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = payload, .iov_len = n_payload}, .msg_iovlen = 1};
 
   if (send_fds) {
     msg.msg_control = cmsgbuf;
@@ -573,7 +567,6 @@ static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool 
     close(sockfd);
     die("sendmsg:");
   }
-
 }
 
 static void vv_attach(char *vv_socket) {
