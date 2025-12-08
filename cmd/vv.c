@@ -73,8 +73,8 @@ static void session_render(struct u8_slice str, void *context) {
 }
 
 static void app_detach_session(struct app_context *app, struct session *s) {
-  uint8_t cmd = 'D';
-  write(s->socket, &cmd, 1);
+  uint8_t detach = 'D';
+  write(s->socket, &detach, 1);
   close(s->socket);
   close(s->input);
   close(s->output);
@@ -92,7 +92,7 @@ static void session_socket_callback(struct io_source *src) {
   struct msghdr msg = {0};
   struct iovec iov;
   char data_buf[256] = {0};
-  int fds[2];
+  int fds[2] = {0};
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
 
   // Normal data buffer
@@ -154,7 +154,7 @@ static void session_socket_callback(struct io_source *src) {
   TODO("Handle client message: %.*s", n, data_buf);
 }
 
-static void socket_connect_callback(struct io_source *src) {
+static void socket_accept(struct io_source *src) {
   struct app_context *app = src->data;
 
   int client_fd = accept(src->fd, nullptr, nullptr);
@@ -435,7 +435,7 @@ static void start_server(struct app_context *app) {
 
     io_add_source(loop, signal_src);
 
-    struct io_source socket_src = { .fd = app->socket, .events = IO_SOURCE_POLLIN, .ready_callback = socket_connect_callback, .data = app };
+    struct io_source socket_src = { .fd = app->socket, .events = IO_SOURCE_POLLIN, .ready_callback = socket_accept, .data = app };
     io_add_source(loop, socket_src);
 
     struct session *session;
@@ -443,10 +443,12 @@ static void start_server(struct app_context *app) {
       struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .ready_callback = session_socket_callback, .data = app };
       io_add_source(loop, socket_src);
       struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .read_callback = session_input_callback, .data = app};
-      io_add_source(loop, input_src);
+      if (input_src.fd)
+        io_add_source(loop, input_src);
       if (session->pending_output.len) {
         struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .write_callback = session_output_callback, .data = app};
-        io_add_source(loop, output_src);
+        if (output_src.fd)
+          io_add_source(loop, output_src);
       }
     }
 
@@ -502,16 +504,20 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    if (fork()) {
-      // original process
+    /* original process */
+    if (fork()) { 
       close(sock_fd);
       vv_attach(getenv("VELVET"));
       return 0;
     }
 
-    if (fork()) {
-      // new child. exiting this process causes the server process to be detached
-      return 0;
+    // detach from controlling terminal
+    if (!setsid())
+      die("setsid:");
+
+    /* parent of child */
+    if (fork()) { 
+      exit(0);
     }
   }
 
@@ -519,11 +525,7 @@ int main(int argc, char **argv) {
   install_signal_handlers();
   // detached child process of exited parent
 
-  // redirect all input/output and close handles.
-  // load bearing closing of stdin.
-  // We have other logic expecting fd 0 to mean unset, so freeing up fd 0 is problematic.
-  // In this instance, opening the log files will occupy fd 0 which is fine, but order matters.
-  close(STDIN_FILENO);
+  // redirect all output/error to log files
   char *outpath = "/tmp/velvet.stdout";
   char *errpath = "/tmp/velvet.stderr";
   int new_stderr = open(errpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
