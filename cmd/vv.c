@@ -610,7 +610,8 @@ static void vv_attach(char *vv_socket) {
       }
     }
     if (!connected) {
-      die("No server to attach to.");
+      fprintf(stderr, "No sessions.\n");
+      exit(1);
     }
   } else {
     strncpy(addr.sun_path, vv_socket, sizeof(addr.sun_path) - 1);
