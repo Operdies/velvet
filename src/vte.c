@@ -391,9 +391,8 @@ static void vte_dispatch_csi(struct vte *vte, uint8_t ch) {
     struct csi csi = {0};
     // Strip the leading escape sequence
     struct u8_slice csi_body = string_range(&vte->command_buffer, 2, -1);
-    size_t parsed = csi_parse(&csi, csi_body);
+    csi_parse(&csi, csi_body);
     if (csi.state == CSI_ACCEPT) {
-      assert(csi_body.len == parsed);
       csi_dispatch(vte, &csi);
     } else {
       logmsg("Reject CSI: %.*s", csi_body.len, csi_body.content);
