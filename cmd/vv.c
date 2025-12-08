@@ -229,7 +229,7 @@ static ssize_t session_write_pending(struct session *sesh) {
     if (written > 0) string_drop_left(&sesh->pending_output, (size_t)written);
     return written;
   }
-  return 0;
+  return -1;
 }
 
 static void app_render(struct u8_slice str, void *context) {
