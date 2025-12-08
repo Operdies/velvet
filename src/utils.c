@@ -89,7 +89,7 @@ _Noreturn void die(char *fmt, ...) {
   va_start(ap, fmt);
   vflogmsg(stderr, fmt, ap);
   va_end(ap);
-  exit(1);
+  __builtin_trap();
 }
 
 #ifndef NDEBUG
