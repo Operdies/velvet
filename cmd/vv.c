@@ -384,15 +384,16 @@ static void start_server(struct app_context *app) {
   multiplexer_spawn_process(&app->multiplexer, "zsh");
   multiplexer_arrange(&app->multiplexer);
 
+  bool did_resize = false;
   for (;;) {
     logmsg("Main loop"); // mostly here to detect misbehaving polls.
-    bool did_resize = false;
     if (app->sessions.length && app->active_session < app->sessions.length) {
       struct session *active = vec_nth(&app->sessions, app->active_session);
       if (active->ws.colums && active->ws.rows && (active->ws.colums != app->multiplexer.ws.colums || active->ws.rows != app->multiplexer.ws.rows)) {
         multiplexer_resize(&app->multiplexer, active->ws);
         did_resize = true;
-        redraw_needed = true;
+        // Defer redraw until the clients have actually updated. Redrawing righ away leads to flickering
+        // redraw_needed = true;
       }
     }
 
