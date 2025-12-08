@@ -79,10 +79,11 @@ static void app_detach_session(struct app_context *app, struct session *s) {
   close(s->input);
   close(s->output);
   string_destroy(&s->pending_output);
+  *s = (struct session){0};
   size_t idx = vec_index(s, app->sessions);
   vec_remove(&app->sessions, idx);
   if (app->active_session >= idx) {
-    app->active_session = MAX(app->active_session - 1, 0);
+    app->active_session = MAX((int)app->active_session - 1, 0);
   }
 }
 
@@ -226,6 +227,8 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
 }
 
 static ssize_t session_write_pending(struct session *sesh) {
+  assert(sesh->input);
+  assert(sesh->output);
   if (sesh->pending_output.len) {
     ssize_t written = io_write(sesh->output, string_as_u8_slice(&sesh->pending_output));
     logmsg("Write %zu / %zu\n", written, sesh->pending_output.len);
@@ -240,8 +243,12 @@ static void app_render(struct u8_slice str, void *context) {
   struct session *sesh;
   if (str.len == 0) return;
   vec_foreach(sesh, a->sessions) {
-    string_push_slice(&sesh->pending_output, str);
-    session_write_pending(sesh);
+    // output is not set if the session has connected to the socket, but has not yet sent its in/out streams.
+    // If the client actually connects, we will send a full render, so there is no need to buffer the write.
+    if (sesh->output) {
+      string_push_slice(&sesh->pending_output, str);
+      session_write_pending(sesh);
+    }
   }
 }
 
@@ -390,25 +397,28 @@ static void start_server(struct app_context *app) {
   bool did_resize = false;
   for (;;) {
     logmsg("Main loop"); // mostly here to detect misbehaving polls.
-    if (app->sessions.length && app->active_session < app->sessions.length) {
-      struct session *active = vec_nth(&app->sessions, app->active_session);
-      if (active->ws.colums && active->ws.rows && (active->ws.colums != app->multiplexer.ws.colums || active->ws.rows != app->multiplexer.ws.rows)) {
-        multiplexer_resize(&app->multiplexer, active->ws);
-        did_resize = true;
-        // Defer redraw until the clients have actually updated. Redrawing righ away leads to flickering
-        // redraw_needed = true;
+    if (app->sessions.length > 0) {
+      assert(app->active_session < app->sessions.length);
+      if (app->active_session < app->sessions.length) {
+        struct session *active = vec_nth(&app->sessions, app->active_session);
+        if (active->ws.colums && active->ws.rows && (active->ws.colums != app->multiplexer.ws.colums || active->ws.rows != app->multiplexer.ws.rows)) {
+          multiplexer_resize(&app->multiplexer, active->ws);
+          did_resize = true;
+          // Defer redraw until the clients have actually updated. Redrawing righ away leads to flickering
+          // redraw_needed = true;
+        }
       }
-    }
 
-    // arrange
-    if (redraw_needed) {
-      redraw_needed = false;
-      multiplexer_arrange(&app->multiplexer);
-      if (did_resize) {
-        draw_no_mans_land(app);
+      // arrange
+      if (redraw_needed) {
+        redraw_needed = false;
+        multiplexer_arrange(&app->multiplexer);
+        if (did_resize) {
+          draw_no_mans_land(app);
+        }
+        // Render the current app state
+        multiplexer_render(&app->multiplexer, app_render, false, app);
       }
-      // Render the current app state
-      multiplexer_render(&app->multiplexer, app_render, false, app);
     }
 
     // Set up IO
@@ -525,6 +535,7 @@ int main(int argc, char **argv) {
   install_signal_handlers();
   // detached child process of exited parent
 
+  close(STDIN_FILENO);
   // redirect all output/error to log files
   char *outpath = "/tmp/velvet.stdout";
   char *errpath = "/tmp/velvet.stderr";
