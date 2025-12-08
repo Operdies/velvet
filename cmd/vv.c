@@ -172,7 +172,7 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
   struct app_context *app = src->data;
   // 1. Dispatch any pending signals
   bool did_sigchld = false;
-  struct int_slice signals = { .content = (int*)str.content, .n = str.len / 4 };
+  struct int_slice signals = {.content = (int *)str.content, .n = str.len / 4};
   for (size_t i = 0; i < signals.n; i++) {
     int signal = signals.content[i];
     switch (signal) {
@@ -184,6 +184,9 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
     } break;
     case SIGCHLD: {
       did_sigchld = true;
+    } break;
+    case SIGINT: {
+      logmsg("Ignoring SIGINT");
     } break;
     default:
       app->quit = true;
