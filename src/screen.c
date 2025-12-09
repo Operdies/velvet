@@ -126,7 +126,7 @@ void screen_save_cursor(struct screen *g) {
 }
 
 static inline void row_set_cell(struct screen_row *row, int col, struct screen_cell new_cell) {
-  if (!row->dirty) row->dirty = !cell_equals(row->cells[col], new_cell);
+  row->dirty = true;
   row->cells[col] = new_cell;
   row->eol = MAX(row->eol, col + 1);
 }
@@ -157,8 +157,7 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
    * Rethink conditional redraws. This solution still redraws if a cell is reassigned A -> B -> A
    * Maybe a double buffering strategy is more appropriate.
    */
-  row_set_cell(row, cur->column, c);
-  cur->column++;
+  row_set_cell(row, cur->column++, c);
 
   if (cur->column > screen_right(g)) {
     cur->wrap_pending = true;
