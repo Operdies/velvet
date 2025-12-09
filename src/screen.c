@@ -125,6 +125,12 @@ void screen_save_cursor(struct screen *g) {
   g->saved_cursor = g->cursor;
 }
 
+static inline void row_set_cell(struct screen_row *row, int col, struct screen_cell new_cell) {
+  if (!row->dirty) row->dirty = !cell_equals(row->cells[col], new_cell);
+  row->cells[col] = new_cell;
+  row->eol = MAX(row->eol, col + 1);
+}
+
 void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
   /* Implementation notes:
    * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
@@ -151,10 +157,8 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
    * Rethink conditional redraws. This solution still redraws if a cell is reassigned A -> B -> A
    * Maybe a double buffering strategy is more appropriate.
    */
-  row->cells[cur->column] = c;
-  row->dirty = true;
+  row_set_cell(row, cur->column, c);
   cur->column++;
-  row->eol = MAX(row->eol, cur->column);
 
   if (cur->column > screen_right(g)) {
     cur->wrap_pending = true;
@@ -224,7 +228,7 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
 
 
     for (int i = col_start; i <= col_end; i++) {
-      row->cells[i] = template;
+      row_set_cell(row, i, template);
     }
 
     // If eol was in the range we just erased, update it to be at most the start of the range.
@@ -235,20 +239,19 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
         row->eol = MAX(0, col_start);
       }
     }
-    row->dirty = true;
   }
 }
 
 void screen_insert_blanks_at_cursor(struct screen *g, int n) {
-  struct screen_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
+  struct screen_cell template = {.symbol = utf8_blank, .style = g->cursor.brush};
   struct screen_row *row = screen_row(g);
   int lcol = screen_column(g);
   for (int col = screen_right(g); col >= lcol; col--) {
     int rcol = col - n;
     struct screen_cell replacement = rcol < lcol ? template : row->cells[rcol];
-    row->cells[col] = replacement;
+    row_set_cell(row, col, replacement);
   }
-  row->eol = MIN(row->eol + n, g->w);
+  if (row->eol > lcol) row->eol = MIN(row->eol + n, g->w);
 }
 
 void screen_shift_from_cursor(struct screen *g, int n) {
@@ -258,9 +261,8 @@ void screen_shift_from_cursor(struct screen *g, int n) {
   for (int col = screen_column(g); col < screen_right(g); col++) {
     int rcol = col + n;
     struct screen_cell replacement = rcol > screen_right(g) ? template : row->cells[rcol];
-    row->cells[col] = replacement;
+    row_set_cell(row, col, replacement);
   }
-  row->dirty = true;
   if (row->eol > g->cursor.column) row->eol = MAX(0, row->eol - n);
 }
 void screen_carriage_return(struct screen *g) {
