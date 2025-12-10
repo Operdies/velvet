@@ -986,6 +986,8 @@ void test_vec() {
   assert(item != nullptr);
   assert(*item == 1);
   assert(vec_index(item, v) == 5);
+  vec_find(item, v, *item == 99);
+  assert(item == nullptr);
   ssize_t index = 0;
   vec_foreach(item, v) {
     int actual = *item;
@@ -1005,6 +1007,13 @@ void test_vec() {
     assert(actual == exp);
     index--;
   }
+
+  int where = 0;
+  vec_where(item, v, *item > 3) where++;
+  assert(where == 4);
+  where = 0;
+  vec_rwhere(item, v, *item < 3) where++;
+  assert(where == 3);
   assert(index == -1);
   vec_rforeach(item, v) {
     vec_remove(&v, vec_index(item, v));
