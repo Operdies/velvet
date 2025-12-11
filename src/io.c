@@ -78,6 +78,7 @@ void io_dispatch(struct io *io) {
   for (size_t i = 0; i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(&io->pollfds, i);
     struct io_source *src = vec_nth(&io->sources, i);
+    assert((pfd->revents & POLLNVAL) == 0);
     for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < MAX_IT; repeats++) {
       const int poll_ms = 0;
       // Read output
