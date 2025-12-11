@@ -969,7 +969,7 @@ void test_string() {
 void test_vec() {
   int *item;
   struct vec v = vec(int);
-  assert(vec_index(&item, v) == -1);
+  assert(vec_index(&v, &item) == -1);
   vec_foreach(item, v) {
     assert(!"foreach: Vec should be empty!");
   }
@@ -985,14 +985,14 @@ void test_vec() {
   vec_find(item, v, *item == 1);
   assert(item != nullptr);
   assert(*item == 1);
-  assert(vec_index(item, v) == 5);
+  assert(vec_index(&v, item) == 5);
   vec_find(item, v, *item == 99);
   assert(item == nullptr);
   ssize_t index = 0;
   vec_foreach(item, v) {
     int actual = *item;
     int exp = expected[index];
-    int actual_index = vec_index(item, v);
+    int actual_index = vec_index(&v, item);
     assert(index == actual_index);
     assert(actual == exp);
     index++;
@@ -1002,7 +1002,7 @@ void test_vec() {
   vec_rforeach(item, v) {
     int actual = *item;
     int exp = expected[index];
-    int actual_index = vec_index(item, v);
+    int actual_index = vec_index(&v, item);
     assert(index == actual_index);
     assert(actual == exp);
     index--;
@@ -1016,7 +1016,7 @@ void test_vec() {
   assert(where == 3);
   assert(index == -1);
   vec_rforeach(item, v) {
-    vec_remove(&v, vec_index(item, v));
+    vec_remove_at(&v, vec_index(&v, item));
   }
   vec_foreach(item, v) {
     assert(!"foreach: Vec should be empty!");

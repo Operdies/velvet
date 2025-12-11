@@ -19,8 +19,8 @@ static void velvet_detach_session(struct velvet *velvet, struct velvet_session *
   close(s->output);
   string_destroy(&s->pending_output);
   *s = (struct velvet_session){0};
-  size_t idx = vec_index(s, velvet->sessions);
-  vec_remove(&velvet->sessions, idx);
+  size_t idx = vec_index(&velvet->sessions, s);
+  vec_remove_at(&velvet->sessions, idx);
   if (velvet->active_session >= idx) {
     velvet->active_session = MAX((int)velvet->active_session - 1, 0);
   }
@@ -64,7 +64,7 @@ static void session_socket_callback(struct io_source *src) {
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
     multiplexer_render(&velvet->multiplexer, velvet_session_render, true, sesh);
-    velvet->active_session = vec_index(sesh, velvet->sessions);
+    velvet->active_session = vec_index(&velvet->sessions, sesh);
   }
 
   if (n > 2 && data_buf[0] == 0x1b && data_buf[1] == '[') {
@@ -214,7 +214,7 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
   if (strncmp((char*)str.content, "\x1b[I", 3) == 0) {
     struct velvet_session *sesh;
     vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) m->active_session = vec_index(sesh, m->sessions);
+    if (sesh) m->active_session = vec_index(&m->sessions, sesh);
   }
 
   if (str.len == 2 && strncmp((char*)str.content, "\x1b]", 2) == 0) {

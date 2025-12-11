@@ -162,7 +162,24 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
   }
 }
 
-void vec_remove(struct vec *v, size_t n) {
+ssize_t vec_index(struct vec *v, const void *const item) {
+  char *it = (char *)item;
+  char *base = v->content;
+  char *end = base + (v->element_size * v->length);
+  if (it < base) return -1;
+  if (it >= end) return -1;
+  size_t offset = it - base;
+  assert(offset % v->element_size == 0);
+  return offset / v->element_size;
+}
+
+void vec_remove(struct vec *v, void *e) {
+  ssize_t index = vec_index(v, e);
+  assert(index >= 0);
+  vec_remove_at(v, index);
+}
+
+void vec_remove_at(struct vec *v, size_t n) {
   assert(n < v->length);
   assert(v->length);
   void *dst = v->content + n * v->element_size;

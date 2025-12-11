@@ -108,8 +108,10 @@ bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_drop_left(struct string *str, size_t n);
 
 void vec_push(struct vec *v, const void *elem);
+/* remove the element represented by `e` from the vector */
+void vec_remove(struct vec *v, void *e);
 /* remove the nth element from the vector */
-void vec_remove(struct vec *v, size_t n);
+void vec_remove_at(struct vec *v, size_t n);
 /* swap two vector elements */
 void vec_swap(struct vec *v, size_t i, size_t j);
 void vec_clear(struct vec *v);
@@ -120,6 +122,7 @@ void *vec_nth(const struct vec *const v, size_t i);
 struct u8_slice string_as_u8_slice(struct string *s);
 struct u8_slice u8_slice_from_cstr(const char *const str);
 struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end);
+ssize_t vec_index(struct vec *v, const void *const item);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }
@@ -142,12 +145,6 @@ struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_
   for ((item) = (vec).content; (((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size)); (item)++)
 
 #define vec_where(item, vec, cond) vec_foreach(item, vec) if ((cond))
-
-#define vec_index(item, vec)                                                                                           \
-  (((char *)item) >= ((char *)(vec).content) &&                                                                        \
-           ((char *)item) < (((char *)(vec).content) + (vec).length * (vec).element_size)                              \
-       ? (ssize_t)(((char *)item - (char *)(vec).content) / (vec).element_size)                                        \
-       : -1)
 
 #define vec_find(item, vec, cond)                                                                                      \
   do {                                                                                                                 \

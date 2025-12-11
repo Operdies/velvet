@@ -32,7 +32,7 @@ static void io_dispatch_scheduled(struct io *io) {
   vec_rforeach(schedule, io->scheduled) {
     if (schedule->when <= now) {
       schedule->callback(schedule->data);
-      vec_remove(&io->scheduled, vec_index(schedule, io->scheduled));
+      vec_remove_at(&io->scheduled, vec_index(&io->scheduled, schedule));
     }
   }
 }

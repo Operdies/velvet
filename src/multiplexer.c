@@ -304,7 +304,7 @@ void multiplexer_destroy(struct multiplexer *m) {
 }
 
 static void multiplexer_remove_host(struct multiplexer *m, size_t index) {
-  vec_remove(&m->hosts, index);
+  vec_remove_at(&m->hosts, index);
 
   if (m->hosts.length == 0) return;
 
@@ -337,7 +337,7 @@ void multiplexer_remove_exited(struct multiplexer *m) {
           // otherwise the process will be reaped in vte_host_destroy
           h->pid = 0;
           vte_host_destroy(h);
-          multiplexer_remove_host(m, vec_index(h, m->hosts));
+          multiplexer_remove_host(m, vec_index(&m->hosts, h));
           break;
         }
       }
