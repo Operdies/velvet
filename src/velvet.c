@@ -237,7 +237,10 @@ static void session_output_callback(struct io_source *src) {
 }
 
 static void vte_write_callback(struct io_source *src) {
-  struct vte_host *vte = src->data;
+  struct velvet *v = src->data;
+  struct vte_host *vte;
+  vec_find(vte, v->multiplexer.hosts, vte->pty == src->fd);
+  assert(vte);
   if (vte->vte.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(&vte->vte.pending_input));
     if (written > 0) string_drop_left(&vte->vte.pending_input, (size_t)written);
@@ -245,7 +248,10 @@ static void vte_write_callback(struct io_source *src) {
 }
 
 static void vte_read_callback(struct io_source *src, struct u8_slice str) {
-  struct vte_host *vte = src->data;
+  struct velvet *v = src->data;
+  struct vte_host *vte;
+  vec_find(vte, v->multiplexer.hosts, vte->pty == src->fd);
+  assert(vte);
   vte_host_process_output(vte, str);
 }
 
@@ -295,7 +301,7 @@ void velvet_loop(struct velvet *velvet) {
     struct vte_host *h;
     vec_foreach(h, velvet->multiplexer.hosts) {
       struct io_source read_src = {
-        .data = h,
+        .data = velvet,
         .fd = h->pty,
         .events = IO_SOURCE_POLLIN,
         .read_callback = vte_read_callback,
