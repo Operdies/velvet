@@ -164,8 +164,8 @@ int main(int argc, char **argv) {
   dup2(new_stdout, STDOUT_FILENO);
 
   struct velvet velvet = {
-      .multiplexer = multiplexer_default,
-      .input_handler = (struct velvet_input){.m = &velvet.multiplexer, .options = {.focus_follows_mouse = true}},
+      .scene = velvet_scene_default,
+      .input_handler = (struct velvet_input){.m = &velvet.scene, .options = {.focus_follows_mouse = true}},
       .sessions = vec(struct velvet_session),
       .socket = sock_fd,
       .event_loop = io_default,

@@ -18,16 +18,16 @@ def get_string(valobj):
     strval = deref.GetString(error, 0)
     return strval
 
-def multiplexer_summary(valobj, internal_dict, options):
+def velvet_scene_summary(valobj, internal_dict, options):
     height_val = valobj.GetChildMemberWithName('rows')
     width_val = valobj.GetChildMemberWithName('columns')
     height = height_val.GetValueAsUnsigned(0)
     width = width_val.GetValueAsUnsigned(0)
     return f"mult: [{height}x{width}]"
 
-def configure_multiplexer(debugger):
-    # debugger.HandleCommand('type filter add multiplexer --child hosts_vec --child prefix --child draw_buffer')
-    summarize(debugger, "multiplexer")
+def configure_velvet_scene(debugger):
+    # debugger.HandleCommand('type filter add velvet_scene --child hosts_vec --child prefix --child draw_buffer')
+    summarize(debugger, "velvet_scene")
 
 def string_summary(valobj, x, y):
     length_val = valobj.GetChildMemberWithName('len')
@@ -273,7 +273,7 @@ def configure_string(debugger):
     summarize(debugger, "string")
 
 def configure(debugger):
-    configure_multiplexer(debugger)
+    configure_velvet_scene(debugger)
     configure_string(debugger)
     summarize(debugger, 'int_slice')
     summarize(debugger, "screen_row")

@@ -2,7 +2,7 @@
 #define VELVET_INPUT_H
 
 #include "collections.h"
-#include "multiplexer.h"
+#include "velvet_scene.h"
 
 enum velvet_input_state {
   VELVET_INPUT_STATE_NORMAL,
@@ -18,7 +18,7 @@ struct velvet_input_options {
 };
 
 struct velvet_input {
-  struct multiplexer *m;
+  struct velvet_scene *m;
   uint8_t prefix;
   enum velvet_input_state state;
   struct string command_buffer;

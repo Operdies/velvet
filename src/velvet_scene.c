@@ -2,13 +2,13 @@
 #include "virtual_terminal_sequences.h"
 #include "vte.h"
 #include "vte_host.h"
-#include <multiplexer.h>
+#include <velvet_scene.h>
 #include <string.h>
 #include <sys/wait.h>
 
 static int nmaster = 1;
 static float factor = 0.5;
-void multiplexer_arrange(struct multiplexer *m) {
+void velvet_scene_arrange(struct velvet_scene *m) {
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.rows};
@@ -72,7 +72,7 @@ static void vte_host_invalidate(struct vte_host *h) {
   vte_invalidate_screen(&h->vte);
 }
 
-static void multiplexer_swap_clients(struct multiplexer *m, size_t c1, size_t c2) {
+static void velvet_scene_swap_clients(struct velvet_scene *m, size_t c1, size_t c2) {
   if (c1 != c2) {
     vec_swap(&m->hosts, c1, c2);
     vte_host_invalidate(vec_nth(&m->hosts, c1));
@@ -86,7 +86,7 @@ static void host_notify_focus(struct vte_host *host, bool focus) {
   }
 }
 
-void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
+void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
   if (m->focus != focus) {
     struct vte_host *current_focus = vec_nth(&m->hosts, m->focus);
     struct vte_host *new_focus = vec_nth(&m->hosts, focus);
@@ -98,63 +98,63 @@ void multiplexer_set_focus(struct multiplexer *m, size_t focus) {
   }
 }
 
-static void multiplexer_swap_previous(struct multiplexer *m) {
+static void velvet_scene_swap_previous(struct velvet_scene *m) {
   if (m->focus > 0 && m->hosts.length > 1) {
-    multiplexer_swap_clients(m, m->focus, m->focus - 1);
-    multiplexer_set_focus(m, m->focus - 1);
+    velvet_scene_swap_clients(m, m->focus, m->focus - 1);
+    velvet_scene_set_focus(m, m->focus - 1);
   }
 }
 
-static void multiplexer_swap_next(struct multiplexer *m) {
+static void velvet_scene_swap_next(struct velvet_scene *m) {
   if (m->focus < m->hosts.length - 1 && m->hosts.length > 1) {
-    multiplexer_swap_clients(m, m->focus, m->focus + 1);
-    multiplexer_set_focus(m, m->focus + 1);
+    velvet_scene_swap_clients(m, m->focus, m->focus + 1);
+    velvet_scene_set_focus(m, m->focus + 1);
   }
 }
 
-static void multiplexer_focus_next(struct multiplexer *m) {
-  multiplexer_set_focus(m, (m->focus + 1) % m->hosts.length);
+static void velvet_scene_focus_next(struct velvet_scene *m) {
+  velvet_scene_set_focus(m, (m->focus + 1) % m->hosts.length);
 }
 
-static void multiplexer_focus_previous(struct multiplexer *m) {
-  multiplexer_set_focus(m, (m->focus + m->hosts.length - 1) % m->hosts.length);
+static void velvet_scene_focus_previous(struct velvet_scene *m) {
+  velvet_scene_set_focus(m, (m->focus + m->hosts.length - 1) % m->hosts.length);
 }
 
-static void multiplexer_zoom(struct multiplexer *m) {
+static void velvet_scene_zoom(struct velvet_scene *m) {
   if (m->hosts.length < 2) return;
   if (m->focus == 0) {
-    multiplexer_swap_clients(m, 0, 1);
-    multiplexer_set_focus(m, 0);
+    velvet_scene_swap_clients(m, 0, 1);
+    velvet_scene_set_focus(m, 0);
   } else {
-    multiplexer_swap_clients(m, 0, m->focus);
-    multiplexer_set_focus(m, 0);
+    velvet_scene_swap_clients(m, 0, m->focus);
+    velvet_scene_set_focus(m, 0);
   }
 }
 
-static void multiplexer_spawn_and_focus(struct multiplexer *m, char *cmdline) {
-  multiplexer_spawn_process(m, cmdline);
-  multiplexer_set_focus(m, m->hosts.length - 1);
+static void velvet_scene_spawn_and_focus(struct velvet_scene *m, char *cmdline) {
+  velvet_scene_spawn_process(m, cmdline);
+  velvet_scene_set_focus(m, m->hosts.length - 1);
 }
 
-static bool handle_keybinds(struct multiplexer *m, uint8_t ch) {
+static bool handle_keybinds(struct velvet_scene *m, uint8_t ch) {
   switch (ch) {
-  case 'c': multiplexer_spawn_and_focus(m, "zsh"); break;
-  case 'j': multiplexer_swap_next(m); break;
-  case 'k': multiplexer_swap_previous(m); break;
-  case 'v': multiplexer_spawn_and_focus(m, "nvim"); break;
+  case 'c': velvet_scene_spawn_and_focus(m, "zsh"); break;
+  case 'j': velvet_scene_swap_next(m); break;
+  case 'k': velvet_scene_swap_previous(m); break;
+  case 'v': velvet_scene_spawn_and_focus(m, "nvim"); break;
   case CTRL('q'): nmaster = MIN(10, nmaster + 1); break;
   case CTRL('e'): nmaster = MAX(0, nmaster - 1); break;
-  case CTRL('g'): multiplexer_zoom(m); break;
+  case CTRL('g'): velvet_scene_zoom(m); break;
   case CTRL('h'): factor = MAX(0.1f, factor - 0.05f); break;
-  case CTRL('j'): multiplexer_focus_next(m); break;
-  case CTRL('k'): multiplexer_focus_previous(m); break;
+  case CTRL('j'): velvet_scene_focus_next(m); break;
+  case CTRL('k'): velvet_scene_focus_previous(m); break;
   case CTRL('l'): factor = MIN(0.9f, factor + 0.05f); break;
   default: return false;
   };
   return true;
 }
 
-void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
+void velvet_scene_feed_input(struct velvet_scene *m, struct u8_slice str) {
   const char ESC = 0x1b;
   static struct string writebuffer = {0};
   static struct string pastebuffer = {0};
@@ -284,17 +284,17 @@ void multiplexer_feed_input(struct multiplexer *m, struct u8_slice str) {
   }
 }
 
-void multiplexer_spawn_process(struct multiplexer *m, char *process) {
+void velvet_scene_spawn_process(struct velvet_scene *m, char *process) {
   assert(m->hosts.element_size == sizeof(struct vte_host));
   logmsg("Spawn %s", process);
   struct vte_host *host = vec_new_element(&m->hosts);
   host->cmdline = strdup(process);
   host->vte = vte_default;
-  multiplexer_arrange(m);
+  velvet_scene_arrange(m);
   vte_host_start(host);
 }
 
-void multiplexer_destroy(struct multiplexer *m) {
+void velvet_scene_destroy(struct velvet_scene *m) {
   struct vte_host *h;
   vec_foreach(h, m->hosts) {
     vte_host_destroy(h);
@@ -303,7 +303,7 @@ void multiplexer_destroy(struct multiplexer *m) {
   string_destroy(&m->draw_buffer);
 }
 
-static void multiplexer_remove_host(struct multiplexer *m, size_t index) {
+static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
   vec_remove_at(&m->hosts, index);
 
   if (m->hosts.length == 0) return;
@@ -324,7 +324,7 @@ static void multiplexer_remove_host(struct multiplexer *m, size_t index) {
   }
 }
 
-void multiplexer_remove_exited(struct multiplexer *m) {
+void velvet_scene_remove_exited(struct velvet_scene *m) {
   int status;
   pid_t pid;
 
@@ -337,7 +337,7 @@ void multiplexer_remove_exited(struct multiplexer *m) {
           // otherwise the process will be reaped in vte_host_destroy
           h->pid = 0;
           vte_host_destroy(h);
-          multiplexer_remove_host(m, vec_index(&m->hosts, h));
+          velvet_scene_remove_host(m, vec_index(&m->hosts, h));
           break;
         }
       }
@@ -345,10 +345,10 @@ void multiplexer_remove_exited(struct multiplexer *m) {
   }
 }
 
-void multiplexer_resize(struct multiplexer *m, struct platform_winsize w) {
+void velvet_scene_resize(struct velvet_scene *m, struct platform_winsize w) {
   if (m->ws.colums != w.colums || m->ws.rows != w.rows || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
     m->ws = w;
-    multiplexer_arrange(m);
+    velvet_scene_arrange(m);
     struct vte_host *h;
     vec_foreach(h, m->hosts) {
       vte_host_invalidate(h);
@@ -356,7 +356,7 @@ void multiplexer_resize(struct multiplexer *m, struct platform_winsize w) {
   }
 }
 
-void multiplexer_render(struct multiplexer *m, render_func_t *render_func, bool full_draw, void *context) {
+void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, bool full_draw, void *context) {
   if (m->hosts.length == 0) return;
   static enum cursor_style current_cursor_style = 0;
   struct string *draw_buffer = &m->draw_buffer;

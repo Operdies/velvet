@@ -4,7 +4,7 @@
 #include "collections.h"
 #include "io.h"
 #include "platform.h"
-#include "multiplexer.h"
+#include "velvet_scene.h"
 #include "velvet_input.h"
 
 struct velvet_session {
@@ -16,7 +16,7 @@ struct velvet_session {
 };
 
 struct velvet {
-  struct multiplexer multiplexer;
+  struct velvet_scene scene;
   struct velvet_input input_handler;
   struct io event_loop;
   struct vec /* struct session */ sessions;

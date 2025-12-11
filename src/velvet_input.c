@@ -171,7 +171,7 @@ static void send_csi_mouse(struct velvet_input *in, const struct csi *const c) {
         struct vte_host *h = vec_nth(&in->m->hosts, i);
         struct bounds b = h->rect.window;
         if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
-          multiplexer_set_focus(in->m, i);
+          velvet_scene_set_focus(in->m, i);
           break;
         }
       }

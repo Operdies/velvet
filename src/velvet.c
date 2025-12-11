@@ -63,7 +63,7 @@ static void session_socket_callback(struct io_source *src) {
     set_nonblocking(sesh->output);
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
-    multiplexer_render(&velvet->multiplexer, velvet_session_render, true, sesh);
+    velvet_scene_render(&velvet->scene, velvet_session_render, true, sesh);
     velvet->active_session = vec_index(&velvet->sessions, sesh);
   }
 
@@ -128,7 +128,7 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
   }
 
   if (did_sigchld) {
-    multiplexer_remove_exited(&velvet->multiplexer);
+    velvet_scene_remove_exited(&velvet->scene);
   }
 }
 
@@ -239,7 +239,7 @@ static void session_output_callback(struct io_source *src) {
 static void vte_write_callback(struct io_source *src) {
   struct velvet *v = src->data;
   struct vte_host *vte;
-  vec_find(vte, v->multiplexer.hosts, vte->pty == src->fd);
+  vec_find(vte, v->scene.hosts, vte->pty == src->fd);
   assert(vte);
   if (vte->vte.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(&vte->vte.pending_input));
@@ -250,7 +250,7 @@ static void vte_write_callback(struct io_source *src) {
 static void vte_read_callback(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   struct vte_host *vte;
-  vec_find(vte, v->multiplexer.hosts, vte->pty == src->fd);
+  vec_find(vte, v->scene.hosts, vte->pty == src->fd);
   assert(vte);
   vte_host_process_output(vte, str);
 }
@@ -261,9 +261,9 @@ void velvet_loop(struct velvet *velvet) {
 
   struct io *const loop = &velvet->event_loop;
 
-  multiplexer_resize(&velvet->multiplexer, ws);
-  multiplexer_spawn_process(&velvet->multiplexer, "zsh");
-  multiplexer_arrange(&velvet->multiplexer);
+  velvet_scene_resize(&velvet->scene, ws);
+  velvet_scene_spawn_process(&velvet->scene, "zsh");
+  velvet_scene_arrange(&velvet->scene);
 
   bool did_resize = false;
   for (;;) {
@@ -272,8 +272,8 @@ void velvet_loop(struct velvet *velvet) {
       assert(velvet->active_session < velvet->sessions.length);
       if (velvet->active_session < velvet->sessions.length) {
         struct velvet_session *active = vec_nth(&velvet->sessions, velvet->active_session);
-        if (active->ws.colums && active->ws.rows && (active->ws.colums != velvet->multiplexer.ws.colums || active->ws.rows != velvet->multiplexer.ws.rows)) {
-          multiplexer_resize(&velvet->multiplexer, active->ws);
+        if (active->ws.colums && active->ws.rows && (active->ws.colums != velvet->scene.ws.colums || active->ws.rows != velvet->scene.ws.rows)) {
+          velvet_scene_resize(&velvet->scene, active->ws);
           did_resize = true;
           // Defer redraw until the clients have actually updated. Redrawing righ away leads to flickering
           // redraw_needed = true;
@@ -281,13 +281,13 @@ void velvet_loop(struct velvet *velvet) {
       }
 
       // arrange
-      multiplexer_arrange(&velvet->multiplexer);
+      velvet_scene_arrange(&velvet->scene);
       if (did_resize) {
         did_resize = false;
         draw_no_mans_land(velvet);
       }
       // Render the current velvet state
-      multiplexer_render(&velvet->multiplexer, velvet_render, false, velvet);
+      velvet_scene_render(&velvet->scene, velvet_render, false, velvet);
     }
 
     // Set up IO
@@ -299,7 +299,7 @@ void velvet_loop(struct velvet *velvet) {
      * processes hotkeys which can rearrange the order of the pointers.
      * */
     struct vte_host *h;
-    vec_foreach(h, velvet->multiplexer.hosts) {
+    vec_foreach(h, velvet->scene.hosts) {
       struct io_source read_src = {
         .data = velvet,
         .fd = h->pty,
@@ -335,7 +335,7 @@ void velvet_loop(struct velvet *velvet) {
     io_dispatch(loop);
 
     // quit ?
-    if (velvet->multiplexer.hosts.length == 0 || velvet->quit) break;
+    if (velvet->scene.hosts.length == 0 || velvet->quit) break;
   }
 
   close(velvet->socket);
@@ -347,7 +347,7 @@ void velvet_loop(struct velvet *velvet) {
 
 void velvet_destroy(struct velvet *velvet) {
   io_destroy(&velvet->event_loop);
-  multiplexer_destroy(&velvet->multiplexer);
+  velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input_handler);
   vec_destroy(&velvet->sessions);
 }
