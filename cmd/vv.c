@@ -56,7 +56,7 @@ struct session {
   struct platform_winsize ws;
 };
 
-struct app_context {
+struct velvet {
   struct multiplexer multiplexer;
   struct velvet_input input_handler;
   struct io event_loop;
@@ -72,7 +72,7 @@ static void session_render(struct u8_slice str, void *context) {
   string_push_slice(&s->pending_output, str);
 }
 
-static void app_detach_session(struct app_context *app, struct session *s) {
+static void velvet_detach_session(struct velvet *velvet, struct session *s) {
   uint8_t detach = 'D';
   write(s->socket, &detach, 1);
   close(s->socket);
@@ -80,15 +80,15 @@ static void app_detach_session(struct app_context *app, struct session *s) {
   close(s->output);
   string_destroy(&s->pending_output);
   *s = (struct session){0};
-  size_t idx = vec_index(s, app->sessions);
-  vec_remove(&app->sessions, idx);
-  if (app->active_session >= idx) {
-    app->active_session = MAX((int)app->active_session - 1, 0);
+  size_t idx = vec_index(s, velvet->sessions);
+  vec_remove(&velvet->sessions, idx);
+  if (velvet->active_session >= idx) {
+    velvet->active_session = MAX((int)velvet->active_session - 1, 0);
   }
 }
 
 static void session_socket_callback(struct io_source *src) {
-  struct app_context *app = src->data;
+  struct velvet *velvet = src->data;
   int sock = src->fd;
   struct msghdr msg = {0};
   struct iovec iov;
@@ -113,10 +113,10 @@ static void session_socket_callback(struct io_source *src) {
   }
 
   struct session *sesh;
-  vec_find(sesh, app->sessions, sesh->socket == src->fd);
+  vec_find(sesh, velvet->sessions, sesh->socket == src->fd);
 
   if (n == 0) {
-    if (sesh) app_detach_session(app, sesh);
+    if (sesh) velvet_detach_session(velvet, sesh);
     else close(sock);
   }
 
@@ -130,8 +130,8 @@ static void session_socket_callback(struct io_source *src) {
     set_nonblocking(sesh->output);
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
-    multiplexer_render(&app->multiplexer, session_render, true, sesh);
-    app->active_session = vec_index(sesh, app->sessions);
+    multiplexer_render(&velvet->multiplexer, session_render, true, sesh);
+    velvet->active_session = vec_index(sesh, velvet->sessions);
   }
 
   if (n > 2 && data_buf[0] == 0x1b && data_buf[1] == '[') {
@@ -156,7 +156,7 @@ static void session_socket_callback(struct io_source *src) {
 }
 
 static void socket_accept(struct io_source *src) {
-  struct app_context *app = src->data;
+  struct velvet *velvet = src->data;
 
   int client_fd = accept(src->fd, nullptr, nullptr);
   if (client_fd == -1) {
@@ -164,13 +164,13 @@ static void socket_accept(struct io_source *src) {
   }
 
   struct session c = { .socket = client_fd };
-  vec_push(&app->sessions, &c);
+  vec_push(&velvet->sessions, &c);
 }
 
 static bool redraw_needed = false;
 
 static void signal_callback(struct io_source *src, struct u8_slice str) {
-  struct app_context *app = src->data;
+  struct velvet *velvet = src->data;
   // 1. Dispatch any pending signals
   bool did_sigchld = false;
   struct int_slice signals = {.content = (int *)str.content, .n = str.len / 4};
@@ -178,7 +178,7 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
     int signal = signals.content[i];
     switch (signal) {
     case SIGTERM: {
-      app->quit = true;
+      velvet->quit = true;
     } break;
     case SIGHUP: {
       logmsg("Ignoring SIGHUP");
@@ -190,24 +190,24 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
       logmsg("Ignoring SIGINT");
     } break;
     default:
-      app->quit = true;
+      velvet->quit = true;
       logmsg("Unhandled signal: %d", signal);
       break;
     }
   }
 
   if (did_sigchld) {
-    multiplexer_remove_exited(&app->multiplexer);
+    multiplexer_remove_exited(&velvet->multiplexer);
     redraw_needed = true;
   }
 }
 
 static void session_input_callback(struct io_source *src, struct u8_slice str) {
-  struct app_context *m = src->data;
+  struct velvet *m = src->data;
   if (str.len == 0) {
     struct session *sesh;
     vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) app_detach_session(m, sesh);
+    if (sesh) velvet_detach_session(m, sesh);
     return;
   }
   redraw_needed = true;
@@ -222,7 +222,7 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
   if (str.len == 2 && strncmp((char*)str.content, "\x1b]", 2) == 0) {
     struct session *sesh;
     vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) app_detach_session(m, sesh);
+    if (sesh) velvet_detach_session(m, sesh);
   }
 }
 
@@ -238,8 +238,8 @@ static ssize_t session_write_pending(struct session *sesh) {
   return -1;
 }
 
-static void app_render(struct u8_slice str, void *context) {
-  struct app_context *a = context;
+static void velvet_render(struct u8_slice str, void *context) {
+  struct velvet *a = context;
   struct session *sesh;
   if (str.len == 0) return;
   vec_foreach(sesh, a->sessions) {
@@ -253,13 +253,13 @@ static void app_render(struct u8_slice str, void *context) {
 }
 
 static void session_output_callback(struct io_source *src) {
-  struct app_context *app = src->data;
+  struct velvet *velvet = src->data;
   struct session *sesh;
-  vec_find(sesh, app->sessions, sesh->output == src->fd);
+  vec_find(sesh, velvet->sessions, sesh->output == src->fd);
   if (sesh && sesh->pending_output.len) {
     ssize_t written = session_write_pending(sesh);
     if (written == 0) {
-      app_detach_session(app, sesh);
+      velvet_detach_session(velvet, sesh);
     }
   }
 }
@@ -306,11 +306,11 @@ static void add_bindir_to_path(void) {
   free(exe_path);
 }
 
-static void app_destroy(struct app_context *app) {
-  io_destroy(&app->event_loop);
-  multiplexer_destroy(&app->multiplexer);
-  velvet_input_destroy(&app->input_handler);
-  vec_destroy(&app->sessions);
+static void velvet_destroy(struct velvet *velvet) {
+  io_destroy(&velvet->event_loop);
+  multiplexer_destroy(&velvet->multiplexer);
+  velvet_input_destroy(&velvet->input_handler);
+  vec_destroy(&velvet->sessions);
 }
 
 static int create_socket() {
@@ -341,14 +341,14 @@ static int create_socket() {
   return sockfd;
 }
 
-static void draw_no_mans_land(struct app_context *app) {
+static void draw_no_mans_land(struct velvet *velvet) {
   static struct string scratch = {0};
-  struct session *active = vec_nth(&app->sessions, app->active_session);
+  struct session *active = vec_nth(&velvet->sessions, velvet->active_session);
   struct session *sesh;
   char *pipe = "│";
   char *dash = "─";
   char *corner = "┘";
-  vec_foreach(sesh, app->sessions) {
+  vec_foreach(sesh, velvet->sessions) {
     if (sesh->ws.colums && sesh->ws.rows) {
       string_clear(&scratch);
       string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
@@ -384,25 +384,25 @@ static void draw_no_mans_land(struct app_context *app) {
   }
 }
 
-static void start_server(struct app_context *app) {
+static void start_server(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct platform_winsize ws = {.colums = 80, .rows = 24, .x_pixel = 800, .y_pixel = 240};
 
-  struct io *const loop = &app->event_loop;
+  struct io *const loop = &velvet->event_loop;
 
-  multiplexer_resize(&app->multiplexer, ws);
-  multiplexer_spawn_process(&app->multiplexer, "zsh");
-  multiplexer_arrange(&app->multiplexer);
+  multiplexer_resize(&velvet->multiplexer, ws);
+  multiplexer_spawn_process(&velvet->multiplexer, "zsh");
+  multiplexer_arrange(&velvet->multiplexer);
 
   bool did_resize = false;
   for (;;) {
     logmsg("Main loop"); // mostly here to detect misbehaving polls.
-    if (app->sessions.length > 0) {
-      assert(app->active_session < app->sessions.length);
-      if (app->active_session < app->sessions.length) {
-        struct session *active = vec_nth(&app->sessions, app->active_session);
-        if (active->ws.colums && active->ws.rows && (active->ws.colums != app->multiplexer.ws.colums || active->ws.rows != app->multiplexer.ws.rows)) {
-          multiplexer_resize(&app->multiplexer, active->ws);
+    if (velvet->sessions.length > 0) {
+      assert(velvet->active_session < velvet->sessions.length);
+      if (velvet->active_session < velvet->sessions.length) {
+        struct session *active = vec_nth(&velvet->sessions, velvet->active_session);
+        if (active->ws.colums && active->ws.rows && (active->ws.colums != velvet->multiplexer.ws.colums || active->ws.rows != velvet->multiplexer.ws.rows)) {
+          multiplexer_resize(&velvet->multiplexer, active->ws);
           did_resize = true;
           // Defer redraw until the clients have actually updated. Redrawing righ away leads to flickering
           // redraw_needed = true;
@@ -412,25 +412,25 @@ static void start_server(struct app_context *app) {
       // arrange
       if (redraw_needed) {
         redraw_needed = false;
-        multiplexer_arrange(&app->multiplexer);
+        multiplexer_arrange(&velvet->multiplexer);
         if (did_resize) {
-          draw_no_mans_land(app);
+          draw_no_mans_land(velvet);
         }
-        // Render the current app state
-        multiplexer_render(&app->multiplexer, app_render, false, app);
+        // Render the current velvet state
+        multiplexer_render(&velvet->multiplexer, velvet_render, false, velvet);
       }
     }
 
     // Set up IO
     vec_clear(&loop->sources);
 
-    struct io_source signal_src = { .fd = signal_read, .events = IO_SOURCE_POLLIN, .read_callback = signal_callback, .data = app};
+    struct io_source signal_src = { .fd = signal_read, .events = IO_SOURCE_POLLIN, .read_callback = signal_callback, .data = velvet};
     /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
      * This is because the signal handler will remove closed clients, and the stdin handler
      * processes hotkeys which can rearrange the order of the pointers.
      * */
     struct vte_host *h;
-    vec_foreach(h, app->multiplexer.hosts) {
+    vec_foreach(h, velvet->multiplexer.hosts) {
       struct io_source read_src = {
         .data = h,
         .fd = h->pty,
@@ -445,18 +445,18 @@ static void start_server(struct app_context *app) {
 
     io_add_source(loop, signal_src);
 
-    struct io_source socket_src = { .fd = app->socket, .events = IO_SOURCE_POLLIN, .ready_callback = socket_accept, .data = app };
+    struct io_source socket_src = { .fd = velvet->socket, .events = IO_SOURCE_POLLIN, .ready_callback = socket_accept, .data = velvet };
     io_add_source(loop, socket_src);
 
     struct session *session;
-    vec_foreach(session, app->sessions) {
-      struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .ready_callback = session_socket_callback, .data = app };
+    vec_foreach(session, velvet->sessions) {
+      struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .ready_callback = session_socket_callback, .data = velvet };
       io_add_source(loop, socket_src);
-      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .read_callback = session_input_callback, .data = app};
+      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .read_callback = session_input_callback, .data = velvet};
       if (input_src.fd)
         io_add_source(loop, input_src);
       if (session->pending_output.len) {
-        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .write_callback = session_output_callback, .data = app};
+        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .write_callback = session_output_callback, .data = velvet};
         if (output_src.fd)
           io_add_source(loop, output_src);
       }
@@ -466,10 +466,10 @@ static void start_server(struct app_context *app) {
     io_dispatch(loop);
 
     // quit ?
-    if (app->multiplexer.hosts.length == 0 || app->quit) break;
+    if (velvet->multiplexer.hosts.length == 0 || velvet->quit) break;
   }
 
-  close(app->socket);
+  close(velvet->socket);
   char *sockpath = getenv("VELVET");
   if (sockpath) {
     unlink(sockpath);
@@ -544,16 +544,16 @@ int main(int argc, char **argv) {
   dup2(new_stderr, STDERR_FILENO);
   dup2(new_stdout, STDOUT_FILENO);
 
-  struct app_context app = {
+  struct velvet velvet = {
       .multiplexer = multiplexer_default,
-      .input_handler = (struct velvet_input){.m = &app.multiplexer, .options = {.focus_follows_mouse = true}},
+      .input_handler = (struct velvet_input){.m = &velvet.multiplexer, .options = {.focus_follows_mouse = true}},
       .sessions = vec(struct session),
       .socket = sock_fd,
       .event_loop = io_default,
   };
 
-  start_server(&app);
-  app_destroy(&app);
+  start_server(&velvet);
+  velvet_destroy(&velvet);
   return 0;
 }
 
