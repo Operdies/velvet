@@ -209,7 +209,7 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
     if (sesh) velvet_detach_session(m, sesh);
     return;
   }
-  velvet_input_process(&m->input_handler, str);
+  velvet_process_input(m, str);
 
   if (strncmp((char*)str.content, "\x1b[I", 3) == 0) {
     struct velvet_session *sesh;
@@ -348,7 +348,7 @@ void velvet_loop(struct velvet *velvet) {
 void velvet_destroy(struct velvet *velvet) {
   io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
-  velvet_input_destroy(&velvet->input_handler);
+  velvet_input_destroy(&velvet->input);
   vec_destroy(&velvet->sessions);
 }
 

@@ -195,10 +195,6 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
   }
 }
 
-static inline bool cell_style_eol_equals(struct screen_cell_style c1, struct screen_cell_style c2) {
-  return color_equals(c1.bg, c2.bg) && c1.attr == c2.attr;
-}
-
 void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuffer) {
   // Ensure the screen content is in sync with the vte_host just-in-time
   vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
