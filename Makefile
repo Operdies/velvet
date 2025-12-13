@@ -27,7 +27,7 @@ RELEASE_TARGET ?= release
 PROFILE_TARGET ?= profile
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences
 OUT_DIR ?= bin
-COMMANDS = vv test statusbar dump
+COMMANDS = vv test statusbar dump keyboard
 CMD_DIR = cmd
 
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
