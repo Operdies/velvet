@@ -21,22 +21,21 @@ static void install_signal_handlers(int *pipes) {
   struct sigaction sa = {0};
   sa.sa_sigaction = &signal_handler;
   sa.sa_flags = SA_SIGINFO;
-  if (sigaction(SIGTERM, &sa, NULL) == -1) {
-    die("sigaction:");
-  }
-  if (sigaction(SIGINT, &sa, NULL) == -1) {
-    die("sigaction:");
-  }
-  if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-    die("sigaction:");
-  }
-  if (sigaction(SIGHUP, &sa, NULL) == -1) {
-    die("sigaction:");
-  }
 
-  if (pipe(pipes) < 0) {
-    die("pipe:");
-  }
+  if (sigaction(SIGTERM, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGQUIT, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGINT, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGHUP, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGPIPE, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGUSR1, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGUSR2, &sa, NULL) == -1) die("sigaction:");
+
+  signal(SIGTTOU, SIG_IGN);
+  signal(SIGTTIN, SIG_IGN);
+  signal(SIGTSTP, SIG_IGN);
+
+  if (pipe(pipes) < 0) die("pipe:");
 }
 
 static void add_bindir_to_path(void) {

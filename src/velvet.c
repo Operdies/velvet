@@ -125,7 +125,7 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
     } break;
     default:
       velvet->quit = true;
-      logmsg("Unhandled signal: %d", signal);
+      die("Unhandled signal: %d", signal);
       break;
     }
   }
