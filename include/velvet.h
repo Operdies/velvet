@@ -90,6 +90,7 @@ struct velvet {
   int socket;
   int signal_read;
   bool quit;
+  bool daemon;
 };
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e);
@@ -99,10 +100,6 @@ void velvet_process_input(struct velvet *in, struct u8_slice str);
 void velvet_input_destroy(struct velvet_input *v);
 struct velvet_keymap *velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, on_key *callback, void *data);
 void velvet_input_unwind(struct velvet *v);
-
-static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
-  return k1.modifiers == k2.modifiers && k1.symbol.numeric == k2.symbol.numeric;
-}
 
 static struct velvet_input velvet_input_default = {
     .options =

@@ -92,6 +92,15 @@ _Noreturn void die(char *fmt, ...) {
   __builtin_trap();
 }
 
+_Noreturn void fatal(char *fmt, ...) {
+  terminal_reset();
+  va_list ap;
+  va_start(ap, fmt);
+  vflogmsg(stderr, fmt, ap);
+  va_end(ap);
+  exit(1);
+}
+
 #ifndef NDEBUG
 
 static void vlogmsg(char *fmt, va_list ap) {

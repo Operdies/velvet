@@ -118,7 +118,10 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
       did_sigchld = true;
     } break;
     case SIGINT: {
-      logmsg("Ignoring SIGINT");
+      if (!velvet->daemon) {
+        logmsg("^C received; exiting");
+        velvet->quit = true;
+      }
     } break;
     default:
       velvet->quit = true;

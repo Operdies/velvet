@@ -1,0 +1,38 @@
+#compdef vv
+
+_vv_bind_actions=(
+  split-horizontal
+  split-vertical
+  new-tab
+  close
+  detach
+  focus-next
+  focus-prev
+  noop
+)
+
+_arguments -s -S \
+  \
+  '-h[Show help]'\
+  '--help[Print usage and exit]'\
+  '-S[Specify the socket to use]:socket path:->socket' \
+  '--socket[Specify the socket to use]:socket path:->socket' \
+  \
+  '(--attach --bind --source)--foreground[Start a server as a foreground process]' \
+  '(--foreground --bind --source)--attach[Attach to the server at the socket]' \
+  '(--foreground --attach --source)--bind[Bind keys to an action (requires --socket or $VELVET)]:keys:( )::action:->bind_action' \
+  '(--foreground --attach --bind)--source[Read mappings from a file or stdin (requires --socket or $VELVET)]:source file:->source'
+
+case $state in
+  socket)
+    _path_files -f -s,w
+    ;;
+  bind_action)
+    _describe 'bind action' _vv_bind_actions
+    ;;
+  source)
+    compadd -
+    _files
+    ;;
+esac
+
