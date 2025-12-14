@@ -19,7 +19,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "attach" ],
+      "args": [ "--attach" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "console": "externalTerminal",
@@ -32,7 +32,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "--headless" ],
+      "args": [ "--foreground" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "initCommands": [

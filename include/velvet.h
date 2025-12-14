@@ -47,6 +47,7 @@ struct velvet_keymap {
    */
   on_key *on_key;
   void *data;
+  bool may_repeat;
   struct velvet_key_event key;
 };
 
@@ -57,7 +58,10 @@ struct velvet_key_sequence {
 
 struct velvet_input_options {
   bool focus_follows_mouse;
-  int keybind_timeout_ms;
+  /* When one mapping is a prefix of another, we resolve the shorter mapping after this delay. */
+  int key_ambiguous_chain_resolve_timeout;
+  /* When */
+  int key_repeat_timeout_ms;
 };
 
 struct velvet_keymap_deferred_action {
@@ -90,6 +94,7 @@ struct velvet {
   int socket;
   int signal_read;
   bool quit;
+  bool daemon;
 };
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e);
@@ -100,15 +105,12 @@ void velvet_input_destroy(struct velvet_input *v);
 struct velvet_keymap *velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, on_key *callback, void *data);
 void velvet_input_unwind(struct velvet *v);
 
-static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
-  return k1.modifiers == k2.modifiers && k1.symbol.numeric == k2.symbol.numeric;
-}
-
 static struct velvet_input velvet_input_default = {
     .options =
         {
             .focus_follows_mouse = true,
-            .keybind_timeout_ms = 1000,
+            .key_ambiguous_chain_resolve_timeout = 1000,
+            .key_repeat_timeout_ms = 1000,
         },
 };
 

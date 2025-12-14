@@ -1,0 +1,76 @@
+#compdef vv
+
+_vv_bind_actions=(
+  split-horizontal
+  split-vertical
+  new-tab
+  close
+  detach
+  focus-next
+  focus-prev
+  noop
+)
+
+typeset -A _vv_set_defaults=(
+  key_repeat_timeout      1000
+  focus_follows_mouse     true
+)
+
+_vv_set_actions=(
+  key_repeat_timeout
+  focus_follows_mouse
+)
+
+_vv_set_key_repeat_timeout() {
+  _numbers
+}
+
+_vv_set_focus_follows_mouse() {
+  _describe -V 'lazy focus' 'wheee'
+  _values 'boolean' true false
+}
+
+
+_arguments -s -S \
+  \
+  '-h[Show help]'\
+  '--help[Print usage and exit]'\
+  '-S[Specify the socket to use]:socket path:->socket' \
+  '--socket[Specify the socket to use]:socket path:->socket' \
+  \
+  '(--set    --attach     --bind   --source)--foreground[Start a server as a foreground process]' \
+  '(--set    --foreground --bind   --source)--attach[Attach to the server at the socket]' \
+  '(--set    --foreground --attach --source)--bind[Bind keys to an action (requires --socket or $VELVET)]:keys:( )::action:->bind_action' \
+  '(--set    --foreground --attach --bind  )--source[Read mappings from a file or stdin (requires --socket or $VELVET)]:source file:->source' \
+  '(--bind   --foreground --attach --source)--set[Set an option to the specified value (requires --socket or $VELVET)]:option:->set_key::value:->set_value'
+
+case $state in
+  socket)
+    _path_files -f -s,w
+    ;;
+  bind_action)
+    _describe 'bind action' _vv_bind_actions
+    ;;
+  set_key)
+    local -a desc
+    for key in $_vv_set_actions; do
+      desc+=("$key:default=${_vv_set_defaults[$key]}")
+    done
+    _describe -V 'set option' desc
+    ;;
+  set_value)
+    # The key is the previous word
+    local key=${words[CURRENT-1]}
+
+    # Call per-key completion function if it exists
+    if (( $+functions[_vv_set_$key] )); then
+      _vv_set_$key
+    else
+      _message 'value'
+    fi
+    ;;
+  source)
+    compadd -
+    _files
+    ;;
+esac

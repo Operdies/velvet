@@ -7,7 +7,10 @@
 
 void logmsg(char *fmt, ...);
 void flogmsg(FILE *f, char *fmt, ...);
+// Abornmal exit
 _Noreturn void die(char *fmt, ...);
+// Normal exit
+_Noreturn void fatal(char *fmt, ...);
 void *ecalloc(size_t sz, size_t count);
 void *erealloc(void *array, size_t nmemb, size_t size);
 void terminal_setup(void);

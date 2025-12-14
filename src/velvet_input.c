@@ -327,7 +327,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
         // If this sequence has both a mapping and a continuation,
         // defer the mapping until the intended sequence can be determined.
         if (keymap_has_mapping(k))
-          io_schedule(&v->event_loop, v->input.options.keybind_timeout_ms, input_unwind_callback, v);
+          io_schedule(&v->event_loop, v->input.options.key_ambiguous_chain_resolve_timeout, input_unwind_callback, v);
       } else {
         // this choord is terminal so on_key must be set
         assert(k->on_key);

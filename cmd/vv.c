@@ -66,28 +66,36 @@ static void add_bindir_to_path(void) {
   free(exe_path);
 }
 
-static int create_socket() {
+#define SOCKET_PATH_MAX ((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
+
+static int create_socket(char *path) {
+  struct sockaddr_un addr = {.sun_family = AF_UNIX};
+  bool success = false;
   int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) die("socket:");
-  char *base = "/tmp/velvet_sock";
-  struct sockaddr_un addr = {.sun_family = AF_UNIX};
-  struct stat buf;
-  bool success = false;
-  for (int i = 1; i < 100 && !success; i++) {
-    snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
-    success = stat(addr.sun_path, &buf) == -1;
+
+  if (!path) {
+    char *base = "/tmp/velvet_sock";
+    struct stat buf;
+    for (int i = 1; i < 100 && !success; i++) {
+      snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
+      success = stat(addr.sun_path, &buf) == -1;
+    }
+  } else {
+    memcpy(addr.sun_path, path, strlen(path));
+    success = true;
   }
 
   if (!success) die("No free socket.");
   if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
     close(sockfd);
-    die("bind:");
+    fatal("bind:");
   }
 
   if (listen(sockfd, 1) == -1) {
     unlink(addr.sun_path);
     close(sockfd);
-    die("listen:");
+    fatal("listen:");
   }
 
   setenv("VELVET", addr.sun_path, true);
@@ -102,29 +110,128 @@ static int get_flag(int argc, char **argv, char *flag) {
   return 0;
 }
 
-int main(int argc, char **argv) {
-#define FLAG(name) (get_flag(argc, argv, name))
-#define ARGUMENT(name) (FLAG(name) && FLAG(name) < (argc - 1) ? argv[FLAG(name) + 1] : nullptr)
+struct velvet_args {
+  bool attach;
+  bool foreground;
+  char *socket;
+  struct {
+    char *keys;
+    char *action;
+  } bind;
+  struct {
+    char *option;
+    char *value;
+  } set;
+  char *source;
+};
 
-  char *attach = ARGUMENT("attach");
-  if (attach || FLAG("attach")) {
+static void usage(char *arg0) {
+  printf("Usage:\n  %s [<options>] [<arguments>]\n\nOptions:\n"
+         "  --attach                Attach to the server at <socket> if present.\n"
+         "  --bind <keys> <action>  Bind <keys> to the action <action>.\n"
+         "  --foreground            Start a server as a foreground process.\n"
+         "  --source -              Read newline separated mapings from stdin\n"
+         "  --source <FILE>         Read newline-separated mappings from a file\n"
+         "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
+         "  --set <option> <value>  Set the <option> to <value>.\n"
+         "  -h, --help              Show this help text and exit.\n"
+         , arg0);
+}
+
+
+static bool file_exists(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0;
+}
+
+static bool file_is_socket(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISSOCK(st.st_mode);
+}
+
+struct velvet_args velvet_parse_args(int argc, char **argv) {
+  #define F(name) (strcmp(arg, #name) == 0)
+  #define NEXT() ((++i) < argc ? argv[i] : nullptr)
+  #define EXPECT(value, arg) if (!(value)) fatal("Option %s expected argument.", arg)
+  #define GET(target) target = NEXT(); EXPECT(target, arg)
+  struct velvet_args a = {0};
+  int n_commands = 0;
+  bool nested = getenv("VELVET");
+
+  for (int i = 1; i < argc; i++) {
+    char *arg = argv[i];
+    if (F(--socket) || F(-S)) {
+      if (a.socket) fatal("--socket specified multiple times.");
+      GET(a.socket);
+    } else if (F(--help) || F(-h)) {
+      usage(argv[0]);
+      exit(0);
+    } else if (F(--set)) {
+      n_commands++;
+      if (a.set.option) fatal("--set specified multiple times");
+      GET(a.set.option);
+      GET(a.set.value);
+    } else if (F(--foreground)) {
+      n_commands++;
+      if (a.foreground) fatal("--foreground specified multiple times.");
+      a.foreground = true;
+    } else if (F(--attach)) {
+      if (nested) fatal("Nesting velvet sessions is not supported.");
+      n_commands++;
+      if (a.attach) fatal("--attach specified multiple times.");
+      a.attach = true;
+    } else if (F(--bind)) {
+      n_commands++;
+      if (a.bind.keys) fatal("--bind specified multiple times.");
+      GET(a.bind.keys);
+      GET(a.bind.action);
+    } else if (F(--source)) {
+      if (a.source) fatal("--source specified multiple times.");
+      GET(a.source);
+    } else {
+      fprintf(stderr, "Unrecognized argument '%s'\n\n", arg);
+      usage(argv[0]);
+      exit(1);
+    }
+  }
+
+  if (n_commands > 1) fatal("Multiple commands specified.");
+
+  if ((a.bind.keys || a.source || a.set.option)) {
+    if (!a.socket) a.socket = getenv("VELVET");
+    if (!a.socket) fatal("Unable to map keys; Either specify the --socket or set $VELVET to a socket path.");
+  }
+
+  if (a.socket && !file_is_socket(a.socket) && (a.bind.keys || a.attach || a.source)) {
+    fatal("Socket '%s' is not a unix domain socket.", a.socket);
+  }
+
+  if (a.socket && strlen(a.socket) > SOCKET_PATH_MAX) {
+    fatal("Socket path max length exceeded. Max: %d", SOCKET_PATH_MAX);
+  }
+
+  return a;
+}
+
+
+int main(int argc, char **argv) {
+  struct velvet_args args = velvet_parse_args(argc, argv);
+
+  if (args.attach) {
     if (getenv("VELVET")) {
-      fprintf(stderr, "Unable to attach; terminal is already in a velvet session.");
+      fatal("Unable to attach; terminal is already in a velvet session.");
       return 1;
     }
-    vv_attach(attach);
+    vv_attach(args.socket);
     return 0;
   }
 
-  // in headless mode, the server starts with no GUI on
-  bool headless = FLAG("--headless");
-
-  int sock_fd = create_socket();
+  int sock_fd = create_socket(args.socket);
 
   // Since we are not connecting to a server, that means we are creating a new server.
   // The server should be detached from the current process hierarchy.
   // We do this with a classic double fork()
-  if (!headless) {
+  if (!args.foreground) {
     struct platform_winsize ws = {0};
     platform_get_winsize(&ws);
     if (ws.rows == 0 || ws.colums == 0) {
@@ -146,6 +253,8 @@ int main(int argc, char **argv) {
     if (fork()) {
       exit(0);
     }
+  } else {
+    printf("Server listening at %s\n", getenv("VELVET"));
   }
 
   add_bindir_to_path();
@@ -154,14 +263,16 @@ int main(int argc, char **argv) {
   signal_write = signal_pipes[1];
   // detached child process of exited parent
 
-  close(STDIN_FILENO);
-  // redirect all output/error to log files
-  char *outpath = "/tmp/velvet.stdout";
-  char *errpath = "/tmp/velvet.stderr";
-  int new_stderr = open(errpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
-  int new_stdout = open(outpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
-  dup2(new_stderr, STDERR_FILENO);
-  dup2(new_stdout, STDOUT_FILENO);
+  if (!args.foreground) {
+    close(STDIN_FILENO);
+    // redirect all output/error to log files
+    char *outpath = "/tmp/velvet.stdout";
+    char *errpath = "/tmp/velvet.stderr";
+    int new_stderr = open(errpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
+    int new_stdout = open(outpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
+    dup2(new_stderr, STDERR_FILENO);
+    dup2(new_stdout, STDOUT_FILENO);
+  }
 
   struct velvet velvet = {
       .scene = velvet_scene_default,
@@ -170,6 +281,7 @@ int main(int argc, char **argv) {
       .socket = sock_fd,
       .event_loop = io_default,
       .signal_read = signal_pipes[0],
+      .daemon = !args.foreground,
   };
 
   velvet_loop(&velvet);
@@ -227,12 +339,10 @@ static void vv_attach(char *vv_socket) {
 
   if (!vv_socket) {
     char *base = "/tmp/velvet_sock";
-    struct stat buf;
     bool connected = false;
     for (int i = 1; i < 100 && !connected; i++) {
       snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
-      bool exists = stat(addr.sun_path, &buf) == 0;
-      if (exists) {
+      if (file_exists(addr.sun_path)) {
         if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
           // if the socket exists but we cannot connect,
           // delete it. This is likely from a dead server which did not shut down correctly.
