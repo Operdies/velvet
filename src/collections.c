@@ -1,6 +1,7 @@
 #include "collections.h"
 #include "utils.h"
 #include <errno.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -150,7 +151,7 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
   while (v->capacity < c) {
     v->capacity *= 2;
     if (v->capacity <= 0) {
-      die("Extremely large vector: 0x%x", c);
+      die("Extremely large vector: 0x%zx", c);
       v->capacity = c;
       break;
     }
@@ -431,4 +432,16 @@ void *vec_nth(const struct vec *const v, size_t i) {
 
 void hashmap_destroy(struct hashmap *h) {
   free(h->values);
+}
+
+void string_push_format_slow(struct string *s, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  size_t required = vsnprintf(nullptr, 0, fmt, ap);
+  va_end(ap);
+
+  string_ensure_capacity(s, s->len + required);
+  va_start(ap, fmt);
+  s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
+  va_end(ap);
 }

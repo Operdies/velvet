@@ -376,15 +376,12 @@ static void vv_configure(struct velvet_args args) {
     word = "set";
     first = args.set.option;
     second = args.set.value;
+  } else {
+    fatal("Nothing to do.");
   }
 
   struct string payload = {0};
-  string_push_cstr(&payload, word);
-  string_push_cstr(&payload, " ");
-  string_push_cstr(&payload, first);
-  string_push_cstr(&payload, " \"");
-  string_push_cstr(&payload, second);
-  string_push_cstr(&payload, "\"");
+  string_push_format_slow(&payload, "%s %s \"%s\"", word, first, second);
   io_write(sockfd, string_as_u8_slice(&payload));
   close(sockfd);
   string_destroy(&payload);

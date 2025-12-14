@@ -128,6 +128,7 @@ struct u8_slice string_as_u8_slice(struct string *s);
 struct u8_slice u8_slice_from_cstr(const char *const str);
 struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end);
 ssize_t vec_index(struct vec *v, const void *const item);
+void string_push_format_slow(struct string *s, char *fmt, ...);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }
