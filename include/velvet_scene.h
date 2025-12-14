@@ -20,7 +20,6 @@ struct velvet_scene {
 
 static const struct velvet_scene velvet_scene_default = {.prefix = ('x' & 037), .hosts = vec(struct vte_host)};
 
-void velvet_scene_feed_input(struct velvet_scene *m, struct u8_slice str);
 void velvet_scene_spawn_process(struct velvet_scene *m, char *process);
 void velvet_scene_remove_exited(struct velvet_scene *m);
 void velvet_scene_resize(struct velvet_scene *m, struct platform_winsize w);

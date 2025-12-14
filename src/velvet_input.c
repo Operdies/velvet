@@ -301,6 +301,10 @@ static bool keymap_has_mapping(struct velvet_keymap *k) {
   return false;
 }
 
+static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
+  return k1.modifiers == k2.modifiers && k1.symbol.numeric == k2.symbol.numeric;
+}
+
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   assert(v);
