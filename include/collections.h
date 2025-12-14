@@ -108,6 +108,11 @@ bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_drop_left(struct string *str, size_t n);
 
 void vec_push(struct vec *v, const void *elem);
+/* remove the element represented by `e` from the vector by swapping with the last element.
+ * This gives us constant time removal at the cost of not preserving order. */
+void vec_swap_remove(struct vec *v, void *e);
+/* remove the last element from the vector and return it */
+void *vec_pop(struct vec *v);
 /* remove the element represented by `e` from the vector */
 void vec_remove(struct vec *v, void *e);
 /* remove the nth element from the vector */
@@ -150,6 +155,7 @@ ssize_t vec_index(struct vec *v, const void *const item);
   do {                                                                                                                 \
     assert(sizeof(*(item)) == (vec).element_size);                                                                     \
     item = nullptr;                                                                                                    \
+    if ((vec).length == 0) break;                                                                                      \
     for ((item) = vec.content; (item) && !(cond);) {                                                                   \
       item++; /* go next */                                                                                            \
       if (!(((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size))) {                         \

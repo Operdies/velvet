@@ -24,17 +24,23 @@ static uint64_t get_ms_since_startup(void) {
   return ms;
 }
 
-
-static void io_dispatch_scheduled(struct io *io) {
-  uint64_t now = get_ms_since_startup();
+static bool io_dispatch_scheduled(struct io *io) {
   struct io_schedule *schedule;
-  // Execute schedules in reverse so we can safely remove them from the vector.
-  vec_rforeach(schedule, io->scheduled) {
-    if (schedule->when <= now) {
-      schedule->callback(schedule->data);
-      vec_remove_at(&io->scheduled, vec_index(&io->scheduled, schedule));
-    }
+  uint64_t now = get_ms_since_startup();
+  bool did_execute = false;
+
+  // Execute all schedules which were sequenced before the current io_dispatch call
+  for (;;) {
+    vec_find(schedule, io->scheduled_actions, schedule->when <= now && schedule->sequence < io->sequence);
+    if (!schedule) break;
+    // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
+    // This is needed because we may otherwise corrupt the vec structure.
+    struct io_schedule copy = *schedule;
+    vec_remove(&io->scheduled_actions, schedule);
+    copy.callback(copy.data);
+    did_execute = true;
   }
+  return did_execute;
 }
 
 void io_dispatch(struct io *io) {
@@ -47,6 +53,10 @@ void io_dispatch(struct io *io) {
   constexpr int MAX_BYTES = mB(1); // 1mB
   constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
 
+  io->sequence++;
+  // First execute any pending scheduled actions;
+  bool did_execute_schedules = io_dispatch_scheduled(io);
+
   static uint8_t readbuffer[BUFSIZE];
   vec_clear(&io->pollfds);
   struct io_source *src;
@@ -55,16 +65,19 @@ void io_dispatch(struct io *io) {
     vec_push(&io->pollfds, &fd);
   }
 
-  io_dispatch_scheduled(io);
   struct io_schedule *next_schedule = nullptr;
   struct io_schedule *schedule;
-  vec_foreach(schedule, io->scheduled) {
+  vec_foreach(schedule, io->scheduled_actions) {
     if (!next_schedule) next_schedule = schedule;
     else next_schedule = next_schedule->when < schedule->when ? next_schedule : schedule;
   }
   uint64_t now = get_ms_since_startup();
   int timeout = next_schedule ? next_schedule->when - now : -1;
   if (next_schedule && timeout < 0) timeout = 0;
+
+  // If a schedule was executed, that might affect the intended poll set.
+  // In that case, we should only read immediately available data and return.
+  if (did_execute_schedules) timeout = 0;
   int polled = poll(io->pollfds.content, io->pollfds.length, timeout);
   if (polled == -1) {
     // EAGAIN / EINTR are expected. In this case we should just return.
@@ -133,12 +146,12 @@ ssize_t io_write(int fd, struct u8_slice s) {
 }
 
 void io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
-  struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms };
-  vec_push(&io->scheduled, &schedule);
+  struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms, .sequence = io->sequence };
+  vec_push(&io->scheduled_actions, &schedule);
 }
 
 void io_destroy(struct io *io) {
   vec_destroy(&io->pollfds);
   vec_destroy(&io->sources);
-  vec_destroy(&io->scheduled);
+  vec_destroy(&io->scheduled_actions);
 }

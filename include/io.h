@@ -27,22 +27,25 @@ struct io_source {
   void *data;
 };
 
+typedef void (io_schedule_callback)(void *data);
 struct io_schedule {
-  void (*callback)(void *data);
+  io_schedule_callback *callback;
   void *data;
   uint64_t when;
+  uint64_t sequence;
 };
 
 struct io {
   struct vec /* io_source */ sources;
   struct vec /* pollfd */ pollfds;
-  struct vec /* scheduled callbacks */ scheduled;
+  struct vec /* scheduled callbacks */ scheduled_actions;
+  uint64_t sequence; /* sequence number used to identify when a schedule was added */
 };
 
 static const struct io io_default = {
     .sources = vec(struct io_source),
     .pollfds = vec(struct pollfd),
-    .scheduled = vec(struct io_schedule),
+    .scheduled_actions = vec(struct io_schedule),
 };
 
 /* Dispatch all pending io. */

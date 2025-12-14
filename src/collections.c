@@ -163,6 +163,7 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
 }
 
 ssize_t vec_index(struct vec *v, const void *const item) {
+  assert(v->length);
   char *it = (char *)item;
   char *base = v->content;
   char *end = base + (v->element_size * v->length);
@@ -171,6 +172,23 @@ ssize_t vec_index(struct vec *v, const void *const item) {
   size_t offset = it - base;
   assert(offset % v->element_size == 0);
   return offset / v->element_size;
+}
+
+void vec_swap_remove(struct vec *v, void *e) {
+  ssize_t index = vec_index(v, e);
+  assert(index >= 0);
+  assert(v->length > 0);
+  v->length = v->length - 1;
+  if (v->length) {
+    void *last = vec_nth(v, v->length);
+    memcpy(e, last, v->element_size);
+  }
+}
+
+void *vec_pop(struct vec *v) {
+  if (v->length == 0) return nullptr;
+  v->length--;
+  return vec_nth(v, v->length);
 }
 
 void vec_remove(struct vec *v, void *e) {

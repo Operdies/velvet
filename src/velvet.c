@@ -258,8 +258,17 @@ static void vte_read_callback(struct io_source *src, struct u8_slice str) {
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct platform_winsize ws = {.colums = 80, .rows = 24, .x_pixel = 800, .y_pixel = 600};
-
   struct io *const loop = &velvet->event_loop;
+
+  {
+    struct velvet_keymap *root = calloc(1, sizeof(*velvet->input.keymap));
+    *root = (struct velvet_keymap){
+        .root = root,
+        .data = velvet,
+        .on_key = velvet_input_send,
+    };
+    velvet->input.keymap = root;
+  }
 
   velvet_scene_resize(&velvet->scene, ws);
   velvet_scene_spawn_process(&velvet->scene, "zsh");
@@ -275,7 +284,7 @@ void velvet_loop(struct velvet *velvet) {
         if (active->ws.colums && active->ws.rows && (active->ws.colums != velvet->scene.ws.colums || active->ws.rows != velvet->scene.ws.rows)) {
           velvet_scene_resize(&velvet->scene, active->ws);
           did_resize = true;
-          // Defer redraw until the clients have actually updated. Redrawing righ away leads to flickering
+          // Defer redraw until the clients have actually updated. Redrawing right away leads to flickering
           // redraw_needed = true;
         }
       }

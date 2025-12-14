@@ -7,37 +7,17 @@
 #define BRACKETED_PASTE_MAX (1 << 20)
 #define CSI_BUFFER_MAX (256)
 
+#ifndef CTRL
+#define CTRL(x) ((x) & 037)
+#endif
+
 static const struct u8_slice bracketed_paste_start = STRING_SLICE(u8"\x1b[200~");
 static const struct u8_slice bracketed_paste_end = STRING_SLICE(u8"\x1b[201~");
 
-enum scroll_direction {
-  scroll_up = 0,
-  scroll_down = 1,
-  scroll_left = 2,
-  scroll_right = 3,
-};
-
-enum mouse_state {
-  mouse_left = 0,
-  mouse_middle = 1,
-  mouse_right = 2,
-  mouse_none = 3,
-};
-enum mouse_modifiers {
-  modifier_none = 0,
-  modifier_shift = 0x04,
-  modifier_alt = 0x08,
-  modifier_ctrl = 0x10,
-};
-enum mouse_event {
-  mouse_click = 0,
-  mouse_move = 0x20,
-  mouse_scroll = 0x40,
-};
-enum mouse_trigger {
-  mouse_down,
-  mouse_up,
-};
+enum scroll_direction { scroll_up = 0, scroll_down = 1, scroll_left = 2, scroll_right = 3 };
+enum mouse_state { mouse_left = 0, mouse_middle = 1, mouse_right = 2, mouse_none = 3 };
+enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
+enum mouse_trigger { mouse_down, mouse_up };
 
 struct mouse_sgr {
   union {
@@ -63,20 +43,29 @@ static void send_byte(struct velvet *v, uint8_t ch) {
   send_bytes(v, ch);
 }
 
-static void dispatch_normal(struct velvet *v, uint8_t ch) {
-  struct velvet_input *in = &v->input;
-  assert(in->command_buffer.len == 0);
-  if (ch == in->prefix) {
-    in->state = VELVET_INPUT_STATE_PREFIX;
-    return;
+static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
+static struct velvet_key_event key_event_from_byte(uint8_t ch) {
+  // special case for <C-Space>
+  if (ch == 0)
+    return (struct velvet_key_event){.symbol.numeric = ' ', .modifiers = KITTY_MODIFIER_CTRL};
+
+  struct velvet_key_event k = {0};
+  bool iscntrl = CTRL(ch) == ch;
+  if (iscntrl) {
+    ch = ch + 96;
   }
-  switch (ch) {
-  case ESC: {
-    string_push_char(&v->input.command_buffer, ch);
-    in->state = VELVET_INPUT_STATE_ESC;
-  } break;
-  default: send_byte(v, ch); break;
+
+  bool isshift = ch >= 'A' && ch <= 'Z';
+  if (!isshift) {
+  // TODO: local aware shift table
+    bool shift_table[] = {
+        ['!'] = '1', ['@'] = 2, ['#'] = 3, ['$'] = 4, ['%'] = 5, ['^'] = 6, ['&'] = 7, ['*'] = 8, ['('] = 9, [')'] = 0};
+    isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
   }
+
+  k.symbol.utf8[0] = ch;
+  k.modifiers = ((iscntrl * KITTY_MODIFIER_CTRL) | (isshift * KITTY_MODIFIER_SHIFT));
+  return k;
 }
 
 static void send_csi_todo(struct velvet *v) {
@@ -201,19 +190,44 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   }
 }
 
+static void send_bracketed_paste(struct velvet *v) {
+  struct velvet_input *in = &v->input;
+  struct vte_host *focus = vec_nth(&v->scene.hosts, v->scene.focus);
+  bool enclose = focus->vte.options.bracketed_paste;
+  uint8_t *start = in->command_buffer.content;
+  size_t len = in->command_buffer.len;
+  if (!enclose) {
+    start += bracketed_paste_start.len;
+    len -= bracketed_paste_start.len + bracketed_paste_end.len;
+  }
+  struct u8_slice s = {.content = start, .len = len};
+  string_push_slice(&focus->vte.pending_input, s);
+  string_clear(&v->input.command_buffer);
+  in->state = VELVET_INPUT_STATE_NORMAL;
+}
+
 static void dispatch_csi(struct velvet *v, uint8_t ch) {
   struct velvet_input *in = &v->input;
   string_push_char(&v->input.command_buffer, ch);
+
+  if (string_starts_with(&v->input.command_buffer, bracketed_paste_start)) {
+    if (string_ends_with(&v->input.command_buffer, bracketed_paste_end)) {
+      send_bracketed_paste(v);
+    }
+
+    if (in->command_buffer.len > BRACKETED_PASTE_MAX) {
+      ERROR("Bracketed Paste max exceeded!!");
+      string_clear(&v->input.command_buffer);
+      in->state = VELVET_INPUT_STATE_NORMAL;
+      return;
+    }
+    return;
+  }
+
   if (in->command_buffer.len > CSI_BUFFER_MAX) {
     ERROR("CSI max exceeded!!");
     string_clear(&v->input.command_buffer);
     in->state = VELVET_INPUT_STATE_NORMAL;
-    return;
-  }
-
-  if (in->command_buffer.len == bracketed_paste_start.len &&
-      string_starts_with(&v->input.command_buffer, bracketed_paste_start)) {
-    in->state = VELVET_INPUT_STATE_BRACKETED_PASTE;
     return;
   }
 
@@ -226,7 +240,6 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
     if (c.state == CSI_ACCEPT) {
       logmsg("Dispatch csi %.*s", s.len, s.content);
       assert(len == s.len);
-
 
 #define KEY(leading, intermediate, final)                                                                              \
   ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
@@ -243,58 +256,143 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
   }
 }
 
-static void dispatch_esc(struct velvet *v, uint8_t ch) {
-  struct velvet_input *in = &v->input;
-  switch (ch) {
-  case '[': {
-    string_push_char(&v->input.command_buffer, ch);
-    in->state = VELVET_INPUT_STATE_CSI;
-  } break;
-  default: {
-    send_bytes(v, ESC, ch);
-    in->state = VELVET_INPUT_STATE_NORMAL;
-    string_clear(&v->input.command_buffer);
-  } break;
-  }
+static void dispatch_tree_recursive(struct velvet *v, struct velvet_keymap *leaf, struct velvet_keymap *end_node) {
+  if (leaf == end_node) return;
+  dispatch_tree_recursive(v, leaf->parent, end_node);
+  dispatch_key_event(v, leaf->key);
 }
 
-static void dispatch_prefix(struct velvet *v, uint8_t ch) {
-  v->input.state = VELVET_INPUT_STATE_NORMAL;
-  switch (ch) {
-  default: break;
+void velvet_input_unwind(struct velvet *v) {
+  struct velvet_keymap *k, *current, *root;
+  current = v->input.keymap;
+  root = current->root;
+  // key not matched. Unwind the parent tree until we find a mapping to execute,
+  // and then replay the unmatched keys. Typically this means replaying
+  // the keys in the root mapping (e.g. inserting the characters),
+  // but it can also mean resolving a mapping which is a prefix of a longer mapping.
+  for (k = current; k && k != root; k = k->parent) {
+    if (k->on_key) {
+      k->on_key(k, k->key);
+      break;
+    }
+
+    // Ensure at least one key is consumed before reinsertion.
+    if (k->parent == root) {
+      root->on_key(root, k->key);
+      break;
+    }
   }
+
+  // now replay the unresolved keys in the root mapping
+  v->input.keymap = root;
+  dispatch_tree_recursive(v, current, k);
 }
 
-static void send_bracketed_paste(struct velvet *v) {
-  struct velvet_input *in = &v->input;
-  struct vte_host *focus = vec_nth(&v->scene.hosts, v->scene.focus);
-  bool enclose = focus->vte.options.bracketed_paste;
-  uint8_t *start = in->command_buffer.content;
-  size_t len = in->command_buffer.len;
-  if (!enclose) {
-    start += bracketed_paste_start.len;
-    len -= bracketed_paste_start.len + bracketed_paste_end.len;
-  }
-  struct u8_slice s = {.content = start, .len = len};
-  string_push_slice(&focus->vte.pending_input, s);
-  string_clear(&v->input.command_buffer);
+void input_unwind_callback(void *data) {
+  struct velvet *v = data;
+  velvet_input_unwind(v);
 }
 
-static void dispatch_bracketed_paste(struct velvet *v, uint8_t ch) {
-  struct velvet_input *in = &v->input;
-  string_push_char(&v->input.command_buffer, ch);
+static bool keymap_has_mapping(struct velvet_keymap *k) {
+  struct velvet_keymap *root = k->root;
+  for (; k && k != root; k = k->parent) {
+    if (k->on_key) return true;
+  }
+  return false;
+}
 
-  if (in->command_buffer.len > BRACKETED_PASTE_MAX) {
-    ERROR("Bracketed Paste max exceeded!!");
-    string_clear(&v->input.command_buffer);
-    in->state = VELVET_INPUT_STATE_NORMAL;
+// this is supposed to emulate VIM-like behavior
+static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
+  assert(v);
+  assert(v->input.keymap);
+  struct velvet_keymap *k, *root, *current;
+  current = v->input.keymap;
+  root = current->root;
+  assert(root);
+
+  // cancel any scheduled unwind
+  struct io_schedule *unwind;
+  vec_find(unwind, v->event_loop.scheduled_actions, unwind->callback == input_unwind_callback);
+  if (unwind) vec_remove(&v->event_loop.scheduled_actions, unwind);
+
+  // First check if this key matches a keybind in the current keymap
+  for (k = current->first_child; k; k = k->next_sibling) {
+    if (key_event_equals(k->key, key)) {
+      if (k->first_child) {
+        v->input.keymap = k;
+        // If this sequence has both a mapping and a continuation,
+        // defer the mapping until the intended sequence can be determined.
+        if (keymap_has_mapping(k))
+          io_schedule(&v->event_loop, v->input.options.keybind_timeout_ms, input_unwind_callback, v);
+      } else {
+        // this choord is terminal so on_key must be set
+        assert(k->on_key);
+        // deliberately reset the keymap before invoking the mapping
+        // this gives the mapping the opportunity to modify the keymap.
+        v->input.keymap = k->root;
+        k->on_key(k, key);
+      }
+      return;
+    }
+  }
+
+  // ESC cancels any pending keybind
+  if (key.symbol.numeric == ESC && current != root) {
+    v->input.keymap = root;
     return;
   }
 
-  if (string_ends_with(&v->input.command_buffer, bracketed_paste_end)) {
-    send_bracketed_paste(v);
-    in->state = VELVET_INPUT_STATE_NORMAL;
+  if (current == root) {
+    root->on_key(root, key);
+  } else {
+    // Since the current key was not matched, we should match the longest
+    // prefix and then reinsert all pending keys
+    velvet_input_unwind(v);
+    dispatch_key_event(v, key);
   }
+}
+
+static void dispatch_esc(struct velvet *v, uint8_t ch) {
+  struct velvet_input *in = &v->input;
+  if (ch == '[') {
+    string_push_char(&v->input.command_buffer, ch);
+    in->state = VELVET_INPUT_STATE_CSI;
+  } else {
+    in->state = VELVET_INPUT_STATE_NORMAL;
+    string_clear(&v->input.command_buffer);
+    struct velvet_key_event k = key_event_from_byte(ch);
+    k.modifiers |= KITTY_MODIFIER_ALT;
+    dispatch_key_event(v, k);
+  }
+}
+
+void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
+  // TODO: check keyboard settings of recipient and modify event accordingly
+  struct velvet *v = k->data;
+  if (e.symbol.numeric == ESC) {
+    send_byte(v, ESC);
+  } else {
+    bool iscntrl = e.modifiers & KITTY_MODIFIER_CTRL;
+    if (e.modifiers & KITTY_MODIFIER_ALT) send_byte(v, ESC);
+    if (iscntrl && e.symbol.numeric == ' ') send_byte(v, 0);
+    else for (int i = 0; i < 4 && e.symbol.utf8[i]; i++)
+      send_byte(v, e.symbol.utf8[i] & (iscntrl ? 0x1f : 0xff));
+  }
+}
+
+static void dispatch_normal(struct velvet *v, uint8_t ch) {
+  struct velvet_input *in = &v->input;
+  assert(in->command_buffer.len == 0);
+
+  if (ch == ESC) {
+    string_push_char(&v->input.command_buffer, ch);
+    in->state = VELVET_INPUT_STATE_ESC;
+    return;
+  }
+
+  struct velvet_key_event key = key_event_from_byte(ch);
+  dispatch_key_event(v, key);
+  assert(v->input.keymap);
 }
 
 void velvet_process_input(struct velvet *v, struct u8_slice str) {
@@ -305,20 +403,15 @@ void velvet_process_input(struct velvet *v, struct u8_slice str) {
     case VELVET_INPUT_STATE_NORMAL: dispatch_normal(v, ch); break;
     case VELVET_INPUT_STATE_ESC: dispatch_esc(v, ch); break;
     case VELVET_INPUT_STATE_CSI: dispatch_csi(v, ch); break;
-    case VELVET_INPUT_STATE_PREFIX:
-    case VELVET_INPUT_STATE_PREFIX_CONT: dispatch_prefix(v, ch); break;
-    case VELVET_INPUT_STATE_BRACKETED_PASTE: dispatch_bracketed_paste(v, ch); break;
     }
   }
+
   if (in->state == VELVET_INPUT_STATE_ESC) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    send_byte(v, ESC);
+    struct velvet_key_event k = {.symbol.numeric = ESC};
+    dispatch_key_event(v, k);
   }
-}
-
-void velvet_input_destroy(struct velvet_input *in) {
-  string_destroy(&in->command_buffer);
 }
 
 static void dispatch_focus(struct velvet *v, const struct csi *const c) {
@@ -354,4 +447,41 @@ void DISPATCH_ARROW_KEY_LEFT(struct velvet *v, const struct csi *const c) {
 }
 void DISPATCH_ARROW_KEY_RIGHT(struct velvet *v, const struct csi *const c) {
   dispatch_arrow_key(v, c);
+}
+
+void velvet_input_destroy(struct velvet_input *in) {
+  string_destroy(&in->command_buffer);
+}
+
+struct velvet_keymap *
+velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, on_key *callback, void *data) {
+  struct velvet_keymap *prev, *chain, *parent;
+  assert(root);
+  assert(keys.len);
+  assert(callback);
+
+  parent = root;
+  for (int i = 0; i < keys.len; i++) {
+    struct velvet_key_event k = keys.sequence[i];
+    prev = nullptr;
+    for (chain = parent->first_child; chain && !key_event_equals(chain->key, k); prev = chain, chain = chain->next_sibling);
+    if (!chain) {
+      chain = ecalloc(1, sizeof(*parent));
+      chain->parent = parent;
+      chain->data = root->data;
+      chain->key = k;
+      chain->root = root;
+      if (prev) {
+        chain->next_sibling = prev->next_sibling;
+        prev->next_sibling = chain;
+      } else {
+        parent->first_child = chain;
+      }
+    }
+    parent = chain;
+  }
+  parent->data = data;
+  parent->on_key = callback;
+  parent->root = root->root ? root->root : root;
+  return parent;
 }

@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
 
   struct velvet velvet = {
       .scene = velvet_scene_default,
-      .input = (struct velvet_input){.options = {.focus_follows_mouse = true}},
+      .input = velvet_input_default,
       .sessions = vec(struct velvet_session),
       .socket = sock_fd,
       .event_loop = io_default,
