@@ -101,8 +101,6 @@ static int create_socket(char *path) {
   return sockfd;
 }
 
-static void vv_attach(char *SOCKET_PATH);
-
 static int get_flag(int argc, char **argv, char *flag) {
   for (int i = 1; i < argc; i++)
     if (strcmp(argv[i], flag) == 0) return i;
@@ -123,6 +121,9 @@ struct velvet_args {
   } set;
   char *source;
 };
+
+static void vv_configure(struct velvet_args args);
+static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
   printf("Usage:\n  %s [<options>] [<arguments>]\n\nOptions:\n"
@@ -221,7 +222,12 @@ int main(int argc, char **argv) {
       fatal("Unable to attach; terminal is already in a velvet session.");
       return 1;
     }
-    vv_attach(args.socket);
+    vv_attach(args);
+    return 0;
+  }
+
+  if (args.bind.action || args.set.option) {
+    vv_configure(args);
     return 0;
   }
 
@@ -241,7 +247,7 @@ int main(int argc, char **argv) {
     /* original process */
     if (fork()) {
       close(sock_fd);
-      vv_attach(getenv("VELVET"));
+      vv_attach(args);
       return 0;
     }
 
@@ -318,20 +324,12 @@ static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool 
   }
 }
 
-static void vv_attach(char *vv_socket) {
-  struct sigaction sa = {0};
-  sa.sa_sigaction = &attach_sighandler;
-  sa.sa_flags = SA_SIGINFO;
-
-  if (sigaction(SIGWINCH, &sa, NULL) == -1) die("sigaction:");
-
-  struct platform_winsize ws;
-  platform_get_winsize(&ws);
+static int vv_connect(char *vv_socket) {
   int sockfd;
   // Create the client socket
   sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) {
-    die("socket:");
+    fatal("socket:");
   }
 
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
@@ -359,9 +357,49 @@ static void vv_attach(char *vv_socket) {
     strncpy(addr.sun_path, vv_socket, sizeof(addr.sun_path) - 1);
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
       close(sockfd);
-      die("connect:");
+      fatal("connect:");
     }
   }
+  return sockfd;
+}
+
+static void vv_configure(struct velvet_args args) {
+  int sockfd = vv_connect(args.socket);
+  char *word;
+  char *first;
+  char *second;
+  if (args.bind.action) {
+    word = "bind";
+    first = args.bind.keys;
+    second = args.bind.action;
+  } else if (args.set.option) {
+    word = "set";
+    first = args.set.option;
+    second = args.set.value;
+  }
+
+  struct string payload = {0};
+  string_push_cstr(&payload, word);
+  string_push_cstr(&payload, " ");
+  string_push_cstr(&payload, first);
+  string_push_cstr(&payload, " \"");
+  string_push_cstr(&payload, second);
+  string_push_cstr(&payload, "\"");
+  io_write(sockfd, string_as_u8_slice(&payload));
+  close(sockfd);
+  string_destroy(&payload);
+}
+
+static void vv_attach(struct velvet_args args) {
+  struct sigaction sa = {0};
+  sa.sa_sigaction = &attach_sighandler;
+  sa.sa_flags = SA_SIGINFO;
+
+  if (sigaction(SIGWINCH, &sa, NULL) == -1) die("sigaction:");
+
+  struct platform_winsize ws;
+  platform_get_winsize(&ws);
+  int sockfd = vv_connect(args.socket);
 
   terminal_setup();
   vv_attach_send_message(sockfd, ws, true);
