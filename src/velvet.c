@@ -12,11 +12,15 @@ static void velvet_session_render(struct u8_slice str, void *context) {
 }
 
 static void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
-  uint8_t detach = 'D';
-  write(s->socket, &detach, 1);
-  close(s->socket);
-  close(s->input);
-  close(s->output);
+  if (s->socket) {
+    uint8_t detach = 'D';
+    write(s->socket, &detach, 1);
+    close(s->socket);
+  }
+  if (s->input)
+    close(s->input);
+  if (s->output)
+    close(s->output);
   string_destroy(&s->pending_output);
   *s = (struct velvet_session){0};
   size_t idx = vec_index(&velvet->sessions, s);
@@ -28,7 +32,6 @@ static void velvet_detach_session(struct velvet *velvet, struct velvet_session *
 
 static void session_socket_callback(struct io_source *src) {
   struct velvet *velvet = src->data;
-  int sock = src->fd;
   char data_buf[256] = {0};
   int fds[2] = {0};
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
@@ -39,7 +42,7 @@ static void session_socket_callback(struct io_source *src) {
       .msg_controllen = sizeof(cmsgbuf),
   };
 
-  ssize_t n = recvmsg(sock, &msg, 0);
+  ssize_t n = recvmsg(src->fd, &msg, 0);
   if (n == -1) {
     ERROR("recvmsg:");
     return;
@@ -47,10 +50,14 @@ static void session_socket_callback(struct io_source *src) {
 
   struct velvet_session *sesh;
   vec_find(sesh, velvet->sessions, sesh->socket == src->fd);
+  assert(sesh);
 
   if (n == 0) {
-    if (sesh) velvet_detach_session(velvet, sesh);
-    else close(sock);
+    // The socket was closed, so let's ensure we don't write to it or close it again
+    close(sesh->socket);
+    sesh->socket = 0;
+    velvet_detach_session(velvet, sesh);
+    return;
   }
 
   assert(sesh);
@@ -85,7 +92,8 @@ static void session_socket_callback(struct io_source *src) {
     }
   }
 
-  TODO("Handle client message: %.*s", n, data_buf);
+  // io_write(src->fd, u8_slice_from_cstr("Unrecognized command\n"));
+  TODO("Handle client message: %.*s", (int)n, data_buf);
 }
 
 static void socket_accept(struct io_source *src) {
