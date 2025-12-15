@@ -107,7 +107,7 @@ void velvet_log(char *fmt, ...) {
   va_end(ap);
 }
 #else
-void logmsg(char *fmt, ...) {
+void velvet_log(char *fmt, ...) {
   (void)fmt;
 }
 #endif

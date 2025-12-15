@@ -30,13 +30,8 @@ void set_nonblocking(int fd);
 #define UNUSED_6(X, ...) (void)(X), UNUSED_5(__VA_ARGS__)
 #define UNUSED_7(X, ...) (void)(X), UNUSED_6(__VA_ARGS__)
 #define GET_MACRO(_1, _2, _3, _4, _5, _6, _7, name, ...) name
-#define UNUSED(...)                                                            \
-  GET_MACRO(__VA_ARGS__, UNUSED_7, UNUSED_6, UNUSED_5, UNUSED_4, UNUSED_3,     \
-            UNUSED_2, UNUSED_1)(__VA_ARGS__)
-#define LOG(...) UNUSED(__VA_ARGS__)
-#define DIAG(...) UNUSED(__VA_ARGS__)
-#define DBG(...) UNUSED(__VA_ARGS__)
-#define INFO(...) UNUSED(__VA_ARGS__)
+#define UNUSED(...)                                                                                                    \
+  GET_MACRO(__VA_ARGS__, UNUSED_7, UNUSED_6, UNUSED_5, UNUSED_4, UNUSED_3, UNUSED_2, UNUSED_1)(__VA_ARGS__)
 #define TODO(...) UNUSED(__VA_ARGS__)
 #define OMITTED(...) UNUSED(__VA_ARGS__)
 #define ERROR(...) velvet_log(__VA_ARGS__)
@@ -46,31 +41,30 @@ void set_nonblocking(int fd);
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #define LINE_STR TOSTRING(__LINE__)
-#define DIAG(...) velvet_log(__VA_ARGS__)
 #define DBG(...) velvet_log(__VA_ARGS__)
 #define INFO(...) velvet_log(__VA_ARGS__)
 #define ERROR(...) velvet_log(__VA_ARGS__)
 // Use in stubs to indicate what the missing funcionality is, and communicate
 // that implementaiton is planned.
-#define TODO(...)                                                              \
-  DBG("[" __FILE__ ":" LINE_STR "] "                                           \
+#define TODO(...)                                                                                                      \
+  DBG("[" __FILE__ ":" LINE_STR "] "                                                                                   \
       "TODO: " __VA_ARGS__)
 // Use in stubs to indicate what the missing functionality is, and communicate
 // that no implementation is planned.
-#define OMITTED(...)                                                           \
-  DIAG("[" __FILE__ ":" LINE_STR "] "                                          \
-       "OMITTED: " __VA_ARGS__)
+#define OMITTED(...)                                                                                                   \
+  DBG("[" __FILE__ ":" LINE_STR "] "                                                                                   \
+      "OMITTED: " __VA_ARGS__)
 #define FAIL_ASSERT(cond)                                                                                              \
   terminal_reset();                                                                                                    \
   ERROR("Assertion failed: %s, file %s, line %d\r\n", #cond, __FILE__, __LINE__);                                      \
   __builtin_trap();
 #endif /* RELEASE_BUILD */
 
-#define assert(cond)                                                           \
-  do {                                                                         \
-    if (!(cond)) {                                                             \
-      FAIL_ASSERT(cond);                                                       \
-    }                                                                          \
+#define assert(cond)                                                                                                   \
+  do {                                                                                                                 \
+    if (!(cond)) {                                                                                                     \
+      FAIL_ASSERT(cond);                                                                                               \
+    }                                                                                                                  \
   } while (0)
 
 #endif /*  UTILS_H */
