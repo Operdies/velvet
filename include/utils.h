@@ -5,12 +5,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-void logmsg(char *fmt, ...)__attribute__((format(printf, 1, 2)));
-void flogmsg(FILE *f, char *fmt, ...)__attribute__((format(printf, 2, 3)));
+void logmsg(char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void flogmsg(FILE *f, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 // Abornmal exit
-_Noreturn void die(char *fmt, ...)__attribute__((format(printf, 1, 2)));
+_Noreturn void die(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Normal exit
-_Noreturn void fatal(char *fmt, ...)__attribute__((format(printf, 1, 2)));
+_Noreturn void fatal(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void *ecalloc(size_t sz, size_t count) __attribute__((malloc, alloc_size(1, 2)));
 void *erealloc(void *array, size_t nmemb, size_t size) __attribute__((alloc_size(2, 3)));
 void terminal_setup(void);
