@@ -15,6 +15,7 @@ static const struct u8_slice bracketed_paste_start = STRING_SLICE(u8"\x1b[200~")
 static const struct u8_slice bracketed_paste_end = STRING_SLICE(u8"\x1b[201~");
 
 enum scroll_direction { scroll_up = 0, scroll_down = 1, scroll_left = 2, scroll_right = 3 };
+enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
 enum mouse_state { mouse_left = 0, mouse_middle = 1, mouse_right = 2, mouse_none = 3 };
 enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
 enum mouse_trigger { mouse_down, mouse_up };
@@ -47,7 +48,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
 static struct velvet_key_event key_event_from_byte(uint8_t ch) {
   // special case for <C-Space>
   if (ch == 0)
-    return (struct velvet_key_event){.symbol.numeric = ' ', .modifiers = KITTY_MODIFIER_CTRL};
+    return (struct velvet_key_event){.symbol.numeric = ' ', .modifiers = MODIFIER_CTRL};
 
   struct velvet_key_event k = {0};
   bool iscntrl = CTRL(ch) == ch;
@@ -64,7 +65,7 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
   }
 
   k.symbol.utf8[0] = ch;
-  k.modifiers = ((iscntrl * KITTY_MODIFIER_CTRL) | (isshift * KITTY_MODIFIER_SHIFT));
+  k.modifiers = ((iscntrl * MODIFIER_CTRL) | (isshift * MODIFIER_SHIFT));
   return k;
 }
 
@@ -365,7 +366,7 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
     struct velvet_key_event k = key_event_from_byte(ch);
-    k.modifiers |= KITTY_MODIFIER_ALT;
+    k.modifiers |= MODIFIER_ALT;
     dispatch_key_event(v, k);
   }
 }
@@ -376,8 +377,8 @@ void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
   if (e.symbol.numeric == ESC) {
     send_byte(v, ESC);
   } else {
-    bool iscntrl = e.modifiers & KITTY_MODIFIER_CTRL;
-    if (e.modifiers & KITTY_MODIFIER_ALT) send_byte(v, ESC);
+    bool iscntrl = e.modifiers & MODIFIER_CTRL;
+    if (e.modifiers & MODIFIER_ALT) send_byte(v, ESC);
     if (iscntrl && e.symbol.numeric == ' ') send_byte(v, 0);
     else for (int i = 0; i < 4 && e.symbol.utf8[i]; i++)
       send_byte(v, e.symbol.utf8[i] & (iscntrl ? 0x1f : 0xff));

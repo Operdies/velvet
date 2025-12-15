@@ -12,22 +12,21 @@ enum velvet_input_state {
   VELVET_INPUT_STATE_CSI,
 };
 
-enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
-
-enum kitty_modifiers {
-  KITTY_MODIFIER_SHIFT     = 0b1,        //(1)
-  KITTY_MODIFIER_ALT       = 0b10,       //(2)
-  KITTY_MODIFIER_CTRL      = 0b100,      //(4)
-  KITTY_MODIFIER_SUPER     = 0b1000,     //(8)
-  KITTY_MODIFIER_HYPER     = 0b10000,    //(16)
-  KITTY_MODIFIER_META      = 0b100000,   //(32)
-  KITTY_MODIFIER_CAPS_LOCK = 0b1000000,  //(64)
-  KITTY_MODIFIER_NUM_LOCK  = 0b10000000, //(128)
+/* masks matching the Kitty keyboard protocol spec: https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
+enum velvey_key_modifier {
+  MODIFIER_SHIFT     = 0b1,        //(1)
+  MODIFIER_ALT       = 0b10,       //(2)
+  MODIFIER_CTRL      = 0b100,      //(4)
+  MODIFIER_SUPER     = 0b1000,     //(8)
+  MODIFIER_HYPER     = 0b10000,    //(16)
+  MODIFIER_META      = 0b100000,   //(32)
+  MODIFIER_CAPS_LOCK = 0b1000000,  //(64)
+  MODIFIER_NUM_LOCK  = 0b10000000, //(128)
 };
 
 struct velvet_key_event {
   struct utf8 symbol;
-  enum kitty_modifiers modifiers;
+  enum velvey_key_modifier modifiers;
 };
 
 struct velvet_keymap;
