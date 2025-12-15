@@ -138,7 +138,7 @@ static void velvet_scene_spawn_and_focus(struct velvet_scene *m, char *cmdline) 
 
 void velvet_scene_spawn_process(struct velvet_scene *m, char *process) {
   assert(m->hosts.element_size == sizeof(struct vte_host));
-  logmsg("Spawn %s", process);
+  velvet_log("Spawn %s", process);
   struct vte_host *host = vec_new_element(&m->hosts);
   host->cmdline = strdup(process);
   host->vte = vte_default;

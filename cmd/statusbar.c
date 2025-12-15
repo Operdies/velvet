@@ -33,7 +33,7 @@ int main(void) {
     render();
     int n = poll(fds, 1, 1000);
     if (n == -1) {
-      die("poll:");
+      velvet_die("poll:");
     }
     if (n) {
       int n_read = read(STDIN_FILENO, readbuf, sizeof(readbuf));

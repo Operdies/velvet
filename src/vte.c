@@ -139,7 +139,7 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
     }
   } break;
   default: {
-    logmsg("Unknown ESC # command: %x", ch);
+    velvet_log("Unknown ESC # command: %x", ch);
   } break;
   }
 }
@@ -381,7 +381,7 @@ void vte_dispatch_dcs(struct vte *vte, uint8_t ch) {
     TODO("DCS sequence: '%.*s'", vte->command_buffer.len - 2, vte->command_buffer.content + 1);
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     vte->state = vte_ground;
-    logmsg("Abort DCS: max length exceeded");
+    velvet_log("Abort DCS: max length exceeded");
   }
 }
 
@@ -395,12 +395,12 @@ static void vte_dispatch_csi(struct vte *vte, uint8_t ch) {
     if (csi.state == CSI_ACCEPT) {
       csi_dispatch(vte, &csi);
     } else {
-      logmsg("Reject CSI: %.*s", csi_body.len, csi_body.content);
+      velvet_log("Reject CSI: %.*s", csi_body.len, csi_body.content);
     }
     vte->state = vte_ground;
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     vte->state = vte_ground;
-    logmsg("Abort CSI: max length exceeded");
+    velvet_log("Abort CSI: max length exceeded");
   }
 }
 
@@ -423,7 +423,7 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
     }
     vte->state = vte_ground;
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
-    logmsg("Abort OSC: max length exceeded");
+    velvet_log("Abort OSC: max length exceeded");
     vte->state = vte_ground;
   }
 }

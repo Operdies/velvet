@@ -59,7 +59,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
       bool did_read = csi_read_subparameter(buffer + i, separator, &color_type, &length);
       i += length;
       if (!did_read) { 
-        logmsg("Reject SGR %d: Missing color parameter", param->primary);
+        velvet_log("Reject SGR %d: Missing color parameter", param->primary);
         *read = i;
         return false;
       }
@@ -74,7 +74,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
       n_subparameters++;
     }
     if (csi_read_subparameter(buffer + i, ':', &value, &length)) {
-      logmsg("Reject CSI: Too many subparameters");
+      velvet_log("Reject CSI: Too many subparameters");
       *read = i;
       return false;
     }
@@ -92,7 +92,7 @@ static bool csi_read_parameter(struct csi_param *param, const uint8_t *buffer, i
       n_subparameters++;
     }
     if (csi_read_subparameter(buffer + i, ':', &value, &length)) {
-      logmsg("Reject CSI: Too many subparameters");
+      velvet_log("Reject CSI: Too many subparameters");
       *read = i;
       return false;
     }
@@ -132,7 +132,7 @@ int csi_parse(struct csi *c, struct u8_slice str) {
     case CSI_PARAMETER: {
       if (c->n_params >= CSI_MAX_PARAMS) {
         c->state = CSI_REJECT;
-        logmsg("Reject CSI: Too many numeric parameters");
+        velvet_log("Reject CSI: Too many numeric parameters");
         return i;
       }
 
@@ -140,7 +140,7 @@ int csi_parse(struct csi *c, struct u8_slice str) {
       c->n_params++;
       int read;
       if (!csi_read_parameter(param, str.content + i, &read, is_sgr)) {
-        logmsg("Reject CSI: Error parsing parameter");
+        velvet_log("Reject CSI: Error parsing parameter");
         c->state = CSI_REJECT;
         return i + read;
       }
@@ -175,13 +175,13 @@ int csi_parse(struct csi *c, struct u8_slice str) {
       return i + 1;
     } break;
     case CSI_REJECT: {
-      logmsg("Reject CSI");
+      velvet_log("Reject CSI");
       return i + 1;
     } break;
     default: assert(!"Unreachable");
     }
   }
-  logmsg("Reject CSI: No accept character");
+  velvet_log("Reject CSI: No accept character");
   c->state = CSI_REJECT;
   return i;
 }

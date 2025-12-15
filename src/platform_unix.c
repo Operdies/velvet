@@ -20,7 +20,7 @@ struct setup_pair {
 void platform_get_winsize(struct platform_winsize *w) {
   struct winsize ws;
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
-    die("TIOCGWINSZ:");
+    velvet_die("TIOCGWINSZ:");
   }
   *w = (struct platform_winsize){
       .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
@@ -51,13 +51,13 @@ static void disable_raw_mode(void) {
 static void enable_raw_mode(void) {
   // Save and configure raw terminal mode
   if (tcgetattr(STDIN_FILENO, &original_terminfo) == -1) {
-    die("tcgetattr:");
+    velvet_die("tcgetattr:");
   }
 
   raw_term = original_terminfo;
   cfmakeraw(&raw_term);
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
-    die("tcsetattr:");
+    velvet_die("tcsetattr:");
   }
 }
 
@@ -121,6 +121,6 @@ void terminal_reset(void) {
 void set_nonblocking(int fd) {
   int flags = fcntl(fd, F_GETFL);
   if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    die("fcntl:");
+    velvet_die("fcntl:");
   }
 }

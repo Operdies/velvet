@@ -73,7 +73,7 @@ bool osc_dispatch(struct vte *vte, struct osc *osc) {
 static int osc_parse_parameters(struct osc *o, const uint8_t *buffer, int len) {
   int i = 0;
   if (buffer[i] != ';') {
-    logmsg("Reject OSC: Expected semicolon after Ps");
+    velvet_log("Reject OSC: Expected semicolon after Ps");
     o->state = OSC_REJECT;
     return i;
   }
@@ -91,7 +91,7 @@ static int osc_parse_parameters(struct osc *o, const uint8_t *buffer, int len) {
     for (; i < len && buffer[i] != '='; i++);
     if (buffer[i] != '=') {
       o->state = OSC_REJECT;
-      logmsg("Reject OSC: Expected '=' in parameter.");
+      velvet_log("Reject OSC: Expected '=' in parameter.");
       return i;
     }
     key.len = &buffer[i] - key.text;
@@ -100,7 +100,7 @@ static int osc_parse_parameters(struct osc *o, const uint8_t *buffer, int len) {
     for (; i < len && buffer[i] != ':' && buffer[i] != ';'; i++);
     if (buffer[i] != ':' && buffer[i] != ';') {
       o->state = OSC_REJECT;
-      logmsg("Reject OSC: Expected parameter value to be terminated by ';' or ':'.");
+      velvet_log("Reject OSC: Expected parameter value to be terminated by ';' or ':'.");
       return i;
     }
     value.len = &buffer[i] - value.text;
@@ -147,7 +147,7 @@ int osc_parse(struct osc *o, struct u8_slice str, const uint8_t *st) {
       o->state = OSC_ACCEPT;
       return i;
     }
-    logmsg("Reject OSC: Expected semicolon before Pt");
+    velvet_log("Reject OSC: Expected semicolon before Pt");
     o->state = OSC_REJECT;
     return i;
   }

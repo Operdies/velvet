@@ -62,28 +62,21 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   fflush(f);
 }
 
-void flogmsg(FILE *f, char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vflogmsg(f, fmt, ap);
-  va_end(ap);
-}
-
-void *erealloc(void *array, size_t nmemb, size_t size) {
+void *velvet_erealloc(void *array, size_t nmemb, size_t size) {
   void *p;
 
-  if (!(p = realloc(array, nmemb * size))) die("realloc:");
+  if (!(p = realloc(array, nmemb * size))) velvet_die("realloc:");
 
   return p;
 }
 
-void *ecalloc(size_t sz, size_t count) {
+void *velvet_calloc(size_t sz, size_t count) {
   void *ptr = calloc(sz, count);
-  if (!ptr) die("calloc:");
+  if (!ptr) velvet_die("calloc:");
   return ptr;
 }
 
-_Noreturn void die(char *fmt, ...) {
+_Noreturn void velvet_die(char *fmt, ...) {
   terminal_reset();
   va_list ap;
   va_start(ap, fmt);
@@ -92,7 +85,7 @@ _Noreturn void die(char *fmt, ...) {
   __builtin_trap();
 }
 
-_Noreturn void fatal(char *fmt, ...) {
+_Noreturn void velvet_fatal(char *fmt, ...) {
   terminal_reset();
   va_list ap;
   va_start(ap, fmt);
@@ -107,7 +100,7 @@ static void vlogmsg(char *fmt, va_list ap) {
   vflogmsg(stdout, fmt, ap);
 }
 
-void logmsg(char *fmt, ...) {
+void velvet_log(char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   vlogmsg(fmt, ap);

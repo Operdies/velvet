@@ -14,7 +14,7 @@ static int signal_write;
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
   ssize_t written = write(signal_write, &sig, sizeof(sig));
-  if (written < (int)sizeof(sig)) die("signal write:");
+  if (written < (int)sizeof(sig)) velvet_die("signal write:");
 }
 
 static void install_signal_handlers(int *pipes) {
@@ -22,20 +22,20 @@ static void install_signal_handlers(int *pipes) {
   sa.sa_sigaction = &signal_handler;
   sa.sa_flags = SA_SIGINFO;
 
-  if (sigaction(SIGTERM, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGQUIT, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGINT, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGCHLD, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGHUP, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGPIPE, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGUSR1, &sa, NULL) == -1) die("sigaction:");
-  if (sigaction(SIGUSR2, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGTERM, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGQUIT, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGINT, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGHUP, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGPIPE, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGUSR1, &sa, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGUSR2, &sa, NULL) == -1) velvet_die("sigaction:");
 
   signal(SIGTTOU, SIG_IGN);
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTSTP, SIG_IGN);
 
-  if (pipe(pipes) < 0) die("pipe:");
+  if (pipe(pipes) < 0) velvet_die("pipe:");
 }
 
 static void add_bindir_to_path(void) {
@@ -71,7 +71,7 @@ static int create_socket(char *path) {
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
   bool success = false;
   int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (sockfd == -1) die("socket:");
+  if (sockfd == -1) velvet_die("socket:");
 
   if (!path) {
     char *base = "/tmp/velvet_sock";
@@ -85,16 +85,16 @@ static int create_socket(char *path) {
     success = true;
   }
 
-  if (!success) die("No free socket.");
+  if (!success) velvet_die("No free socket.");
   if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
     close(sockfd);
-    fatal("bind:");
+    velvet_fatal("bind:");
   }
 
   if (listen(sockfd, 1) == -1) {
     unlink(addr.sun_path);
     close(sockfd);
-    fatal("listen:");
+    velvet_fatal("listen:");
   }
 
   setenv("VELVET", addr.sun_path, true);
@@ -152,7 +152,7 @@ static bool file_is_socket(const char *path) {
 struct velvet_args velvet_parse_args(int argc, char **argv) {
   #define F(name) (strcmp(arg, #name) == 0)
   #define NEXT() ((++i) < argc ? argv[i] : nullptr)
-  #define EXPECT(value, arg) if (!(value)) fatal("Option %s expected argument.", arg)
+  #define EXPECT(value, arg) if (!(value)) velvet_fatal("Option %s expected argument.", arg)
   #define GET(target) target = NEXT(); EXPECT(target, arg)
   struct velvet_args a = {0};
   int n_commands = 0;
@@ -161,32 +161,32 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     char *arg = argv[i];
     if (F(--socket) || F(-S)) {
-      if (a.socket) fatal("--socket specified multiple times.");
+      if (a.socket) velvet_fatal("--socket specified multiple times.");
       GET(a.socket);
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
     } else if (F(--set)) {
       n_commands++;
-      if (a.set.option) fatal("--set specified multiple times");
+      if (a.set.option) velvet_fatal("--set specified multiple times");
       GET(a.set.option);
       GET(a.set.value);
     } else if (F(--foreground)) {
       n_commands++;
-      if (a.foreground) fatal("--foreground specified multiple times.");
+      if (a.foreground) velvet_fatal("--foreground specified multiple times.");
       a.foreground = true;
     } else if (F(--attach)) {
-      if (nested) fatal("Nesting velvet sessions is not supported.");
+      if (nested) velvet_fatal("Nesting velvet sessions is not supported.");
       n_commands++;
-      if (a.attach) fatal("--attach specified multiple times.");
+      if (a.attach) velvet_fatal("--attach specified multiple times.");
       a.attach = true;
     } else if (F(--bind)) {
       n_commands++;
-      if (a.bind.keys) fatal("--bind specified multiple times.");
+      if (a.bind.keys) velvet_fatal("--bind specified multiple times.");
       GET(a.bind.keys);
       GET(a.bind.action);
     } else if (F(--source)) {
-      if (a.source) fatal("--source specified multiple times.");
+      if (a.source) velvet_fatal("--source specified multiple times.");
       GET(a.source);
     } else {
       fprintf(stderr, "Unrecognized argument '%s'\n\n", arg);
@@ -195,19 +195,19 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     }
   }
 
-  if (n_commands > 1) fatal("Multiple commands specified.");
+  if (n_commands > 1) velvet_fatal("Multiple commands specified.");
 
   if ((a.bind.keys || a.source || a.set.option)) {
     if (!a.socket) a.socket = getenv("VELVET");
-    if (!a.socket) fatal("Unable to map keys; Either specify the --socket or set $VELVET to a socket path.");
+    if (!a.socket) velvet_fatal("Unable to map keys; Either specify the --socket or set $VELVET to a socket path.");
   }
 
   if (a.socket && !file_is_socket(a.socket) && (a.bind.keys || a.attach || a.source)) {
-    fatal("Socket '%s' is not a unix domain socket.", a.socket);
+    velvet_fatal("Socket '%s' is not a unix domain socket.", a.socket);
   }
 
   if (a.socket && strlen(a.socket) > SOCKET_PATH_MAX) {
-    fatal("Socket path max length exceeded. Max: %d", SOCKET_PATH_MAX);
+    velvet_fatal("Socket path max length exceeded. Max: %d", SOCKET_PATH_MAX);
   }
 
   return a;
@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
 
   if (args.attach) {
     if (getenv("VELVET")) {
-      fatal("Unable to attach; terminal is already in a velvet session.");
+      velvet_fatal("Unable to attach; terminal is already in a velvet session.");
       return 1;
     }
     vv_attach(args);
@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
     }
 
     // detach from controlling terminal
-    if (!setsid()) die("setsid:");
+    if (!setsid()) velvet_die("setsid:");
 
     /* parent of child */
     if (fork()) {
@@ -320,7 +320,7 @@ static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool 
 
   if (sendmsg(sockfd, &msg, 0) == -1) {
     close(sockfd);
-    die("sendmsg:");
+    velvet_die("sendmsg:");
   }
 }
 
@@ -329,7 +329,7 @@ static int vv_connect(char *vv_socket) {
   // Create the client socket
   sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) {
-    fatal("socket:");
+    velvet_fatal("socket:");
   }
 
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
@@ -357,7 +357,7 @@ static int vv_connect(char *vv_socket) {
     strncpy(addr.sun_path, vv_socket, sizeof(addr.sun_path) - 1);
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
       close(sockfd);
-      fatal("connect:");
+      velvet_fatal("connect:");
     }
   }
   return sockfd;
@@ -377,12 +377,19 @@ static void vv_configure(struct velvet_args args) {
     first = args.set.option;
     second = args.set.value;
   } else {
-    fatal("Nothing to do.");
+    velvet_fatal("Nothing to do.");
   }
 
   struct string payload = {0};
   string_push_format_slow(&payload, "%s %s \"%s\"", word, first, second);
   io_write(sockfd, string_as_u8_slice(&payload));
+
+  char buf[1024] = {0};
+  int n = read(sockfd, buf, sizeof(buf));
+  if (n == -1) {
+    velvet_fatal("read:");
+  }
+  printf("%.*s\n", n, buf);
   close(sockfd);
   string_destroy(&payload);
 }
@@ -392,7 +399,7 @@ static void vv_attach(struct velvet_args args) {
   sa.sa_sigaction = &attach_sighandler;
   sa.sa_flags = SA_SIGINFO;
 
-  if (sigaction(SIGWINCH, &sa, NULL) == -1) die("sigaction:");
+  if (sigaction(SIGWINCH, &sa, NULL) == -1) velvet_die("sigaction:");
 
   struct platform_winsize ws;
   platform_get_winsize(&ws);

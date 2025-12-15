@@ -26,7 +26,7 @@ void vte_host_destroy(struct vte_host *vte_host) {
     int status;
     kill(vte_host->pid, SIGTERM);
     pid_t result = waitpid(vte_host->pid, &status, WNOHANG);
-    if (result == -1) die("waitpid:");
+    if (result == -1) velvet_die("waitpid:");
   }
   vte_destroy(&vte_host->vte);
   free(vte_host->cmdline);
@@ -349,12 +349,12 @@ void vte_host_start(struct vte_host *vte_host) {
       .ws_ypixel = vte_host->rect.client.y_pixel,
   };
   pid_t pid = forkpty(&vte_host->pty, NULL, NULL, &vte_hostsize);
-  if (pid < 0) die("forkpty:");
+  if (pid < 0) velvet_die("forkpty:");
 
   if (pid == 0) {
     char *argv[] = {"sh", "-c", vte_host->cmdline, NULL};
     execvp("sh", argv);
-    die("execlp:");
+    velvet_die("execlp:");
   }
   vte_host->pid = pid;
   set_nonblocking(vte_host->pty);

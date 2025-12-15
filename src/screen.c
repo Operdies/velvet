@@ -166,8 +166,8 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
 }
 
 static void screen_initialize(struct screen *g, int w, int h) {
-  g->rows = ecalloc(h, sizeof(*g->rows));
-  g->_cells = ecalloc(w * h, sizeof(*g->_cells));
+  g->rows = velvet_calloc(h, sizeof(*g->rows));
+  g->_cells = velvet_calloc(w * h, sizeof(*g->_cells));
   g->h = h;
   g->w = w;
   screen_reset_scroll_region(g);

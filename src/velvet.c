@@ -120,20 +120,20 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
       velvet->quit = true;
     } break;
     case SIGHUP: {
-      logmsg("Ignoring SIGHUP");
+      velvet_log("Ignoring SIGHUP");
     } break;
     case SIGCHLD: {
       did_sigchld = true;
     } break;
     case SIGINT: {
       if (!velvet->daemon) {
-        logmsg("^C received; exiting");
+        velvet_log("^C received; exiting");
         velvet->quit = true;
       }
     } break;
     default:
       velvet->quit = true;
-      die("Unhandled signal: %d", signal);
+      velvet_die("Unhandled signal: %d", signal);
       break;
     }
   }
@@ -191,7 +191,7 @@ static ssize_t session_write_pending(struct velvet_session *sesh) {
   assert(sesh->output);
   if (sesh->pending_output.len) {
     ssize_t written = io_write(sesh->output, string_as_u8_slice(&sesh->pending_output));
-    logmsg("Write %zu / %zu\n", written, sesh->pending_output.len);
+    velvet_log("Write %zu / %zu\n", written, sesh->pending_output.len);
     if (written > 0) string_drop_left(&sesh->pending_output, (size_t)written);
     return written;
   }
@@ -287,7 +287,7 @@ void velvet_loop(struct velvet *velvet) {
 
   bool did_resize = false;
   for (;;) {
-    logmsg("Main loop"); // mostly here to detect misbehaving polls.
+    velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     if (velvet->sessions.length > 0) {
       assert(velvet->active_session < velvet->sessions.length);
       if (velvet->active_session < velvet->sessions.length) {

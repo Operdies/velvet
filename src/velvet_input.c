@@ -92,14 +92,14 @@ static void mouse_debug_logging(struct mouse_sgr sgr) {
                     : sgr.trigger == mouse_down   ? "click"
                                                   : "release";
 
-  logmsg("shift=%d,alt=%d,ctrl=%d",
+  velvet_log("shift=%d,alt=%d,ctrl=%d",
          !!(sgr.modifiers & modifier_shift),
          !!(sgr.modifiers & modifier_alt),
          !!(sgr.modifiers & modifier_ctrl));
   switch (sgr.event_type) {
-  case mouse_click: logmsg("%s %s at %d;%d", eventname, mousebutton, sgr.row, sgr.column); break;
-  case mouse_move: logmsg("%s at %d;%d", eventname, sgr.row, sgr.column); break;
-  case mouse_scroll: logmsg("%s %s %d;%d", eventname, scrolldir, sgr.row, sgr.column); break;
+  case mouse_click: velvet_log("%s %s at %d;%d", eventname, mousebutton, sgr.row, sgr.column); break;
+  case mouse_move: velvet_log("%s at %d;%d", eventname, sgr.row, sgr.column); break;
+  case mouse_scroll: velvet_log("%s %s %d;%d", eventname, scrolldir, sgr.row, sgr.column); break;
   }
 }
 
@@ -148,7 +148,7 @@ static void send_mouse_sgr(struct vte_host *target, struct mouse_sgr sgr) {
                   trans.trigger == mouse_down ? "M" : "m");
   int end = target->vte.pending_input.len;
   struct u8_slice s = string_range(&target->vte.pending_input, start, end);
-  logmsg("send sgr: %.*s", s.len, s.content);
+  velvet_log("send sgr: %.*s", s.len, s.content);
 }
 
 static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
@@ -173,9 +173,9 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   if (!target) return;
 
   struct mouse_options m = target->vte.options.mouse;
-  logmsg("Target: %s", target->title);
-  logmsg("Target tracking: %d", m.tracking);
-  logmsg("Target mode: %d", m.mode);
+  velvet_log("Target: %s", target->title);
+  velvet_log("Target tracking: %d", m.tracking);
+  velvet_log("Target mode: %d", m.mode);
   if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
   if (m.mode != MOUSE_MODE_SGR) return;
 
@@ -238,7 +238,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
     struct u8_slice s = string_range(&v->input.command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
     if (c.state == CSI_ACCEPT) {
-      logmsg("Dispatch csi %.*s", s.len, s.content);
+      velvet_log("Dispatch csi %.*s", s.len, s.content);
       assert(len == s.len);
 
 #define KEY(leading, intermediate, final)                                                                              \
@@ -470,7 +470,7 @@ velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, o
     prev = nullptr;
     for (chain = parent->first_child; chain && !key_event_equals(chain->key, k); prev = chain, chain = chain->next_sibling);
     if (!chain) {
-      chain = ecalloc(1, sizeof(*parent));
+      chain = velvet_calloc(1, sizeof(*parent));
       chain->parent = parent;
       chain->data = root->data;
       chain->key = k;

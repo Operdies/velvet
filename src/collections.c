@@ -15,7 +15,7 @@ static void string_ensure_capacity(struct string *str, size_t required) {
   if (str->content == nullptr || str->cap < required) {
     uint8_t *prev = str->content;
     size_t newsize = next_size(required);
-    str->content = ecalloc(newsize, 1);
+    str->content = velvet_calloc(newsize, 1);
     str->cap = newsize;
     if (prev && str->len) {
       memcpy(str->content, prev, str->len);
@@ -127,7 +127,7 @@ bool string_flush(struct string *str, int fd, int *total_written) {
         usleep(1);
         continue;
       }
-      die("write:");
+      velvet_die("write:");
     }
     if (w == 0) {
       if (total_written) *total_written = written;
@@ -151,15 +151,15 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
   while (v->capacity < c) {
     v->capacity *= 2;
     if (v->capacity <= 0) {
-      die("Extremely large vector: 0x%zx", c);
+      velvet_die("Extremely large vector: 0x%zx", c);
       v->capacity = c;
       break;
     }
   }
   if (v->content) {
-    v->content = erealloc(v->content, v->capacity, v->element_size);
+    v->content = velvet_erealloc(v->content, v->capacity, v->element_size);
   } else {
-    v->content = ecalloc(v->capacity, v->element_size);
+    v->content = velvet_calloc(v->capacity, v->element_size);
   }
 }
 

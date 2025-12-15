@@ -5,14 +5,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-void logmsg(char *fmt, ...) __attribute__((format(printf, 1, 2)));
-void flogmsg(FILE *f, char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void velvet_log(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Abornmal exit
-_Noreturn void die(char *fmt, ...) __attribute__((format(printf, 1, 2)));
+_Noreturn void velvet_die(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Normal exit
-_Noreturn void fatal(char *fmt, ...) __attribute__((format(printf, 1, 2)));
-void *ecalloc(size_t sz, size_t count) __attribute__((malloc, alloc_size(1, 2)));
-void *erealloc(void *array, size_t nmemb, size_t size) __attribute__((alloc_size(2, 3)));
+_Noreturn void velvet_fatal(char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void *velvet_calloc(size_t sz, size_t count) __attribute__((malloc, alloc_size(1, 2)));
+void *velvet_erealloc(void *array, size_t nmemb, size_t size) __attribute__((alloc_size(2, 3)));
 void terminal_setup(void);
 void terminal_reset(void);
 void set_nonblocking(int fd);
@@ -40,17 +39,17 @@ void set_nonblocking(int fd);
 #define INFO(...) UNUSED(__VA_ARGS__)
 #define TODO(...) UNUSED(__VA_ARGS__)
 #define OMITTED(...) UNUSED(__VA_ARGS__)
-#define ERROR(...) logmsg(__VA_ARGS__)
+#define ERROR(...) velvet_log(__VA_ARGS__)
 
 #else
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #define LINE_STR TOSTRING(__LINE__)
-#define DIAG(...) logmsg(__VA_ARGS__)
-#define DBG(...) logmsg(__VA_ARGS__)
-#define INFO(...) logmsg(__VA_ARGS__)
-#define ERROR(...) logmsg(__VA_ARGS__)
+#define DIAG(...) velvet_log(__VA_ARGS__)
+#define DBG(...) velvet_log(__VA_ARGS__)
+#define INFO(...) velvet_log(__VA_ARGS__)
+#define ERROR(...) velvet_log(__VA_ARGS__)
 // Use in stubs to indicate what the missing funcionality is, and communicate
 // that implementaiton is planned.
 #define TODO(...)                                                              \
