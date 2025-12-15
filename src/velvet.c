@@ -249,21 +249,21 @@ static void session_output_callback(struct io_source *src) {
 
 static void vte_write_callback(struct io_source *src) {
   struct velvet *v = src->data;
-  struct vte_host *vte;
+  struct pty_host *vte;
   vec_find(vte, v->scene.hosts, vte->pty == src->fd);
   assert(vte);
-  if (vte->vte.pending_input.len) {
-    ssize_t written = io_write(src->fd, string_as_u8_slice(&vte->vte.pending_input));
-    if (written > 0) string_drop_left(&vte->vte.pending_input, (size_t)written);
+  if (vte->emulator.pending_input.len) {
+    ssize_t written = io_write(src->fd, string_as_u8_slice(&vte->emulator.pending_input));
+    if (written > 0) string_drop_left(&vte->emulator.pending_input, (size_t)written);
   }
 }
 
 static void vte_read_callback(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
-  struct vte_host *vte;
+  struct pty_host *vte;
   vec_find(vte, v->scene.hosts, vte->pty == src->fd);
   assert(vte);
-  vte_host_process_output(vte, str);
+  pty_host_process_output(vte, str);
 }
 
 void velvet_loop(struct velvet *velvet) {
@@ -318,7 +318,7 @@ void velvet_loop(struct velvet *velvet) {
      * This is because the signal handler will remove closed clients, and the stdin handler
      * processes hotkeys which can rearrange the order of the pointers.
      * */
-    struct vte_host *h;
+    struct pty_host *h;
     vec_foreach(h, velvet->scene.hosts) {
       struct io_source read_src = {
         .data = velvet,
@@ -327,7 +327,7 @@ void velvet_loop(struct velvet *velvet) {
         .read_callback = vte_read_callback,
         .write_callback = vte_write_callback,
       };
-      if (h->vte.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
+      if (h->emulator.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
 
       io_add_source(loop, read_src);
     }

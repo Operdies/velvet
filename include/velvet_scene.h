@@ -2,15 +2,18 @@
 #define velvet_scene_H
 
 #include "collections.h"
-#include "vte_host.h"
+#include "pty_host.h"
 #include "platform.h"
 
 struct host_features {
   bool synchronized_rendering;
 };
 
+struct velvet_scene_layout {
+};
+
 struct velvet_scene {
-  struct vec /*vte_host*/ hosts;
+  struct vec /*pty_host*/ hosts;
   struct platform_winsize ws;
   size_t focus;
   uint8_t prefix;
@@ -18,7 +21,7 @@ struct velvet_scene {
   struct host_features host_features;
 };
 
-static const struct velvet_scene velvet_scene_default = {.prefix = ('x' & 037), .hosts = vec(struct vte_host)};
+static const struct velvet_scene velvet_scene_default = {.prefix = ('x' & 037), .hosts = vec(struct pty_host)};
 
 void velvet_scene_spawn_process(struct velvet_scene *m, char *process);
 void velvet_scene_remove_exited(struct velvet_scene *m);

@@ -1,6 +1,6 @@
 #include "platform.h"
 #include <ctype.h>
-#include <vte_host.h>
+#include <pty_host.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,21 +17,21 @@
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 
-void vte_host_destroy(struct vte_host *vte_host) {
-  if (vte_host->pty > 0) {
-    close(vte_host->pty);
-    vte_host->pty = 0;
+void pty_host_destroy(struct pty_host *pty_host) {
+  if (pty_host->pty > 0) {
+    close(pty_host->pty);
+    pty_host->pty = 0;
   }
-  if (vte_host->pid > 0) {
+  if (pty_host->pid > 0) {
     int status;
-    kill(vte_host->pid, SIGTERM);
-    pid_t result = waitpid(vte_host->pid, &status, WNOHANG);
+    kill(pty_host->pid, SIGTERM);
+    pid_t result = waitpid(pty_host->pid, &status, WNOHANG);
     if (result == -1) velvet_die("waitpid:");
   }
-  vte_destroy(&vte_host->vte);
-  free(vte_host->cmdline);
-  vte_host->pty = vte_host->pid = 0;
-  vte_host->cmdline = nullptr;
+  vte_destroy(&pty_host->emulator);
+  free(pty_host->cmdline);
+  pty_host->pty = pty_host->pid = 0;
+  pty_host->cmdline = nullptr;
 }
 
 struct sgr_param {
@@ -59,7 +59,7 @@ static void cat_strings(char *dst, int n, char **strings) {
   dst[i] = 0;
 }
 
-void vte_host_update_cwd(struct vte_host *p) {
+void pty_host_update_cwd(struct pty_host *p) {
   if (platform.get_cwd_from_pty) {
     char buf[256];
     if (platform.get_cwd_from_pty(p->pty, buf, sizeof(buf))) {
@@ -195,17 +195,17 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
   }
 }
 
-void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuffer) {
-  // Ensure the screen content is in sync with the vte_host just-in-time
-  vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
+void pty_host_draw(struct pty_host *pty_host, bool redraw, struct string *outbuffer) {
+  // Ensure the screen content is in sync with the pty_host just-in-time
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
 
-  struct screen *g = vte_get_current_screen(&vte_host->vte);
+  struct screen *g = vte_get_current_screen(&pty_host->emulator);
   for (int row = 0; row < g->h; row++) {
     struct screen_row *screen_row = &g->rows[row];
     if (!redraw && !screen_row->dirty) continue;
     if (!redraw) screen_row->dirty = false;
-    int columnno = 1 + vte_host->rect.client.x;
-    int lineno = 1 + vte_host->rect.client.y + row;
+    int columnno = 1 + pty_host->rect.client.x;
+    int lineno = 1 + pty_host->rect.client.y + row;
     string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
 
     for (int col = 0; col < g->w; col++) {
@@ -235,9 +235,9 @@ void vte_host_draw(struct vte_host *vte_host, bool redraw, struct string *outbuf
 }
 
 // TODO: This sucks
-// Alternative implementation: Walk vte_host list and termine where all the borders are
-// Then draw the borders, and style the borders touching the focused vte_host
-void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
+// Alternative implementation: Walk pty_host list and termine where all the borders are
+// Then draw the borders, and style the borders touching the focused pty_host
+void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
   if (p->border_width == 0 || !p->border_dirty) return;
   static const struct screen_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
   static const struct screen_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
@@ -299,17 +299,17 @@ void vte_host_draw_border(struct vte_host *p, struct string *b, bool focused) {
   apply_style(&style_default, b);
 }
 
-void vte_host_process_output(struct vte_host *vte_host, struct u8_slice str) {
+void pty_host_process_output(struct pty_host *pty_host, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
-  vte_set_size(&vte_host->vte, vte_host->rect.client.w, vte_host->rect.client.h);
-  vte_process(&vte_host->vte, str);
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
+  vte_process(&pty_host->emulator, str);
 }
 
 static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
   return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h;
 }
 
-void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
+void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
   // Refuse to go below a minimum size
   if (outer.w < 2) outer.w = 2;
   if (outer.h < 2) outer.h = 2;
@@ -319,43 +319,43 @@ void vte_host_resize(struct vte_host *vte_host, struct bounds outer) {
 
   bool leftmost = outer.x == 0;
 
-  struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : vte_host->border_width),
-                                        .y = outer.y + vte_host->border_width,
-                                        .w = outer.w - (leftmost ? 0 : vte_host->border_width),
-                                        .h = outer.h - vte_host->border_width};
+  struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : pty_host->border_width),
+                                        .y = outer.y + pty_host->border_width,
+                                        .w = outer.w - (leftmost ? 0 : pty_host->border_width),
+                                        .h = outer.h - pty_host->border_width};
   inner.x_pixel = inner.w * pixels_per_column;
   inner.y_pixel = inner.h * pixels_per_row;
 
-  if (vte_host->rect.window.w != outer.w || vte_host->rect.window.h != outer.h) {
+  if (pty_host->rect.window.w != outer.w || pty_host->rect.window.h != outer.h) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
-    if (vte_host->pty) ioctl(vte_host->pty, TIOCSWINSZ, &ws);
-    if (vte_host->pid) kill(vte_host->pid, SIGWINCH);
-    if (vte_host->border_width) vte_host->border_dirty = true;
+    if (pty_host->pty) ioctl(pty_host->pty, TIOCSWINSZ, &ws);
+    if (pty_host->pid) kill(pty_host->pid, SIGWINCH);
+    if (pty_host->border_width) pty_host->border_dirty = true;
   }
 
   // If anything changed about the window position / dimensions, do a full redraw
-  if (!bounds_equal(&outer, &vte_host->rect.window) || !bounds_equal(&inner, &vte_host->rect.client)) {
-    vte_host->border_dirty = true;
+  if (!bounds_equal(&outer, &pty_host->rect.window) || !bounds_equal(&inner, &pty_host->rect.client)) {
+    pty_host->border_dirty = true;
   }
-  vte_host->rect.window = outer;
-  vte_host->rect.client = inner;
+  pty_host->rect.window = outer;
+  pty_host->rect.client = inner;
 }
 
-void vte_host_start(struct vte_host *vte_host) {
-  struct winsize vte_hostsize = {
-      .ws_col = vte_host->rect.client.w,
-      .ws_row = vte_host->rect.client.h,
-      .ws_xpixel = vte_host->rect.client.x_pixel,
-      .ws_ypixel = vte_host->rect.client.y_pixel,
+void pty_host_start(struct pty_host *pty_host) {
+  struct winsize pty_hostsize = {
+      .ws_col = pty_host->rect.client.w,
+      .ws_row = pty_host->rect.client.h,
+      .ws_xpixel = pty_host->rect.client.x_pixel,
+      .ws_ypixel = pty_host->rect.client.y_pixel,
   };
-  pid_t pid = forkpty(&vte_host->pty, NULL, NULL, &vte_hostsize);
+  pid_t pid = forkpty(&pty_host->pty, NULL, NULL, &pty_hostsize);
   if (pid < 0) velvet_die("forkpty:");
 
   if (pid == 0) {
-    char *argv[] = {"sh", "-c", vte_host->cmdline, NULL};
+    char *argv[] = {"sh", "-c", pty_host->cmdline, NULL};
     execvp("sh", argv);
     velvet_die("execlp:");
   }
-  vte_host->pid = pid;
-  set_nonblocking(vte_host->pty);
+  pty_host->pid = pid;
+  set_nonblocking(pty_host->pty);
 }

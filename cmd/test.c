@@ -1,6 +1,6 @@
 #include "collections.h"
 #include "csi.h"
-#include "vte_host.h"
+#include "pty_host.h"
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,41 +177,41 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   struct u8_slice reset_slice = { .content = reset, .len = strlen((char*)reset) };
   struct dumb_screen *expected = make_dumb_screen(5, 8, expected1);
 
-  struct vte_host p = {.vte = vte_default};
-  vte_host_resize(&p, blarge);
+  struct pty_host p = {.emulator = vte_default};
+  pty_host_resize(&p, blarge);
   struct string output = {0};
   {
     string_clear(&output);
     // 1. Write the input and verify the output
-    vte_host_process_output(&p, u8_slice_from_cstr(input));
-    vte_host_draw(&p, false, &output);
+    pty_host_process_output(&p, u8_slice_from_cstr(input));
+    pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial", outer_test_name);
-    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.emulator), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
-    vte_host_process_output(&p, string_as_u8_slice(&output));
+    pty_host_process_output(&p, string_as_u8_slice(&output));
     string_clear(&output);
-    vte_host_draw(&p, false, &output);
+    pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
-    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.emulator), testname2);
   }
   {
     // 2. Clear the screen ensuring it is clean
     string_clear(&output);
-    vte_host_process_output(&p, reset_slice);
-    vte_host_draw(&p, false, &output);
+    pty_host_process_output(&p, reset_slice);
+    pty_host_draw(&p, false, &output);
     struct dumb_screen *cleared = make_dumb_screen(5, 8, (screen_5x8){0});
     snprintf(testname2, sizeof(testname2), "%s: clear screen", outer_test_name);
-    assert_screen_equals(cleared, vte_get_current_screen(&p.vte), testname2);
+    assert_screen_equals(cleared, vte_get_current_screen(&p.emulator), testname2);
 
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
     // See 1.b
-    vte_host_process_output(&p, string_as_u8_slice(&output));
+    pty_host_process_output(&p, string_as_u8_slice(&output));
     string_clear(&output);
-    vte_host_draw(&p, false, &output);
+    pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
-    assert_screen_equals(cleared, vte_get_current_screen(&p.vte), outer_test_name);
+    assert_screen_equals(cleared, vte_get_current_screen(&p.emulator), outer_test_name);
 
     assert_ge(output.len, 0, outer_test_name, "Output should not be empty after clear!");
     free(cleared);
@@ -219,22 +219,22 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   {
     // 3. Redraw the screen and verify output
     string_clear(&output);
-    vte_host_process_output(&p, reset_slice);
-    vte_host_process_output(&p, u8_slice_from_cstr(input));
-    vte_host_draw(&p, false, &output);
+    pty_host_process_output(&p, reset_slice);
+    pty_host_process_output(&p, u8_slice_from_cstr(input));
+    pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round 2", outer_test_name);
-    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.emulator), testname2);
 
     // See 1.b
-    vte_host_process_output(&p, string_as_u8_slice(&output));
+    pty_host_process_output(&p, string_as_u8_slice(&output));
     string_clear(&output);
-    vte_host_draw(&p, false, &output);
+    pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);
-    assert_screen_equals(expected, vte_get_current_screen(&p.vte), testname2);
+    assert_screen_equals(expected, vte_get_current_screen(&p.emulator), testname2);
   }
   free(expected);
   string_destroy(&output);
-  vte_host_destroy(&p);
+  pty_host_destroy(&p);
 }
 
 static void
@@ -242,30 +242,30 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   struct dumb_screen *small = make_dumb_screen(5, 5, small1);
   struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
-  struct vte_host p = {.vte = vte_default};
-  vte_host_resize(&p, bsmall);
-  vte_host_process_output(&p, u8_slice_from_cstr(input));
+  struct pty_host p = {.emulator = vte_default};
+  pty_host_resize(&p, bsmall);
+  pty_host_process_output(&p, u8_slice_from_cstr(input));
   struct string output = {0};
   {
     string_clear(&output);
-    vte_host_draw(&p, false, &output);
-    assert_screen_equals(small, vte_get_current_screen(&p.vte), test_name);
+    pty_host_draw(&p, false, &output);
+    assert_screen_equals(small, vte_get_current_screen(&p.emulator), test_name);
   }
   {
     string_clear(&output);
-    vte_host_resize(&p, blarge);
-    vte_host_draw(&p, false, &output);
-    assert_screen_equals(large, vte_get_current_screen(&p.vte), test_name);
+    pty_host_resize(&p, blarge);
+    pty_host_draw(&p, false, &output);
+    assert_screen_equals(large, vte_get_current_screen(&p.emulator), test_name);
   }
   {
     string_clear(&output);
-    vte_host_resize(&p, bsmall);
-    vte_host_draw(&p, false, &output);
+    pty_host_resize(&p, bsmall);
+    pty_host_draw(&p, false, &output);
     // It is always possibly to losslessly convert back to the initial screen, so let's verify that
-    assert_screen_equals(small, vte_get_current_screen(&p.vte), test_name);
+    assert_screen_equals(small, vte_get_current_screen(&p.emulator), test_name);
   }
 
-  vte_host_destroy(&p);
+  pty_host_destroy(&p);
   free(small), free(large), string_destroy(&output);
 }
 
@@ -274,22 +274,22 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
   struct dumb_screen *small = make_dumb_screen(5, 5, small1);
   struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
-  struct vte_host p = {.vte = vte_default};
-  vte_host_resize(&p, blarge);
-  vte_host_process_output(&p, u8_slice_from_cstr(input));
+  struct pty_host p = {.emulator = vte_default};
+  pty_host_resize(&p, blarge);
+  pty_host_process_output(&p, u8_slice_from_cstr(input));
   struct string output = {0};
   {
     string_clear(&output);
-    vte_host_draw(&p, false, &output);
-    assert_screen_equals(large, vte_get_current_screen(&p.vte), test_name);
+    pty_host_draw(&p, false, &output);
+    assert_screen_equals(large, vte_get_current_screen(&p.emulator), test_name);
   }
   {
     string_clear(&output);
-    vte_host_resize(&p, bsmall);
-    vte_host_draw(&p, false, &output);
-    assert_screen_equals(small, vte_get_current_screen(&p.vte), test_name);
+    pty_host_resize(&p, bsmall);
+    pty_host_draw(&p, false, &output);
+    assert_screen_equals(small, vte_get_current_screen(&p.emulator), test_name);
   }
-  vte_host_destroy(&p);
+  pty_host_destroy(&p);
   free(small), free(large), string_destroy(&output);
 }
 

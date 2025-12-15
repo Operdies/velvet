@@ -3,7 +3,7 @@
 
 #include <ctype.h>
 #include <string.h>
-#include "vte_host.h"
+#include "pty_host.h"
 
 static bool osc_dispatch_todo(struct vte *vte, struct osc *osc) {
   (void)vte;
@@ -43,15 +43,15 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
         (type *)((char *)__mptr - offsetof(type,member));})
 
 static bool osc_set_title(struct vte *vte, struct osc *osc) {
-  struct vte_host *container;
-  container = container_of(vte, struct vte_host, vte);
+  struct pty_host *container;
+  container = container_of(vte, struct pty_host, emulator);
   container->border_dirty = true;
   strncpy(container->title, (char*)osc->pt.text, MIN(osc->pt.len, (int)sizeof(container->title) - 1));
   return true;
 }
 static bool osc_set_icon(struct vte *vte, struct osc *osc) {
-  struct vte_host *container;
-  container = container_of(vte, struct vte_host, vte);
+  struct pty_host *container;
+  container = container_of(vte, struct pty_host, emulator);
   container->border_dirty = true;
   strncpy(container->icon, (char*)osc->pt.text, MIN(osc->pt.len, (int)sizeof(container->icon) - 1));
   return true;
