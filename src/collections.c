@@ -164,7 +164,7 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
 }
 
 ssize_t vec_index(struct vec *v, const void *const item) {
-  assert(v->length);
+  if (!v->length || !item) return -1;
   char *it = (char *)item;
   char *base = v->content;
   char *end = base + (v->element_size * v->length);

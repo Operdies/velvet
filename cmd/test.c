@@ -967,7 +967,7 @@ void test_string() {
 }
 
 void test_vec() {
-  int *item;
+  int *item = nullptr;
   struct vec v = vec(int);
   assert(vec_index(&v, &item) == -1);
   vec_foreach(item, v) {
