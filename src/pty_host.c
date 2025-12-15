@@ -197,11 +197,11 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
 
 void pty_host_draw(struct pty_host *pty_host, bool redraw, struct string *outbuffer) {
   // Ensure the screen content is in sync with the pty_host just-in-time
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
 
   struct screen *g = vte_get_current_screen(&pty_host->emulator);
   for (int row = 0; row < g->h; row++) {
-    struct screen_row *screen_row = &g->rows[row];
+    struct screen_line *screen_row = &g->lines[row];
     if (!redraw && !screen_row->dirty) continue;
     if (!redraw) screen_row->dirty = false;
     int columnno = 1 + pty_host->rect.client.x;
@@ -268,8 +268,8 @@ void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
   uint8_t *aftertitle = u8" ";  //"├";
   int left = p->rect.window.x + 1;
   int top = p->rect.window.y + 1;
-  int bottom = p->rect.window.h + top;
-  int right = p->rect.window.w + left;
+  int bottom = p->rect.window.lines + top;
+  int right = p->rect.window.columns + left;
 
   apply_style(focused ? &focused_style : &normal_style, b);
 
@@ -301,33 +301,33 @@ void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
 
 void pty_host_process_output(struct pty_host *pty_host, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
   vte_process(&pty_host->emulator, str);
 }
 
 static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
-  return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h;
+  return a->x == b->x && a->y == b->y && a->columns == b->columns && a->lines == b->lines;
 }
 
 void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
   // Refuse to go below a minimum size
-  if (outer.w < 2) outer.w = 2;
-  if (outer.h < 2) outer.h = 2;
+  if (outer.columns < 2) outer.columns = 2;
+  if (outer.lines < 2) outer.lines = 2;
 
-  int pixels_per_column = (int)((float)outer.x_pixel / (float)outer.w);
-  int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.h);
+  int pixels_per_column = (int)((float)outer.x_pixel / (float)outer.columns);
+  int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.lines);
 
   bool leftmost = outer.x == 0;
 
   struct bounds inner = (struct bounds){.x = outer.x + (leftmost ? 0 : pty_host->border_width),
                                         .y = outer.y + pty_host->border_width,
-                                        .w = outer.w - (leftmost ? 0 : pty_host->border_width),
-                                        .h = outer.h - pty_host->border_width};
-  inner.x_pixel = inner.w * pixels_per_column;
-  inner.y_pixel = inner.h * pixels_per_row;
+                                        .columns = outer.columns - (leftmost ? 0 : pty_host->border_width),
+                                        .lines = outer.lines - pty_host->border_width};
+  inner.x_pixel = inner.columns * pixels_per_column;
+  inner.y_pixel = inner.lines * pixels_per_row;
 
-  if (pty_host->rect.window.w != outer.w || pty_host->rect.window.h != outer.h) {
-    struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
+  if (pty_host->rect.window.columns != outer.columns || pty_host->rect.window.lines != outer.lines) {
+    struct winsize ws = {.ws_col = inner.columns, .ws_row = inner.lines, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
     if (pty_host->pty) ioctl(pty_host->pty, TIOCSWINSZ, &ws);
     if (pty_host->pid) kill(pty_host->pid, SIGWINCH);
     if (pty_host->border_width) pty_host->border_dirty = true;
@@ -343,8 +343,8 @@ void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
 
 void pty_host_start(struct pty_host *pty_host) {
   struct winsize pty_hostsize = {
-      .ws_col = pty_host->rect.client.w,
-      .ws_row = pty_host->rect.client.h,
+      .ws_col = pty_host->rect.client.columns,
+      .ws_row = pty_host->rect.client.lines,
       .ws_xpixel = pty_host->rect.client.x_pixel,
       .ws_ypixel = pty_host->rect.client.y_pixel,
   };

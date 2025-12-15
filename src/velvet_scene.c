@@ -11,11 +11,11 @@ static float factor = 0.5;
 void velvet_scene_arrange(struct velvet_scene *m) {
   struct {
     int ws_col, ws_row;
-  } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.rows};
+  } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.lines};
   int i, n;
   int mh, mx, mw, my, sy, sw, nm, ns;
   int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.colums);
-  int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.rows);
+  int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.lines);
 
   n = m->hosts.length;
   struct pty_host *c;
@@ -40,9 +40,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
 
   for (; i < nmaster && i < n; i++) {
     struct pty_host *p = vec_nth(&m->hosts, i);
-    struct bounds b = {.x = mx, .y = my, .w = mw, .h = mh};
-    b.x_pixel = b.w * pixels_per_column;
-    b.y_pixel = b.h * pixels_per_row;
+    struct bounds b = {.x = mx, .y = my, .columns = mw, .lines = mh};
+    b.x_pixel = b.columns * pixels_per_column;
+    b.y_pixel = b.lines * pixels_per_row;
     pty_host_resize(p, b);
     my += mh;
   }
@@ -53,9 +53,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   for (; i < n; i++) {
     struct pty_host *p = vec_nth(&m->hosts, i);
     int height = (float)stack_height_left / stack_items_left;
-    struct bounds b = {.x = mw, .y = sy, .w = sw, .h = height};
-    b.x_pixel = b.w * pixels_per_column;
-    b.y_pixel = b.h * pixels_per_row;
+    struct bounds b = {.x = mw, .y = sy, .columns = sw, .lines = height};
+    b.x_pixel = b.columns * pixels_per_column;
+    b.y_pixel = b.lines * pixels_per_row;
     pty_host_resize(p, b);
     sy += height;
     stack_items_left--;
@@ -198,7 +198,7 @@ void velvet_scene_remove_exited(struct velvet_scene *m) {
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct platform_winsize w) {
-  if (m->ws.colums != w.colums || m->ws.rows != w.rows || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
+  if (m->ws.colums != w.colums || m->ws.lines != w.lines || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
     m->ws = w;
     velvet_scene_arrange(m);
     struct pty_host *h;
@@ -236,7 +236,7 @@ void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, boo
     // move cursor to focused host
     struct screen *g = vte_get_current_screen(&focused->emulator);
     struct cursor *c = &g->cursor;
-    int lineno = 1 + focused->rect.client.y + c->row;
+    int lineno = 1 + focused->rect.client.y + c->line;
     int columnno = 1 + focused->rect.client.x + c->column;
     string_push_csi(draw_buffer, 0, INT_SLICE(lineno, columnno), "H");
   }

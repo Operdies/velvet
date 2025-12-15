@@ -388,20 +388,20 @@ static bool ED(struct vte *vte, struct csi *csi) {
   switch (mode) {
   case 1: // Erase from start of screen to cursor
     start.column = screen_left(g);
-    start.row = screen_top(g);
+    start.line = screen_top(g);
     break;
   case 2: // Erase entire screen
     start.column = screen_left(g);
-    start.row = screen_top(g);
+    start.line = screen_top(g);
     end.column = screen_right(g);
-    end.row = screen_bottom(g);
+    end.line = screen_bottom(g);
     break;
   case 3: // erase scrollback
     return csi_dispatch_todo(vte, csi);
   case 0:
   default: // erase from cursor to end of screen
     end.column = screen_right(g);
-    end.row = screen_bottom(g);
+    end.line = screen_bottom(g);
     break;
   }
 
@@ -475,8 +475,8 @@ static bool ECH(struct vte *vte, struct csi *csi) {
   first_column = s->cursor.column;
   // subtract 1 from last column because the erase function is inclusive
   last_column = first_column + count - 1;
-  struct cursor start = {.row = s->cursor.row, .column = first_column};
-  struct cursor end = {.row = s->cursor.row, .column = last_column};
+  struct cursor start = {.line = s->cursor.line, .column = first_column};
+  struct cursor end = {.line = s->cursor.line, .column = last_column};
   screen_erase_between_cursors(s, start, end);
   return true;
 }

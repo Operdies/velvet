@@ -70,7 +70,7 @@ struct screen_cell {
   struct screen_cell_style style;
 };
 
-struct screen_row {
+struct screen_line {
   // If set, this indicates a newline was inserted at `eol`. This is relevant when the screen is resized.
   bool has_newline;
   // Track whether or not the line starting with this cell is dirty (should be
@@ -84,7 +84,7 @@ struct screen_row {
 
 // 0-indexed screen coordinates. This cursor points at a raw cell
 struct cursor {
-  int column, row;
+  int column, line;
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
    * Used whenever a new character is emitted */
   struct screen_cell_style brush;
@@ -96,12 +96,12 @@ struct cursor {
 
 
 struct screen {
-  int w, h;
+  int w, h, _cells_size, _lines_size;
   /* scroll region is local to the screen and is not persisted when the window /
    * pty_host is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
   struct screen_cell *_cells; // cells[w*h]
-  struct screen_row *rows;   // rows[h]
+  struct screen_line *lines;   // lines[h]
   struct cursor cursor;
   struct cursor saved_cursor;
 };
@@ -119,6 +119,7 @@ void screen_destroy(struct screen *screen);
 void screen_erase_between_cursors(struct screen *g, struct cursor from,
                                 struct cursor to);
 void screen_full_reset(struct screen *g);
+void screen_initialize(struct screen *g, int w, int h);
 void screen_insert(struct screen *g, struct screen_cell c, bool wrap);
 void screen_insert_blanks_at_cursor(struct screen *g, int n);
 void screen_move_cursor_relative(struct screen *g, int x, int y);

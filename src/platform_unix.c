@@ -23,7 +23,7 @@ void platform_get_winsize(struct platform_winsize *w) {
     velvet_die("TIOCGWINSZ:");
   }
   *w = (struct platform_winsize){
-      .colums = ws.ws_col, .rows = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
+      .colums = ws.ws_col, .lines = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
 }
 
 static void disable_alternate_screen(void) {

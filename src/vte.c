@@ -59,7 +59,7 @@ void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
       int x, y;
       struct screen *s = vte_get_current_screen(vte);
       x = s->cursor.column;
-      y = s->cursor.row;
+      y = s->cursor.line;
       // respect origin mode
       if (vte->options.origin_mode)
         y -= s->scroll_top;
@@ -130,7 +130,7 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
     struct screen_cell E = {.symbol = {.utf8 = {'E'}}};
     struct screen *g = vte_get_current_screen(vte);
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
-      struct screen_row *row = &g->rows[rowidx];
+      struct screen_line *row = &g->lines[rowidx];
       for (int col = 0; col < g->w; col++) {
         row->cells[col] = E;
       }
@@ -447,7 +447,7 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 static void vte_init_alternate_screen(struct vte *vte) {
   struct screen *g = &vte->alternate;
   screen_resize_if_needed(g, vte->columns, vte->rows, false);
-  for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
+  for (int i = 0; i < g->h; i++) g->lines[i].dirty = true;
 }
 
 void vte_enter_alternate_screen(struct vte *vte) {
@@ -459,8 +459,8 @@ void vte_enter_alternate_screen(struct vte *vte) {
   // should be accessible from the alternate screen, but new lines should
   // not be appended; the `m` rows in the alternate screen should be reused.
   // Leaving the alternate screen discards the `m` rows
-  struct cursor start = {.column = screen_left(g), .row = screen_top(g)};
-  struct cursor end = {.column = screen_right(g), .row = screen_bottom(g)};
+  struct cursor start = {.column = screen_left(g), .line = screen_top(g)};
+  struct cursor end = {.column = screen_right(g), .line = screen_bottom(g)};
   screen_erase_between_cursors(g, start, end);
   vte->alternate.cursor = vte->primary.cursor;
 }
@@ -468,7 +468,7 @@ void vte_enter_alternate_screen(struct vte *vte) {
 static void vte_init_primary_screen(struct vte *vte) {
   struct screen *g = &vte->primary;
   screen_resize_if_needed(g, vte->columns, vte->rows, true);
-  for (int i = 0; i < g->h; i++) g->rows[i].dirty = true;
+  for (int i = 0; i < g->h; i++) g->lines[i].dirty = true;
 }
 
 void vte_enter_primary_screen(struct vte *vte) {
@@ -549,5 +549,5 @@ struct screen *vte_get_current_screen(struct vte *vte) {
 void vte_invalidate_screen(struct vte *vte) {
   struct screen *s = vte_get_current_screen(vte);
   for (int i = 0; i < s->h; i++)
-    s->rows[i].dirty = true;
+    s->lines[i].dirty = true;
 }

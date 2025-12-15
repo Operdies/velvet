@@ -151,12 +151,12 @@ static void draw_no_mans_land(struct velvet *velvet) {
   char *dash = "─";
   char *corner = "┘";
   vec_foreach(sesh, velvet->sessions) {
-    if (sesh->ws.colums && sesh->ws.rows) {
+    if (sesh->ws.colums && sesh->ws.lines) {
       string_clear(&scratch);
       string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
       // 1. Draw the empty space to the right of this client
       if (sesh->ws.colums > active->ws.colums) {
-        for (int i = 0; i < active->ws.rows; i++) {
+        for (int i = 0; i < active->ws.lines; i++) {
           string_push_csi(&scratch, 0, INT_SLICE(i + 1, active->ws.colums + 1), "H");
           int draw_count = sesh->ws.colums - active->ws.colums;
           string_push_slice(&scratch, u8_slice_from_cstr(pipe));
@@ -165,10 +165,10 @@ static void draw_no_mans_land(struct velvet *velvet) {
         }
       }
       // 2. Draw the empty space below this client
-      for (int i = active->ws.rows; i < sesh->ws.rows; i++) {
+      for (int i = active->ws.lines; i < sesh->ws.lines; i++) {
         int draw_count = sesh->ws.colums;
         string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
-        if (i == active->ws.rows) {
+        if (i == active->ws.lines) {
           string_push_slice(&scratch, u8_slice_from_cstr(dash));
           draw_count--;
           int n_dashes = MIN(draw_count, active->ws.colums - 1);
@@ -268,7 +268,7 @@ static void vte_read_callback(struct io_source *src, struct u8_slice str) {
 
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
-  struct platform_winsize ws = {.colums = 80, .rows = 24, .x_pixel = 800, .y_pixel = 600};
+  struct platform_winsize ws = {.colums = 80, .lines = 24, .x_pixel = 800, .y_pixel = 600};
   struct io *const loop = &velvet->event_loop;
 
   {
@@ -292,7 +292,7 @@ void velvet_loop(struct velvet *velvet) {
       assert(velvet->active_session < velvet->sessions.length);
       if (velvet->active_session < velvet->sessions.length) {
         struct velvet_session *active = vec_nth(&velvet->sessions, velvet->active_session);
-        if (active->ws.colums && active->ws.rows && (active->ws.colums != velvet->scene.ws.colums || active->ws.rows != velvet->scene.ws.rows)) {
+        if (active->ws.colums && active->ws.lines && (active->ws.colums != velvet->scene.ws.colums || active->ws.lines != velvet->scene.ws.lines)) {
           velvet_scene_resize(&velvet->scene, active->ws);
           did_resize = true;
           // Defer redraw until the clients have actually updated. Redrawing right away leads to flickering

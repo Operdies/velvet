@@ -386,8 +386,24 @@ struct u8_slice u8_slice_from_cstr(const char *const str) {
   return (struct u8_slice) { .len = strlen(str), .content = (uint8_t*)str };
 }
 
-struct u8_slice string_as_u8_slice(struct string *s) {
-  return string_range(s, 0, -1);
+struct u8_slice string_as_u8_slice(const struct string *const s) {
+  return (struct u8_slice) { .content = s->content, .len = s->len };
+}
+
+struct u8_slice slice_range(struct u8_slice s, ssize_t start, ssize_t end) {
+  if (end < 0) {
+    end = s.len + end + 1;
+  }
+  if (start < 0) {
+    start = s.len + start + 1;
+  }
+  size_t length = end - start;
+  assert(start >= 0);
+  assert(end <= (ssize_t)s.len);
+  assert(length > 0);
+  assert(start + length <= s.len);
+  struct u8_slice slice = { .content = s.content + start, .len = length };
+  return slice;
 }
 
 /* whole string: string_range(s, 0, s->len)
@@ -396,19 +412,8 @@ struct u8_slice string_as_u8_slice(struct string *s) {
  * Last 10: string_range(s, -11, -1)
  * */
 struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end) {
-  if (end < 0) {
-    end = s->len + end + 1;
-  }
-  if (start < 0) {
-    start = s->len + start + 1;
-  }
-  size_t length = end - start;
-  assert(start >= 0);
-  assert(end <= (ssize_t)s->len);
-  assert(length > 0);
-  assert(start + length <= s->len);
-  struct u8_slice slice = { .content = s->content + start, .len = length };
-  return slice;
+  struct u8_slice s2 = string_as_u8_slice(s);
+  return slice_range(s2, start, end);
 }
 
 void vec_swap(struct vec *v, size_t i, size_t j) {

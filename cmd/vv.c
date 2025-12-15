@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
   if (!args.foreground) {
     struct platform_winsize ws = {0};
     platform_get_winsize(&ws);
-    if (ws.rows == 0 || ws.colums == 0) {
+    if (ws.lines == 0 || ws.colums == 0) {
       fprintf(stderr, "Error getting terminal size. Exiting.\n");
       return 1;
     }
@@ -420,7 +420,7 @@ static void vv_attach(struct velvet_args args) {
       if (errno == EINTR) {
         struct platform_winsize ws2 = {0};
         platform_get_winsize(&ws2);
-        if (ws2.colums && ws2.rows && (ws2.colums != ws.colums || ws2.rows != ws.rows)) {
+        if (ws2.colums && ws2.lines && (ws2.colums != ws.colums || ws2.lines != ws.lines)) {
           ws = ws2;
           vv_attach_send_message(sockfd, ws, false);
         }

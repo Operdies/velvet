@@ -41,8 +41,8 @@ struct dumb_screen {
   char cells[];
 };
 
-struct bounds bsmall = {.w = 5, .h = 5};
-struct bounds blarge = {.w = 8, .h = 5};
+struct bounds bsmall = {.columns = 5, .lines = 5};
+struct bounds blarge = {.columns = 8, .lines = 5};
 
 struct dumb_screen *make_dumb_screen(int rows, int cols, char g[rows][cols]) {
   struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols, 1);
@@ -61,7 +61,7 @@ static struct dumb_screen *screen_to_dumb_screen(const struct screen *const src)
   screen->cols = src->w;
   screen->rows = src->h;
   for (int row = 0; row < src->h; row++) {
-    struct screen_row *screen_row = &src->rows[row];
+    struct screen_line *screen_row = &src->lines[row];
     for (int col = 0; col < src->w; col++) {
       screen->cells[row * src->w + col] = screen_row->cells[col].symbol.utf8[0];
     }

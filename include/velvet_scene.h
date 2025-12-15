@@ -19,6 +19,7 @@ struct velvet_scene {
   uint8_t prefix;
   struct string draw_buffer;
   struct host_features host_features;
+  struct screen render;
 };
 
 static const struct velvet_scene velvet_scene_default = {.prefix = ('x' & 037), .hosts = vec(struct pty_host)};
