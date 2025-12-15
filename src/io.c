@@ -2,6 +2,7 @@
 #include "collections.h"
 #include "utils.h"
 #include <errno.h>
+#include <stdarg.h>
 #include <sys/wait.h>
 #include <time.h>
 
@@ -142,6 +143,16 @@ ssize_t io_write(int fd, struct u8_slice s) {
   ssize_t written = write(fd, s.content, s.len);
   if (written == -1 && errno != EAGAIN && errno != EINTR)
     ERROR("io_write:");
+  return written;
+}
+
+ssize_t io_write_format_slow(int fd, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  ssize_t written = vdprintf(fd, fmt, ap);
+  if (written == -1 && errno != EAGAIN && errno != EINTR)
+    ERROR("io_write:");
+  va_end(ap);
   return written;
 }
 

@@ -57,6 +57,7 @@ void io_clear_sources(struct io *io);
 /* Free all resources held by this io instance. */
 void io_destroy(struct io *io);
 ssize_t io_write(int fd, struct u8_slice content);
+ssize_t io_write_format_slow(int fd, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data);
 
 #define io_write_literal(fd, str)                                                                                        \
