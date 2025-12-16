@@ -1012,6 +1012,22 @@ void test_vec() {
   }
   vec_find(item, v, *item == 1);
   assert(item == nullptr);
+  assert(v.length == 0);
+
+  vec_set(&v, 5, &(int){7});
+  assert(v.length == 6);
+  assert(*(int *)vec_nth(&v, 5) == 7);
+  for (int i = 0; i < 5; i++) {
+    assert(*(int *)vec_nth(&v, i) == 0);
+  }
+  vec_set(&v, 6, &(int){9});
+  assert(v.length == 7);
+  assert(*(int *)vec_nth(&v, 5) == 7);
+  assert(*(int *)vec_nth(&v, 6) == 9);
+  for (int i = 0; i < 5; i++) {
+    assert(*(int *)vec_nth(&v, i) == 0);
+  }
+
   vec_destroy(&v);
 }
 

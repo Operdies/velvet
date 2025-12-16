@@ -208,15 +208,32 @@ void vec_remove_at(struct vec *v, size_t n) {
   v->length--;
 }
 
+void vec_set(struct vec *v, size_t i, const void *elem) {
+  size_t initial_length = v->length;
+  v->length = MAX(i + 1, v->length);
+  vec_ensure_capacity(v, v->length);
+  void *item = vec_nth(v, i);
+  if (elem)
+    memcpy(item, elem, v->element_size);
+  else
+    memset(item, 0, v->element_size);
+
+  void *start = vec_nth(v, initial_length);
+  void *end = (char*)v->content + (i * v->element_size);
+  if (start < end) {
+    memset(start, 0, end - start);
+  }
+}
+
 void vec_push(struct vec *v, const void *elem) {
   assert(v->element_size && "Element size cannot be 0");
-  vec_ensure_capacity(v, v->length + 1);
-  char *addr = (char *)v->content + v->length * v->element_size;
-  if (elem)
-    memcpy(addr, elem, v->element_size);
-  else
-    memset(addr, 0, v->element_size);
   v->length++;
+  vec_ensure_capacity(v, v->length);
+  void *last = vec_nth(v, v->length - 1);
+  if (elem)
+    memcpy(last, elem, v->element_size);
+  else
+    memset(last, 0, v->element_size);
 }
 
 void vec_clear(struct vec *v) {
