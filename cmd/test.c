@@ -822,20 +822,6 @@ void test_csi_parsing(void) {
       .leading = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
 }
 
-static void test_hash() {
-  const uint8_t characters[] = u8"\x1b[200~\0\0";
-  const struct running_hash paste_start = {.characters = u8"\x1b[200~"};
-  struct running_hash running_hash = {0};
-
-  running_hash_append(&running_hash, characters[0]);
-  for (int i = 1; i < 8; i++) {
-    assert(running_hash_match(running_hash, paste_start, i));
-    assert(!running_hash_match(running_hash, paste_start, i + 1));
-    running_hash_append(&running_hash, characters[i]);
-  }
-  assert(running_hash_match(running_hash, paste_start, 8));
-}
-
 #define assertf(cond, fmt, ...)                                                                                        \
   do {                                                                                                                 \
     if (!(cond)) {                                                                                                     \
@@ -1035,7 +1021,6 @@ int main(void) {
   test_erase();
   test_scrolling();
   test_csi_parsing();
-  test_hash();
   test_hashmap();
   test_hashmap_collisions();
   test_string();

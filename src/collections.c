@@ -234,18 +234,6 @@ void *vec_new_element(struct vec *v) {
   return vec_nth(v, v->length - 1);
 }
 
-void running_hash_append(struct running_hash *hash, uint8_t ch) {
-  hash->hash = (hash->hash >> 8) | (uint64_t)ch << 56;
-}
-
-bool running_hash_match(struct running_hash running, struct running_hash item, int count) {
-  assert(count >= 1);
-  assert(count <= 8);
-  int discard = 8 * (8 - count);
-  uint64_t keep = ~0UL >> discard;
-  return (running.hash >> discard) == (item.hash & keep);
-}
-
 #define HASHMAP_MAX_LOAD (0.7)
 
 [[gnu::const]] static uint32_t hashmap_hash(uint32_t key) {

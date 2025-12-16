@@ -50,13 +50,6 @@ struct vec {
 #endif
 };
 
-struct running_hash {
-  union {
-    uint8_t characters[8];
-    uint64_t hash;
-  };
-};
-
 enum [[gnu::packed]] hashmap_slot_state {
   // Never used
   HASHMAP_SLOT_PRISTINE,
@@ -86,10 +79,6 @@ bool hashmap_contains(const struct hashmap *h, uint32_t key);
 void *hashmap_get(const struct hashmap *h, uint32_t key);
 // Return the item with the specified key, if it exists, returning it.
 bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
-
-bool running_hash_match(struct running_hash running, struct running_hash item,
-                        int count);
-void running_hash_append(struct running_hash *hash, uint8_t ch);
 void string_push_cstr(struct string *str, char *cstr);
 void string_push_slice(struct string *str, struct u8_slice slice);
 void string_push_range(struct string *str, const uint8_t *const src,
