@@ -132,15 +132,14 @@ static void velvet_scene_zoom(struct velvet_scene *m) {
 }
 
 static void velvet_scene_spawn_and_focus(struct velvet_scene *m, char *cmdline) {
-  velvet_scene_spawn_process(m, cmdline);
+  velvet_scene_spawn_process(m, u8_slice_from_cstr(cmdline));
   velvet_scene_set_focus(m, m->hosts.length - 1);
 }
 
-void velvet_scene_spawn_process(struct velvet_scene *m, char *process) {
+void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
   assert(m->hosts.element_size == sizeof(struct pty_host));
-  velvet_log("Spawn %s", process);
   struct pty_host *host = vec_new_element(&m->hosts);
-  host->cmdline = strdup(process);
+  host->cmdline = strndup((char*)cmdline.content, cmdline.len);
   host->emulator = vte_default;
   velvet_scene_arrange(m);
   pty_host_start(host);
@@ -222,14 +221,30 @@ void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, boo
     // if the host does not advertise support, hide the cursor while drawing instead
     string_push_slice(draw_buffer, vt_cursor_visible_off);
   }
+  size_t pre = draw_buffer->len;
   for (size_t i = 0; i < m->hosts.length; i++) {
     struct pty_host *h = vec_nth(&m->hosts, i);
     pty_host_update_cwd(h);
     pty_host_draw(h, full_draw, draw_buffer);
-    bool stored = h->border_dirty;
-    if (full_draw) h->border_dirty = true;
-    pty_host_draw_border(h, draw_buffer, i == m->focus);
-    h->border_dirty = stored;
+    if (full_draw) {
+      bool stored = h->border_dirty;
+      h->border_dirty = true;
+      pty_host_draw_border(h, draw_buffer, i == m->focus);
+      h->border_dirty = stored;
+    } else {
+      pty_host_draw_border(h, draw_buffer, i == m->focus);
+    }
+  }
+
+  // set the cursor style according to the focused client.
+  if (focused->emulator.options.cursor.style != current_cursor_style) {
+    current_cursor_style = focused->emulator.options.cursor.style;
+    string_push_csi(draw_buffer, 0, INT_SLICE(current_cursor_style), " q");
+  }
+
+  if (draw_buffer->len == pre) {
+    string_clear(draw_buffer);
+    return;
   }
 
   {
@@ -239,12 +254,6 @@ void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, boo
     int lineno = 1 + focused->rect.client.y + c->line;
     int columnno = 1 + focused->rect.client.x + c->column;
     string_push_csi(draw_buffer, 0, INT_SLICE(lineno, columnno), "H");
-  }
-
-  // set the cursor style according to the focused client.
-  if (focused->emulator.options.cursor.style != current_cursor_style) {
-    current_cursor_style = focused->emulator.options.cursor.style;
-    string_push_csi(draw_buffer, 0, INT_SLICE(current_cursor_style), " q");
   }
 
   // Set cursor visibility according to the focused client.

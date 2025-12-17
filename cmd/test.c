@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "velvet_cmd.h"
 
 /* the SYM macro is not useful. It exists because of a treesitter parser bug which messes up indentation otherwise */
 #define SYM(X) #X
@@ -1022,6 +1023,88 @@ void test_vec() {
   vec_destroy(&v);
 }
 
+static void assert_u8_is(struct u8_slice s, char *str) {
+  assertf(u8_slice_equals(s, u8_slice_from_cstr(str)), "Expected `%s`, was `%.*s`", str, (int)s.len, s.content);
+}
+void test_velvet_cmd() {
+  struct velvet_cmd_iterator it;
+  struct velvet_cmd_arg_iterator argit;
+  struct u8_slice config = u8_slice_from_cstr("map   <C-w> 123\n"
+                                              "map '<C-x>c' 'spawn zsh'"
+                                              ";detach\n"
+                                              ";'detach'\n"
+                                              ";"
+                                              "map '<C-S-f>' do something   ;"
+                                              "detach");
+  it = (struct velvet_cmd_iterator){.src = config};
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "map   <C-w> 123");
+    char *expected[] = {"map", "<C-w>", "123"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "map '<C-x>c' 'spawn zsh'");
+    char *expected[] = {"map", "<C-x>c", "spawn zsh"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "detach");
+    char *expected[] = {"detach"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "'detach'");
+    char *expected[] = {"detach"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "map '<C-S-f>' do something");
+    char *expected[] = {"map", "<C-S-f>", "do", "something"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "detach");
+    char *expected[] = {"detach"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+}
+
 int main(void) {
   test_input_output();
   test_reflow();
@@ -1032,5 +1115,6 @@ int main(void) {
   test_hashmap_collisions();
   test_string();
   test_vec();
+  test_velvet_cmd();
   return n_failures;
 }

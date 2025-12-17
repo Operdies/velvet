@@ -27,6 +27,8 @@ enum velvey_key_modifier {
 struct velvet_key_event {
   struct utf8 symbol;
   enum velvey_key_modifier modifiers;
+  /* set if the mapping was removed. If removed is set, no other fields will be set. */
+  bool removed;
 };
 
 struct velvet_keymap;
@@ -50,16 +52,11 @@ struct velvet_keymap {
   struct velvet_key_event key;
 };
 
-struct velvet_key_sequence {
-  struct velvet_key_event *sequence;
-  int len;
-};
-
 struct velvet_input_options {
   bool focus_follows_mouse;
   /* When one mapping is a prefix of another, we resolve the shorter mapping after this delay. */
-  int key_ambiguous_chain_resolve_timeout;
-  /* When */
+  int key_chain_timeout_ms;
+  /* When a keybind repeatable mapping is triggered, allow retriggers within this window */
   int key_repeat_timeout_ms;
 };
 
@@ -75,12 +72,17 @@ struct velvet_input {
   struct velvet_keymap *keymap;
 };
 
+
 struct velvet_session {
   int socket;                   // socket connection
   struct string pending_output; // buffered output
   int input;                    // stdin
   int output;                   // stdout
   struct platform_winsize ws;
+  struct {
+    struct string buffer; // partial commands
+    int lines;
+  } commands;
 };
 
 struct velvet {
@@ -89,7 +91,7 @@ struct velvet {
   struct io event_loop;
   struct vec /* struct session */ sessions;
   /* this is modified by events such as receiving focus IN/OUT events, new sessions attaching, etc */
-  size_t active_session;
+  int focused_socket;
   int socket;
   int signal_read;
   bool quit;
@@ -101,14 +103,17 @@ void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 void velvet_process_input(struct velvet *in, struct u8_slice str);
 void velvet_input_destroy(struct velvet_input *v);
-struct velvet_keymap *velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, on_key *callback, void *data);
+void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence);
+struct velvet_keymap * velvet_keymap_map(struct velvet_keymap *root, struct u8_slice keys);
 void velvet_input_unwind(struct velvet *v);
+struct velvet_session *velvet_get_focused_session(struct velvet *v);
+void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 
 static struct velvet_input velvet_input_default = {
     .options =
         {
             .focus_follows_mouse = true,
-            .key_ambiguous_chain_resolve_timeout = 1000,
+            .key_chain_timeout_ms = 1000,
             .key_repeat_timeout_ms = 1000,
         },
 };

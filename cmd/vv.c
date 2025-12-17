@@ -17,25 +17,35 @@ static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
   if (written < (int)sizeof(sig)) velvet_die("signal write:");
 }
 
+static void signal_trap(int sig, siginfo_t *siginfo, void *context) {
+  (void)siginfo, (void)context, (void)sig;
+  __builtin_trap();
+}
+
 static void install_signal_handlers(int *pipes) {
-  struct sigaction sa = {0};
-  sa.sa_sigaction = &signal_handler;
-  sa.sa_flags = SA_SIGINFO;
+  if (pipe(pipes) < 0) velvet_die("pipe:");
 
-  if (sigaction(SIGTERM, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGQUIT, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGINT, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGCHLD, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGHUP, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGPIPE, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGUSR1, &sa, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGUSR2, &sa, NULL) == -1) velvet_die("sigaction:");
+  struct sigaction sig_handle = {0};
+  sig_handle.sa_sigaction = &signal_handler;
+  sig_handle.sa_flags = SA_SIGINFO;
 
+  struct sigaction sig_trap = {0};
+  sig_trap.sa_sigaction = &signal_trap;
+  sig_trap.sa_flags = SA_SIGINFO;
+
+  if (sigaction(SIGTERM, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGQUIT, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGINT, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGCHLD, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGHUP, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGUSR1, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGUSR2, &sig_handle, NULL) == -1) velvet_die("sigaction:");
+  if (sigaction(SIGBUS, &sig_trap, NULL) == -1) velvet_die("sigaction:");
+
+  signal(SIGPIPE, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTSTP, SIG_IGN);
-
-  if (pipe(pipes) < 0) velvet_die("pipe:");
 }
 
 static void add_bindir_to_path(void) {
@@ -65,7 +75,17 @@ static void add_bindir_to_path(void) {
   free(exe_path);
 }
 
-#define SOCKET_PATH_MAX ((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
+static bool file_exists(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0;
+}
+
+static bool file_is_socket(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISSOCK(st.st_mode);
+}
+
+#define SOCKET_PATH_MAX (int)((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
 
 static int create_socket(char *path) {
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
@@ -75,10 +95,21 @@ static int create_socket(char *path) {
 
   if (!path) {
     char *base = "/tmp/velvet_sock";
-    struct stat buf;
     for (int i = 1; i < 100 && !success; i++) {
       snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
-      success = stat(addr.sun_path, &buf) == -1;
+      if (file_is_socket(addr.sun_path)) {
+        int temp_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (connect(temp_sock, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+          // socket is in use -- leave it be
+          close(temp_sock);
+          continue;
+        }
+        // socket is not in use -- use it
+        unlink(addr.sun_path);
+        close(temp_sock);
+      }
+      success = true;
+      break;
     }
   } else {
     memcpy(addr.sun_path, path, strlen(path));
@@ -101,52 +132,30 @@ static int create_socket(char *path) {
   return sockfd;
 }
 
-static int get_flag(int argc, char **argv, char *flag) {
-  for (int i = 1; i < argc; i++)
-    if (strcmp(argv[i], flag) == 0) return i;
-  return 0;
-}
-
 struct velvet_args {
   bool attach;
   bool foreground;
   char *socket;
-  struct {
-    char *keys;
-    char *action;
-  } bind;
-  struct {
-    char *option;
-    char *value;
-  } set;
   char *source;
+  char **rest;
+  int n_rest;
 };
 
 static void vv_configure(struct velvet_args args);
 static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
-  printf("Usage:\n  %s [<options>] [<arguments>]\n\nOptions:\n"
-         "  --attach                Attach to the server at <socket> if present.\n"
-         "  --bind <keys> <action>  Bind <keys> to the action <action>.\n"
+  printf("Usage:\n  %s [<options>] [<arguments> ...]\n\nOptions:\n"
+         "  attach                Attach to the server at <socket> if present.\n"
+         "  map <keys> <action>     Map <keys> to the action <action>.\n"
+         "  unmap <keys>            Clear any mapping associated with <keys>.\n"
          "  --foreground            Start a server as a foreground process.\n"
-         "  --source -              Read newline separated mapings from stdin\n"
-         "  --source <FILE>         Read newline-separated mappings from a file\n"
+         "  source -              Read newline separated mapings from stdin\n"
+         "  source <FILE>         Read newline-separated mappings from a file\n"
          "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
-         "  --set <option> <value>  Set the <option> to <value>.\n"
+         "  set <option> <value>  Set the <option> to <value>.\n"
          "  -h, --help              Show this help text and exit.\n"
          , arg0);
-}
-
-
-static bool file_exists(const char *path) {
-  struct stat st;
-  return stat(path, &st) == 0;
-}
-
-static bool file_is_socket(const char *path) {
-  struct stat st;
-  return stat(path, &st) == 0 && S_ISSOCK(st.st_mode);
 }
 
 struct velvet_args velvet_parse_args(int argc, char **argv) {
@@ -166,43 +175,37 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
-    } else if (F(--set)) {
-      n_commands++;
-      if (a.set.option) velvet_fatal("--set specified multiple times");
-      GET(a.set.option);
-      GET(a.set.value);
     } else if (F(--foreground)) {
       n_commands++;
       if (a.foreground) velvet_fatal("--foreground specified multiple times.");
       a.foreground = true;
-    } else if (F(--attach)) {
+    } else if (F(attach)) {
       if (nested) velvet_fatal("Nesting velvet sessions is not supported.");
       n_commands++;
-      if (a.attach) velvet_fatal("--attach specified multiple times.");
+      if (a.attach) velvet_fatal("attach specified multiple times.");
       a.attach = true;
-    } else if (F(--bind)) {
-      n_commands++;
-      if (a.bind.keys) velvet_fatal("--bind specified multiple times.");
-      GET(a.bind.keys);
-      GET(a.bind.action);
-    } else if (F(--source)) {
-      if (a.source) velvet_fatal("--source specified multiple times.");
+    } else if (F(source)) {
+      if (a.source) velvet_fatal("source specified multiple times.");
       GET(a.source);
     } else {
-      fprintf(stderr, "Unrecognized argument '%s'\n\n", arg);
-      usage(argv[0]);
-      exit(1);
+      // unnamed positional arguments at the end are sent to the server. Any errors are hnadled server-side.
+      // This is meant to keep the client as simple as possible and keep complexity in the server.
+      // This should allow a dumb client to talk to servers of different versions, hopefully.
+      a.rest = &argv[i];
+      a.n_rest = argc - i;
+      n_commands++;
+      break;
     }
   }
 
   if (n_commands > 1) velvet_fatal("Multiple commands specified.");
 
-  if ((a.bind.keys || a.source || a.set.option)) {
+  if (a.source || a.rest) {
     if (!a.socket) a.socket = getenv("VELVET");
-    if (!a.socket) velvet_fatal("Unable to map keys; Either specify the --socket or set $VELVET to a socket path.");
+    if (!a.socket) velvet_fatal("Unable to send command; Either specify the --socket or set $VELVET to a socket path.");
   }
 
-  if (a.socket && !file_is_socket(a.socket) && (a.bind.keys || a.attach || a.source)) {
+  if (a.socket && !file_is_socket(a.socket) && (a.rest || a.attach || a.source)) {
     velvet_fatal("Socket '%s' is not a unix domain socket.", a.socket);
   }
 
@@ -226,12 +229,14 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (args.bind.action || args.set.option) {
+  if (args.rest || args.source) {
     vv_configure(args);
     return 0;
   }
 
+  if (getenv("VELVET")) velvet_fatal("Nesting velvet is not supported.");
   int sock_fd = create_socket(args.socket);
+  args.socket = getenv("VELVET");
 
   // Since we are not connecting to a server, that means we are creating a new server.
   // The server should be detached from the current process hierarchy.
@@ -302,8 +307,15 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
 
 static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool send_fds) {
   int fds[2] = {STDIN_FILENO, STDOUT_FILENO};
-  char payload[100] = {0};
-  int n_payload = snprintf(payload, 99, "\x1b[%d;%d;%d;%dW", ws.rows, ws.colums, ws.y_pixel, ws.x_pixel);
+  char payload[256] = {0};
+  // int n_payload = snprintf(payload, 99, "\x1b[%d;%d;%d;%dW", ws.rows, ws.colums, ws.y_pixel, ws.x_pixel);
+  int n_payload = snprintf(payload,
+                           sizeof(payload) - 1,
+                           "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
+                           ws.lines,
+                           ws.colums,
+                           ws.y_pixel,
+                           ws.x_pixel);
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
 
   struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = payload, .iov_len = n_payload}, .msg_iovlen = 1};
@@ -363,35 +375,89 @@ static int vv_connect(char *vv_socket) {
   return sockfd;
 }
 
+struct vv_source {
+  int source, sock;
+  struct io loop;
+};
+
+
+static void vv_source_exit(void*) {
+  exit(0);
+}
+
+static void vv_source_output(struct io_source *src, struct u8_slice data) {
+  (void)src;
+  if (data.len == 0) {
+    exit(0);
+    return;
+  }
+  printf("%.*s", (int)data.len, data.content);
+}
+static void vv_source_input(struct io_source *src, struct u8_slice data) {
+  struct vv_source *s = src->data;
+  if (data.len == 0) {
+    // give the server a bit of time to respond with error messages
+    io_schedule(&s->loop, 10, vv_source_exit, nullptr);
+    return;
+  }
+  io_write(s->sock, data);
+}
+
+static void vv_source(struct velvet_args args, int sock) {
+  int source;
+  if (strcmp(args.source, "-") == 0) {
+    source = STDIN_FILENO;
+  } else {
+    source = open(args.source, O_RDONLY);
+  }
+  if (source == -1) velvet_fatal("cannot open %s:", args.source);
+
+  struct vv_source context = {.source = source, .sock = sock, .loop = io_default};
+  struct io_source input = {.fd = source, .events = POLLIN, .read_callback = vv_source_input, .data = &context};
+  io_add_source(&context.loop, input);
+  struct io_source output = {.fd = sock, .events = POLLIN, .read_callback = vv_source_output, .data = &context};
+  io_add_source(&context.loop, output);
+
+  for (;;) {
+    io_dispatch(&context.loop);
+  }
+}
+
 static void vv_configure(struct velvet_args args) {
   int sockfd = vv_connect(args.socket);
-  char *word;
-  char *first;
-  char *second;
-  if (args.bind.action) {
-    word = "bind";
-    first = args.bind.keys;
-    second = args.bind.action;
-  } else if (args.set.option) {
-    word = "set";
-    first = args.set.option;
-    second = args.set.value;
-  } else {
-    velvet_fatal("Nothing to do.");
-  }
 
-  struct string payload = {0};
-  string_push_format_slow(&payload, "%s %s \"%s\"", word, first, second);
-  io_write(sockfd, string_as_u8_slice(&payload));
-
-  char buf[1024] = {0};
-  int n = read(sockfd, buf, sizeof(buf));
-  if (n == -1) {
-    velvet_fatal("read:");
-  }
-  printf("%.*s\n", n, buf);
+  if (args.source) {
+    vv_source(args, sockfd);
+  } else if (args.n_rest) {
+    struct string payload = {0};
+    for (int i = 0; i < args.n_rest; i++) {
+      if (i) string_push_char(&payload, ' ');
+      bool has_space = strchr(args.rest[i], ' ');
+      bool has_squot = strchr(args.rest[i], '\'');
+      bool has_dquot = strchr(args.rest[i], '"');
+      if (has_squot && has_dquot) {
+        string_push_char(&payload, '"');
+        for (char *ch = args.rest[i]; *ch; ch++) {
+          if (*ch == '\\' || *ch == '"') {
+            string_push_char(&payload, '\\');
+          }
+          string_push_char(&payload, *ch);
+        }
+        string_push_char(&payload, '"');
+      } else {
+        if (has_space || has_squot || has_dquot) {
+          char quote = has_squot ? '"' : '\'';
+          string_push_format_slow(&payload, "%c%s%c", quote, args.rest[i], quote);
+        } else {
+          string_push_format_slow(&payload, "%s", args.rest[i]);
+        }
+      }
+    }
+    string_push_char(&payload, '\n');
+    io_write(sockfd, string_as_u8_slice(&payload));
+    string_destroy(&payload);
+  } 
   close(sockfd);
-  string_destroy(&payload);
 }
 
 static void vv_attach(struct velvet_args args) {

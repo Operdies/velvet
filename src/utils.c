@@ -42,7 +42,7 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
     // Assume utf8 continuation byte
     if ((buf[i]) & 0x80) continue;
     if (buf[i] == ' ') continue;
-    if (buf[i] == '\\') buf[i] = '.';
+    if (buf[i] == '\t') continue;
     if (!isgraph(buf[i])) buf[i] = '.';
   }
 

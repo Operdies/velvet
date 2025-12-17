@@ -73,10 +73,22 @@ void string_push_char(struct string *str, uint8_t ch) {
   string_push_range(str, &ch, 1);
 }
 
+bool u8_slice_starts_with_cstr(struct u8_slice slice, char *str) {
+  size_t i = 0;
+  for (; *str && i < slice.len; i++, str++)
+    if (slice.content[i] != *str) return false;
+  return true;
+}
+
+bool u8_slice_starts_with(struct u8_slice slice, struct u8_slice prefix) {
+  if (!slice.content || !prefix.content) return false;
+  if (slice.len < prefix.len) return false;
+  if (slice.content == prefix.content) return true;
+  return memcmp(slice.content, prefix.content, prefix.len) == 0;
+}
+
 bool string_starts_with(struct string *str, struct u8_slice slice) {
-  if (!str->content || !slice.content) return false;
-  if (str->len < slice.len) return false;
-  return memcmp(str->content, slice.content, slice.len) == 0;
+  return u8_slice_starts_with(string_as_u8_slice(str), slice);
 }
 
 bool string_ends_with(struct string *str, struct u8_slice slice) {
@@ -395,7 +407,29 @@ struct u8_slice string_as_u8_slice(const struct string *const s) {
   return (struct u8_slice) { .content = s->content, .len = s->len };
 }
 
-struct u8_slice slice_range(struct u8_slice s, ssize_t start, ssize_t end) {
+bool u8_slice_equals(struct u8_slice a, struct u8_slice b) {
+  if (a.len != b.len) return false;
+  if (a.content == b.content) return true;
+  return memcmp(a.content, b.content, a.len) == 0;
+}
+
+bool u8_slice_contains(struct u8_slice s, uint8_t ch) {
+  for (size_t i = 0; i < s.len; i++) if (s.content[i] == ch) return true;
+  return false;
+}
+
+struct u8_slice u8_slice_strip(struct u8_slice s, struct u8_slice chars) {
+  size_t start, end;
+  for (start = 0; start < s.len && u8_slice_contains(chars, s.content[start]);) start++;
+  for (end = s.len - 1; end > start && u8_slice_contains(chars, s.content[end]);) end--;
+  return u8_slice_range(s, start, end + 1);
+}
+
+struct u8_slice u8_slice_strip_whitespace(struct u8_slice s) {
+  return u8_slice_strip(s, u8_slice_from_cstr(" \v\f\t\r\n"));
+}
+
+struct u8_slice u8_slice_range(struct u8_slice s, ssize_t start, ssize_t end) {
   if (end < 0) {
     end = s.len + end + 1;
   }
@@ -405,7 +439,6 @@ struct u8_slice slice_range(struct u8_slice s, ssize_t start, ssize_t end) {
   size_t length = end - start;
   assert(start >= 0);
   assert(end <= (ssize_t)s.len);
-  assert(length > 0);
   assert(start + length <= s.len);
   struct u8_slice slice = { .content = s.content + start, .len = length };
   return slice;
@@ -418,7 +451,7 @@ struct u8_slice slice_range(struct u8_slice s, ssize_t start, ssize_t end) {
  * */
 struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end) {
   struct u8_slice s2 = string_as_u8_slice(s);
-  return slice_range(s2, start, end);
+  return u8_slice_range(s2, start, end);
 }
 
 void vec_swap(struct vec *v, size_t i, size_t j) {
@@ -450,8 +483,9 @@ void string_push_format_slow(struct string *s, char *fmt, ...) {
   size_t required = vsnprintf(nullptr, 0, fmt, ap);
   va_end(ap);
 
-  string_ensure_capacity(s, s->len + required);
+  string_ensure_capacity(s, s->len + required + 1);
   va_start(ap, fmt);
   s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
   va_end(ap);
 }
+

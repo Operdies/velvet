@@ -174,9 +174,6 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   if (!target) return;
 
   struct mouse_options m = target->emulator.options.mouse;
-  velvet_log("Target: %s", target->title);
-  velvet_log("Target tracking: %d", m.tracking);
-  velvet_log("Target mode: %d", m.mode);
   if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
   if (m.mode != MOUSE_MODE_SGR) return;
 
@@ -328,7 +325,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
         // If this sequence has both a mapping and a continuation,
         // defer the mapping until the intended sequence can be determined.
         if (keymap_has_mapping(k))
-          io_schedule(&v->event_loop, v->input.options.key_ambiguous_chain_resolve_timeout, input_unwind_callback, v);
+          io_schedule(&v->event_loop, v->input.options.key_chain_timeout_ms, input_unwind_callback, v);
       } else {
         // this choord is terminal so on_key must be set
         assert(k->on_key);
@@ -366,7 +363,11 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
     struct velvet_key_event k = key_event_from_byte(ch);
+    /* ALT and META are different, but in VT environments they have historically
+     * been collated. Since there is no way to distinguish them,
+     * treat ESC as both. */
     k.modifiers |= MODIFIER_ALT;
+    k.modifiers |= MODIFIER_META;
     dispatch_key_event(v, k);
   }
 }
@@ -458,22 +459,131 @@ void velvet_input_destroy(struct velvet_input *in) {
   string_destroy(&in->command_buffer);
 }
 
-struct velvet_keymap *
-velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, on_key *callback, void *data) {
+static void velvet_keymap_remove_internal(struct velvet_keymap *k) {
+  if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
+
+  // If the kd mapping has continuations, we need to keep the node in the tree.
+  // However, we clear the associated action and data
+  if (k->first_child) {
+    k->on_key = nullptr;
+    k->data = nullptr;
+    return;
+  }
+
+  struct velvet_keymap *p = k->parent;
+  if (p->first_child == k) {
+    p->first_child = k->next_sibling;
+  } else {
+    struct velvet_keymap *pre = p->first_child;
+    for (; pre->next_sibling != k; pre = pre->next_sibling);
+    assert(pre);
+    pre->next_sibling = k->next_sibling;
+  }
+  if (!p->on_key && !p->first_child) {
+    velvet_keymap_remove_internal(p);
+  }
+}
+
+#define MAX_KEYS 10
+int keymap_parse_keys(struct u8_slice keys, struct velvet_key_event *events, int n_events) {
+  int count = 0;
+  struct velvet_key_event k = {0};
+  for (size_t i = 0; i < keys.len; i++) {
+    uint8_t ch = keys.content[i];
+
+    // '<' indicates a modifiers + key combo such as <C-S-M-w>, or a named key, such as
+    // <space>, <prefix>, <leader>, or other user defined named key
+    // If no known macro or modifiers are detected, we treat the sequence as a raw key sequence
+    // (vim-like behavior). So <asd will match the literal sequence {<, a, s, d}
+    if (ch == '<') {
+      uint32_t mods = 0;
+      size_t j = i + 1;
+      for (; j < keys.len && keys.content[j] != '>'; j++);
+      struct u8_slice inner = {.content = keys.content + i + 1, .len = j - i - 1};
+      if (inner.len > 0 && j < keys.len && keys.content[j] == '>') {
+        char *modifiers[] = {
+            "S-",    // shift     -- 1 << 0
+            "M-",    // alt       -- 1 << 1
+            "C-",    // ctrl      -- 1 << 2
+            "D-",    // super     -- 1 << 3
+            "H-",    // hyper     -- 1 << 4
+            "T-",    // meta      -- 1 << 5
+            "Caps-", // caps lock -- 1 << 6
+            "Num-",  // num lock  -- 1 << 7
+        };
+        struct u8_slice modifier_slices[LENGTH(modifiers)] = {0};
+        for (int i = 0; i < LENGTH(modifiers); i++) modifier_slices[i] = u8_slice_from_cstr(modifiers[i]);
+
+        bool changed = true;
+        while (changed) {
+          changed = false;
+          for (int i = 0; i < LENGTH(modifiers); i++) {
+            struct u8_slice mod = modifier_slices[i];
+            if (u8_slice_starts_with(inner, mod)) {
+              inner = u8_slice_range(inner, mod.len, -1);
+              mods |= (1 << i);
+              changed = true;
+            }
+          }
+        }
+        if (inner.len == 1) {
+          k.symbol.numeric = inner.content[0];
+          k.modifiers = mods;
+          if (count < n_events) {
+            events[count] = k;
+          }
+          count++;
+          k = (struct velvet_key_event){0};
+          i = j;
+          continue;
+        }
+      }
+    }
+
+    k.symbol.numeric = ch;
+    if (count < n_events) {
+      events[count] = k;
+    }
+    count++;
+    k = (struct velvet_key_event){0};
+  }
+  if (count >= n_events) {
+    velvet_log("Mapping '%.*s' rejected; the maximum allowed sequence is %d (was %d)", (int)keys.len, keys.content, MAX_KEYS, count);
+    return -1;
+  }
+  return count;
+}
+
+void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence) {
+  int n_keys;
+  struct velvet_key_event keys[MAX_KEYS] = {0};
+  n_keys = keymap_parse_keys(key_sequence, keys, MAX_KEYS);
+  if (n_keys < 1) return;
+  for (int i = 0; root && i < n_keys; i++) {
+    for (root = root->first_child; root && !key_event_equals(root->key, keys[i]); root = root->next_sibling);
+  }
+  if (root) velvet_keymap_remove_internal(root);
+}
+
+struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_slice key_sequence) {
+  int n_keys;
+  struct velvet_key_event keys[MAX_KEYS] = {0};
   struct velvet_keymap *prev, *chain, *parent;
   assert(root);
-  assert(keys.len);
-  assert(callback);
+  assert(key_sequence.len);
+
+  n_keys = keymap_parse_keys(key_sequence, keys, MAX_KEYS);
+  if (n_keys < 1) return nullptr;
 
   parent = root;
-  for (int i = 0; i < keys.len; i++) {
-    struct velvet_key_event k = keys.sequence[i];
+  for (int i = 0; i < n_keys; i++) {
+    struct velvet_key_event k = keys[i];
     prev = nullptr;
     for (chain = parent->first_child; chain && !key_event_equals(chain->key, k); prev = chain, chain = chain->next_sibling);
     if (!chain) {
       chain = velvet_calloc(1, sizeof(*parent));
       chain->parent = parent;
-      chain->data = root->data;
+      chain->data = nullptr;
       chain->key = k;
       chain->root = root;
       if (prev) {
@@ -485,8 +595,10 @@ velvet_keymap_add(struct velvet_keymap *root, struct velvet_key_sequence keys, o
     }
     parent = chain;
   }
-  parent->data = data;
-  parent->on_key = callback;
+  if (parent->on_key) {
+    struct velvet_key_event removed = { .removed = true };
+    parent->on_key(parent, removed);
+  }
   parent->root = root->root ? root->root : root;
   return parent;
 }

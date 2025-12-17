@@ -32,7 +32,7 @@ static bool io_dispatch_scheduled(struct io *io) {
 
   // Execute all schedules which were sequenced before the current io_dispatch call
   for (;;) {
-    vec_find(schedule, io->scheduled_actions, schedule->when <= now && schedule->sequence < io->sequence);
+    vec_find(schedule, io->scheduled_actions, schedule->when <= now && schedule->sequence <= io->sequence);
     if (!schedule) break;
     // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
     // This is needed because we may otherwise corrupt the vec structure.
@@ -54,9 +54,12 @@ void io_dispatch(struct io *io) {
   constexpr int MAX_BYTES = mB(1); // 1mB
   constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
 
-  io->sequence++;
   // First execute any pending scheduled actions;
-  bool did_execute_schedules = io_dispatch_scheduled(io);
+  // If a schedule was executed, return. This is needed because a scheduled
+  // action can affect everything, including closing file descriptors,
+  // and generally affecting all kinds of behavior.
+  if (io_dispatch_scheduled(io)) return;
+  io->sequence++;
 
   static uint8_t readbuffer[BUFSIZE];
   vec_clear(&io->pollfds);
@@ -76,9 +79,6 @@ void io_dispatch(struct io *io) {
   int timeout = next_schedule ? next_schedule->when - now : -1;
   if (next_schedule && timeout < 0) timeout = 0;
 
-  // If a schedule was executed, that might affect the intended poll set.
-  // In that case, we should only read immediately available data and return.
-  if (did_execute_schedules) timeout = 0;
   int polled = poll(io->pollfds.content, io->pollfds.length, timeout);
   if (polled == -1) {
     // EAGAIN / EINTR are expected. In this case we should just return.

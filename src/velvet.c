@@ -5,13 +5,15 @@
 #include <sys/socket.h>
 #include <csi.h>
 #include <string.h>
+#include "velvet_cmd.h"
 
 static void velvet_session_render(struct u8_slice str, void *context) {
   struct velvet_session *s = context;
   string_push_slice(&s->pending_output, str);
 }
 
-static void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
+void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
+  int sock = s->socket;
   if (s->socket) {
     uint8_t detach = 'D';
     write(s->socket, &detach, 1);
@@ -22,17 +24,52 @@ static void velvet_detach_session(struct velvet *velvet, struct velvet_session *
   if (s->output)
     close(s->output);
   string_destroy(&s->pending_output);
+  string_destroy(&s->commands.buffer);
   *s = (struct velvet_session){0};
   size_t idx = vec_index(&velvet->sessions, s);
   vec_remove_at(&velvet->sessions, idx);
-  if (velvet->active_session >= idx) {
-    velvet->active_session = MAX((int)velvet->active_session - 1, 0);
+  if (sock && velvet->focused_socket == sock) {
+    struct velvet_session *fst = nullptr;
+    vec_find(fst, velvet->sessions, fst->socket && fst->input);
+    velvet->focused_socket = fst ? fst->socket : 0;
+  }
+}
+
+struct velvet_session *velvet_get_focused_session(struct velvet *v) {
+  if (v->sessions.length && v->focused_socket) {
+    struct velvet_session *f;
+    vec_find(f, v->sessions, f->socket == v->focused_socket);
+    return f;
+  }
+  return nullptr;
+}
+
+static void session_handle_command_buffer(struct velvet *v, struct velvet_session *src) {
+  int socket = src->socket;
+  struct velvet_cmd_iterator it = {.src = string_as_u8_slice(&src->commands.buffer)};
+
+  /* if the command is from an open socket, we can't know if the last line in the input
+   * is complete or partial. This final line will only be handled once it is either terminated,
+   * or the socket is closed.
+   */
+  bool require_newline = src->socket != 0;
+  it.require_terminator = require_newline;
+  while (velvet_cmd_iterator_next(&it)) {
+    velvet_cmd(v, socket, it.current);
+  }
+
+  /* the command buffer may contain a partial command.
+   * Drop all the commands we have actually handled and buffer the partial command for later.
+   */
+  if (it.cursor) {
+    string_drop_left(&src->commands.buffer, it.cursor);
+    src->commands.lines += it.line_count;
   }
 }
 
 static void session_socket_callback(struct io_source *src) {
   struct velvet *velvet = src->data;
-  char data_buf[256] = {0};
+  char data_buf[2048] = {0};
   int fds[2] = {0};
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
   struct msghdr msg = {
@@ -56,11 +93,14 @@ static void session_socket_callback(struct io_source *src) {
     // The socket was closed, so let's ensure we don't write to it or close it again
     close(sesh->socket);
     sesh->socket = 0;
+    session_handle_command_buffer(velvet, sesh);
     velvet_detach_session(velvet, sesh);
     return;
   }
 
   assert(sesh);
+
+  bool needs_render = false;
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
   if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
     memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
@@ -70,30 +110,17 @@ static void session_socket_callback(struct io_source *src) {
     set_nonblocking(sesh->output);
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
+    velvet->focused_socket = sesh->socket;
+    needs_render = true;
+  }
+
+  struct u8_slice cmd = {.content = (uint8_t *)data_buf, .len = n};
+  string_push_slice(&sesh->commands.buffer, cmd);
+  session_handle_command_buffer(velvet, sesh);
+
+  if (needs_render) {
     velvet_scene_render(&velvet->scene, velvet_session_render, true, sesh);
-    velvet->active_session = vec_index(&velvet->sessions, sesh);
   }
-
-  if (n > 2 && data_buf[0] == 0x1b && data_buf[1] == '[') {
-    struct u8_slice client_size = {.content = (uint8_t *)data_buf + 2, .len = n - 2};
-    struct csi c = {0};
-    csi_parse(&c, client_size);
-
-    if (c.state == CSI_ACCEPT) {
-      if (c.final == 'W' && c.n_params == 4) {
-        sesh->ws = (struct platform_winsize){
-            .rows = c.params[0].primary,
-            .colums = c.params[1].primary,
-            .y_pixel = c.params[2].primary,
-            .x_pixel = c.params[3].primary,
-        };
-        return;
-      }
-    }
-  }
-
-  // io_write(src->fd, u8_slice_from_cstr("Unrecognized command\n"));
-  TODO("Handle client message: %.*s", (int)n, data_buf);
 }
 
 static void socket_accept(struct io_source *src) {
@@ -145,33 +172,33 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
 
 static void draw_no_mans_land(struct velvet *velvet) {
   static struct string scratch = {0};
-  struct velvet_session *active = vec_nth(&velvet->sessions, velvet->active_session);
-  struct velvet_session *sesh;
+  struct velvet_session *focused = velvet_get_focused_session(velvet);
+  struct velvet_session *s;
   char *pipe = "│";
   char *dash = "─";
   char *corner = "┘";
-  vec_foreach(sesh, velvet->sessions) {
-    if (sesh->ws.colums && sesh->ws.lines) {
+  vec_foreach(s, velvet->sessions) {
+    if (s->ws.colums && s->ws.lines) {
       string_clear(&scratch);
       string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
       // 1. Draw the empty space to the right of this client
-      if (sesh->ws.colums > active->ws.colums) {
-        for (int i = 0; i < active->ws.lines; i++) {
-          string_push_csi(&scratch, 0, INT_SLICE(i + 1, active->ws.colums + 1), "H");
-          int draw_count = sesh->ws.colums - active->ws.colums;
+      if (s->ws.colums > focused->ws.colums) {
+        for (int i = 0; i < focused->ws.lines; i++) {
+          string_push_csi(&scratch, 0, INT_SLICE(i + 1, focused->ws.colums + 1), "H");
+          int draw_count = s->ws.colums - focused->ws.colums;
           string_push_slice(&scratch, u8_slice_from_cstr(pipe));
           if (--draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr("·"));
           if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
         }
       }
       // 2. Draw the empty space below this client
-      for (int i = active->ws.lines; i < sesh->ws.lines; i++) {
-        int draw_count = sesh->ws.colums;
+      for (int i = focused->ws.lines; i < s->ws.lines; i++) {
+        int draw_count = s->ws.colums;
         string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
-        if (i == active->ws.lines) {
+        if (i == focused->ws.lines) {
           string_push_slice(&scratch, u8_slice_from_cstr(dash));
           draw_count--;
-          int n_dashes = MIN(draw_count, active->ws.colums - 1);
+          int n_dashes = MIN(draw_count, focused->ws.colums - 1);
           string_push_csi(&scratch, 0, INT_SLICE(n_dashes), "b");
           draw_count -= n_dashes;
           if (draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr(corner));
@@ -181,7 +208,7 @@ static void draw_no_mans_land(struct velvet *velvet) {
         if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
       }
       string_push_csi(&scratch, 0, INT_SLICE(0), "m");
-      string_push_slice(&sesh->pending_output, string_as_u8_slice(&scratch));
+      string_push_slice(&s->pending_output, string_as_u8_slice(&scratch));
     }
   }
 }
@@ -225,7 +252,7 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
   if (strncmp((char*)str.content, "\x1b[I", 3) == 0) {
     struct velvet_session *sesh;
     vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) m->active_session = vec_index(&m->sessions, sesh);
+    if (sesh) m->focused_socket = sesh->socket;
   }
 
   if (str.len == 2 && strncmp((char*)str.content, "\x1b]", 2) == 0) {
@@ -266,6 +293,22 @@ static void vte_read_callback(struct io_source *src, struct u8_slice str) {
   pty_host_process_output(vte, str);
 }
 
+static void velvet_default_config(struct velvet *v) {
+  char *config = "map <C-x>c 'spawn zsh'\n"
+                 "map <C-x>d detach\n"
+                 "map <C-x>f 'spawn zsh ; detach'\n"
+                 "map -r <C-x>j focus-next\n"
+                 "map -r <C-x>k focus-previous\n"
+                 "map -r <C-x>j swap-next\n"
+                 "map -r <C-x>k swap-previous\n";
+
+  struct u8_slice cfg = u8_slice_from_cstr(config);
+  struct velvet_cmd_iterator it = {.src = cfg};
+  while (velvet_cmd_iterator_next(&it)) {
+    velvet_cmd(v, 0, it.current);
+  }
+}
+
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct platform_winsize ws = {.colums = 80, .lines = 24, .x_pixel = 800, .y_pixel = 600};
@@ -282,22 +325,21 @@ void velvet_loop(struct velvet *velvet) {
   }
 
   velvet_scene_resize(&velvet->scene, ws);
-  velvet_scene_spawn_process(&velvet->scene, "zsh");
+  velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("zsh"));
   velvet_scene_arrange(&velvet->scene);
+
+  velvet_default_config(velvet);
 
   bool did_resize = false;
   for (;;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
-    if (velvet->sessions.length > 0) {
-      assert(velvet->active_session < velvet->sessions.length);
-      if (velvet->active_session < velvet->sessions.length) {
-        struct velvet_session *active = vec_nth(&velvet->sessions, velvet->active_session);
-        if (active->ws.colums && active->ws.lines && (active->ws.colums != velvet->scene.ws.colums || active->ws.lines != velvet->scene.ws.lines)) {
-          velvet_scene_resize(&velvet->scene, active->ws);
-          did_resize = true;
-          // Defer redraw until the clients have actually updated. Redrawing right away leads to flickering
-          // redraw_needed = true;
-        }
+    struct velvet_session *focus = velvet_get_focused_session(velvet);
+    if (focus) {
+      if (focus->ws.colums && focus->ws.lines && (focus->ws.colums != velvet->scene.ws.colums || focus->ws.lines != velvet->scene.ws.lines)) {
+        velvet_scene_resize(&velvet->scene, focus->ws);
+        did_resize = true;
+        // Defer redraw until the clients have actually updated. Redrawing right away leads to flickering
+        // redraw_needed = true;
       }
 
       // arrange
