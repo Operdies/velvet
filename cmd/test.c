@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+/* the SYM macro is not useful. It exists because of a treesitter parser bug which messes up indentation otherwise */
+#define SYM(X) #X
 #define CSI "\x1b["
 #define CUU(x) CSI #x "A"
 #define CUD(x) CSI #x "B"
@@ -387,7 +389,7 @@ static void test_input_output(void) {
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
   test_screen_input_output("Off by one 2",
-                         CUF(99) CUD(99) "Y" SGR(0) CUU(99) CUB(99) "X" SGR(0),
+                         CUF(99) CUD(99) SYM(Y) SGR(0) CUU(99) CUB(99) "X" SGR(0),
                          (screen_5x8){
                              {'X', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' },
@@ -505,17 +507,6 @@ static void test_input_output(void) {
                              {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
                              {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
                          });
-
-  // test_screen_input_output("Test Clear DECSTBM",
-  //                        "ABCDEFGHIJKLMNOP"
-  //                        "ABCDEFGHIJKLMNOP" CUP(5,1) CSI "J",
-  //                        (screen_5x8){
-  //                            {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A' },
-  //                            {'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B' },
-  //                            {'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C' },
-  //                            {'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D' },
-  //                            {'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E' },
-  //                        });
 }
 
 static void test_reflow(void) {
