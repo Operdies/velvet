@@ -1,6 +1,6 @@
 #compdef vv
 
-_vv_bind_actions=(
+_vv_map_actions=(
   split-horizontal
   split-vertical
   new-tab
@@ -30,6 +30,16 @@ _vv_set_focus_follows_mouse() {
   _values 'boolean' true false
 }
 
+_vv_map() {
+  _arguments \
+    '1:keys:( )' \
+    '2:action:->map_action'
+}
+
+_vv_set() {
+  _arguments \
+    "1:options:()"
+}
 
 _arguments -s -S \
   \
@@ -38,18 +48,28 @@ _arguments -s -S \
   '-S[Specify the socket to use]:socket path:->socket' \
   '--socket[Specify the socket to use]:socket path:->socket' \
   \
-  '(--set    --attach     --bind   --source)--foreground[Start a server as a foreground process]' \
-  '(--set    --foreground --bind   --source)--attach[Attach to the server at the socket]' \
-  '(--set    --foreground --attach --source)--bind[Bind keys to an action (requires --socket or $VELVET)]:keys:( )::action:->bind_action' \
-  '(--set    --foreground --attach --bind  )--source[Read mappings from a file or stdin (requires --socket or $VELVET)]:source file:->source' \
-  '(--bind   --foreground --attach --source)--set[Set an option to the specified value (requires --socket or $VELVET)]:option:->set_key::value:->set_value'
+  '1:command:(map set attach foreground source)' \
+  '*::arg:->args'
 
 case $state in
+  command)
+    _values 'command' map
+    ;;
+  args)
+    case $words[1] in
+      map) 
+        _vv_map 
+        ;;
+      set) 
+        _vv_set 
+        ;;
+    esac
+    ;;
   socket)
     _path_files -f -s,w
     ;;
-  bind_action)
-    _describe 'bind action' _vv_bind_actions
+  map_action)
+    _describe 'map action' _vv_map_actions
     ;;
   set_key)
     local -a desc

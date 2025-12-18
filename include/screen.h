@@ -73,9 +73,6 @@ struct screen_cell {
 struct screen_line {
   // If set, this indicates a newline was inserted at `eol`. This is relevant when the screen is resized.
   bool has_newline;
-  // Track whether or not the line starting with this cell is dirty (should be
-  // re-rendered)
-  bool dirty;
   // Track how many characters are significant on this line. This is needed for
   // reflowing when resizing screens.
   int eol;

@@ -19,7 +19,6 @@ void screen_clear_line(struct screen *g, int n) {
   for (int i = 0; i < g->w; i++) {
     row->cells[i] = clear;
   }
-  row->dirty = true;
   row->has_newline = false;
   row->eol = 0;
 }
@@ -49,8 +48,6 @@ static void screen_swap_rows(struct screen *g, int r1, int r2) {
     struct screen_line tmp = g->lines[r1];
     g->lines[r1] = g->lines[r2];
     g->lines[r2] = tmp;
-    g->lines[r1].dirty = true;
-    g->lines[r2].dirty = true;
   }
 }
 
@@ -126,7 +123,6 @@ void screen_save_cursor(struct screen *g) {
 }
 
 static inline void row_set_cell(struct screen_line *row, int col, struct screen_cell new_cell) {
-  row->dirty = true;
   row->cells[col] = new_cell;
   row->eol = MAX(row->eol, col + 1);
 }
@@ -153,10 +149,6 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     }
   }
 
-  /* TODO:
-   * Rethink conditional redraws. This solution still redraws if a cell is reassigned A -> B -> A
-   * Maybe a double buffering strategy is more appropriate.
-   */
   row_set_cell(row, cur->column++, c);
 
   if (cur->column > screen_right(g)) {
@@ -176,7 +168,7 @@ void screen_initialize(struct screen *g, int w, int h) {
 
   struct screen_cell empty_cell = { .style = style_default, .symbol = utf8_blank };
   for (int i = 0; i < h; i++) {
-    g->lines[i] = (struct screen_line){.cells = &g->_cells[i * w], .dirty = true};
+    g->lines[i] = (struct screen_line){.cells = &g->_cells[i * w]};
     for (int j = 0; j < w; j++) {
       g->_cells[i * w + j] = empty_cell;
     }
@@ -317,7 +309,6 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
       dst_cursor = dst->cursor;
     }
   }
-  for (int i = 0; i < dst->h; i++) dst->lines[i].dirty = true;
 
   if (dst_cursor.column != -1 && dst_cursor.line != -1) {
     dst->cursor = dst_cursor;

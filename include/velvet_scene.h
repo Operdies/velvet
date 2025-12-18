@@ -5,11 +5,30 @@
 #include "pty_host.h"
 #include "platform.h"
 
-struct host_features {
-  bool synchronized_rendering;
+struct velvet_scene_renderer_line {
+  int cell_offset;
+  struct {
+    /* [start..end) is an inclusive range specifying what needs to be rendered */
+    int start, end;
+  } damage;
 };
 
-struct velvet_scene_layout {
+struct velvet_scene_renderer {
+  int w, h;
+  struct screen_cell *cells;
+  struct velvet_scene_renderer_line *lines;
+  struct string draw_buffer;
+  struct screen_cell_style current_style;
+  struct cursor_options current_cursor;
+};
+
+struct velvet_scene_style {
+  struct {
+    struct screen_cell_style title, outline;
+  } inactive;
+  struct {
+    struct screen_cell_style title, outline;
+  } active;
 };
 
 struct velvet_scene {
@@ -17,9 +36,8 @@ struct velvet_scene {
   struct platform_winsize ws;
   size_t focus;
   uint8_t prefix;
-  struct string draw_buffer;
-  struct host_features host_features;
-  struct screen render;
+  struct velvet_scene_renderer renderer;
+  struct velvet_scene_style style;
 };
 
 static const struct velvet_scene velvet_scene_default = {.prefix = ('x' & 037), .hosts = vec(struct pty_host)};

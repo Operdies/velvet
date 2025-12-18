@@ -76,7 +76,6 @@ void pty_host_update_cwd(struct pty_host *p) {
 }
 
 static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
-  // TODO: Is this possible?
   assert(b->n < SGR_PARAMS_MAX);
   b->params[b->n] = (struct sgr_param){.primary = n};
   b->n++;
@@ -89,7 +88,7 @@ static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
   p->n_sub++;
 }
 
-static void apply_color(struct color col, bool fg, struct sgr_buffer *sgr) {
+static void sgr_buffer_push_color(struct color col, bool fg, struct sgr_buffer *sgr) {
   if (col.cmd == COLOR_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
   } else if (col.cmd == COLOR_TABLE) {
@@ -159,10 +158,10 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
   }
 
   if (!color_equals(fg, style->fg)) {
-    apply_color(style->fg, true, &sgr);
+    sgr_buffer_push_color(style->fg, true, &sgr);
   }
   if (!color_equals(bg, style->bg)) {
-    apply_color(style->bg, false, &sgr);
+    sgr_buffer_push_color(style->bg, false, &sgr);
   }
 
   attr = style->attr;
@@ -202,8 +201,6 @@ void pty_host_draw(struct pty_host *pty_host, bool redraw, struct string *outbuf
   struct screen *g = vte_get_current_screen(&pty_host->emulator);
   for (int row = 0; row < g->h; row++) {
     struct screen_line *screen_row = &g->lines[row];
-    if (!redraw && !screen_row->dirty) continue;
-    if (!redraw) screen_row->dirty = false;
     int columnno = 1 + pty_host->rect.client.x;
     int lineno = 1 + pty_host->rect.client.y + row;
     string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
@@ -279,7 +276,6 @@ void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
   // top line
   {
     int i = left + 1;
-    // TODO: Technically process can contain utf8 which could be problematic with strlen
     int n = utf8_strlen(p->title);
     i += n + 3;
     string_push(b, dash);

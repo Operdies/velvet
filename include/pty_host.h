@@ -16,10 +16,15 @@ struct pty_host {
   int pty, pid;
   int border_width;
   bool border_dirty;
-  struct {
-    struct bounds window;
-    struct bounds client;
-  } rect;
+  union {
+    struct {
+      int x, y, columns, lines;
+    };
+    struct {
+      struct bounds window;
+      struct bounds client;
+    } rect;
+  };
   struct vte emulator;
 };
 

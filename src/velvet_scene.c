@@ -145,13 +145,19 @@ void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline)
   pty_host_start(host);
 }
 
+static void velvet_scene_renderer_destroy(struct velvet_scene_renderer *renderer) {
+  string_destroy(&renderer->draw_buffer);
+  free(renderer->cells);
+  free(renderer->lines);
+}
+
 void velvet_scene_destroy(struct velvet_scene *m) {
   struct pty_host *h;
   vec_foreach(h, m->hosts) {
     pty_host_destroy(h);
   }
   vec_destroy(&m->hosts);
-  string_destroy(&m->draw_buffer);
+  velvet_scene_renderer_destroy(&m->renderer);
 }
 
 static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
@@ -207,60 +213,256 @@ void velvet_scene_resize(struct velvet_scene *m, struct platform_winsize w) {
   }
 }
 
+static void velvet_scene_renderer_set_cell(struct velvet_scene_renderer *r, int line, int column, struct screen_cell value) {
+  struct velvet_scene_renderer_line *l = &r->lines[line];
+  int index = l->cell_offset + column;
+  if (!cell_equals(r->cells[index], value)) {
+    r->cells[index] = value;
+    l->damage.start = MIN(l->damage.start, column);
+    l->damage.end = MAX(l->damage.end, column);
+  }
+}
+
+static void velvet_scene_renderer_set_cursor(struct velvet_scene_renderer *r, struct cursor_options cursor) {
+  if (r->current_cursor.style != cursor.style) {
+    string_push_csi(&r->draw_buffer, 0, INT_SLICE(cursor.style), " q");
+  }
+  if (r->current_cursor.visible != cursor.visible) {
+    string_push_slice(&r->draw_buffer, cursor.visible ? vt_cursor_visible_on : vt_cursor_visible_off);
+  }
+  r->current_cursor = cursor;
+}
+
+static void velvet_scene_renderer_set_style(struct velvet_scene_renderer *r, struct screen_cell_style style);
+
+static void velvet_scene_renderer_draw_to_buffer(struct velvet_scene_renderer *r) {
+  for (int line = 0; line < r->h; line++) {
+    struct velvet_scene_renderer_line *l = &r->lines[line];
+    if (l->damage.start >= r->w) continue;
+    string_push_csi(&r->draw_buffer, 0, INT_SLICE(line + 1, l->damage.start + 1), "H");
+
+    for (int col = l->damage.start; col <= l->damage.end; col++) {
+      struct screen_cell *c = &r->cells[l->cell_offset + col];
+      velvet_scene_renderer_set_style(r, c->style);
+
+      uint8_t utf8_len = 0;
+      struct utf8 sym = c->symbol;
+      for (; utf8_len < 4 && sym.utf8[utf8_len]; utf8_len++);
+      struct u8_slice text = { .content = sym.utf8, .len = utf8_len };
+      string_push_slice(&r->draw_buffer, text);
+
+      int repeats = 1;
+      int remaining = l->damage.end - col - 1;
+      for (; repeats < remaining && cell_equals(c[0], c[repeats]); repeats++);
+      repeats--;
+      if (repeats > 0) {
+        if (utf8_len * repeats < 4) {
+          for (int i = 0; i < repeats; i++)
+            string_push_slice(&r->draw_buffer, text);
+        } else {
+          string_push_csi(&r->draw_buffer, 0, INT_SLICE(repeats), "b");
+        }
+        col += repeats;
+      }
+    }
+  }
+}
+
+// TODO: Invalidate renderer when any pty client is resized or moved */
 void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, bool full_draw, void *context) {
   if (m->hosts.length == 0) return;
-  static enum cursor_style current_cursor_style = 0;
-  struct string *draw_buffer = &m->draw_buffer;
   struct pty_host *focused = vec_nth(&m->hosts, m->focus);
 
-  if (m->host_features.synchronized_rendering) {
-    // if the host supports synchronized rendering, make use of it to ensure
-    // the full frame is written before it is rendered.
-    string_push_slice(draw_buffer, vt_synchronized_rendering_on);
-  } else {
-    // if the host does not advertise support, hide the cursor while drawing instead
-    string_push_slice(draw_buffer, vt_cursor_visible_off);
-  }
-  size_t pre = draw_buffer->len;
-  for (size_t i = 0; i < m->hosts.length; i++) {
-    struct pty_host *h = vec_nth(&m->hosts, i);
-    pty_host_update_cwd(h);
-    pty_host_draw(h, full_draw, draw_buffer);
-    if (full_draw) {
-      bool stored = h->border_dirty;
-      h->border_dirty = true;
-      pty_host_draw_border(h, draw_buffer, i == m->focus);
-      h->border_dirty = stored;
-    } else {
-      pty_host_draw_border(h, draw_buffer, i == m->focus);
+  struct pty_host *h;
+  struct velvet_scene_renderer *r = &m->renderer;
+
+  if (!r->cells || r->h != m->ws.lines || r->w != m->ws.colums) {
+    free(r->cells);
+    free(r->lines);
+    r->h = m->ws.lines; r->w = m->ws.colums;
+    r->cells = velvet_calloc(sizeof(*r->cells), r->h * r->w);
+    r->lines = velvet_calloc(sizeof(*r->lines), r->h);
+    for (int i = 0; i < r->h; i++) {
+      r->lines[i].cell_offset = r->w * i;
     }
   }
 
-  // set the cursor style according to the focused client.
-  if (focused->emulator.options.cursor.style != current_cursor_style) {
-    current_cursor_style = focused->emulator.options.cursor.style;
-    string_push_csi(draw_buffer, 0, INT_SLICE(current_cursor_style), " q");
+  /* Mark each line as undamaged. */
+  for (int i = 0; i < r->h; i++) {
+    struct velvet_scene_renderer_line *l = &r->lines[i];
+    l->damage.end = full_draw ? (r->w - 1) : -1;
+    l->damage.start = full_draw ? 0 : r->w;
   }
 
-  if (draw_buffer->len == pre) {
-    string_clear(draw_buffer);
-    return;
+  vec_foreach(h, m->hosts) {
+    struct screen *active = vte_get_current_screen(&h->emulator);
+    for (int line = 0; line < active->h; line++) {
+      struct screen_line *screen_line = &active->lines[line];
+      int render_line = h->rect.client.y + line;
+      if (render_line >= r->h) break;
+      for (int column = 0; column < active->w; column++) {
+        int render_column = h->rect.client.x + column;
+        if (render_column >= r->w) break;
+        velvet_scene_renderer_set_cell(r, render_line, render_column, screen_line->cells[column]);
+      }
+    }
   }
 
+  /* TODO: Rewrite this to use _set_cell() since these writes are not persisted */
+  vec_where(h, m->hosts, h->border_dirty && h->border_width) {
+    pty_host_update_cwd(h);
+    pty_host_draw_border(h, &r->draw_buffer, (ssize_t)m->focus == vec_index(&m->hosts, h));
+  }
+
+  velvet_scene_renderer_draw_to_buffer(r);
+
+  /* There is no need to move the cursor if nothing was written. If a single
+   * character was written, */
+  if (r->draw_buffer.len > 0)
   {
     // move cursor to focused host
     struct screen *g = vte_get_current_screen(&focused->emulator);
     struct cursor *c = &g->cursor;
     int lineno = 1 + focused->rect.client.y + c->line;
     int columnno = 1 + focused->rect.client.x + c->column;
-    string_push_csi(draw_buffer, 0, INT_SLICE(lineno, columnno), "H");
+    string_push_csi(&r->draw_buffer, 0, INT_SLICE(lineno, columnno), "H");
+    velvet_scene_renderer_set_cursor(r, focused->emulator.options.cursor);
   }
 
-  // Set cursor visibility according to the focused client.
-  if (focused->emulator.options.cursor.visible) string_push_slice(draw_buffer, vt_cursor_visible_on);
-  if (m->host_features.synchronized_rendering) string_push_slice(draw_buffer, vt_synchronized_rendering_off);
 
-  struct u8_slice s = {.content = m->draw_buffer.content, .len = m->draw_buffer.len};
-  render_func(s, context);
-  string_clear(&m->draw_buffer);
+  struct u8_slice render = string_as_u8_slice(&r->draw_buffer);
+  render_func(render, context);
+  string_clear(&r->draw_buffer);
 }
+
+struct sgr_param {
+  uint8_t primary;
+  uint8_t sub[4];
+  int n_sub;
+};
+
+// Terminal emulators may not have infinite sapce set aside for SGR sequences,
+// so let's split our sequences at this threshold. Such sequences should be unusual anyway.
+#define MAX_LOAD 10
+#define SGR_PARAMS_MAX 12
+struct sgr_buffer {
+  struct sgr_param params[SGR_PARAMS_MAX];
+  uint8_t n;
+};
+
+static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
+  assert(b->n < SGR_PARAMS_MAX);
+  b->params[b->n] = (struct sgr_param){.primary = n};
+  b->n++;
+}
+static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
+  assert(b->n);
+  int k = b->n - 1;
+  struct sgr_param *p = &b->params[k];
+  p->sub[p->n_sub] = sub;
+  p->n_sub++;
+}
+
+static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
+  if (col.cmd == COLOR_RESET) {
+    sgr_buffer_push(sgr, fg ? 39 : 49);
+  } else if (col.cmd == COLOR_TABLE) {
+    if (col.table <= 7) {
+      sgr_buffer_push(sgr, (fg ? 30 : 40) + col.table);
+    } else if (col.table <= 15) {
+      sgr_buffer_push(sgr, (fg ? 90 : 100) + col.table - 8);
+    } else {
+      sgr_buffer_push(sgr, fg ? 38 : 48);
+      sgr_buffer_add_param(sgr, 5);
+      sgr_buffer_add_param(sgr, col.table);
+    }
+  } else if (col.cmd == COLOR_RGB) {
+    sgr_buffer_push(sgr, fg ? 38 : 48);
+    sgr_buffer_add_param(sgr, 2);
+    sgr_buffer_add_param(sgr, col.r);
+    sgr_buffer_add_param(sgr, col.g);
+    sgr_buffer_add_param(sgr, col.b);
+  }
+}
+
+static void velvet_scene_renderer_set_style(struct velvet_scene_renderer *r, struct screen_cell_style style) {
+  struct color fg = r->current_style.fg;
+  struct color bg = r->current_style.bg;
+  uint32_t attr = r->current_style.attr;
+  struct sgr_buffer sgr = {.n = 0 };
+
+  // 1. Handle attributes
+  if (attr != style.attr) {
+    if (style.attr == 0) {
+      // Unfortunately this also resets colors, so we need to set those again
+      // Technically we could track what styles are active here and disable those specifically,
+      // but it is much simpler to just eat the color reset.
+      fg = bg = color_default;
+      sgr_buffer_push(&sgr, 0);
+    } else {
+      uint32_t features[] = {
+          [0] = ATTR_NONE,
+          [1] = ATTR_BOLD,
+          [2] = ATTR_FAINT,
+          [3] = ATTR_ITALIC,
+          [4] = ATTR_UNDERLINE,
+          [5] = ATTR_BLINK_SLOW,
+          [6] = ATTR_BLINK_RAPID,
+          [7] = ATTR_REVERSE,
+          [8] = ATTR_CONCEAL,
+          [9] = ATTR_CROSSED_OUT,
+      };
+      for (size_t i = 1; i < LENGTH(features); i++) {
+        uint32_t current = features[i] & attr;
+        uint32_t next = features[i] & style.attr;
+        if (current && !next) {
+          if (i == 1) {
+            // annoying special case for bold
+            sgr_buffer_push(&sgr, 22);
+          } else {
+            sgr_buffer_push(&sgr, 20 + i);
+          }
+        } else if (!current && next) {
+          sgr_buffer_push(&sgr, i);
+        }
+      }
+    }
+  }
+
+  if (!color_equals(fg, style.fg)) {
+    sgr_color_apply(&sgr, style.fg, true);
+  }
+  if (!color_equals(bg, style.bg)) {
+    sgr_color_apply(&sgr, style.bg, false);
+  }
+
+  // struct screen_cell_style new_style = { .attr = attr, .bg = bg, .fg = fg };
+  r->current_style = style;
+
+  if (sgr.n) {
+    struct string *w = &r->draw_buffer;
+    string_push(w, u8"\x1b[");
+    int current_load = 0;
+    for (int i = 0; i < sgr.n; i++) {
+      struct sgr_param *p = &sgr.params[i];
+      int this_load = 1 + p->n_sub;
+      if (current_load + this_load > MAX_LOAD) {
+        w->content[w->len - 1] = 'm';
+        string_push(w, u8"\x1b[");
+        current_load = 0;
+      }
+      current_load += this_load;
+      string_push_int(w, p->primary);
+      for (int j = 0; j < p->n_sub; j++) {
+        // I would prefer to properly use ':' to split subparameters here, but it appears that 
+        // some terminal emulators do not properly implement this. For compatibility, 
+        // use ';' as a separator instead.
+        string_push_char(w, ';');
+        string_push_int(w, p->sub[j]);
+      }
+      string_push_char(w, ';');
+    }
+    w->content[w->len - 1] = 'm';
+  }
+}
+

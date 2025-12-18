@@ -35,17 +35,23 @@ struct io_schedule {
   uint64_t sequence;
 };
 
+#define mB(x) ((x) << 20)
+#define kB(x) ((x) << 10)
+
 struct io {
   struct vec /* io_source */ sources;
   struct vec /* pollfd */ pollfds;
   struct vec /* scheduled callbacks */ scheduled_actions;
   uint64_t sequence; /* sequence number used to identify when a schedule was added */
+  uint8_t buffer[kB(2)];
+  int max_iterations;
 };
 
 static const struct io io_default = {
     .sources = vec(struct io_source),
     .pollfds = vec(struct pollfd),
     .scheduled_actions = vec(struct io_schedule),
+    .max_iterations = mB(1) / sizeof(io_default.buffer),
 };
 
 /* Dispatch all pending io. */
