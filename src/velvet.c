@@ -106,8 +106,9 @@ static void session_socket_callback(struct io_source *src) {
     memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
     sesh->input = fds[0];
     sesh->output = fds[1];
-    set_nonblocking(sesh->input);
+
     set_nonblocking(sesh->output);
+
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
     velvet->focused_socket = sesh->socket;
@@ -217,7 +218,8 @@ static ssize_t session_write_pending(struct velvet_session *sesh) {
   assert(sesh->input);
   assert(sesh->output);
   if (sesh->pending_output.len) {
-    ssize_t written = io_write(sesh->output, string_as_u8_slice(&sesh->pending_output));
+    struct u8_slice pending = string_as_u8_slice(&sesh->pending_output);
+    ssize_t written = io_write(sesh->output, pending);
     velvet_log("Write %zu / %zu\n", written, sesh->pending_output.len);
     if (written > 0) string_drop_left(&sesh->pending_output, (size_t)written);
     return written;
@@ -227,16 +229,11 @@ static ssize_t session_write_pending(struct velvet_session *sesh) {
 
 static void velvet_render(struct u8_slice str, void *context) {
   struct velvet *a = context;
-  struct velvet_session *sesh;
+  struct velvet_session *s;
   if (str.len == 0) return;
-  vec_foreach(sesh, a->sessions) {
-    // output is not set if the session has connected to the socket, but has not yet sent its in/out streams.
-    // If the client actually connects, we will send a full render, so there is no need to buffer the write.
-    if (sesh->output) {
-      string_push_slice(&sesh->pending_output, str);
-      session_write_pending(sesh);
-    }
-  }
+
+  vec_where(s, a->sessions, s->output) string_push_slice(&s->pending_output, str);
+  vec_where(s, a->sessions, s->output) session_write_pending(s);
 }
 
 static void session_input_callback(struct io_source *src, struct u8_slice str) {
@@ -296,7 +293,7 @@ static void vte_read_callback(struct io_source *src, struct u8_slice str) {
 static void velvet_default_config(struct velvet *v) {
   char *config = "map <C-x>c 'spawn zsh'\n"
                  "map <C-x>d detach\n"
-                 "map <C-x>f 'spawn zsh ; detach'\n"
+                 "map <C-x>b spawn bash\n"
                  "map -r <C-x>j focus-next\n"
                  "map -r <C-x>k focus-previous\n"
                  "map -r <C-x>j swap-next\n"

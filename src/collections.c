@@ -126,33 +126,6 @@ void string_destroy(struct string *str) {
   str->content = nullptr;
 }
 
-// TODO: Avoid blocking here.
-// If the full content cannot be flushed (EAGAIN), try again later
-// This requires moving the content of the *str object instead of clearing it.
-// Special care should be taken to ensure a *str does not grow indefinitely.
-bool string_flush(struct string *str, int fd, int *total_written) {
-  size_t written = 0;
-  while (written < str->len) {
-    ssize_t w = write(fd, str->content + written, str->len - written);
-    if (w == -1) {
-      if (errno == EAGAIN || errno == EINTR) {
-        usleep(1);
-        continue;
-      }
-      velvet_die("write:");
-    }
-    if (w == 0) {
-      if (total_written) *total_written = written;
-      string_clear(str);
-      return true;
-    }
-    written += w;
-  }
-  if (total_written) *total_written = written;
-  string_clear(str);
-  return true;
-}
-
 void vec_ensure_capacity(struct vec *v, size_t c) {
   assert(v->element_size && "Element size cannot be 0");
   if (v->capacity >= c) return;

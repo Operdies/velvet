@@ -2,24 +2,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "attach to new session",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
-      "args": [  ],
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "make all",
-      "console": "externalTerminal",
-      "initCommands": [
-        "command source ${workspaceFolder}/lldb-config"
-      ]
-    },
-    {
       "name": "attach",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "--attach" ],
+      "args": [ "attach" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "console": "externalTerminal",
@@ -28,14 +15,14 @@
       ]
     },
     {
-      "name": "headless",
+      "name": "foreground",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
       "args": [ "--foreground" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
-      "console": "integratedTerminal",
+      "console": "externalTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/lldb-config"
       ]

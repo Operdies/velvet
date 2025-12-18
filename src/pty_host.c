@@ -34,7 +34,7 @@ void pty_host_destroy(struct pty_host *pty_host) {
   pty_host->cmdline = nullptr;
 }
 
-struct sgr_param {
+struct velvet_scene_render_sgr_param {
   uint8_t primary;
   uint8_t sub[4];
   int n_sub;
@@ -44,8 +44,8 @@ struct sgr_param {
 // so let's split our sequences at this threshold. Such sequences should be unusual anyway.
 #define MAX_LOAD 10
 #define SGR_PARAMS_MAX 12
-struct sgr_buffer {
-  struct sgr_param params[SGR_PARAMS_MAX];
+struct velvet_scene_render_sgr_buffer {
+  struct velvet_scene_render_sgr_param params[SGR_PARAMS_MAX];
   uint8_t n;
 };
 
@@ -75,21 +75,20 @@ void pty_host_update_cwd(struct pty_host *p) {
   }
 }
 
-static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
-  // TODO: Is this possible?
+static inline void sgr_buffer_push(struct velvet_scene_render_sgr_buffer *b, int n) {
   assert(b->n < SGR_PARAMS_MAX);
-  b->params[b->n] = (struct sgr_param){.primary = n};
+  b->params[b->n] = (struct velvet_scene_render_sgr_param){.primary = n};
   b->n++;
 }
-static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
+static inline void sgr_buffer_add_param(struct velvet_scene_render_sgr_buffer *b, int sub) {
   assert(b->n);
   int k = b->n - 1;
-  struct sgr_param *p = &b->params[k];
+  struct velvet_scene_render_sgr_param *p = &b->params[k];
   p->sub[p->n_sub] = sub;
   p->n_sub++;
 }
 
-static void apply_color(struct color col, bool fg, struct sgr_buffer *sgr) {
+static void apply_color(struct color col, bool fg, struct velvet_scene_render_sgr_buffer *sgr) {
   if (col.cmd == COLOR_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
   } else if (col.cmd == COLOR_TABLE) {
@@ -117,7 +116,7 @@ static void apply_color(struct color col, bool fg, struct sgr_buffer *sgr) {
 static inline void apply_style(const struct screen_cell_style *const style, struct string *outbuffer) {
   static struct color fg = color_default;
   static struct color bg = color_default;
-  struct sgr_buffer sgr = {.n = 0};
+  struct velvet_scene_render_sgr_buffer sgr = {.n = 0};
 
   static uint32_t attr;
   // 1. Handle attributes
@@ -173,7 +172,7 @@ static inline void apply_style(const struct screen_cell_style *const style, stru
     string_push(outbuffer, u8"\x1b[");
     int current_load = 0;
     for (int i = 0; i < sgr.n; i++) {
-      struct sgr_param *p = &sgr.params[i];
+      struct velvet_scene_render_sgr_param *p = &sgr.params[i];
       int this_load = 1 + p->n_sub;
       if (current_load + this_load > MAX_LOAD) {
         outbuffer->content[outbuffer->len - 1] = 'm';
@@ -202,8 +201,6 @@ void pty_host_draw(struct pty_host *pty_host, bool redraw, struct string *outbuf
   struct screen *g = vte_get_current_screen(&pty_host->emulator);
   for (int row = 0; row < g->h; row++) {
     struct screen_line *screen_row = &g->lines[row];
-    if (!redraw && !screen_row->dirty) continue;
-    if (!redraw) screen_row->dirty = false;
     int columnno = 1 + pty_host->rect.client.x;
     int lineno = 1 + pty_host->rect.client.y + row;
     string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
@@ -279,7 +276,6 @@ void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
   // top line
   {
     int i = left + 1;
-    // TODO: Technically process can contain utf8 which could be problematic with strlen
     int n = utf8_strlen(p->title);
     i += n + 3;
     string_push(b, dash);

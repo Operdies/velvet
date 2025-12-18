@@ -135,7 +135,6 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
         row->cells[col] = E;
       }
       row->eol = g->w;
-      row->dirty = true;
     }
   } break;
   default: {
@@ -447,7 +446,6 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 static void vte_init_alternate_screen(struct vte *vte) {
   struct screen *g = &vte->alternate;
   screen_resize_if_needed(g, vte->columns, vte->rows, false);
-  for (int i = 0; i < g->h; i++) g->lines[i].dirty = true;
 }
 
 void vte_enter_alternate_screen(struct vte *vte) {
@@ -468,7 +466,6 @@ void vte_enter_alternate_screen(struct vte *vte) {
 static void vte_init_primary_screen(struct vte *vte) {
   struct screen *g = &vte->primary;
   screen_resize_if_needed(g, vte->columns, vte->rows, true);
-  for (int i = 0; i < g->h; i++) g->lines[i].dirty = true;
 }
 
 void vte_enter_primary_screen(struct vte *vte) {
@@ -548,6 +545,4 @@ struct screen *vte_get_current_screen(struct vte *vte) {
 
 void vte_invalidate_screen(struct vte *vte) {
   struct screen *s = vte_get_current_screen(vte);
-  for (int i = 0; i < s->h; i++)
-    s->lines[i].dirty = true;
 }

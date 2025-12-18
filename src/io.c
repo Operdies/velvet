@@ -6,9 +6,6 @@
 #include <sys/wait.h>
 #include <time.h>
 
-#define mB(x) ((x) << 20)
-#define kB(x) ((x) << 10)
-
 static uint64_t get_ms_since_startup(void) {
   static struct timespec initial = {0};
   struct timespec now = {0};
@@ -45,15 +42,6 @@ static bool io_dispatch_scheduled(struct io *io) {
 }
 
 void io_dispatch(struct io *io) {
-  // These values are somewhat arbitrarily chosen;
-  // The key idea is that we want to continually read
-  // from the same file descriptor in high-throughput scenarios,
-  // but we don't want the same file descriptor to indefinitely block
-  // the main thread.
-  constexpr int BUFSIZE = kB(2);      // 2kB
-  constexpr int MAX_BYTES = mB(1); // 1mB
-  constexpr int MAX_IT = MAX_BYTES / BUFSIZE;
-
   // First execute any pending scheduled actions;
   // If a schedule was executed, return. This is needed because a scheduled
   // action can affect everything, including closing file descriptors,
@@ -61,7 +49,6 @@ void io_dispatch(struct io *io) {
   if (io_dispatch_scheduled(io)) return;
   io->sequence++;
 
-  static uint8_t readbuffer[BUFSIZE];
   vec_clear(&io->pollfds);
   struct io_source *src;
   vec_foreach(src, io->sources) {
@@ -93,13 +80,13 @@ void io_dispatch(struct io *io) {
     struct pollfd *pfd = vec_nth(&io->pollfds, i);
     struct io_source *src = vec_nth(&io->sources, i);
     assert((pfd->revents & POLLNVAL) == 0);
-    for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < MAX_IT; repeats++) {
+    for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < io->max_iterations; repeats++) {
       const int poll_ms = 0;
       // Read output
       if (pfd->revents & POLLIN && src->ready_callback) {
         src->ready_callback(src);
       } else if (pfd->revents & POLLIN) {
-        int n = read(pfd->fd, readbuffer, sizeof(readbuffer));
+        int n = read(pfd->fd, io->buffer, sizeof(io->buffer));
         if (n == -1) {
           // A signal was raised during the read. This is okay.
           // We can just break and read it later.
@@ -116,7 +103,7 @@ void io_dispatch(struct io *io) {
           }
           ERROR("read:");
         } else {
-          struct u8_slice s = {.len = (size_t)n, .content = readbuffer};
+          struct u8_slice s = {.len = (size_t)n, .content = io->buffer};
           src->read_callback(src, s);
         }
       }

@@ -58,7 +58,7 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
 
   bool isshift = ch >= 'A' && ch <= 'Z';
   if (!isshift) {
-  // TODO: local aware shift table
+  // TODO: locale aware shift table
     bool shift_table[] = {
         ['!'] = '1', ['@'] = 2, ['#'] = 3, ['$'] = 4, ['%'] = 5, ['^'] = 6, ['&'] = 7, ['*'] = 8, ['('] = 9, [')'] = 0};
     isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
@@ -182,7 +182,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
       ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
        sgr.event_type == mouse_click) ||
       (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none);
-  // TODO: scroll
+  // TODO: scroll wheel support
   if (do_send) {
     send_mouse_sgr(target, sgr);
   }
@@ -236,7 +236,6 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
     struct u8_slice s = string_range(&v->input.command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
     if (c.state == CSI_ACCEPT) {
-      velvet_log("Dispatch csi %.*s", s.len, s.content);
       assert(len == s.len);
 
 #define KEY(leading, intermediate, final)                                                                              \

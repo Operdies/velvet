@@ -305,10 +305,21 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   (void)context;
 }
 
-static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool send_fds) {
-  int fds[2] = {STDIN_FILENO, STDOUT_FILENO};
+static void vv_attach_set_size(int sockfd, struct platform_winsize ws) {
   char payload[256] = {0};
-  // int n_payload = snprintf(payload, 99, "\x1b[%d;%d;%d;%dW", ws.rows, ws.colums, ws.y_pixel, ws.x_pixel);
+  int n_payload = snprintf(payload,
+                           sizeof(payload) - 1,
+                           "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
+                           ws.lines,
+                           ws.colums,
+                           ws.y_pixel,
+                           ws.x_pixel);
+  write(sockfd, payload, n_payload);
+}
+
+static void vv_attach_file_descriptors(int sockfd, struct platform_winsize ws, int input_fd, int output_fd) {
+  int fds[2] = {input_fd, output_fd};
+  char payload[256] = {0};
   int n_payload = snprintf(payload,
                            sizeof(payload) - 1,
                            "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
@@ -320,15 +331,13 @@ static void vv_attach_send_message(int sockfd, struct platform_winsize ws, bool 
 
   struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = payload, .iov_len = n_payload}, .msg_iovlen = 1};
 
-  if (send_fds) {
-    msg.msg_control = cmsgbuf;
-    msg.msg_controllen = sizeof(cmsgbuf);
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_len = CMSG_LEN(sizeof(fds));
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    memcpy(CMSG_DATA(cmsg), fds, sizeof(fds));
-  }
+  msg.msg_control = cmsgbuf;
+  msg.msg_controllen = sizeof(cmsgbuf);
+  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_len = CMSG_LEN(sizeof(fds));
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  memcpy(CMSG_DATA(cmsg), fds, sizeof(fds));
 
   if (sendmsg(sockfd, &msg, 0) == -1) {
     close(sockfd);
@@ -472,37 +481,54 @@ static void vv_attach(struct velvet_args args) {
   int sockfd = vv_connect(args.socket);
 
   terminal_setup();
-  vv_attach_send_message(sockfd, ws, true);
 
-  // Block until EOF on the socket
-  char buf[32];
+  int output_pipe[2];
+  if (pipe(output_pipe) < 0) velvet_fatal("pipe:");
+  vv_attach_file_descriptors(sockfd, ws, STDIN_FILENO, output_pipe[1]);
 
+  struct pollfd pollset[] = {{.events = POLLIN, .fd = output_pipe[0]}, {.events = POLLIN, .fd = sockfd}};
+
+  constexpr int bufsize = 1 << 16;
+  uint8_t *buf = velvet_calloc(1, bufsize);
   bool detach = false;
   bool quit = false;
   for (; !detach && !quit;) {
-    struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
-    int n = poll(&pfd, 1, -1);
-    if (n == -1) {
+    int n_polled = poll(pollset, LENGTH(pollset), -1);
+    if (n_polled == -1) {
       if (errno == EINTR) {
-        struct platform_winsize ws2 = {0};
-        platform_get_winsize(&ws2);
-        if (ws2.colums && ws2.lines && (ws2.colums != ws.colums || ws2.lines != ws.lines)) {
-          ws = ws2;
-          vv_attach_send_message(sockfd, ws, false);
-        }
+        // assume SIGWINCH
+        struct platform_winsize ws;
+        platform_get_winsize(&ws);
+        vv_attach_set_size(sockfd, ws);
+      } else {
+        velvet_die("poll:");
       }
     }
-    if (n > 0) {
-      n = read(sockfd, buf, sizeof(buf));
+
+    if (pollset[0].revents & POLLIN) {
+      int n = read(output_pipe[0], buf, bufsize);
       if (n == 0) {
         quit = true;
-      } else if (n == 1 && buf[0] == 'D') {
-        detach = true;
+        break;
       }
+      struct u8_slice pending = {.content = buf, .len = n};
+      ssize_t written = io_write(STDOUT_FILENO, pending);
+      assert(written == n);
+    }
+
+    if (pollset[1].revents & POLLIN) {
+      int n = read(sockfd, buf, bufsize);
+      if (n == 0) {
+        quit = true;
+        break;
+      }
+      if (n > 0 && buf[0] == 'D') detach = true;
     }
   }
 
   close(sockfd);
+  close(output_pipe[0]);
+  close(output_pipe[1]);
   terminal_reset();
 
   if (detach) {
