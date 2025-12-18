@@ -183,22 +183,15 @@ static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
 
 void velvet_scene_remove_exited(struct velvet_scene *m) {
   int status;
-  pid_t pid;
+  pid_t pid = 0;
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    if (WIFEXITED(status)) {
-      struct pty_host *h;
-      vec_foreach(h, m->hosts) {
-        if (h->pid == pid) {
-          // zero the pid to indicate the process exited.
-          // otherwise the process will be reaped in pty_host_destroy
-          h->pid = 0;
-          pty_host_destroy(h);
-          velvet_scene_remove_host(m, vec_index(&m->hosts, h));
-          break;
-        }
-      }
-    }
+    struct pty_host *h;
+    vec_find(h, m->hosts, h->pid == pid);
+    if (!h) continue;
+    h->pid = 0;
+    pty_host_destroy(h);
+    velvet_scene_remove_host(m, vec_index(&m->hosts, h));
   }
 }
 
