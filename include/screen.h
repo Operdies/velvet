@@ -83,14 +83,18 @@ struct screen_line {
 struct cursor {
   int column, line;
   /* cell containing state relevant for new characters (fg, bg, attributes, ...)
-   * Used whenever a new character is emitted */
+   * Used whenever a new character is emitted
+   */
   struct screen_cell_style brush;
   /* flag set when a character is written at the final column.
    * Cleared after wrapping, or when the cursor is moved.
-   * */
+   */
   bool wrap_pending;
+  /* When this flag is set, absolute cursor motions are shifted by the
+   * configured scroll region.
+   */
+  bool origin;
 };
-
 
 struct screen {
   int w, h, _cells_size, _lines_size;

@@ -50,6 +50,7 @@ void vte_send_device_attributes(struct vte *vte) {
 }
 
 void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
+  struct screen *active = vte_get_current_screen(vte);
   switch (n) {
   case VTE_DSR_OPERATING_STATUS: {
     // no malfunction
@@ -61,7 +62,7 @@ void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
       x = s->cursor.column;
       y = s->cursor.line;
       // respect origin mode
-      if (vte->options.origin_mode)
+      if (active->cursor.origin)
         y -= s->scroll_top;
       if (y < 0) y = 0;
       string_push_csi(&vte->pending_input, 0, INT_SLICE(y + 1, x + 1), "R");

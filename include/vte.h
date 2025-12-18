@@ -153,8 +153,6 @@ struct emulator_options {
   /* when focus reporting is enabled, send ESC [ I and ESC [ O when the pty_host
    * receives / loses keyboard focus */
   bool focus_reporting;
-  /* DECOM */
-  bool origin_mode;
 
   struct modifier_options modifiers;
   struct charset_options charset;

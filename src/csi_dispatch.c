@@ -591,9 +591,10 @@ static enum DECRQM_QUERY_RESPONSE query_ansi_mode(struct vte *vte, int mode) {
 
 static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) {
   struct emulator_options o = vte->options;
+  struct screen *active = vte_get_current_screen(vte);
   switch (mode) {
   case 1: return resp(o.application_mode);
-  case 6: return resp(o.origin_mode);
+  case 6: return resp(active->cursor.origin);
   case 7: return resp(o.auto_wrap_mode);
   case 12: return resp(o.cursor.style & 1);
   case 25: return resp(o.cursor.visible);
@@ -615,6 +616,7 @@ static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) 
 #undef resp
 
 static bool DECSET(struct vte *vte, struct csi *csi) {
+  struct screen *active = vte_get_current_screen(vte);
   struct mouse_options *m = &vte->options.mouse;
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
@@ -624,7 +626,7 @@ static bool DECSET(struct vte *vte, struct csi *csi) {
     int mode = csi->params[i].primary;
     switch (mode) {
     case 1: vte->options.application_mode = on; break;
-    case 6: vte->options.origin_mode = on; break;
+    case 6: active->cursor.origin = on; break;
     case 7: vte->options.auto_wrap_mode = on; break;
     case 12: set_cursor_blinking(vte, on); break;
     case 25: vte->options.cursor.visible = on; break;
@@ -740,7 +742,8 @@ static bool DECSTBM(struct vte *vte, struct csi *csi) {
   struct screen *g = vte_get_current_screen(vte);
   screen_set_scroll_region(g, top, bottom);
   screen_set_cursor_column(g, 0);
-  screen_set_cursor_row(g, vte->options.origin_mode ? top : 0);
+  struct screen *active = vte_get_current_screen(vte);
+  screen_set_cursor_row(g, active->cursor.origin ? top : 0);
   return true;
 }
 

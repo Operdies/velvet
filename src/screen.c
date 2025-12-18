@@ -113,12 +113,12 @@ void screen_restore_cursor(struct screen *g) {
 
 void screen_save_cursor(struct screen *g) {
   // TODO: This is incorrect. This should save:
-  // * cursor position
-  // * graphic rendition
-  // * character set shift state
-  // * state of wrap flag
-  // * state of origin mode
-  // * state of selective erase
+  // - [x] cursor position
+  // - [x] graphic rendition
+  // - [ ] character set shift state
+  // - [x] state of wrap flag
+  // - [x] state of origin mode
+  // - [ ] state of selective erase
   g->saved_cursor = g->cursor;
 }
 
