@@ -20,6 +20,7 @@ struct velvet_scene_renderer {
   struct string draw_buffer;
   struct screen_cell_style current_style;
   struct cursor_options current_cursor;
+  struct cursor cursor;
 };
 
 struct velvet_scene_style {
