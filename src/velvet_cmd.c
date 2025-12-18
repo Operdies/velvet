@@ -74,6 +74,18 @@ bool velvet_cmd_iterator_next(struct velvet_cmd_iterator *it) {
   return true;
 }
 
+static bool velvet_cmd_arg_iterator_rest(struct velvet_cmd_arg_iterator *it) {
+  if (it->cursor >= it->src.len) return false;
+
+  size_t remaining = it->src.len - it->cursor;
+  struct u8_slice rest = { .content = it->src.content + it->cursor, .len = remaining };
+  rest = u8_slice_strip_whitespace(rest);
+  it->current = rest;
+  if (rest.len == 0) return false;
+  it->cursor = it->src.len;
+  return true;
+};
+
 bool velvet_cmd_arg_iterator_next(struct velvet_cmd_arg_iterator *it) {
   struct u8_slice t = it->src;
   size_t start = it->cursor;
@@ -199,17 +211,12 @@ static void velvet_cmd_map(struct velvet *v, struct velvet_cmd_arg_iterator *it)
     }
     keys = it->current;
   }
-  if (!velvet_cmd_arg_iterator_next(it)) {
+  if (!velvet_cmd_arg_iterator_rest(it)) {
     velvet_log("map: missing command");
     return;
   }
-  /* run to end to indicate to caller we used all arguments */
-  for (; velvet_cmd_arg_iterator_next(it););
 
-  const uint8_t *args_start = keys.content + keys.len + 1;
-  size_t args_len = (it->src.content + it->src.len) - args_start;
-  struct u8_slice raw_args = {.content = args_start, .len = args_len};
-  map_cmd = u8_slice_strip_whitespace(raw_args);
+  map_cmd = it->current;
   struct velvet_keymap *added = velvet_keymap_map(v->input.keymap->root, keys);
   if (added) {
     struct velvet_action_data *data = calloc(1, sizeof(*data));
@@ -226,6 +233,7 @@ static void velvet_cmd_map(struct velvet *v, struct velvet_cmd_arg_iterator *it)
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   struct velvet_session *sender = nullptr;
+  velvet_log("velvet_cmd: %.*s", (int)cmd.len, cmd.content);
   if (source_socket) vec_find(sender, v->sessions, sender->socket == source_socket);
 
   if (cmd.len > 2) {
@@ -252,8 +260,8 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       velvet_cmd_map(v, &it);
     } else if (u8_match(command, "spawn")) {
       struct u8_slice spawn;
-      if (velvet_cmd_arg_iterator_next(&it)) {
-        spawn = it.current;
+      if (velvet_cmd_arg_iterator_rest(&it)) {
+        spawn = u8_slice_strip_quotes(it.current);
         velvet_scene_spawn_process(&v->scene, spawn);
       } else {
         velvet_log("`spawn' command missing argument.");

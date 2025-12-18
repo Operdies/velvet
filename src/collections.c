@@ -398,6 +398,16 @@ struct u8_slice u8_slice_strip(struct u8_slice s, struct u8_slice chars) {
   return u8_slice_range(s, start, end + 1);
 }
 
+struct u8_slice u8_slice_strip_quotes(struct u8_slice s) {
+  char quotes[] = {'\'', '"'};
+  for (int i = 0; i < LENGTH(quotes); i++) {
+    if (s.len >= 2 && s.content[0] == quotes[i] && s.content[s.len - 1] == quotes[i]) {
+      return u8_slice_range(s, 1, -2);
+    }
+  }
+  return s;
+}
+
 struct u8_slice u8_slice_strip_whitespace(struct u8_slice s) {
   return u8_slice_strip(s, u8_slice_from_cstr(" \v\f\t\r\n"));
 }
