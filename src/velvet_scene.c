@@ -66,7 +66,6 @@ void velvet_scene_arrange(struct velvet_scene *m) {
 #endif
 
 static void pty_host_invalidate(struct pty_host *h) {
-  h->border_dirty = true;
   vte_invalidate_screen(&h->emulator);
 }
 
@@ -140,6 +139,7 @@ void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline)
   string_clear(&host->cmdline);
   string_push_slice(&host->cmdline, cmdline);
   host->emulator = vte_default;
+  host->border_width = 1;
   velvet_scene_arrange(m);
   pty_host_start(host);
 }
@@ -243,6 +243,7 @@ static void velvet_scene_renderer_position_cursor(struct velvet_scene_renderer *
 static void velvet_scene_renderer_draw_to_buffer(struct velvet_scene_renderer *r) {
   int ll, lc;
   ll = lc = -1;
+
   for (int line = 0; line < r->h; line++) {
     struct velvet_scene_renderer_line *l = &r->lines[line];
     if (l->damage.start >= r->w) continue;
@@ -251,6 +252,7 @@ static void velvet_scene_renderer_draw_to_buffer(struct velvet_scene_renderer *r
     for (int col = l->damage.start; col <= l->damage.end; col++) {
       struct screen_cell *c = &r->cells[l->cell_offset + col];
       velvet_scene_renderer_set_style(r, c->style);
+      if (c->symbol.numeric == 0) c->symbol.numeric = ' ';
 
       uint8_t utf8_len = 0;
       struct utf8 sym = c->symbol;
@@ -284,34 +286,13 @@ static void velvet_scene_renderer_draw_to_buffer(struct velvet_scene_renderer *r
   }
 }
 
-// TODO: Invalidate renderer when any pty client is resized or moved */
-void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, bool full_draw, void *context) {
-  if (m->hosts.length == 0) return;
-  struct pty_host *focused = vec_nth(&m->hosts, m->focus);
-
+static void velvet_scene_renderer_draw_cells(struct velvet_scene_renderer *r, struct velvet_scene *m) {
   struct pty_host *h;
-  struct velvet_scene_renderer *r = &m->renderer;
-
-  if (!r->cells || r->h != m->ws.lines || r->w != m->ws.colums) {
-    free(r->cells);
-    free(r->lines);
-    r->h = m->ws.lines; r->w = m->ws.colums;
-    r->cells = velvet_calloc(sizeof(*r->cells), r->h * r->w);
-    r->lines = velvet_calloc(sizeof(*r->lines), r->h);
-    for (int i = 0; i < r->h; i++) {
-      r->lines[i].cell_offset = r->w * i;
-    }
-  }
-
-  /* Mark each line as undamaged. */
-  for (int i = 0; i < r->h; i++) {
-    struct velvet_scene_renderer_line *l = &r->lines[i];
-    l->damage.end = full_draw ? (r->w - 1) : -1;
-    l->damage.start = full_draw ? 0 : r->w;
-  }
-
   vec_foreach(h, m->hosts) {
     struct screen *active = vte_get_current_screen(&h->emulator);
+    assert(active);
+    assert(active->w == h->rect.client.columns);
+    assert(active->h == h->rect.client.lines);
     for (int line = 0; line < active->h; line++) {
       struct screen_line *screen_line = &active->lines[line];
       int render_line = h->rect.client.y + line;
@@ -323,17 +304,140 @@ void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, boo
       }
     }
   }
+}
 
-  /* TODO: Rewrite this to use _set_cell() since these writes are not persisted */
-  vec_where(h, m->hosts, h->border_dirty && h->border_width) {
-    pty_host_update_cwd(h);
-    if (h->border_dirty) {
-      r->cursor.line = -1;
-      r->cursor.column = -1;
-    }
-    pty_host_draw_border(h, &r->draw_buffer, (ssize_t)m->focus == vec_index(&m->hosts, h));
+/* lol */
+static struct utf8 utf8_from_cstr(char *src) {
+  struct utf8 result = {0};
+  char *dst = (char*)result.utf8;
+  for (; *src; *dst++ = *src++);
+  return result;
+}
+
+static void velvet_scene_renderer_draw_borders(struct velvet_scene_renderer *r, struct velvet_scene *m) {
+  struct utf8 topleft = utf8_from_cstr("┌");
+  struct utf8 topright = utf8_from_cstr("┐");
+  struct utf8 bottomleft = utf8_from_cstr("└");
+  struct utf8 bottomright = utf8_from_cstr("┘");
+  struct utf8 pipe = utf8_from_cstr("│");
+  struct utf8 dash = utf8_from_cstr("─");
+  struct utf8 top_connector = utf8_from_cstr("┬");
+  struct utf8 left_connector = utf8_from_cstr("├");
+  struct utf8 right_connector = utf8_from_cstr("┤");
+  struct utf8 cross_connector = utf8_from_cstr("┼");
+  struct utf8 elipsis = utf8_from_cstr("…");
+
+  struct pty_host *host;
+  vec_foreach(host, m->hosts) {
+    pty_host_update_cwd(host);
   }
 
+  /* draw title bars for each window */
+  vec_where(host, m->hosts, host->border_width) {
+    bool is_focused = (int)m->focus == vec_index(&m->hosts, host);
+    int i, x, y, h, w;
+    i = 0;
+    w = host->rect.window.columns; h = host->rect.window.lines; x = host->rect.window.x; y = host->rect.window.y;
+
+    struct screen_cell_style chrome_style = is_focused ? m->style.active.outline : m->style.inactive.outline;
+    struct screen_cell_style title_style = is_focused ? m->style.active.title : m->style.inactive.title;
+    struct screen_cell chrome = {.style = chrome_style, .symbol = dash};
+
+    struct screen_cell space = { .symbol.numeric = ' ', .style = title_style };
+    struct screen_cell truncation_symbol = { .symbol = elipsis, .style = title_style };
+
+    /* dashes before the window title */
+    for (; i < 2; i++) velvet_scene_renderer_set_cell(r, y, x + i, chrome);
+    velvet_scene_renderer_set_cell(r, y, x + i++, space);
+
+    /* draw each codepoint of the title */
+    struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
+    for (; i < w - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
+      struct screen_cell chr = {.style = title_style};
+      if (it.invalid) {
+        chr.symbol = utf8_fffd;
+      } else {
+        memcpy(chr.symbol.utf8, it.current.content, it.current.len);
+      }
+      velvet_scene_renderer_set_cell(r, y, x + i, chr);
+    }
+
+    /* add a space or truncation symbol */
+    if (u8_slice_codepoint_iterator_next(&it)) {
+      /* title was truncated */
+      velvet_scene_renderer_set_cell(r, y, x + i++, truncation_symbol);
+    } else {
+      velvet_scene_renderer_set_cell(r, y, x + i++, space);
+    }
+
+    /* draw the rest of the line */
+    for (; i < w; i++) velvet_scene_renderer_set_cell(r, y, x + i, chrome);
+  }
+
+  /* now we need to detect the edges between windows */
+}
+
+void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context) {
+  if (m->hosts.length == 0) return;
+  struct pty_host *focused = vec_nth(&m->hosts, m->focus);
+  struct velvet_scene_renderer *r = &m->renderer;
+  string_clear(&r->draw_buffer);
+
+  /* we don't know where the cursor could be, so ensure it is correctly moved when needed */
+  r->cursor.line = -1;
+  r->cursor.column = -1;
+
+  /* Mark each line as fully damaged. */
+  for (int i = 0; i < r->h; i++) {
+    struct velvet_scene_renderer_line *l = &r->lines[i];
+    l->damage.end = r->w - 1;
+    l->damage.start = 0;
+  }
+
+  string_push_cstr(&r->draw_buffer, "\x1b[2J");
+  velvet_scene_renderer_draw_to_buffer(r);
+
+  /* move cursor to focused host */
+  struct screen *screen = vte_get_current_screen(&focused->emulator);
+  struct cursor *cursor = &screen->cursor;
+
+  velvet_scene_renderer_position_cursor(
+      r, cursor->line + focused->rect.client.y, cursor->column + focused->rect.client.x);
+  velvet_scene_renderer_set_cursor_style(r, focused->emulator.options.cursor);
+
+  struct u8_slice render = string_as_u8_slice(r->draw_buffer);
+  render_func(render, context);
+}
+
+// TODO: Invalidate renderer when any pty client is resized or moved */
+void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
+  if (m->hosts.length == 0) return;
+  struct pty_host *focused = vec_nth(&m->hosts, m->focus);
+
+  struct velvet_scene_renderer *r = &m->renderer;
+  string_clear(&r->draw_buffer);
+
+  if (!r->cells || r->h != m->ws.lines || r->w != m->ws.colums) {
+    free(r->cells);
+    free(r->lines);
+    r->h = m->ws.lines; r->w = m->ws.colums;
+    r->cells = velvet_calloc(sizeof(*r->cells), r->h * r->w);
+    r->lines = velvet_calloc(sizeof(*r->lines), r->h);
+    for (int i = 0; i < r->h; i++) {
+      r->lines[i].cell_offset = r->w * i;
+    }
+    string_push_cstr(&r->draw_buffer, "\x1b[2J");
+  }
+
+  /* Mark each line as undamaged. */
+  for (int i = 0; i < r->h; i++) {
+    struct velvet_scene_renderer_line *l = &r->lines[i];
+    l->damage.end = -1;
+    l->damage.start = r->w;
+  }
+
+  velvet_scene_renderer_draw_cells(r, m);
+  velvet_scene_renderer_draw_borders(r, m);
   velvet_scene_renderer_draw_to_buffer(r);
 
   /* move cursor to focused host */
@@ -345,7 +449,6 @@ void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, boo
 
   struct u8_slice render = string_as_u8_slice(r->draw_buffer);
   render_func(render, context);
-  string_clear(&r->draw_buffer);
 }
 
 struct sgr_param {

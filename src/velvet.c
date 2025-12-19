@@ -120,7 +120,7 @@ static void session_socket_callback(struct io_source *src) {
   session_handle_command_buffer(velvet, session);
 
   if (needs_render) {
-    velvet_scene_render(&velvet->scene, velvet_session_render, true, sesh);
+    velvet_scene_render_full(&velvet->scene, velvet_session_render, session);
   }
 }
 

@@ -49,7 +49,34 @@ struct velvet_scene {
   struct velvet_scene_style style;
 };
 
-static const struct velvet_scene velvet_scene_default = {.prefix = ('x' & 037), .hosts = vec(struct pty_host)};
+#define HEX_TO_NUM(x) (((x) >= '0' && (x) <= '9') ? (x) - '0' : (x) - 'a' + 10)
+#define RGB(color)                                                                                                     \
+  {.cmd = COLOR_RGB,                                                                                                   \
+   .r = (HEX_TO_NUM(color[1]) << 4) | (HEX_TO_NUM(color[2])),                                                          \
+   .g = (HEX_TO_NUM(color[3]) << 4) | (HEX_TO_NUM(color[4])),                                                          \
+   .b = (HEX_TO_NUM(color[5]) << 4) | (HEX_TO_NUM(color[5]))}
+
+static const struct velvet_scene velvet_scene_default = {
+    .hosts = vec(struct pty_host),
+    .style = {.active =
+                  {
+                      .outline = {.attr = 0, .fg = RGB("#f38ba8")},
+                      .title = {.attr = ATTR_BOLD, .fg = RGB("#f38ba8")},
+                  },
+              .inactive =
+                  {
+                      .outline = {.attr = 0, .fg = RGB("#b4befe")},
+                      .title = {.attr = 0, .fg = RGB("#b4befe")},
+                  }},
+    .renderer =
+        {
+            .options = {.no_repeat_wide_chars = false},
+            .cursor = {.column = -1, .line = -1},
+        },
+};
+
+#undef RGB
+#undef HEX_TO_NUM
 
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
 void velvet_scene_remove_exited(struct velvet_scene *m);
@@ -59,6 +86,7 @@ void velvet_scene_destroy(struct velvet_scene *m);
 void velvet_scene_set_focus(struct velvet_scene *m, size_t focus);
 
 typedef void (render_func_t)(struct u8_slice str, void *context);
-void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, bool full_redraw, void *context);
+void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context);
+void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context);
 
 #endif // VELVET_SCENE_H
