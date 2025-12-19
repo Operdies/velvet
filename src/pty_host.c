@@ -36,23 +36,8 @@ void pty_host_destroy(struct pty_host *pty_host) {
   pty_host->pty = pty_host->pid = 0;
 }
 
-struct sgr_param {
-  uint8_t primary;
-  uint8_t sub[4];
-  int n_sub;
-};
-
-// Terminal emulators may not have infinite sapce set aside for SGR sequences,
-// so let's split our sequences at this threshold. Such sequences should be unusual anyway.
-#define MAX_LOAD 10
-#define SGR_PARAMS_MAX 12
-struct sgr_buffer {
-  struct sgr_param params[SGR_PARAMS_MAX];
-  uint8_t n;
-};
-
 void pty_host_update_cwd(struct pty_host *p) {
-  if (platform.get_cwd_from_pty) {
+  if (p->pty && platform.get_cwd_from_pty) {
     char buf[256] = {0};
     if (platform.get_cwd_from_pty(p->pty, buf, sizeof(buf))) {
       string_clear(&p->cwd);
@@ -65,241 +50,18 @@ void pty_host_update_cwd(struct pty_host *p) {
       char *home = getenv("HOME");
       if (home) string_replace_inplace_slow(&p->title, home, "~");
     }
-  } else if (!p->title.len) {
+  } else if (!p->title.len && p->cmdline.len) {
     // fallback to using the process as title
     string_clear(&p->title);
     string_push_string(&p->title, p->cmdline);
   }
 }
 
-static inline void sgr_buffer_push(struct sgr_buffer *b, int n) {
-  assert(b->n < SGR_PARAMS_MAX);
-  b->params[b->n] = (struct sgr_param){.primary = n};
-  b->n++;
-}
-static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
-  assert(b->n);
-  int k = b->n - 1;
-  struct sgr_param *p = &b->params[k];
-  p->sub[p->n_sub] = sub;
-  p->n_sub++;
-}
-
-static void sgr_buffer_push_color(struct color col, bool fg, struct sgr_buffer *sgr) {
-  if (col.cmd == COLOR_RESET) {
-    sgr_buffer_push(sgr, fg ? 39 : 49);
-  } else if (col.cmd == COLOR_TABLE) {
-    if (col.table <= 7) {
-      sgr_buffer_push(sgr, (fg ? 30 : 40) + col.table);
-    } else if (col.table <= 15) {
-      sgr_buffer_push(sgr, (fg ? 90 : 100) + col.table - 8);
-    } else {
-      sgr_buffer_push(sgr, fg ? 38 : 48);
-      sgr_buffer_add_param(sgr, 5);
-      sgr_buffer_add_param(sgr, col.table);
-    }
-  } else if (col.cmd == COLOR_RGB) {
-    sgr_buffer_push(sgr, fg ? 38 : 48);
-    sgr_buffer_add_param(sgr, 2);
-    sgr_buffer_add_param(sgr, col.r);
-    sgr_buffer_add_param(sgr, col.g);
-    sgr_buffer_add_param(sgr, col.b);
-  }
-}
-
-/* Write the specified style attributes to the outbuffer, but only if they are different from what is currently stored.
- * Note that the use of statics means that this function is not thread safe or re-entrant. It should only be used for
- * streaming content to the screen. */
-static inline void apply_style(const struct screen_cell_style *const style, struct string *outbuffer) {
-  static struct color fg = color_default;
-  static struct color bg = color_default;
-  struct sgr_buffer sgr = {.n = 0};
-
-  static uint32_t attr;
-  // 1. Handle attributes
-  if (attr != style->attr) {
-    if (style->attr == 0) {
-      // Unfortunately this also resets colors, so we need to set those again
-      // Technically we could track what styles are active here and disable those specifically,
-      // but it is much simpler to just eat the color reset.
-      fg = bg = color_default;
-      sgr_buffer_push(&sgr, 0);
-    } else {
-      uint32_t features[] = {
-          [0] = ATTR_NONE,
-          [1] = ATTR_BOLD,
-          [2] = ATTR_FAINT,
-          [3] = ATTR_ITALIC,
-          [4] = ATTR_UNDERLINE,
-          [5] = ATTR_BLINK_SLOW,
-          [6] = ATTR_BLINK_RAPID,
-          [7] = ATTR_REVERSE,
-          [8] = ATTR_CONCEAL,
-          [9] = ATTR_CROSSED_OUT,
-      };
-      for (size_t i = 1; i < LENGTH(features); i++) {
-        uint32_t is_on = features[i] & attr;
-        uint32_t should_be_on = features[i] & style->attr;
-        if (is_on && !should_be_on) {
-          if (i == 1) {
-            // annoying special case for bold
-            sgr_buffer_push(&sgr, 22);
-          } else {
-            sgr_buffer_push(&sgr, 20 + i);
-          }
-        } else if (!is_on && should_be_on) {
-          sgr_buffer_push(&sgr, i);
-        }
-      }
-    }
-  }
-
-  if (!color_equals(fg, style->fg)) {
-    sgr_buffer_push_color(style->fg, true, &sgr);
-  }
-  if (!color_equals(bg, style->bg)) {
-    sgr_buffer_push_color(style->bg, false, &sgr);
-  }
-
-  attr = style->attr;
-  fg = style->fg;
-  bg = style->bg;
-
-  if (sgr.n) {
-    string_push(outbuffer, u8"\x1b[");
-    int current_load = 0;
-    for (int i = 0; i < sgr.n; i++) {
-      struct sgr_param *p = &sgr.params[i];
-      int this_load = 1 + p->n_sub;
-      if (current_load + this_load > MAX_LOAD) {
-        outbuffer->content[outbuffer->len - 1] = 'm';
-        string_push(outbuffer, u8"\x1b[");
-        current_load = 0;
-      }
-      current_load += this_load;
-      string_push_int(outbuffer, p->primary);
-      for (int j = 0; j < p->n_sub; j++) {
-        // I would prefer to properly use ':' to split subparameters here, but it appears that 
-        // some terminal emulators do not properly implement this. For compatibility, 
-        // use ';' as a separator instead.
-        string_push_char(outbuffer, ';');
-        string_push_int(outbuffer, p->sub[j]);
-      }
-      string_push_char(outbuffer, ';');
-    }
-    outbuffer->content[outbuffer->len - 1] = 'm';
-  }
-}
-
-void pty_host_draw(struct pty_host *pty_host, bool redraw, struct string *outbuffer) {
-  // Ensure the screen content is in sync with the pty_host just-in-time
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
-
-  struct screen *g = vte_get_current_screen(&pty_host->emulator);
-  for (int row = 0; row < g->h; row++) {
-    struct screen_line *screen_row = &g->lines[row];
-    int columnno = 1 + pty_host->rect.client.x;
-    int lineno = 1 + pty_host->rect.client.y + row;
-    string_push_csi(outbuffer, 0, INT_SLICE(lineno, columnno), "H");
-
-    for (int col = 0; col < g->w; col++) {
-      struct screen_cell *c = &screen_row->cells[col];
-      apply_style(&c->style, outbuffer);
-      uint8_t utf8_len = 0;
-      struct utf8 sym = c->symbol;
-      for (; utf8_len < 4 && sym.utf8[utf8_len]; utf8_len++);
-      struct u8_slice text = { .content = sym.utf8, .len = utf8_len };
-      string_push_slice(outbuffer, text);
-
-      int repeats = 1;
-      int remaining = g->w - col;
-      for (; repeats < remaining && cell_equals(c[0], c[repeats]); repeats++);
-      repeats--;
-      if (repeats > 0) {
-        if (utf8_len * repeats < 4) {
-          for (int i = 0; i < repeats; i++)
-            string_push_slice(outbuffer, text);
-        } else {
-          string_push_csi(outbuffer, 0, INT_SLICE(repeats), "b");
-        }
-        col += repeats;
-      }
-    }
-  }
-}
-
-// TODO: This sucks
-// Alternative implementation: Walk pty_host list and termine where all the borders are
-// Then draw the borders, and style the borders touching the focused pty_host
-void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
-  if (p->border_width == 0 || !p->border_dirty) return;
-  static const struct screen_cell_style focused_style = {.attr = ATTR_BOLD, .fg = {.cmd = COLOR_TABLE, .table = 9}};
-  static const struct screen_cell_style normal_style = {.attr = 0, .fg = {.cmd = COLOR_TABLE, .table = 4}};
-  p->border_dirty = false;
-  bool topmost = p->rect.window.y == 0;
-  bool leftmost = p->rect.window.x == 0;
-
-  uint8_t *topleft_corner = NULL;
-  uint8_t *topright_corner = u8"─";
-  if (topmost && leftmost) {
-    topleft_corner = u8"─";
-  } else if (topmost) {
-    topleft_corner = u8"┬";
-  } else if (leftmost) {
-    topleft_corner = u8"─";
-    topright_corner = u8"┤";
-  } else {
-    topleft_corner = u8"├";
-  }
-  if (!leftmost && !topmost) {
-    topleft_corner = u8"│";
-  }
-
-  uint8_t *bottomleftcorner = u8"\n\b│";
-  uint8_t *pipe = u8"\n\b│";
-  uint8_t *dash = u8"─";
-  uint8_t *beforetitle = u8" "; //"┤";
-  uint8_t *aftertitle = u8" ";  //"├";
-  int left = p->rect.window.x + 1;
-  int top = p->rect.window.y + 1;
-  int bottom = p->rect.window.lines + top;
-  int right = p->rect.window.columns + left;
-
-  apply_style(focused ? &focused_style : &normal_style, b);
-
-  // top left corner
-  string_push_csi(b, 0, INT_SLICE(top, left), "H");
-  string_push(b, topleft_corner);
-  // top line
-  {
-    int i = left + 1;
-    int n = string_strlen(p->title);
-    i += n + 3;
-    string_push(b, dash);
-    string_push(b, beforetitle);
-    string_push_string(b, p->title);
-    string_push(b, aftertitle);
-    for (; i < right - 1; i++) string_push(b, dash);
-    string_push(b, topright_corner);
-  }
-  if (!leftmost) {
-    string_push_csi(b, 0, INT_SLICE(top, left + 1), "H");
-    for (int row = top + 1; row < bottom - 1; row++) {
-      string_push(b, pipe);
-    }
-    string_push(b, bottomleftcorner);
-  }
-  apply_style(&style_default, b);
-}
 
 void pty_host_process_output(struct pty_host *pty_host, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
   vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
   vte_process(&pty_host->emulator, str);
-}
-
-static inline bool bounds_equal(const struct bounds *const a, const struct bounds *const b) {
-  return a->x == b->x && a->y == b->y && a->columns == b->columns && a->lines == b->lines;
 }
 
 void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
@@ -323,15 +85,12 @@ void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
     struct winsize ws = {.ws_col = inner.columns, .ws_row = inner.lines, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
     if (pty_host->pty) ioctl(pty_host->pty, TIOCSWINSZ, &ws);
     if (pty_host->pid) kill(pty_host->pid, SIGWINCH);
-    if (pty_host->border_width) pty_host->border_dirty = true;
   }
 
-  // If anything changed about the window position / dimensions, do a full redraw
-  if (!bounds_equal(&outer, &pty_host->rect.window) || !bounds_equal(&inner, &pty_host->rect.client)) {
-    pty_host->border_dirty = true;
-  }
   pty_host->rect.window = outer;
   pty_host->rect.client = inner;
+
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
 }
 
 void pty_host_start(struct pty_host *pty_host) {
