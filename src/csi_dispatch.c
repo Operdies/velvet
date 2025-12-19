@@ -121,6 +121,11 @@ static bool DECSTBM(struct vte *vte, struct csi *csi);
 static bool DECCARA(struct vte *vte, struct csi *csi);
 /* CSI Pl ; Pr s Set left and right margins (DECSLRM), VT420 and up.  This is available only when DECLRMM is enabled. */
 static bool DECSLRM(struct vte *vte, struct csi *csi);
+/* CSI > Pp ; Pv m
+   CSI > Pp m 
+   Set/reset key modifier options
+   */
+static bool XTMODKEYS(struct vte *vte, struct csi *csi);
 /* CSI Ps ; Ps ; Ps t Window manipulation (XTWINOPS) */
 static bool XTWINOPS(struct vte *vte, struct csi *csi);
 /* CSI Ps SP t Set warning-bell volume (DECSWBV), VT520. */
@@ -133,6 +138,12 @@ static bool SCORC(struct vte *vte, struct csi *csi);
 static bool DECRQUPSS(struct vte *vte, struct csi *csi);
 /* CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
 static bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi);
+/* CSI > Ps u */
+static bool KITTY_KEYBOARD_PUSH(struct vte *vte, struct csi *csi);
+/* CSI = Ps u */
+static bool KITTY_KEYBOARD_MODIFY(struct vte *vte, struct csi *csi);
+/* CSI < Ps u */
+static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi);
 /* CSI Ps + T https://sw.kovidgoyal.net/kitty/unscroll/ */
 static bool KITTY_UNSCROLL(struct vte *vte, struct csi *csi);
 /* CSI Ps SP u Set margin-bell volume (DECSMBV), VT520. */
@@ -751,6 +762,11 @@ bool DECCARA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DEC
 
 bool DECSLRM(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECSLRM"); return false; }
 
+static bool XTMODKEYS(struct vte *vte, struct csi *csi) {
+  velvet_log("TODO: XTMODKEYS");
+  return true;
+}
+
 static bool XTWINOPS(struct vte *vte, struct csi *csi) {
   switch (csi->params[0].primary) {
   case 14: TODO("Report Text Area Size in Pixels"); return false;
@@ -771,7 +787,25 @@ bool SCORC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SCORC
 
 bool DECRQUPSS(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECRQUPSS"); return false; }
 
-bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("KITTY_KEYBOARD_QUERY"); return false; }
+bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) { 
+  (void)csi;
+  string_push_csi(&vte->pending_input, '?', INT_SLICE(0), "u");
+  return true;
+}
+
+static bool KITTY_KEYBOARD_PUSH(struct vte *vte, struct csi *csi) {
+  velvet_log("TODO: Kitty Push");
+  return true;
+}
+static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi) { 
+  velvet_log("TODO: Kitty Pop");
+  return true;
+}
+
+static bool KITTY_KEYBOARD_MODIFY(struct vte *vte, struct csi *csi) {
+  velvet_log("TODO: Kitty Modify");
+  return true;
+}
 
 bool KITTY_UNSCROLL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("KITTY_UNSCROLL"); return false; }
 

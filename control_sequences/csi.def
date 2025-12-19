@@ -122,9 +122,13 @@ CSI(___,    ___,  '^', SD,                         "CSI Ps ^  Scroll down Ps lin
 
 // XTERM {{{1
 CSI(___,    ___,  't', XTWINOPS,                   "CSI Ps ; Ps ; Ps t Window manipulation (XTWINOPS)")
+CSI('>',    ___,  'm', XTMODKEYS,                  "CSI Ps ; Ps ; Ps t Window manipulation (XTWINOPS)")
 
 // Kitty {{{1
-CSI(___,    '?',  'u', KITTY_KEYBOARD_QUERY,       "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
+CSI('?',    ___,  'u', KITTY_KEYBOARD_QUERY,       "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
+CSI('>',    ___,  'u', KITTY_KEYBOARD_PUSH,        "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
+CSI('<',    ___,  'u', KITTY_KEYBOARD_POP,         "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
+CSI('=',    ___,  'u', KITTY_KEYBOARD_MODIFY,      "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
 CSI(___,    '+',  'T', KITTY_UNSCROLL,             "CSI Ps + T https://sw.kovidgoyal.net/kitty/unscroll/")
 
 #undef ___
