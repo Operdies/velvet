@@ -45,15 +45,17 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
 static bool osc_set_title(struct vte *vte, struct osc *osc) {
   struct pty_host *container;
   container = container_of(vte, struct pty_host, emulator);
-  container->border_dirty = true;
-  strncpy(container->title, (char*)osc->pt.text, MIN(osc->pt.len, (int)sizeof(container->title) - 1));
+  string_clear(&container->title);
+  struct u8_slice new_title = { .content = osc->pt.text, .len = osc->pt.len };
+  string_push_slice(&container->title, new_title);
   return true;
 }
+
 static bool osc_set_icon(struct vte *vte, struct osc *osc) {
   struct pty_host *container;
   container = container_of(vte, struct pty_host, emulator);
-  container->border_dirty = true;
-  strncpy(container->icon, (char*)osc->pt.text, MIN(osc->pt.len, (int)sizeof(container->icon) - 1));
+  struct u8_slice new_icon = { .content = osc->pt.text, .len = osc->pt.len };
+  string_push_slice(&container->icon, new_icon);
   return true;
 }
 

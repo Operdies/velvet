@@ -305,31 +305,42 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   (void)context;
 }
 
-static void vv_attach_set_size(int sockfd, struct platform_winsize ws) {
-  char payload[256] = {0};
-  int n_payload = snprintf(payload,
-                           sizeof(payload) - 1,
+static struct string vv_attach_option_buffer = {0};
+static void vv_attach_update_size(int sockfd) {
+  struct platform_winsize ws;
+  platform_get_winsize(&ws);
+  string_clear(&vv_attach_option_buffer);
+  string_push_format_slow(&vv_attach_option_buffer, 
                            "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
                            ws.lines,
                            ws.colums,
                            ws.y_pixel,
                            ws.x_pixel);
-  write(sockfd, payload, n_payload);
+  io_write(sockfd, string_as_u8_slice(vv_attach_option_buffer));
 }
 
-static void vv_attach_file_descriptors(int sockfd, struct platform_winsize ws, int input_fd, int output_fd) {
+static void vv_attach_handshake(int sockfd, struct platform_winsize ws, int input_fd, int output_fd) {
+  string_clear(&vv_attach_option_buffer);
   int fds[2] = {input_fd, output_fd};
-  char payload[256] = {0};
-  int n_payload = snprintf(payload,
-                           sizeof(payload) - 1,
-                           "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
-                           ws.lines,
-                           ws.colums,
-                           ws.y_pixel,
-                           ws.x_pixel);
+  bool no_repeat_wide_chars = false;
+  char *term;
+  if ((term = getenv("TERM_PROGRAM")) && strcmp(term, "Apple_Terminal") == 0) {
+    no_repeat_wide_chars = true;
+  }
+  string_push_format_slow(&vv_attach_option_buffer,
+                          "set lines %d\n"
+                          "set columns %d\n"
+                          "set lines_pixels %d\n"
+                          "set columns_pixels %d\n"
+                          "set no_repeat_wide_chars %c\n",
+                          ws.lines,
+                          ws.colums,
+                          ws.y_pixel,
+                          ws.x_pixel,
+                          no_repeat_wide_chars ? 't' : 'f');
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
 
-  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = payload, .iov_len = n_payload}, .msg_iovlen = 1};
+  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = vv_attach_option_buffer.content, .iov_len = vv_attach_option_buffer.len}, .msg_iovlen = 1};
 
   msg.msg_control = cmsgbuf;
   msg.msg_controllen = sizeof(cmsgbuf);
@@ -463,12 +474,15 @@ static void vv_configure(struct velvet_args args) {
       }
     }
     string_push_char(&payload, '\n');
-    io_write(sockfd, string_as_u8_slice(&payload));
+    io_write(sockfd, string_as_u8_slice(payload));
     string_destroy(&payload);
   } 
   close(sockfd);
 }
 
+/* TODO: This loop sucks.
+ * Update it to use `struct io` and proper signal handling.
+ */
 static void vv_attach(struct velvet_args args) {
   struct sigaction sa = {0};
   sa.sa_sigaction = &attach_sighandler;
@@ -484,7 +498,7 @@ static void vv_attach(struct velvet_args args) {
 
   int output_pipe[2];
   if (pipe(output_pipe) < 0) velvet_fatal("pipe:");
-  vv_attach_file_descriptors(sockfd, ws, STDIN_FILENO, output_pipe[1]);
+  vv_attach_handshake(sockfd, ws, STDIN_FILENO, output_pipe[1]);
 
   struct pollfd pollset[] = {{.events = POLLIN, .fd = output_pipe[0]}, {.events = POLLIN, .fd = sockfd}};
 
@@ -497,9 +511,7 @@ static void vv_attach(struct velvet_args args) {
     if (n_polled == -1) {
       if (errno == EINTR) {
         // assume SIGWINCH
-        struct platform_winsize ws;
-        platform_get_winsize(&ws);
-        vv_attach_set_size(sockfd, ws);
+        vv_attach_update_size(sockfd);
       } else {
         velvet_die("poll:");
       }
@@ -507,12 +519,28 @@ static void vv_attach(struct velvet_args args) {
 
     if (pollset[0].revents & POLLIN) {
       int n = read(output_pipe[0], buf, bufsize);
-      if (n == 0) {
+      if (n == -1) {
+        if (errno == EINTR) {
+          /* assume SIGWINCH */
+          vv_attach_update_size(sockfd);
+          continue;
+        } else {
+          velvet_die("read:");
+        }
+      } else if (n == 0) {
         quit = true;
         break;
       }
       struct u8_slice pending = {.content = buf, .len = n};
       ssize_t written = io_write(STDOUT_FILENO, pending);
+      if (written == -1) {
+        if (errno == EINTR) {
+          written = io_write(STDOUT_FILENO, pending);
+          vv_attach_update_size(sockfd);
+        } else {
+          velvet_die("write pending:");
+        }
+      }
       assert(written == n);
     }
 
@@ -532,8 +560,8 @@ static void vv_attach(struct velvet_args args) {
   terminal_reset();
 
   if (detach) {
-    printf("[Detached]\n");
+    velvet_log("[Detached]");
   } else {
-    printf("[Shutdown]\n");
+    velvet_log("[Shutdown]");
   }
 }

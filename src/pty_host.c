@@ -29,9 +29,11 @@ void pty_host_destroy(struct pty_host *pty_host) {
     if (result == -1) velvet_die("waitpid:");
   }
   vte_destroy(&pty_host->emulator);
-  free(pty_host->cmdline);
+  string_destroy(&pty_host->cmdline);
+  string_destroy(&pty_host->title);
+  string_destroy(&pty_host->icon);
+  string_destroy(&pty_host->cwd);
   pty_host->pty = pty_host->pid = 0;
-  pty_host->cmdline = nullptr;
 }
 
 struct sgr_param {
@@ -49,29 +51,24 @@ struct sgr_buffer {
   uint8_t n;
 };
 
-// Concatenate the strings in `strings` into `dst`.
-static void cat_strings(char *dst, int n, char **strings) {
-  int i = 0;
-  for (; strings && *strings; strings++) {
-    const uint8_t *ch = (uint8_t *)*strings;
-    for (; ch && *ch && i < n; ch++) dst[i++] = iscntrl(*ch) ? '.' : *ch;
-  }
-  dst[i] = 0;
-}
-
 void pty_host_update_cwd(struct pty_host *p) {
   if (platform.get_cwd_from_pty) {
-    char buf[256];
+    char buf[256] = {0};
     if (platform.get_cwd_from_pty(p->pty, buf, sizeof(buf))) {
-      if (strncmp(buf, p->cwd, MIN(sizeof(buf), sizeof(p->cwd)))) {
-        p->border_dirty = true;
-        strncpy(p->cwd, buf, MIN(sizeof(buf), sizeof(p->cwd)));
-        cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->cmdline, " — ", p->cwd, NULL});
-      }
+      string_clear(&p->cwd);
+      string_push_cstr(&p->cwd, buf);
+      string_clear(&p->title);
+      string_push_string(&p->title, p->cmdline);
+      string_push_cstr(&p->title, " in ");
+      string_push_string(&p->title, p->cwd);
+
+      char *home = getenv("HOME");
+      if (home) string_replace_inplace_slow(&p->title, home, "~");
     }
-  } else if (!p->title[0]) {
+  } else if (!p->title.len) {
     // fallback to using the process as title
-    cat_strings(p->title, sizeof(p->title) - 1, (char *[]){p->cmdline, NULL});
+    string_clear(&p->title);
+    string_push_string(&p->title, p->cmdline);
   }
 }
 
@@ -276,11 +273,11 @@ void pty_host_draw_border(struct pty_host *p, struct string *b, bool focused) {
   // top line
   {
     int i = left + 1;
-    int n = utf8_strlen(p->title);
+    int n = string_strlen(p->title);
     i += n + 3;
     string_push(b, dash);
     string_push(b, beforetitle);
-    string_push(b, (uint8_t *)p->title);
+    string_push_string(b, p->title);
     string_push(b, aftertitle);
     for (; i < right - 1; i++) string_push(b, dash);
     string_push(b, topright_corner);
@@ -348,7 +345,8 @@ void pty_host_start(struct pty_host *pty_host) {
   if (pid < 0) velvet_die("forkpty:");
 
   if (pid == 0) {
-    char *argv[] = {"sh", "-c", pty_host->cmdline, NULL};
+    string_ensure_null_terminated(&pty_host->cmdline);
+    char *argv[] = {"sh", "-c", (char*)pty_host->cmdline.content, NULL};
     execvp("sh", argv);
     velvet_die("execlp:");
   }

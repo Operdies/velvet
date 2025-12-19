@@ -9,22 +9,16 @@ struct bounds {
 };
 
 struct pty_host {
-  char *cmdline;
-  char title[50];
-  char icon[50];
-  char cwd[256];
+  struct string cmdline;
+  struct string title;
+  struct string icon;
+  struct string cwd;
   int pty, pid;
   int border_width;
-  bool border_dirty;
-  union {
-    struct {
-      int x, y, columns, lines;
-    };
-    struct {
-      struct bounds window;
-      struct bounds client;
-    } rect;
-  };
+  struct {
+    struct bounds window;
+    struct bounds client;
+  } rect;
   struct vte emulator;
 };
 

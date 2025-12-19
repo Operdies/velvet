@@ -139,7 +139,8 @@ static void velvet_scene_spawn_and_focus(struct velvet_scene *m, char *cmdline) 
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
   assert(m->hosts.element_size == sizeof(struct pty_host));
   struct pty_host *host = vec_new_element(&m->hosts);
-  host->cmdline = strndup((char*)cmdline.content, cmdline.len);
+  string_clear(&host->cmdline);
+  string_push_slice(&host->cmdline, cmdline);
   host->emulator = vte_default;
   velvet_scene_arrange(m);
   pty_host_start(host);
