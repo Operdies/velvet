@@ -5,10 +5,12 @@
 #include "io.h"
 #include "platform.h"
 #include "velvet_scene.h"
+#include "velvet_keyboard.h"
 
 enum velvet_input_state {
   VELVET_INPUT_STATE_NORMAL,
   VELVET_INPUT_STATE_ESC,
+  VELVET_INPUT_STATE_APPLICATION_KEYS,
   VELVET_INPUT_STATE_CSI,
 };
 
@@ -24,8 +26,9 @@ enum velvey_key_modifier {
   MODIFIER_NUM_LOCK  = 0b10000000, //(128)
 };
 
+
 struct velvet_key_event {
-  struct utf8 symbol;
+  struct velvet_key key;
   enum velvey_key_modifier modifiers;
   /* set if the mapping was removed. If removed is set, no other fields will be set. */
   bool removed;

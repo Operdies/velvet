@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "virtual_terminal_sequences.h"
 #include "velvet.h"
+#include <string.h>
 
 #define ESC 0x1b
 #define BRACKETED_PASTE_MAX (1 << 20)
@@ -48,7 +49,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
 static struct velvet_key_event key_event_from_byte(uint8_t ch) {
   // special case for <C-Space>
   if (ch == 0)
-    return (struct velvet_key_event){.symbol.numeric = ' ', .modifiers = MODIFIER_CTRL};
+    return (struct velvet_key_event){.key.literal = true, .key.symbol.numeric = ' ', .modifiers = MODIFIER_CTRL};
 
   struct velvet_key_event k = {0};
   bool iscntrl = CTRL(ch) == ch;
@@ -64,14 +65,15 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
     isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
   }
 
-  k.symbol.utf8[0] = ch;
+  k.key.symbol.utf8[0] = ch;
+  k.key.literal = true;
   k.modifiers = ((iscntrl * MODIFIER_CTRL) | (isshift * MODIFIER_SHIFT));
   return k;
 }
 
 static void send_csi_todo(struct velvet *v) {
   struct velvet_input *in = &v->input;
-  TODO("Input CSI: %.*s", in->command_buffer.len, in->command_buffer.content);
+  TODO("Input CSI: %.*s", (int)in->command_buffer.len, in->command_buffer.content);
   string_clear(&v->input.command_buffer);
 }
 
@@ -149,7 +151,7 @@ static void send_mouse_sgr(struct pty_host *target, struct mouse_sgr sgr) {
                   trans.trigger == mouse_down ? "M" : "m");
   int end = target->emulator.pending_input.len;
   struct u8_slice s = string_range(&target->emulator.pending_input, start, end);
-  velvet_log("send sgr: %.*s", s.len, s.content);
+  velvet_log("send sgr: %.*s", (int)s.len, s.content);
 }
 
 static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
@@ -298,8 +300,12 @@ static bool keymap_has_mapping(struct velvet_keymap *k) {
   return false;
 }
 
+/* TODO: How should meta/alt behave */ 
 static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
-  return k1.modifiers == k2.modifiers && k1.symbol.numeric == k2.symbol.numeric;
+  if (k1.modifiers != k2.modifiers) return false;
+  if (k1.key.literal != k2.key.literal) return false;
+  if (k1.key.literal) return k1.key.symbol.numeric == k2.key.symbol.numeric;
+  return strcmp(k1.key.special.name, k2.key.special.name) == 0;
 }
 
 // this is supposed to emulate VIM-like behavior
@@ -338,7 +344,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   }
 
   // ESC cancels any pending keybind
-  if (key.symbol.numeric == ESC && current != root) {
+  if (key.key.literal && key.key.symbol.numeric == ESC && current != root) {
     v->input.keymap = root;
     return;
   }
@@ -353,11 +359,31 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   }
 }
 
+static void dispatch_app(struct velvet *v, uint8_t ch) {
+  bool found = false;
+  string_push_char(&v->input.command_buffer, ch);
+
+  struct u8_slice key = string_as_u8_slice(v->input.command_buffer);
+  for (int i = 0; !found && i < LENGTH(keys); i++) {
+    struct u8_slice key_escape = u8_slice_from_cstr(keys[i].escape);
+    if (u8_slice_equals(key, key_escape)) {
+      struct velvet_key_event e = { .key.special = keys[i] };
+      dispatch_key_event(v, e);
+      found = true;
+    }
+  }
+  v->input.state = VELVET_INPUT_STATE_NORMAL;
+  string_clear(&v->input.command_buffer);
+  if (!found) velvet_log("TODO: Unhandled escape \x1bO%c", ch);
+}
+
 static void dispatch_esc(struct velvet *v, uint8_t ch) {
+  string_push_char(&v->input.command_buffer, ch);
   struct velvet_input *in = &v->input;
   if (ch == '[') {
-    string_push_char(&v->input.command_buffer, ch);
     in->state = VELVET_INPUT_STATE_CSI;
+  } else if (ch == 'O') {
+    in->state = VELVET_INPUT_STATE_APPLICATION_KEYS;
   } else {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
@@ -371,18 +397,32 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   }
 }
 
+static void velvet_input_send_literal(struct velvet *v, struct utf8 s, enum velvey_key_modifier m) {
+  if (s.numeric == ESC) {
+    send_byte(v, ESC);
+  } else {
+    bool iscntrl = m & MODIFIER_CTRL;
+    bool is_meta = (m & MODIFIER_ALT) || (m & MODIFIER_META);
+    if (is_meta) send_byte(v, ESC);
+
+    if (iscntrl && s.numeric == ' ') send_byte(v, 0);
+    else for (int i = 0; i < 4 && s.utf8[i]; i++)
+      send_byte(v, s.utf8[i] & (iscntrl ? 0x1f : 0xff));
+  }
+}
+
+static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m) {
+  /* TODO: Modifiers + respect client keyboard settings */
+  for (char *ch = s.escape; *ch; ch++)
+    send_byte(v, *ch);
+}
+
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
   // TODO: check keyboard settings of recipient and modify event accordingly
   struct velvet *v = k->data;
-  if (e.symbol.numeric == ESC) {
-    send_byte(v, ESC);
-  } else {
-    bool iscntrl = e.modifiers & MODIFIER_CTRL;
-    if (e.modifiers & MODIFIER_ALT) send_byte(v, ESC);
-    if (iscntrl && e.symbol.numeric == ' ') send_byte(v, 0);
-    else for (int i = 0; i < 4 && e.symbol.utf8[i]; i++)
-      send_byte(v, e.symbol.utf8[i] & (iscntrl ? 0x1f : 0xff));
-  }
+  if (e.key.literal) velvet_input_send_literal(v, e.key.symbol, e.modifiers);
+  else velvet_input_send_special(v, e.key.special, e.modifiers);
+  
 }
 
 static void dispatch_normal(struct velvet *v, uint8_t ch) {
@@ -401,6 +441,7 @@ static void dispatch_normal(struct velvet *v, uint8_t ch) {
 }
 
 void velvet_process_input(struct velvet *v, struct u8_slice str) {
+  // velvet_log("Input: %.*s (%d)", (int)str.len, str.content, (int)str.len);
   struct velvet_input *in = &v->input;
   for (size_t i = 0; i < str.len; i++) {
     uint8_t ch = str.content[i];
@@ -408,13 +449,14 @@ void velvet_process_input(struct velvet *v, struct u8_slice str) {
     case VELVET_INPUT_STATE_NORMAL: dispatch_normal(v, ch); break;
     case VELVET_INPUT_STATE_ESC: dispatch_esc(v, ch); break;
     case VELVET_INPUT_STATE_CSI: dispatch_csi(v, ch); break;
+    case VELVET_INPUT_STATE_APPLICATION_KEYS: dispatch_app(v, ch); break;
     }
   }
 
   if (in->state == VELVET_INPUT_STATE_ESC) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    struct velvet_key_event k = {.symbol.numeric = ESC};
+    struct velvet_key_event k = {.key.symbol.numeric = ESC, .key.literal = true };
     dispatch_key_event(v, k);
   }
 }
@@ -483,6 +525,38 @@ static void velvet_keymap_remove_internal(struct velvet_keymap *k) {
   }
 }
 
+static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
+  struct velvet_key k = {0};
+  assert(s.len > 0);
+
+  if (s.content[0] >= 0xC2 && s.content[0] < 0xF4) {
+    // utf8
+    size_t expected_length = utf8_expected_length(s.content[0]);
+    if (expected_length != s.len) {
+      velvet_log("Unexpected utf8 length: %.*s", (int)s.len, s.content);
+    }
+    k.literal = true;
+    for (size_t i = 0; i < s.len; i++) k.symbol.utf8[i] = s.content[i];
+    *result = k;
+    return true;
+  } else if (s.len == 1) {
+    k.literal = true;
+    k.symbol.utf8[0] = s.content[0];
+    *result = k;
+    return true;
+  }
+  for (int i = 0; i < LENGTH(keys); i++) {
+    struct u8_slice special = u8_slice_from_cstr(keys[i].name);
+    if (u8_slice_equals_ignore_case(s, special)) {
+      k.literal = false;
+      k.special = keys[i];
+      *result = k;
+      return true;
+    }
+  }
+  return false;
+}
+
 #define MAX_KEYS 10
 int keymap_parse_keys(struct u8_slice keys, struct velvet_key_event *events, int n_events) {
   int count = 0;
@@ -525,8 +599,9 @@ int keymap_parse_keys(struct u8_slice keys, struct velvet_key_event *events, int
             }
           }
         }
-        if (inner.len == 1) {
-          k.symbol.numeric = inner.content[0];
+        struct velvet_key key = {0};
+        if (key_from_slice(inner, &key)){
+          k.key = key;
           k.modifiers = mods;
           if (count < n_events) {
             events[count] = k;
@@ -535,11 +610,14 @@ int keymap_parse_keys(struct u8_slice keys, struct velvet_key_event *events, int
           k = (struct velvet_key_event){0};
           i = j;
           continue;
+        } else {
+          velvet_log("Unrecognized key %.*s", (int)inner.len, inner.content);
         }
       }
     }
 
-    k.symbol.numeric = ch;
+    k.key.literal = true;
+    k.key.symbol.numeric = ch;
     if (count < n_events) {
       events[count] = k;
     }

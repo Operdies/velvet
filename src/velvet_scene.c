@@ -18,8 +18,6 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.lines);
 
   n = m->hosts.length;
-  struct pty_host *c;
-  vec_foreach(c, m->hosts) c->border_width = 1;
 
   i = my = sy = mx = 0;
   nm = n > nmaster ? nmaster : n;

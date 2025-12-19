@@ -26,6 +26,7 @@ VT(clear, CSI "2J");
 VT(kitty_keyboard_on, CSI ">31u");
 VT(kitty_keyboard_off, CSI ">0u");
 
+VT_ANSI_MODE(application_mode, 1);
 VT_PRIVATE_MODE(synchronized_rendering, 2026);
 VT_PRIVATE_MODE(mouse_mode_sgr, 1006);
 VT_PRIVATE_MODE(mouse_mode_sgr_pixel, 1016);

@@ -1,0 +1,45 @@
+#ifndef VELVET_KEYBOARD_H
+#define VELVET_KEYBOARD_H
+
+#include "collections.h"
+#include "text.h"
+#include <string.h>
+struct special_key {
+  char *name;
+  char *escape;
+};
+
+#define SPECIAL_KEYS                                                                                                   \
+  X(F1, "\x1bOP")                                                                                                      \
+  X(F2, "\x1bOQ")                                                                                                      \
+  X(F3, "\x1bOR")                                                                                                      \
+  X(F4, "\x1bOS")                                                                                                      \
+  X(F5, "\x1b[15~")                                                                                                    \
+  X(F6, "\x1b[17~")                                                                                                    \
+  X(F7, "\x1b[18~")                                                                                                    \
+  X(F8, "\x1b[19~")                                                                                                    \
+  X(F9, "\x1b[20~")                                                                                                    \
+  X(F10, "\x1b[21~")                                                                                                   \
+  X(F11, "\x1b[23~")                                                                                                   \
+  X(F12, "\x1b[24~")                                                                                                   \
+  X(UP, "\x1b[A")                                                                                                      \
+  X(DOWN, "\x1b[B")                                                                                                    \
+  X(RIGHT, "\x1b[C")                                                                                                   \
+  X(LEFT, "\x1b[D")\
+  X(ESC, "\x1b")
+
+static const struct special_key keys[] = {
+#define X(x, y) {.name = #x, .escape = y},
+    SPECIAL_KEYS};
+#undef X
+#define X(x, y) static const struct special_key * VELVET_KEY_##x = 
+
+struct velvet_key {
+  bool literal;
+  union {
+    struct utf8 symbol;
+    struct special_key special;
+  };
+};
+
+#endif
