@@ -263,11 +263,14 @@ static void velvet_scene_renderer_draw_to_buffer(struct velvet_scene_renderer *r
       for (; repeats < remaining && cell_equals(c[0], c[repeats]); repeats++);
       repeats--;
       if (repeats > 0) {
-        if (utf8_len * repeats < 4) {
-          for (int i = 0; i < repeats; i++)
-            string_push_slice(&r->draw_buffer, text);
-        } else {
+        int num_bytes = utf8_len * repeats;
+        bool can_repeat = utf8_len == 1 || r->options.no_repeat_wide_chars == false;
+        if (num_bytes > 10 && can_repeat) {
           string_push_csi(&r->draw_buffer, 0, INT_SLICE(repeats), "b");
+        } else {
+          for (int i = 0; i < repeats; i++) {
+            string_push_slice(&r->draw_buffer, text);
+          }
         }
         col += repeats;
       }

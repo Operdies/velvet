@@ -171,6 +171,8 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *source, struct u8
     v->input.options.key_chain_timeout_ms = digit;
   } else if (u8_match(option, "focus_follows_mouse")) {
     v->input.options.focus_follows_mouse = boolean;
+  } else if (u8_match(option, "no_repeat_wide_chars")) {
+    source->features.no_repeat_wide_chars = boolean;
   }
 }
 

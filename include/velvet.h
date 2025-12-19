@@ -75,6 +75,9 @@ struct velvet_input {
   struct velvet_keymap *keymap;
 };
 
+struct velvet_session_features {
+  bool no_repeat_wide_chars;
+};
 
 struct velvet_session {
   int socket;                   // socket connection
@@ -86,6 +89,7 @@ struct velvet_session {
     struct string buffer; // partial commands
     int lines;
   } commands;
+  struct velvet_session_features features;
 };
 
 struct velvet {

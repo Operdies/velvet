@@ -13,6 +13,14 @@ struct velvet_scene_renderer_line {
   } damage;
 };
 
+struct velvet_scene_renderer_options {
+  /* unfortunately some emulators don't support repeating multi-byte characters.
+   * I observed this with the stock emulator on MacOS.
+   * If we detect the host emulator of the active session is AppleTerminal, then we disable this feature.
+   */
+  bool no_repeat_wide_chars;
+};
+
 struct velvet_scene_renderer {
   int w, h;
   struct screen_cell *cells;
@@ -21,6 +29,7 @@ struct velvet_scene_renderer {
   struct screen_cell_style current_style;
   struct cursor_options current_cursor;
   struct cursor cursor;
+  struct velvet_scene_renderer_options options;
 };
 
 struct velvet_scene_style {
@@ -36,7 +45,6 @@ struct velvet_scene {
   struct vec /*pty_host*/ hosts;
   struct platform_winsize ws;
   size_t focus;
-  uint8_t prefix;
   struct velvet_scene_renderer renderer;
   struct velvet_scene_style style;
 };
