@@ -32,6 +32,14 @@ struct u8_slice {
   const uint8_t *content;
 };
 
+struct u8_slice_codepoint_iterator {
+  struct u8_slice src;
+  size_t cursor;
+  struct u8_slice current;
+  bool invalid; /* set if `current` points to an invalid sequence. In that case, next() will attempt to recover
+  by fast forwarding to the start of the next character.  */
+};
+
 // A view into a vector
 struct vec_slice {
   const size_t length;
@@ -79,7 +87,9 @@ bool hashmap_contains(const struct hashmap *h, uint32_t key);
 void *hashmap_get(const struct hashmap *h, uint32_t key);
 // Return the item with the specified key, if it exists, returning it.
 bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
+int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
 void string_push_cstr(struct string *str, char *cstr);
+void string_push_string(struct string *dest, struct string src);
 void string_push_slice(struct string *str, struct u8_slice slice);
 void string_push_range(struct string *str, const uint8_t *const src,
                        size_t len);
@@ -119,13 +129,19 @@ struct u8_slice u8_slice_range(struct u8_slice s, ssize_t start, ssize_t end);
 bool u8_slice_starts_with_cstr(struct u8_slice slice, char *str);
 bool u8_slice_starts_with(struct u8_slice slice, struct u8_slice prefix);
 bool u8_slice_equals(struct u8_slice a, struct u8_slice b);
+bool u8_slice_equals_ignore_case(struct u8_slice a, struct u8_slice b);
 bool u8_slice_contains(struct u8_slice s, uint8_t ch);
 struct u8_slice u8_slice_strip(struct u8_slice s, struct u8_slice chars);
 struct u8_slice u8_slice_strip_whitespace(struct u8_slice s);
 struct u8_slice u8_slice_strip_quotes(struct u8_slice s);
 struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end);
 ssize_t vec_index(struct vec *v, const void *const item);
+void string_push_vformat_slow(struct string *s, char *fmt, va_list ap);
 void string_push_format_slow(struct string *s, char *fmt, ...) __attribute__((format(printf, 2, 3)));
+size_t u8_slice_strlen(struct u8_slice s);
+size_t string_strlen(struct string s);
+void string_ensure_null_terminated(struct string *s);
+bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }

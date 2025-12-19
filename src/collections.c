@@ -1,4 +1,5 @@
 #include "collections.h"
+#include "text.h"
 #include "utils.h"
 #include <errno.h>
 #include <stdarg.h>
@@ -380,12 +381,49 @@ struct u8_slice string_as_u8_slice(struct string s) {
   return (struct u8_slice) { .content = s.content, .len = s.len };
 }
 
+void string_push_string(struct string *dest, struct string src) {
+  string_push_slice(dest, string_as_u8_slice(src));
+}
+
+size_t string_strlen(struct string s) {
+    return u8_slice_strlen(string_as_u8_slice(s));
+}
+
+size_t u8_slice_strlen(struct u8_slice s) {
+  int i = 0;
+  for (size_t k = 0; k < s.len; k++)
+    if ((s.content[k] & 0xC0) != 0x80) i++;
+  return i;
 }
 
 bool u8_slice_equals(struct u8_slice a, struct u8_slice b) {
   if (a.len != b.len) return false;
   if (a.content == b.content) return true;
   return memcmp(a.content, b.content, a.len) == 0;
+}
+
+bool u8_slice_equals_ignore_case(struct u8_slice a, struct u8_slice b) {
+  uint8_t table[256] = {0};
+  int shift = 'a' - 'A';
+  for (uint8_t i = 'a'; i <= 'z'; i++) {
+    table[i] = i - shift;
+  }
+  for (uint8_t i = 'A'; i <= 'Z'; i++) {
+    table[i] = i;
+  }
+
+  if (a.len != b.len) return false;
+  if (a.content == b.content) return true;
+
+  for (size_t i = 0; i < a.len; i++) {
+    if (a.content[i] != b.content[i]) {
+      char t1 = table[a.content[i]];
+      char t2 = table[b.content[i]];
+      if (!t1 || !t2) return false;
+      if (t1 != t2) return false;
+    }
+  }
+  return true;
 }
 
 bool u8_slice_contains(struct u8_slice s, uint8_t ch) {
@@ -439,6 +477,46 @@ struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_
   return u8_slice_range(s2, start, end);
 }
 
+void string_ensure_null_terminated(struct string *s) {
+  if (s->len && s->content[s->len-1] == 0) return;
+  string_push_char(s, 0);
+  s->len--;
+}
+
+int string_replace_inplace_slow(struct string *str, const char *const _old, const char *const _new) {
+  static struct string buffer = {0};
+  string_clear(&buffer);
+
+  int replacements = 0;
+  string_ensure_capacity(str, str->len * 2);
+  struct u8_slice old = u8_slice_from_cstr(_old);
+  struct u8_slice new = u8_slice_from_cstr(_new);
+  if (str->len < old.len) return 0;
+
+  uint8_t *cursor = str->content;
+  uint8_t *end = str->content + str->len;
+  for (; end - cursor > (int)old.len;) {
+    uint8_t *next = (uint8_t*)strnstr((char*)cursor, _old, end - cursor);
+    if (!next) { 
+      struct u8_slice remaining = { .content = (uint8_t*)cursor, .len = end - cursor };
+      string_push_slice(&buffer, remaining);
+      break;
+    }
+    struct u8_slice before_match = { .content = (uint8_t*)cursor, .len = next - cursor };
+    if (before_match.len) {
+      string_push_slice(&buffer, before_match);
+    }
+    string_push_slice(&buffer, new);
+    cursor = next + old.len;
+    replacements++;
+  }
+
+  struct string tmp = *str;
+  *str = buffer;
+  buffer = tmp;
+  return replacements;
+}
+
 void vec_swap(struct vec *v, size_t i, size_t j) {
   assert(i < v->length);
   assert(j < v->length);
@@ -462,15 +540,58 @@ void hashmap_destroy(struct hashmap *h) {
   free(h->values);
 }
 
+void string_push_vformat_slow(struct string *s, char *fmt, va_list ap) {
+  size_t required = vsnprintf(nullptr, 0, fmt, ap);
+  string_ensure_capacity(s, s->len + required + 1);
+  s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
+}
+
 void string_push_format_slow(struct string *s, char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  size_t required = vsnprintf(nullptr, 0, fmt, ap);
+  string_push_vformat_slow(s, fmt, ap);
   va_end(ap);
+}
 
-  string_ensure_capacity(s, s->len + required + 1);
-  va_start(ap, fmt);
-  s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
-  va_end(ap);
+bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s) {
+  if (s->cursor >= s->src.len) 
+    return false;
+
+  struct u8_slice t = s->src;
+  size_t remaining = t.len - s->cursor;
+  uint8_t head = t.content[s->cursor];
+  uint8_t expected_length = utf8_expected_length(head);
+
+  if (expected_length > remaining) {
+    s->invalid = true;
+    s->current = u8_slice_range(t, s->cursor, s->cursor + remaining);
+    s->cursor = t.len;
+    return true;
+  }
+
+  bool invalid = expected_length == 0;
+
+  for (int i = 1; i < expected_length; i++) {
+    uint8_t cont = t.content[s->cursor + i];
+    if ((cont & 0xC0) != 0x80) {
+      invalid = true; 
+      break;
+    }
+  }
+
+  if (invalid) {
+    /* fast forward to next character */
+    size_t next = s->cursor + 1;
+    for (; next < t.len && utf8_expected_length(t.content[next]) == 0; next++);
+    s->invalid = true;
+    s->current = u8_slice_range(t, s->cursor, next);
+    s->cursor = next;
+    return true;
+  }
+
+  s->invalid = false;
+  s->current = u8_slice_range(t, s->cursor, s->cursor + expected_length);
+  s->cursor += expected_length;
+  return true;
 }
 
