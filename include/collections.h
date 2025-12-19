@@ -113,7 +113,7 @@ void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
 void *vec_nth(const struct vec *const v, size_t i);
-struct u8_slice string_as_u8_slice(const struct string *const s);
+struct u8_slice string_as_u8_slice(struct string s);
 struct u8_slice u8_slice_from_cstr(const char *const str);
 struct u8_slice u8_slice_range(struct u8_slice s, ssize_t start, ssize_t end);
 bool u8_slice_starts_with_cstr(struct u8_slice slice, char *str);

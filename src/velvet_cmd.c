@@ -180,7 +180,7 @@ static void velvet_action_callback(struct velvet_keymap *k, struct velvet_key_ev
     string_destroy(&d->cmd);
     free(d);
   } else {
-    velvet_cmd(d->v, 0, string_as_u8_slice(&d->cmd));
+    velvet_cmd(d->v, 0, string_as_u8_slice(d->cmd));
   }
 }
 

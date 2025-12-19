@@ -192,7 +192,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
     assert_screen_equals(expected, vte_get_current_screen(&p.emulator), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
-    pty_host_process_output(&p, string_as_u8_slice(&output));
+    pty_host_process_output(&p, string_as_u8_slice(output));
     string_clear(&output);
     pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
@@ -210,7 +210,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
     assert_ge(output.len, 0, outer_test_name, "Output should be empty after clear!");
 
     // See 1.b
-    pty_host_process_output(&p, string_as_u8_slice(&output));
+    pty_host_process_output(&p, string_as_u8_slice(output));
     string_clear(&output);
     pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: clear screen replay", outer_test_name);
@@ -229,7 +229,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
     assert_screen_equals(expected, vte_get_current_screen(&p.emulator), testname2);
 
     // See 1.b
-    pty_host_process_output(&p, string_as_u8_slice(&output));
+    pty_host_process_output(&p, string_as_u8_slice(output));
     string_clear(&output);
     pty_host_draw(&p, false, &output);
     snprintf(testname2, sizeof(testname2), "%s: round replay", outer_test_name);

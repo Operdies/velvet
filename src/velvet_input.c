@@ -438,7 +438,7 @@ static void dispatch_arrow_key(struct velvet *v, const struct csi *const c) {
   if (focus->emulator.options.application_mode) {
     send_bytes(v, ESC, 'O', c->final);
   } else {
-    send(v, string_as_u8_slice(&v->input.command_buffer));
+    send(v, string_as_u8_slice(v->input.command_buffer));
   }
 }
 void DISPATCH_ARROW_KEY_UP(struct velvet *v, const struct csi *const c) {

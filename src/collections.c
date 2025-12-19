@@ -88,7 +88,7 @@ bool u8_slice_starts_with(struct u8_slice slice, struct u8_slice prefix) {
 }
 
 bool string_starts_with(struct string *str, struct u8_slice slice) {
-  return u8_slice_starts_with(string_as_u8_slice(str), slice);
+  return u8_slice_starts_with(string_as_u8_slice(*str), slice);
 }
 
 bool string_ends_with(struct string *str, struct u8_slice slice) {
@@ -376,8 +376,10 @@ struct u8_slice u8_slice_from_cstr(const char *const str) {
   return (struct u8_slice) { .len = strlen(str), .content = (uint8_t*)str };
 }
 
-struct u8_slice string_as_u8_slice(const struct string *const s) {
-  return (struct u8_slice) { .content = s->content, .len = s->len };
+struct u8_slice string_as_u8_slice(struct string s) {
+  return (struct u8_slice) { .content = s.content, .len = s.len };
+}
+
 }
 
 bool u8_slice_equals(struct u8_slice a, struct u8_slice b) {
@@ -433,7 +435,7 @@ struct u8_slice u8_slice_range(struct u8_slice s, ssize_t start, ssize_t end) {
  * Last 10: string_range(s, -11, -1)
  * */
 struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_t end) {
-  struct u8_slice s2 = string_as_u8_slice(s);
+  struct u8_slice s2 = string_as_u8_slice(*s);
   return u8_slice_range(s2, start, end);
 }
 

@@ -46,7 +46,7 @@ struct velvet_session *velvet_get_focused_session(struct velvet *v) {
 
 static void session_handle_command_buffer(struct velvet *v, struct velvet_session *src) {
   int socket = src->socket;
-  struct velvet_cmd_iterator it = {.src = string_as_u8_slice(&src->commands.buffer)};
+  struct velvet_cmd_iterator it = {.src = string_as_u8_slice(src->commands.buffer)};
 
   /* if the command is from an open socket, we can't know if the last line in the input
    * is complete or partial. This final line will only be handled once it is either terminated,
@@ -85,39 +85,39 @@ static void session_socket_callback(struct io_source *src) {
     return;
   }
 
-  struct velvet_session *sesh;
-  vec_find(sesh, velvet->sessions, sesh->socket == src->fd);
-  assert(sesh);
+  struct velvet_session *session;
+  vec_find(session, velvet->sessions, session->socket == src->fd);
+  assert(session);
 
   if (n == 0) {
     // The socket was closed, so let's ensure we don't write to it or close it again
-    close(sesh->socket);
-    sesh->socket = 0;
-    session_handle_command_buffer(velvet, sesh);
-    velvet_detach_session(velvet, sesh);
+    close(session->socket);
+    session->socket = 0;
+    session_handle_command_buffer(velvet, session);
+    velvet_detach_session(velvet, session);
     return;
   }
 
-  assert(sesh);
+  assert(session);
 
   bool needs_render = false;
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
   if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
     memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
-    sesh->input = fds[0];
-    sesh->output = fds[1];
+    session->input = fds[0];
+    session->output = fds[1];
 
-    set_nonblocking(sesh->output);
+    set_nonblocking(session->output);
 
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
-    velvet->focused_socket = sesh->socket;
+    velvet->focused_socket = session->socket;
     needs_render = true;
   }
 
   struct u8_slice cmd = {.content = (uint8_t *)data_buf, .len = n};
-  string_push_slice(&sesh->commands.buffer, cmd);
-  session_handle_command_buffer(velvet, sesh);
+  string_push_slice(&session->commands.buffer, cmd);
+  session_handle_command_buffer(velvet, session);
 
   if (needs_render) {
     velvet_scene_render(&velvet->scene, velvet_session_render, true, sesh);
@@ -209,7 +209,7 @@ static void draw_no_mans_land(struct velvet *velvet) {
         if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
       }
       string_push_csi(&scratch, 0, INT_SLICE(0), "m");
-      string_push_slice(&s->pending_output, string_as_u8_slice(&scratch));
+      string_push_slice(&s->pending_output, string_as_u8_slice(scratch));
     }
   }
 }
@@ -218,9 +218,9 @@ static ssize_t session_write_pending(struct velvet_session *sesh) {
   assert(sesh->input);
   assert(sesh->output);
   if (sesh->pending_output.len) {
-    struct u8_slice pending = string_as_u8_slice(&sesh->pending_output);
+    struct u8_slice pending = string_as_u8_slice(sesh->pending_output);
     ssize_t written = io_write(sesh->output, pending);
-    velvet_log("Write %zu / %zu\n", written, sesh->pending_output.len);
+    velvet_log("Write %zu / %zu", written, sesh->pending_output.len);
     if (written > 0) string_drop_left(&sesh->pending_output, (size_t)written);
     return written;
   }
@@ -277,7 +277,7 @@ static void vte_write_callback(struct io_source *src) {
   vec_find(vte, v->scene.hosts, vte->pty == src->fd);
   assert(vte);
   if (vte->emulator.pending_input.len) {
-    ssize_t written = io_write(src->fd, string_as_u8_slice(&vte->emulator.pending_input));
+    ssize_t written = io_write(src->fd, string_as_u8_slice(vte->emulator.pending_input));
     if (written > 0) string_drop_left(&vte->emulator.pending_input, (size_t)written);
   }
 }
@@ -323,6 +323,8 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_scene_resize(&velvet->scene, ws);
   velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("zsh"));
+  velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("bash"));
+  velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("nvim"));
   velvet_scene_arrange(&velvet->scene);
 
   velvet_default_config(velvet);
@@ -341,12 +343,13 @@ void velvet_loop(struct velvet *velvet) {
 
       // arrange
       velvet_scene_arrange(&velvet->scene);
+      // Render the current velvet state
+      velvet->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
+      velvet_scene_render_damage(&velvet->scene, velvet_render, velvet);
       if (did_resize) {
         did_resize = false;
         draw_no_mans_land(velvet);
       }
-      // Render the current velvet state
-      velvet_scene_render(&velvet->scene, velvet_render, false, velvet);
     }
 
     // Set up IO

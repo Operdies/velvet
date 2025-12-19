@@ -341,7 +341,7 @@ void velvet_scene_render(struct velvet_scene *m, render_func_t *render_func, boo
   velvet_scene_renderer_position_cursor(r, cursor->line + focused->rect.client.y, cursor->column + focused->rect.client.x);
   velvet_scene_renderer_set_cursor_style(r, focused->emulator.options.cursor);
 
-  struct u8_slice render = string_as_u8_slice(&r->draw_buffer);
+  struct u8_slice render = string_as_u8_slice(r->draw_buffer);
   render_func(render, context);
   string_clear(&r->draw_buffer);
 }

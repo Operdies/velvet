@@ -127,9 +127,11 @@ void io_clear_sources(struct io *io) {
 }
 
 ssize_t io_write(int fd, struct u8_slice s) {
+  /* clearly a bug */
+  assert(s.len < (1 << 30));
   ssize_t written = write(fd, s.content, s.len);
   if (written == -1 && errno != EAGAIN && errno != EINTR)
-    ERROR("io_write:");
+    velvet_die("io_write:");
   return written;
 }
 
@@ -138,7 +140,7 @@ ssize_t io_write_format_slow(int fd, char *fmt, ...) {
   va_start(ap, fmt);
   ssize_t written = vdprintf(fd, fmt, ap);
   if (written == -1 && errno != EAGAIN && errno != EINTR)
-    ERROR("io_write:");
+    velvet_die("io_write:");
   va_end(ap);
   return written;
 }
