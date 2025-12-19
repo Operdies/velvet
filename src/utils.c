@@ -10,40 +10,39 @@
 #include <unistd.h>
 #include <platform.h>
 #include "murmur3.h"
+#include "collections.h"
 
 #define CSI "\x1b["
 
 #define MURMUR3_SEED (123) // doesn't matter
 
 static void vflogmsg(FILE *f, char *fmt, va_list ap) {
-  constexpr int bufsize = 1 << 16;
-  static char *buf = nullptr;
-  if (!buf) {
-    buf = calloc(1, bufsize);
-  }
-  static uint32_t prev_hash = 0;
-
-  static int repeat_count = 0;
   assert(f);
   assert(fmt);
-  int n = strlen(fmt);
-  char last = n > 0 ? fmt[n - 1] : 0;
+  static struct string str = {0};
+  static uint32_t prev_hash = 0;
+  static int repeat_count = 0;
 
-  int n_buf = vsnprintf(buf, bufsize - 1, fmt, ap);
-  if (n_buf > bufsize) n_buf = bufsize;
+  string_push_vformat_slow(&str, fmt, ap);
 
   // Ensure at least one space
-  if (last == ':') {
-    n_buf += snprintf(buf + n_buf, bufsize - n_buf, " %s (%d)", strerror(errno), errno);
+  int n = strlen(fmt);
+  if (n && fmt[n-1] == ':') {
+    string_push_format_slow(&str, " %s (%d)", strerror(errno), errno);
   }
 
-  // replace non-printable characters with dots
-  for (int i = 0; i < n_buf; i++) {
-    // Assume utf8 continuation byte
-    if ((buf[i]) & 0x80) continue;
-    if (buf[i] == ' ') continue;
-    if (buf[i] == '\t') continue;
-    if (!isgraph(buf[i])) buf[i] = '.';
+#define REPLACEMENTS_LST                                                                                               \
+  X("\x1b[", "<CSI>")                                                                                                  \
+  X("\x1b", "<ESC>")                                                                                                   \
+  X("\t", "<TAB>")
+
+#define X(old, new) string_replace_inplace_slow(&str, old, new);
+  REPLACEMENTS_LST
+
+  for (int i = 'a' & 0x1f; i < ('z' & 0x1f); i++) {
+    char old[] = { i, 0 };
+    char new[] = { '<', 'C', '-', i + 96, '>', 0 };
+    string_replace_inplace_slow(&str, old, new);
   }
 
   time_t rawtime;
@@ -53,13 +52,14 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
   char timebuf[12] = {0};
   strftime(timebuf, sizeof(timebuf), "[%H:%M:%S]", timeinfo);
 
-  uint32_t buf_hash = murmur3_32((uint8_t*)buf, bufsize, MURMUR3_SEED);
+  uint32_t buf_hash = murmur3_32((uint8_t*)str.content, str.len, MURMUR3_SEED);
   bool repeat = buf_hash == prev_hash;
   prev_hash = buf_hash;
   char *final_fmt = repeat ? ( CSI "F" CSI "2K" "%s %.*s (%d)\n" ) : ( "%s %.*s\n" );
   repeat_count = repeat ? repeat_count + 1 : 1;
-  fprintf(f, final_fmt, timebuf, n_buf, buf, repeat_count);
+  fprintf(f, final_fmt, timebuf, str.len, str.content, repeat_count);
   fflush(f);
+  string_clear(&str);
 }
 
 void *velvet_erealloc(void *array, size_t nmemb, size_t size) {
