@@ -1,26 +1,11 @@
 #include <io.h>
 #include "collections.h"
+#include "platform.h"
 #include "utils.h"
 #include <errno.h>
 #include <stdarg.h>
 #include <sys/wait.h>
 #include <time.h>
-
-static uint64_t get_ms_since_startup(void) {
-  static struct timespec initial = {0};
-  struct timespec now = {0};
-  if (initial.tv_sec == 0 && initial.tv_nsec == 0) {
-    clock_gettime(CLOCK_MONOTONIC_RAW, &initial);
-  }
-  clock_gettime(CLOCK_MONOTONIC_RAW, &now);
-  uint64_t ms = (now.tv_sec - initial.tv_sec) * 1000;
-  if (now.tv_nsec > initial.tv_nsec) {
-    ms += (now.tv_nsec - initial.tv_nsec) / 1e6;
-  } else {
-    ms -= (initial.tv_nsec - now.tv_nsec) / 1e6;
-  }
-  return ms;
-}
 
 static bool io_dispatch_scheduled(struct io *io) {
   struct io_schedule *schedule;

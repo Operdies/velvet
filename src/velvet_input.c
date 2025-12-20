@@ -336,13 +336,28 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
         assert(k->on_key);
         // deliberately reset the keymap before invoking the mapping
         // this gives the mapping the opportunity to modify the keymap.
-        v->input.keymap = k->root;
-        k->on_key(k, key);
+        if (k->may_repeat) {
+          uint64_t now = get_ms_since_startup();
+          if (v->input.last_repeat) {
+            if (now - v->input.last_repeat > v->input.options.key_repeat_timeout_ms) {
+              /* timeout -- handle keystroke in root mapping */
+              v->input.keymap = k->root;
+              break;
+            }
+          }
+          v->input.last_repeat = now;
+          k->on_key(k, key);
+        } else {
+          /* if the key is not repeatable, return to root immediately. */
+          v->input.keymap = k->root;
+          k->on_key(k, key);
+        }
       }
       return;
     }
   }
 
+  v->input.last_repeat = 0;
   // ESC cancels any pending keybind
   if (key.key.literal && key.key.symbol.numeric == ESC && current != root) {
     v->input.keymap = root;

@@ -58,9 +58,9 @@ struct velvet_keymap {
 struct velvet_input_options {
   bool focus_follows_mouse;
   /* When one mapping is a prefix of another, we resolve the shorter mapping after this delay. */
-  int key_chain_timeout_ms;
+  uint64_t key_chain_timeout_ms;
   /* When a keybind repeatable mapping is triggered, allow retriggers within this window */
-  int key_repeat_timeout_ms;
+  uint64_t key_repeat_timeout_ms;
 };
 
 struct velvet_keymap_deferred_action {
@@ -73,6 +73,7 @@ struct velvet_input {
   struct string command_buffer;
   struct velvet_input_options options;
   struct velvet_keymap *keymap;
+  uint64_t last_repeat;
 };
 
 struct velvet_session_features {
