@@ -2,7 +2,7 @@
 #define PLATFORM_H
 
 struct platform_winsize {
-  int lines, colums, x_pixel, y_pixel;
+  int lines, columns, x_pixel, y_pixel;
 };
 
 void platform_get_winsize(struct platform_winsize *w);

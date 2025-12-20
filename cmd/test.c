@@ -46,8 +46,8 @@ struct dumb_screen {
 
 struct bounds bsmall = {.columns = 5, .lines = 5};
 struct bounds blarge = {.columns = 8, .lines = 5};
-struct platform_winsize bsmall2 = {.colums = 5, .lines = 5};
-struct platform_winsize blarge2 = {.colums = 8, .lines = 5};
+struct platform_winsize bsmall2 = {.columns = 5, .lines = 5};
+struct platform_winsize blarge2 = {.columns = 8, .lines = 5};
 
 struct dumb_screen *make_dumb_screen(int rows, int cols, char g[rows][cols]) {
   struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols, 1);

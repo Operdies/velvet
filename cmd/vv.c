@@ -244,7 +244,7 @@ int main(int argc, char **argv) {
   if (!args.foreground) {
     struct platform_winsize ws = {0};
     platform_get_winsize(&ws);
-    if (ws.lines == 0 || ws.colums == 0) {
+    if (ws.lines == 0 || ws.columns == 0) {
       fprintf(stderr, "Error getting terminal size. Exiting.\n");
       return 1;
     }
@@ -313,7 +313,7 @@ static void vv_attach_update_size(int sockfd) {
   string_push_format_slow(&vv_attach_option_buffer, 
                            "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
                            ws.lines,
-                           ws.colums,
+                           ws.columns,
                            ws.y_pixel,
                            ws.x_pixel);
   io_write(sockfd, string_as_u8_slice(vv_attach_option_buffer));
@@ -334,7 +334,7 @@ static void vv_attach_handshake(int sockfd, struct platform_winsize ws, int inpu
                           "set columns_pixels %d\n"
                           "set no_repeat_wide_chars %c\n",
                           ws.lines,
-                          ws.colums,
+                          ws.columns,
                           ws.y_pixel,
                           ws.x_pixel,
                           no_repeat_wide_chars ? 't' : 'f');

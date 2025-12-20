@@ -11,10 +11,10 @@ static float factor = 0.5;
 void velvet_scene_arrange(struct velvet_scene *m) {
   struct {
     int ws_col, ws_row;
-  } ws = {.ws_col = m->ws.colums, .ws_row = m->ws.lines};
+  } ws = {.ws_col = m->ws.columns, .ws_row = m->ws.lines};
   int i, n;
   int mh, mx, mw, my, sy, sw, nm, ns;
-  int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.colums);
+  int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.columns);
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.lines);
 
   n = m->hosts.length;
@@ -195,7 +195,7 @@ void velvet_scene_remove_exited(struct velvet_scene *m) {
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct platform_winsize w) {
-  if (m->ws.colums != w.colums || m->ws.lines != w.lines || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
+  if (m->ws.columns != w.columns || m->ws.lines != w.lines || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
     m->ws = w;
     velvet_scene_arrange(m);
     struct pty_host *h;
@@ -417,10 +417,10 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   struct velvet_scene_renderer *r = &m->renderer;
   string_clear(&r->draw_buffer);
 
-  if (!r->cells || r->h != m->ws.lines || r->w != m->ws.colums) {
+  if (!r->cells || r->h != m->ws.lines || r->w != m->ws.columns) {
     free(r->cells);
     free(r->lines);
-    r->h = m->ws.lines; r->w = m->ws.colums;
+    r->h = m->ws.lines; r->w = m->ws.columns;
     r->cells = velvet_calloc(sizeof(*r->cells), r->h * r->w);
     r->lines = velvet_calloc(sizeof(*r->lines), r->h);
     for (int i = 0; i < r->h; i++) {

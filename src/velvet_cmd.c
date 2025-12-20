@@ -160,7 +160,7 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *source, struct u8
   if (u8_match(option, "lines")) {
     if (source) source->ws.lines = digit;
   } else if (u8_match(option, "columns")) {
-    if (source) source->ws.colums = digit;
+    if (source) source->ws.columns = digit;
   } else if (u8_match(option, "lines_pixels")) {
     if (source) source->ws.y_pixel = digit;
   } else if (u8_match(option, "columns_pixels")) {
