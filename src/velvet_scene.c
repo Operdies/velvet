@@ -65,15 +65,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
 #define CTRL(x) ((x) & 037)
 #endif
 
-static void pty_host_invalidate(struct pty_host *h) {
-  vte_invalidate_screen(&h->emulator);
-}
-
 static void velvet_scene_swap_clients(struct velvet_scene *m, size_t c1, size_t c2) {
   if (c1 != c2) {
     vec_swap(&m->hosts, c1, c2);
-    pty_host_invalidate(vec_nth(&m->hosts, c1));
-    pty_host_invalidate(vec_nth(&m->hosts, c2));
   }
 }
 
@@ -87,8 +81,6 @@ void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
   if (m->focus != focus) {
     struct pty_host *current_focus = vec_nth(&m->hosts, m->focus);
     struct pty_host *new_focus = vec_nth(&m->hosts, focus);
-    pty_host_invalidate(current_focus);
-    pty_host_invalidate(new_focus);
     m->focus = focus;
     host_notify_focus(current_focus, false);
     host_notify_focus(new_focus, true);
@@ -198,10 +190,6 @@ void velvet_scene_resize(struct velvet_scene *m, struct platform_winsize w) {
   if (m->ws.columns != w.columns || m->ws.lines != w.lines || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
     m->ws = w;
     velvet_scene_arrange(m);
-    struct pty_host *h;
-    vec_foreach(h, m->hosts) {
-      pty_host_invalidate(h);
-    }
   }
 }
 

@@ -485,7 +485,6 @@ void vte_set_size(struct vte *vte, int w, int h) {
     } else {
       vte_init_primary_screen(vte);
     }
-    vte_invalidate_screen(vte);
   }
 }
 
@@ -542,8 +541,4 @@ void vte_destroy(struct vte *vte) {
 
 struct screen *vte_get_current_screen(struct vte *vte) {
   return vte->options.alternate_screen ? &vte->alternate : &vte->primary;
-}
-
-void vte_invalidate_screen(struct vte *vte) {
-  struct screen *s = vte_get_current_screen(vte);
 }
