@@ -242,9 +242,9 @@ int main(int argc, char **argv) {
   // The server should be detached from the current process hierarchy.
   // We do this with a classic double fork()
   if (!args.foreground) {
-    struct platform_winsize ws = {0};
+    struct rect ws = {0};
     platform_get_winsize(&ws);
-    if (ws.lines == 0 || ws.columns == 0) {
+    if (ws.h == 0 || ws.w == 0) {
       fprintf(stderr, "Error getting terminal size. Exiting.\n");
       return 1;
     }
@@ -307,19 +307,19 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
 
 static struct string vv_attach_option_buffer = {0};
 static void vv_attach_update_size(int sockfd) {
-  struct platform_winsize ws;
+  struct rect ws;
   platform_get_winsize(&ws);
   string_clear(&vv_attach_option_buffer);
   string_push_format_slow(&vv_attach_option_buffer, 
                            "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
-                           ws.lines,
-                           ws.columns,
+                           ws.h,
+                           ws.w,
                            ws.y_pixel,
                            ws.x_pixel);
   io_write(sockfd, string_as_u8_slice(vv_attach_option_buffer));
 }
 
-static void vv_attach_handshake(int sockfd, struct platform_winsize ws, int input_fd, int output_fd) {
+static void vv_attach_handshake(int sockfd, struct rect ws, int input_fd, int output_fd) {
   string_clear(&vv_attach_option_buffer);
   int fds[2] = {input_fd, output_fd};
   bool no_repeat_wide_chars = false;
@@ -333,8 +333,8 @@ static void vv_attach_handshake(int sockfd, struct platform_winsize ws, int inpu
                           "set lines_pixels %d\n"
                           "set columns_pixels %d\n"
                           "set no_repeat_wide_chars %c\n",
-                          ws.lines,
-                          ws.columns,
+                          ws.h,
+                          ws.w,
                           ws.y_pixel,
                           ws.x_pixel,
                           no_repeat_wide_chars ? 't' : 'f');
@@ -490,7 +490,7 @@ static void vv_attach(struct velvet_args args) {
 
   if (sigaction(SIGWINCH, &sa, NULL) == -1) velvet_die("sigaction:");
 
-  struct platform_winsize ws;
+  struct rect ws;
   platform_get_winsize(&ws);
   int sockfd = vv_connect(args.socket);
 

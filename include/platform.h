@@ -2,11 +2,11 @@
 #define PLATFORM_H
 
 #include <stdint.h>
-struct platform_winsize {
-  int lines, columns, x_pixel, y_pixel;
+struct rect {
+  int x, y, h, w, x_pixel, y_pixel;
 };
 
-void platform_get_winsize(struct platform_winsize *w);
+void platform_get_winsize(struct rect *w);
 uint64_t get_ms_since_startup(void);
 
 extern const struct PLATFORM_IMPL {

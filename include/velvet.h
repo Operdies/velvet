@@ -85,7 +85,7 @@ struct velvet_session {
   struct string pending_output; // buffered output
   int input;                    // stdin
   int output;                   // stdout
-  struct platform_winsize ws;
+  struct rect ws;
   struct {
     struct string buffer; // partial commands
     int lines;

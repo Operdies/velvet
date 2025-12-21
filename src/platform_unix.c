@@ -17,13 +17,13 @@ struct setup_pair {
   setup_func disable;
 };
 
-void platform_get_winsize(struct platform_winsize *w) {
+void platform_get_winsize(struct rect *w) {
   struct winsize ws;
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     velvet_die("TIOCGWINSZ:");
   }
-  *w = (struct platform_winsize){
-      .columns = ws.ws_col, .lines = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
+  *w = (struct rect){
+      .w = ws.ws_col, .h = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
 }
 
 uint64_t get_ms_since_startup(void) {

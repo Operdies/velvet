@@ -179,27 +179,27 @@ static void draw_no_mans_land(struct velvet *velvet) {
   char *dash = "─";
   char *corner = "┘";
   vec_foreach(s, velvet->sessions) {
-    if (s->ws.columns && s->ws.lines) {
+    if (s->ws.w && s->ws.h) {
       string_clear(&scratch);
       string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
       // 1. Draw the empty space to the right of this client
-      if (s->ws.columns > focused->ws.columns) {
-        for (int i = 0; i < focused->ws.lines; i++) {
-          string_push_csi(&scratch, 0, INT_SLICE(i + 1, focused->ws.columns + 1), "H");
-          int draw_count = s->ws.columns - focused->ws.columns;
+      if (s->ws.w > focused->ws.w) {
+        for (int i = 0; i < focused->ws.h; i++) {
+          string_push_csi(&scratch, 0, INT_SLICE(i + 1, focused->ws.w + 1), "H");
+          int draw_count = s->ws.w - focused->ws.w;
           string_push_slice(&scratch, u8_slice_from_cstr(pipe));
           if (--draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr("·"));
           if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
         }
       }
       // 2. Draw the empty space below this client
-      for (int i = focused->ws.lines; i < s->ws.lines; i++) {
-        int draw_count = s->ws.columns;
+      for (int i = focused->ws.h; i < s->ws.h; i++) {
+        int draw_count = s->ws.w;
         string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
-        if (i == focused->ws.lines) {
+        if (i == focused->ws.h) {
           string_push_slice(&scratch, u8_slice_from_cstr(dash));
           draw_count--;
-          int n_dashes = MIN(draw_count, focused->ws.columns - 1);
+          int n_dashes = MIN(draw_count, focused->ws.w - 1);
           string_push_csi(&scratch, 0, INT_SLICE(n_dashes), "b");
           draw_count -= n_dashes;
           if (draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr(corner));
@@ -308,7 +308,7 @@ static void velvet_default_config(struct velvet *v) {
 
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
-  struct platform_winsize ws = {.columns = 80, .lines = 24, .x_pixel = 800, .y_pixel = 600};
+  struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
   struct io *const loop = &velvet->event_loop;
 
   {
@@ -334,7 +334,7 @@ void velvet_loop(struct velvet *velvet) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
     if (focus) {
-      if (focus->ws.columns && focus->ws.lines && (focus->ws.columns != velvet->scene.ws.columns || focus->ws.lines != velvet->scene.ws.lines)) {
+      if (focus->ws.w && focus->ws.h && (focus->ws.w != velvet->scene.ws.w || focus->ws.h != velvet->scene.ws.h)) {
         velvet_scene_resize(&velvet->scene, focus->ws);
         did_resize = true;
         // Defer redraw until the clients have actually updated. Redrawing right away leads to flickering

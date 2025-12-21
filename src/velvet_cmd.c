@@ -9,7 +9,6 @@ bool velvet_cmd_iterator_next(struct velvet_cmd_iterator *it) {
   struct u8_slice t = it->src;
   size_t c0 = it->cursor;
   size_t cursor = it->cursor;
-  ;
 
   for (; cursor < t.len;) {
     char ch = t.content[cursor];
@@ -154,13 +153,12 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *source, struct u8
     // the sender is not a client, so we should apply this change to the focused session if possible
     source = velvet_get_focused_session(v);
   }
-  velvet_log("Set %.*s to %.*s", (int)option.len, option.content, (int)value.len, value.content);
   int digit = u8_slice_digit(value);
   bool boolean = digit || (value.len && value.content[0] == 't');
   if (u8_match(option, "lines")) {
-    if (source) source->ws.lines = digit;
+    if (source) source->ws.h = digit;
   } else if (u8_match(option, "columns")) {
-    if (source) source->ws.columns = digit;
+    if (source) source->ws.w = digit;
   } else if (u8_match(option, "lines_pixels")) {
     if (source) source->ws.y_pixel = digit;
   } else if (u8_match(option, "columns_pixels")) {

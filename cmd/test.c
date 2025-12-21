@@ -44,10 +44,8 @@ struct dumb_screen {
   char cells[];
 };
 
-struct bounds bsmall = {.columns = 5, .lines = 5};
-struct bounds blarge = {.columns = 8, .lines = 5};
-struct platform_winsize bsmall2 = {.columns = 5, .lines = 5};
-struct platform_winsize blarge2 = {.columns = 8, .lines = 5};
+struct rect bsmall = {.w = 5, .h = 5};
+struct rect blarge = {.w = 8, .h = 5};
 
 struct dumb_screen *make_dumb_screen(int rows, int cols, char g[rows][cols]) {
   struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols, 1);
@@ -186,7 +184,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   struct velvet_scene v = velvet_scene_default;
   struct pty_host *p = vec_new_element(&v.hosts);
   p->emulator = vte_default;
-  velvet_scene_resize(&v, blarge2);
+  velvet_scene_resize(&v, blarge);
   pty_host_resize(p, blarge);
 
   {
@@ -216,7 +214,7 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   struct velvet_scene v = velvet_scene_default;
   struct pty_host *p = vec_new_element(&v.hosts);
   p->emulator = vte_default;
-  velvet_scene_resize(&v, bsmall2);
+  velvet_scene_resize(&v, bsmall);
   pty_host_resize(p, bsmall);
 
   pty_host_process_output(p, u8_slice_from_cstr(input));
@@ -255,7 +253,7 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
   struct velvet_scene v = velvet_scene_default;
   struct pty_host p = {.emulator = vte_default, .border_width = 0};
   vec_push(&v.hosts, &p);
-  velvet_scene_resize(&v, blarge2);
+  velvet_scene_resize(&v, blarge);
   pty_host_resize(&p, blarge);
   pty_host_process_output(&p, u8_slice_from_cstr(input));
   {

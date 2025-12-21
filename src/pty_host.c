@@ -60,35 +60,36 @@ void pty_host_update_cwd(struct pty_host *p) {
 
 void pty_host_process_output(struct pty_host *pty_host, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
   vte_process(&pty_host->emulator, str);
 }
 
-static bool bounds_equal(struct bounds b1, struct bounds b2) {
-  return b1.columns == b2.columns && b1.lines == b2.lines && b1.x_pixel == b2.x_pixel && b1.y_pixel == b2.y_pixel;
+static bool rect_same_size(struct rect b1, struct rect b2) {
+  return b1.w == b2.w && b1.h == b2.h;
 }
 
-void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
+void pty_host_resize(struct pty_host *pty_host, struct rect outer) {
+  if (pty_host->dragging) return;
   // Refuse to go below a minimum size
-  if (outer.columns < 2) outer.columns = 2;
-  if (outer.lines < 2) outer.lines = 2;
+  int min_size = pty_host->border_width * 2 + 1;
+  if (outer.w < min_size) outer.w = min_size;
+  if (outer.h < min_size) outer.h = min_size;
 
-  int pixels_per_column = (int)((float)outer.x_pixel / (float)outer.columns);
-  int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.lines);
+  int pixels_per_column = (int)((float)outer.x_pixel / (float)outer.w);
+  int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.h);
 
-  bool leftmost = outer.x == 0;
-
-  struct bounds inner;
-  inner.x = outer.x + (leftmost ? 0 : pty_host->border_width);
-  inner.y = outer.y + pty_host->border_width;
-  inner.columns = outer.columns - (inner.x - outer.x);
-  inner.lines = outer.lines - (inner.y - outer.y);
-  inner.x_pixel = inner.columns * pixels_per_column;
-  inner.y_pixel = inner.lines * pixels_per_row;
+  struct rect inner = {
+      .x = outer.x + pty_host->border_width,
+      .y = outer.y + pty_host->border_width,
+      .w = outer.w - (inner.x - outer.x) - pty_host->border_width,
+      .h = outer.h - (inner.y - outer.y) - pty_host->border_width,
+      .x_pixel = inner.w * pixels_per_column,
+      .y_pixel = inner.h * pixels_per_row,
+  };
 
   // if (pty_host->rect.window.columns != outer.columns || pty_host->rect.window.lines != outer.lines) {
-  if (!bounds_equal(pty_host->rect.client, inner)) {
-    struct winsize ws = {.ws_col = inner.columns, .ws_row = inner.lines, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
+  if (!rect_same_size(pty_host->rect.client, inner)) {
+    struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
     if (pty_host->pty) ioctl(pty_host->pty, TIOCSWINSZ, &ws);
     if (pty_host->pid) kill(pty_host->pid, SIGWINCH);
   }
@@ -96,13 +97,13 @@ void pty_host_resize(struct pty_host *pty_host, struct bounds outer) {
   pty_host->rect.window = outer;
   pty_host->rect.client = inner;
 
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.columns, pty_host->rect.client.lines);
+  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
 }
 
 void pty_host_start(struct pty_host *pty_host) {
   struct winsize pty_hostsize = {
-      .ws_col = pty_host->rect.client.columns,
-      .ws_row = pty_host->rect.client.lines,
+      .ws_col = pty_host->rect.client.w,
+      .ws_row = pty_host->rect.client.h,
       .ws_xpixel = pty_host->rect.client.x_pixel,
       .ws_ypixel = pty_host->rect.client.y_pixel,
   };

@@ -11,11 +11,11 @@ static float factor = 0.5;
 void velvet_scene_arrange(struct velvet_scene *m) {
   struct {
     int ws_col, ws_row;
-  } ws = {.ws_col = m->ws.columns, .ws_row = m->ws.lines};
+  } ws = {.ws_col = m->ws.w, .ws_row = m->ws.h};
   int i, n;
   int mh, mx, mw, my, sy, sw, nm, ns;
-  int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.columns);
-  int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.lines);
+  int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.w);
+  int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.h);
 
   n = m->hosts.length;
 
@@ -38,9 +38,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
 
   for (; i < nmaster && i < n; i++) {
     struct pty_host *p = vec_nth(&m->hosts, i);
-    struct bounds b = {.x = mx, .y = my, .columns = mw, .lines = mh};
-    b.x_pixel = b.columns * pixels_per_column;
-    b.y_pixel = b.lines * pixels_per_row;
+    struct rect b = {.x = mx, .y = my, .w = mw, .h = mh};
+    b.x_pixel = b.w * pixels_per_column;
+    b.y_pixel = b.h * pixels_per_row;
     pty_host_resize(p, b);
     my += mh;
   }
@@ -51,9 +51,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   for (; i < n; i++) {
     struct pty_host *p = vec_nth(&m->hosts, i);
     int height = (float)stack_height_left / stack_items_left;
-    struct bounds b = {.x = mw, .y = sy, .columns = sw, .lines = height};
-    b.x_pixel = b.columns * pixels_per_column;
-    b.y_pixel = b.lines * pixels_per_row;
+    struct rect b = {.x = mw, .y = sy, .w = sw, .h = height};
+    b.x_pixel = b.w * pixels_per_column;
+    b.y_pixel = b.h * pixels_per_row;
     pty_host_resize(p, b);
     sy += height;
     stack_items_left--;

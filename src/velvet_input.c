@@ -109,8 +109,9 @@ static void mouse_debug_logging(struct mouse_sgr sgr) {
 struct pty_host *coord_to_client(struct velvet *v, struct mouse_sgr sgr) {
   for (size_t i = 0; i < v->scene.hosts.length; i++) {
     struct pty_host *h = vec_nth(&v->scene.hosts, i);
-    struct bounds b = h->rect.window;
-    if (b.x <= sgr.column && (b.x + b.columns) >= sgr.column && b.y <= sgr.row && (b.y + b.lines) >= sgr.row) {
+    if (h->dragging) continue;
+    struct rect b = h->rect.window;
+    if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
       return h;
       break;
     }
@@ -163,8 +164,8 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
     if (sgr.event_type & mouse_move && sgr.button_state == mouse_none) {
       for (size_t i = 0; i < v->scene.hosts.length; i++) {
         struct pty_host *h = vec_nth(&v->scene.hosts, i);
-        struct bounds b = h->rect.window;
-        if (b.x <= sgr.column && (b.x + b.columns) >= sgr.column && b.y <= sgr.row && (b.y + b.lines) >= sgr.row) {
+        struct rect b = h->rect.window;
+        if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
           velvet_scene_set_focus(&v->scene, i);
           break;
         }

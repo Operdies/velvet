@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include "screen.h"
 
-#define CLAMP(x, low, high) (MIN(high, MAX(x, low)))
 #define screen_column(g) (g->cursor.column)
 #define screen_row(g) (&g->lines[g->cursor.line])
 
