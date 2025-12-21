@@ -254,7 +254,7 @@ static void render_buffer_add_damage(struct velvet_render_buffer_line *f, int st
     f->damage[n_damage - 1].end = end;
   } else {
     f->damage[n_damage].start = start;
-    f->damage[n_damage].end = end - 1;
+    f->damage[n_damage].end = end;
     f->n_damage++;
   }
 }
@@ -282,9 +282,11 @@ static int velvet_render_calculate_damage(struct velvet_render *r) {
       if (!cell_equals(f->cells[start], b->cells[start])) {
         int end = start + 1;
         for (; end < r->w && !cell_equals(f->cells[end], b->cells[end]); end++);
+        end--;
         render_buffer_add_damage(f, start, end, !r->options.display_damage);
-        start = end - 1;
+        start = end;
         damage += end - start + 1;
+        if (end == r->w - 1) break;
       }
     }
 
@@ -314,6 +316,7 @@ static void velvet_render_render_buffer(struct velvet_render *r,
       int start = f->damage[dmg].start;
       int end = f->damage[dmg].end;
       if (start > end) continue;
+      assert(end < r->w);
       velvet_render_position_cursor(r, line, start);
       for (int col = start; col <= end; col++) {
         struct screen_cell *c = &f->cells[col];
@@ -494,7 +497,7 @@ static void velvet_render_swap_buffers(struct velvet_render *r) {
   string_clear(&r->draw_buffer);
   r->current_buffer = (r->current_buffer + 1) % LENGTH(r->buffers);
   struct velvet_render_buffer *buffer = &r->buffers[r->current_buffer];
-  struct screen_cell space = {.codepoint = ' '};
+  struct screen_cell space = {.codepoint = codepoint_space };
   for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
 }
 
