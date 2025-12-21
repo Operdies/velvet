@@ -523,7 +523,6 @@ void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func
   velvet_scene_render_damage(m, render_func, context);
 }
 
-// TODO: Invalidate renderer when any pty client is resized or moved */
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
   if (m->hosts.length == 0) return;
   struct pty_host *focused = velvet_scene_get_focus(m);
@@ -673,7 +672,6 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
     sgr_color_apply(&sgr, style.bg, false);
   }
 
-  // struct screen_cell_style new_style = { .attr = attr, .bg = bg, .fg = fg };
   r->current_style = style;
 
   if (sgr.n) {

@@ -107,13 +107,56 @@ static void mouse_debug_logging(struct mouse_sgr sgr) {
 }
 
 struct pty_host *coord_to_client(struct velvet *v, struct mouse_sgr sgr) {
-  for (size_t i = 0; i < v->scene.hosts.length; i++) {
-    struct pty_host *h = vec_nth(&v->scene.hosts, i);
+  /* convert to 0-index */
+  sgr.column--;
+  sgr.row--;
+  struct pty_host *h;
+
+  /* then fall back to full window */
+  vec_rforeach(h, v->scene.hosts) {
+    struct rect b = h->rect.client;
+    if (b.x <= sgr.column && (b.x + b.w) > sgr.column && b.y <= sgr.row && (b.y + b.h) > sgr.row) {
+      return h;
+    }
+  }
+  return nullptr;
+}
+
+static bool between(int value, int lo, int hi) {
+  return value >= lo && value <= hi;
+}
+
+struct pty_host *coord_to_title(struct velvet *v, struct mouse_sgr sgr) {
+  /* convert to 0-index */
+  sgr.column--;
+  sgr.row--;
+  struct pty_host *h;
+  /* first try to match the title bar */
+  vec_foreach(h, v->scene.hosts) {
     if (h->dragging) continue;
     struct rect b = h->rect.window;
-    if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
+    int bw = h->border_width;
+    if (!bw) continue;
+    if (between(sgr.column, b.x + bw, b.x + b.w - bw - 1) /* columns match ? */
+        && sgr.row == b.y + bw - 1 /* line matches ? */) {
       return h;
-      break;
+    }
+  }
+  return nullptr;
+}
+
+struct pty_host *coord_to_window(struct velvet *v, struct mouse_sgr sgr) {
+  /* convert to 0-index */
+  sgr.column--;
+  sgr.row--;
+  struct pty_host *h;
+
+  /* then fall back to full window */
+  vec_rforeach(h, v->scene.hosts) {
+    if (h->dragging) continue;
+    struct rect b = h->rect.window;
+    if (b.x <= sgr.column && (b.x + b.w) > sgr.column && b.y <= sgr.row && (b.y + b.h) > sgr.row) {
+      return h;
     }
   }
   return nullptr;
@@ -156,20 +199,6 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
 
   // mouse_debug_logging(sgr);
-
-  if (v->input.options.focus_follows_mouse) {
-    if (sgr.event_type & mouse_move && sgr.button_state == mouse_none) {
-      for (size_t i = 0; i < v->scene.hosts.length; i++) {
-        struct pty_host *h = vec_nth(&v->scene.hosts, i);
-        struct rect b = h->rect.window;
-        if (b.x <= sgr.column && (b.x + b.w) >= sgr.column && b.y <= sgr.row && (b.y + b.h) >= sgr.row) {
-          velvet_scene_set_focus(&v->scene, i);
-          break;
-        }
-      }
-    }
-  }
-
   struct pty_host *target = nullptr;
   if (in->dragging.id) {
     vec_find(target, v->scene.hosts, target->pty == in->dragging.id);
@@ -178,14 +207,10 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
     }
   }
 
-  if (!target) target = coord_to_client(v, sgr);
+  if (!target) target = coord_to_window(v, sgr);
   if (!target) return;
 
-  struct mouse_sgr trans = sgr;
-  trans.row = sgr.row - target->rect.client.y;
-  trans.column = sgr.column - target->rect.client.x;
-
-  if (in->dragging.id || trans.row == 0) {
+  if (in->dragging.id || (target == coord_to_title(v, sgr) && (sgr.event_type == mouse_click))) {
     if (sgr.event_type == mouse_click && sgr.trigger == mouse_down) {
       in->dragging = (struct velvet_input_drag_event){
           .id = target->pty,
@@ -195,9 +220,10 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
           .drag_start.client_y = target->rect.window.y,
       };
       target->dragging = true;
+      velvet_scene_set_focus(&v->scene, vec_index(&v->scene.hosts, target));
     } else if (sgr.event_type == mouse_click && sgr.trigger == mouse_up) {
       /* drop */
-      struct pty_host *drop_target = coord_to_client(v, sgr);
+      struct pty_host *drop_target = coord_to_window(v, sgr);
       target->dragging = false;
       if (drop_target && drop_target != target) {
         int a = vec_index(&v->scene.hosts, target);
@@ -206,7 +232,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
         velvet_scene_set_focus(&v->scene, b);
       }
       in->dragging = (struct velvet_input_drag_event) {0};
-    } else if (in->dragging.id && sgr.event_type & mouse_move) {
+    } else if (in->dragging.id && (sgr.event_type & mouse_move)) {
       int delta_x = sgr.column - in->dragging.drag_start.x;
       int delta_y =  sgr.row - in->dragging.drag_start.y;
       int adj_x = target->rect.window.x - in->dragging.drag_start.client_x;
@@ -220,9 +246,18 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
       velvet_log("Border drag: %d,%d", delta_x, delta_y);
     }
     return;
-  } else if (v->input.options.focus_follows_mouse && target) {
+  }
+
+  if (v->input.options.focus_follows_mouse && target) {
     velvet_scene_set_focus(&v->scene, vec_index(&v->scene.hosts, target));
   }
+
+  target = coord_to_client(v, sgr);
+  if (!target) return;
+
+  struct mouse_sgr trans = sgr;
+  trans.row = sgr.row - target->rect.client.y;
+  trans.column = sgr.column - target->rect.client.x;
 
   struct mouse_options m = target->emulator.options.mouse;
   if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
