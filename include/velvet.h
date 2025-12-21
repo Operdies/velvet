@@ -51,7 +51,7 @@ struct velvet_keymap {
    */
   on_key *on_key;
   void *data;
-  bool may_repeat;
+  bool is_repeatable;
   struct velvet_key_event key;
 };
 
@@ -109,7 +109,12 @@ struct velvet {
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e);
 void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
-void velvet_process_input(struct velvet *in, struct u8_slice str);
+/* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
+ * This input will not be parsed for CSI sequences or any current keymap. */
+void velvet_input_put(struct velvet *in, struct u8_slice str);
+/* Process e.g. standard input from the keyboard. This input will be parsed for CSI sequences and matched against the
+ * current keymap. */
+void velvet_input_process(struct velvet *in, struct u8_slice str);
 void velvet_input_destroy(struct velvet_input *v);
 void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence);
 struct velvet_keymap * velvet_keymap_map(struct velvet_keymap *root, struct u8_slice keys);

@@ -1,7 +1,6 @@
 #ifndef VELVET_KEYBOARD_H
 #define VELVET_KEYBOARD_H
 
-#include "collections.h"
 #include "text.h"
 #include <string.h>
 struct special_key {
@@ -25,14 +24,15 @@ struct special_key {
   X(UP, "\x1b[A")                                                                                                      \
   X(DOWN, "\x1b[B")                                                                                                    \
   X(RIGHT, "\x1b[C")                                                                                                   \
-  X(LEFT, "\x1b[D")\
-  X(ESC, "\x1b")
+  X(LEFT, "\x1b[D")                                                                                                    \
+  X(ESC, "\x1b")                                                                                                       \
+  X(SPACE, " ")
 
 static const struct special_key keys[] = {
 #define X(x, y) {.name = #x, .escape = y},
     SPECIAL_KEYS};
 #undef X
-#define X(x, y) static const struct special_key * VELVET_KEY_##x = 
+#define X(x, y) static const struct special_key *VELVET_KEY_##x =
 
 struct velvet_key {
   bool literal;

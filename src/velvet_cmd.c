@@ -223,12 +223,22 @@ static void velvet_cmd_map(struct velvet *v, struct velvet_cmd_arg_iterator *it)
     data->v = v;
     added->data = data;
     added->on_key = velvet_action_callback;
-    added->may_repeat = repeat;
+    added->is_repeatable = repeat;
     string_push_slice(&data->cmd, map_cmd);
     velvet_log("map %.*s to %.*s", (int)keys.len, keys.content, (int)data->cmd.len, data->cmd.content);
   } else {
     velvet_log("unable to add keymap  %.*s", (int)keys.len, keys.content);
   }
+}
+
+static void velvet_cmd_put(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+  struct u8_slice keys;
+  if (!velvet_cmd_arg_iterator_rest(it)) {
+    velvet_log("`put` missing keys.");
+    return;
+  }
+  keys = it->current;
+  velvet_input_put(v, keys);
 }
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
@@ -251,11 +261,13 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   struct velvet_cmd_arg_iterator it = {.src = cmd};
   struct u8_slice command;
 
-  while (velvet_cmd_arg_iterator_next(&it)) {
+  if (velvet_cmd_arg_iterator_next(&it)) {
     command = it.current;
     if (u8_match(command, "detach")) {
       struct velvet_session *focused = velvet_get_focused_session(v);
       if (focused) velvet_detach_session(v, focused);
+    } else if (u8_match(command, "put")) {
+      velvet_cmd_put(v, &it);
     } else if (u8_match(command, "map")) {
       velvet_cmd_map(v, &it);
     } else if (u8_match(command, "spawn")) {

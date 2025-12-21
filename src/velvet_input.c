@@ -335,30 +335,34 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
       } else {
         // this choord is terminal so on_key must be set
         assert(k->on_key);
-        // deliberately reset the keymap before invoking the mapping
-        // this gives the mapping the opportunity to modify the keymap.
-        if (k->may_repeat) {
-          uint64_t now = get_ms_since_startup();
-          if (v->input.last_repeat) {
-            if (now - v->input.last_repeat > v->input.options.key_repeat_timeout_ms) {
-              /* timeout -- handle keystroke in root mapping */
-              v->input.keymap = k->root;
-              break;
-            }
-          }
-          v->input.last_repeat = now;
-          k->on_key(k, key);
-        } else {
-          /* if the key is not repeatable, return to root immediately. */
-          v->input.keymap = k->root;
-          k->on_key(k, key);
-        }
+
+        /* If the current keymap is still active because of a repeat,
+         * only trigger a continuation if it allows repeating. */
+        if (v->input.last_repeat && !k->is_repeatable) break;
+
+        uint64_t now = get_ms_since_startup();
+        uint64_t last_repeat = v->input.last_repeat;
+        if (!last_repeat) last_repeat = now;
+        uint64_t timeout = v->input.options.key_repeat_timeout_ms;
+
+        /* if `timeout` has elapsed since the previous repeat, break */
+        if (k->is_repeatable && now - last_repeat > timeout) break;
+
+        /* update the repeat timer */
+        if (k->is_repeatable) v->input.last_repeat = now;
+
+        k->on_key(k, key);
+
+        /* reset the keymap unless the key is repeatable */
+        if (!k->is_repeatable) v->input.keymap = k->root;
       }
       return;
     }
   }
 
+  bool did_repeat = v->input.last_repeat > 0;
   v->input.last_repeat = 0;
+
   // ESC cancels any pending keybind
   if (key.key.literal && key.key.symbol.numeric == ESC && current != root) {
     v->input.keymap = root;
@@ -367,6 +371,10 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
 
   if (current == root) {
     root->on_key(root, key);
+  } else if (did_repeat) {
+    /* don't unwind the unresolved stack if we are handling a repeat timeout */
+    v->input.keymap = root;
+    dispatch_key_event(v, key);
   } else {
     // Since the current key was not matched, we should match the longest
     // prefix and then reinsert all pending keys
@@ -456,7 +464,7 @@ static void dispatch_normal(struct velvet *v, uint8_t ch) {
   assert(v->input.keymap);
 }
 
-void velvet_process_input(struct velvet *v, struct u8_slice str) {
+void velvet_input_process(struct velvet *v, struct u8_slice str) {
   // velvet_log("Input: %.*s (%d)", (int)str.len, str.content, (int)str.len);
   struct velvet_input *in = &v->input;
   for (size_t i = 0; i < str.len; i++) {
@@ -573,104 +581,116 @@ static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
   return false;
 }
 
-#define MAX_KEYS 10
-int keymap_parse_keys(struct u8_slice keys, struct velvet_key_event *events, int n_events) {
-  int count = 0;
-  struct velvet_key_event k = {0};
-  for (size_t i = 0; i < keys.len; i++) {
-    uint8_t ch = keys.content[i];
+struct velvet_key_iterator {
+  struct u8_slice src;
+  size_t cursor;
+  struct velvet_key_event current;
+  struct u8_slice current_range;
+  bool invalid;
+};
 
-    // '<' indicates a modifiers + key combo such as <C-S-M-w>, or a named key, such as
-    // <space>, <prefix>, <leader>, or other user defined named key
-    // If no known macro or modifiers are detected, we treat the sequence as a raw key sequence
-    // (vim-like behavior). So <asd will match the literal sequence {<, a, s, d}
-    if (ch == '<') {
-      uint32_t mods = 0;
-      size_t j = i + 1;
-      for (; j < keys.len && keys.content[j] != '>'; j++);
-      struct u8_slice inner = {.content = keys.content + i + 1, .len = j - i - 1};
-      if (inner.len > 0 && j < keys.len && keys.content[j] == '>') {
-        char *modifiers[] = {
-            "S-",    // shift     -- 1 << 0
-            "M-",    // alt       -- 1 << 1
-            "C-",    // ctrl      -- 1 << 2
-            "D-",    // super     -- 1 << 3
-            "H-",    // hyper     -- 1 << 4
-            "T-",    // meta      -- 1 << 5
-            "Caps-", // caps lock -- 1 << 6
-            "Num-",  // num lock  -- 1 << 7
-        };
-        struct u8_slice modifier_slices[LENGTH(modifiers)] = {0};
-        for (int i = 0; i < LENGTH(modifiers); i++) modifier_slices[i] = u8_slice_from_cstr(modifiers[i]);
+static bool is_whitespace(char ch) {
+  return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v';
+}
 
-        bool changed = true;
-        while (changed) {
-          changed = false;
-          for (int i = 0; i < LENGTH(modifiers); i++) {
-            struct u8_slice mod = modifier_slices[i];
-            if (u8_slice_starts_with(inner, mod)) {
-              inner = u8_slice_range(inner, mod.len, -1);
-              mods |= (1 << i);
-              changed = true;
-            }
-          }
-        }
-        struct velvet_key key = {0};
-        if (key_from_slice(inner, &key)){
-          k.key = key;
-          k.modifiers = mods;
-          if (count < n_events) {
-            events[count] = k;
-          }
-          count++;
-          k = (struct velvet_key_event){0};
-          i = j;
-          continue;
-        } else {
-          velvet_log("Unrecognized key %.*s", (int)inner.len, inner.content);
-        }
+static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
+  struct u8_slice t = it->src;
+  size_t cursor = it->cursor;
+  size_t key_end = 0;
+
+  // for (; cursor < t.len && is_whitespace(t.content[cursor]); cursor++);
+  if (cursor >= t.len || it->invalid) return false;
+
+  uint8_t ch = t.content[cursor];
+
+  if (ch == '<') {
+    size_t match = cursor + 1;
+    for (; match < t.len; match++) {
+      if (t.content[match] == '>') {
+        key_end = match + 1;
+        break;
       }
     }
+  }
 
-    k.key.literal = true;
-    k.key.symbol.numeric = ch;
-    if (count < n_events) {
-      events[count] = k;
+  if (key_end == 0 || (key_end - cursor) < 3) {
+    /* basic ascii key */
+    it->current = (struct velvet_key_event){.key = {.literal = true, .symbol.numeric = ch}};
+    it->cursor = cursor + 1;
+    it->current_range = u8_slice_range(t, cursor, cursor + 1);
+    return true;
+  }
+
+  /* this is a key chord enclosed in '<>' wiht optional modifiers */
+  uint32_t mods = 0;
+  it->current_range = u8_slice_range(t, cursor, key_end);
+  /* strip enclosing '<>' */
+  struct u8_slice inner = u8_slice_range(it->current_range, 1, -2);
+  struct u8_slice modifier_slices[] = {
+      u8_slice_from_cstr("S-"),    // shift     -- 1 << 0
+      u8_slice_from_cstr("M-"),    // alt       -- 1 << 1
+      u8_slice_from_cstr("C-"),    // ctrl      -- 1 << 2
+      u8_slice_from_cstr("D-"),    // super     -- 1 << 3
+      u8_slice_from_cstr("H-"),    // hyper     -- 1 << 4
+      u8_slice_from_cstr("T-"),    // meta      -- 1 << 5
+      u8_slice_from_cstr("Caps-"), // caps lock -- 1 << 6
+      u8_slice_from_cstr("Num-"),  // num lock  -- 1 << 7
+  };
+
+  bool changed = true;
+  while (changed && inner.len > 0) {
+    changed = false;
+    for (int i = 0; i < LENGTH(modifier_slices); i++) {
+      struct u8_slice mod = modifier_slices[i];
+      if (u8_slice_starts_with(inner, mod)) {
+        inner = u8_slice_range(inner, mod.len, -1);
+        mods |= (1 << i);
+        changed = true;
+      }
     }
-    count++;
-    k = (struct velvet_key_event){0};
   }
-  if (count >= n_events) {
-    velvet_log("Mapping '%.*s' rejected; the maximum allowed sequence is %d (was %d)", (int)keys.len, keys.content, MAX_KEYS, count);
-    return -1;
+
+  struct velvet_key key = {0};
+  if (!key_from_slice(inner, &key)) {
+    it->invalid = true;
+    it->cursor = t.len;
+    it->current_range = u8_slice_range(t, cursor, key_end - cursor);
+    return false;
   }
-  return count;
+  it->current = (struct velvet_key_event){.key = key, .modifiers = mods};
+  it->cursor = key_end;
+  return true;
 }
 
 void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence) {
-  int n_keys;
-  struct velvet_key_event keys[MAX_KEYS] = {0};
-  n_keys = keymap_parse_keys(key_sequence, keys, MAX_KEYS);
-  if (n_keys < 1) return;
-  for (int i = 0; root && i < n_keys; i++) {
-    for (root = root->first_child; root && !key_event_equals(root->key, keys[i]); root = root->next_sibling);
+  struct velvet_key_iterator it = { .src = key_sequence };
+  for (; velvet_key_iterator_next(&it); ) {
+    for (root = root->first_child; root && !key_event_equals(root->key, it.current); root = root->next_sibling);
   }
   if (root) velvet_keymap_remove_internal(root);
 }
 
 struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_slice key_sequence) {
-  int n_keys;
-  struct velvet_key_event keys[MAX_KEYS] = {0};
   struct velvet_keymap *prev, *chain, *parent;
   assert(root);
   assert(key_sequence.len);
 
-  n_keys = keymap_parse_keys(key_sequence, keys, MAX_KEYS);
-  if (n_keys < 1) return nullptr;
+  struct velvet_key_iterator it = { .src = key_sequence };
+  struct velvet_key_iterator test = it;
+  for (; velvet_key_iterator_next(&test);) {
+    if (test.invalid) {
+      velvet_log("Rejecting keymap %.*s: The key %.*s was not recognized.",
+                 (int)key_sequence.len,
+                 key_sequence.content,
+                 (int)test.current_range.len,
+                 test.current_range.content);
+    }
+  }
+
 
   parent = root;
-  for (int i = 0; i < n_keys; i++) {
-    struct velvet_key_event k = keys[i];
+  for (; velvet_key_iterator_next(&it); ) {
+    struct velvet_key_event k = it.current;
     prev = nullptr;
     for (chain = parent->first_child; chain && !key_event_equals(chain->key, k); prev = chain, chain = chain->next_sibling);
     if (!chain) {
@@ -694,4 +714,18 @@ struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_sl
   }
   parent->root = root->root ? root->root : root;
   return parent;
+}
+
+void velvet_input_put(struct velvet *in, struct u8_slice str) {
+  struct velvet_key_iterator it = { .src = str };
+  struct velvet_key_iterator copy = it;
+  for (; velvet_key_iterator_next(&copy); ) {
+    if (it.invalid) {
+      velvet_log("Put: rejecting invalid sequence %.*s", (int)str.len, str.content);
+    }
+  }
+  struct velvet_keymap *root = in->input.keymap->root;
+  for (; velvet_key_iterator_next(&it); ) {
+    velvet_input_send(root, it.current);
+  }
 }
