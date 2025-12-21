@@ -88,5 +88,6 @@ void velvet_scene_set_focus(struct velvet_scene *m, size_t focus);
 typedef void (render_func_t)(struct u8_slice str, void *context);
 void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context);
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context);
+struct pty_host *velvet_scene_get_focus(struct velvet_scene *m);
 
 #endif // VELVET_SCENE_H

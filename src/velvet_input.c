@@ -37,7 +37,7 @@ struct mouse_sgr {
 
 static void send(struct velvet *v, struct u8_slice s) {
   assert(v->scene.hosts.length > 0);
-  struct pty_host *focus = vec_nth(&v->scene.hosts, v->scene.focus);
+  struct pty_host *focus = velvet_scene_get_focus(&v->scene);
   string_push_slice(&focus->emulator.pending_input, s);
 }
 

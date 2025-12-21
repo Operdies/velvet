@@ -77,6 +77,14 @@ static void host_notify_focus(struct pty_host *host, bool focus) {
   }
 }
 
+struct pty_host *velvet_scene_get_focus(struct velvet_scene *m) {
+  if (m->hosts.length > 0)  {
+    if (m->focus >= m->hosts.length) m->focus = m->hosts.length - 1;
+    return vec_nth(&m->hosts, m->focus);
+  }
+  return nullptr;
+}
+
 void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
   if (m->focus != focus) {
     struct pty_host *current_focus = vec_nth(&m->hosts, m->focus);
