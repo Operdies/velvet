@@ -107,9 +107,6 @@ struct screen {
   struct cursor saved_cursor;
 };
 
-bool cell_equals(struct screen_cell a, struct screen_cell b);
-bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
-bool color_equals(struct color a, struct color b);
 void screen_move_or_scroll_down(struct screen *g);
 void screen_move_or_scroll_up(struct screen *g);
 void screen_backspace(struct screen *g);

@@ -228,9 +228,9 @@ static void velvet_scene_renderer_position_cursor(struct velvet_scene_renderer *
   r->cursor.line = line;
 }
 
-static void velvet_scene_renderer_draw_to_buffer(struct velvet_scene_renderer *r) {
-  int ll, lc;
-  ll = lc = -1;
+static bool cell_equals(struct screen_cell a, struct screen_cell b);
+static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
+static bool color_equals(struct color a, struct color b);
 
   for (int line = 0; line < r->h; line++) {
     struct velvet_scene_renderer_line *l = &r->lines[line];
@@ -570,3 +570,25 @@ static void velvet_scene_renderer_set_style(struct velvet_scene_renderer *r, str
   }
 }
 
+static bool color_equals(struct color a, struct color b) {
+  if (a.cmd != b.cmd) return false;
+  switch (a.cmd) {
+  case COLOR_RESET: return true;
+  case COLOR_RGB: return a.r == b.r && a.g == b.g && a.b == b.b;
+  case COLOR_TABLE: return a.table == b.table;
+  }
+  return false;
+}
+
+static bool cell_equals(struct screen_cell a, struct screen_cell b) {
+  // uint32_t n1, n2;
+  // n1 = a.symbol.numeric;
+  // n2 = b.symbol.numeric;
+  // /* treat 0 as space, and ignore text attributes / foreground color for spaces */
+  // if ((n1 == 0 || n1 == ' ') && (n2 == 0 || n2 == ' ')) return color_equals(a.style.bg, b.style.bg);
+  return utf8_equals(a.symbol, b.symbol) && cell_style_equals(a.style, b.style);
+}
+
+static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b) {
+  return a.attr == b.attr && color_equals(a.fg, b.fg) && color_equals(a.bg, b.bg);
+}
