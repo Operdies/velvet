@@ -68,12 +68,24 @@ struct velvet_keymap_deferred_action {
   struct velvet_key_event key;
 };
 
+struct velvet_input_drag_event {
+  struct {
+    /* the initial position of the mosue */
+    int x, y;
+    /* the initial position of the dragged client */
+    int client_x, client_y;
+  } drag_start;
+  /* the id of the client being dragged */
+  int id;
+};
+
 struct velvet_input {
   enum velvet_input_state state;
   struct string command_buffer;
   struct velvet_input_options options;
   struct velvet_keymap *keymap;
   uint64_t last_repeat;
+  struct velvet_input_drag_event dragging;
 };
 
 struct velvet_session_features {

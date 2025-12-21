@@ -152,6 +152,7 @@ static void send_mouse_sgr(struct pty_host *target, struct mouse_sgr trans) {
 }
 
 static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
+  struct velvet_input *in = &v->input;
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
 
   // mouse_debug_logging(sgr);
@@ -169,12 +170,60 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
     }
   }
 
-  struct pty_host *target = coord_to_client(v, sgr);
+  struct pty_host *target = nullptr;
+  if (in->dragging.id) {
+    vec_find(target, v->scene.hosts, target->pty == in->dragging.id);
+    if (!target) {
+      in->dragging = (struct velvet_input_drag_event) {0};
+    }
+  }
+
+  if (!target) target = coord_to_client(v, sgr);
   if (!target) return;
 
   struct mouse_sgr trans = sgr;
   trans.row = sgr.row - target->rect.client.y;
   trans.column = sgr.column - target->rect.client.x;
+
+  if (in->dragging.id || trans.row == 0) {
+    if (sgr.event_type == mouse_click && sgr.trigger == mouse_down) {
+      in->dragging = (struct velvet_input_drag_event){
+          .id = target->pty,
+          .drag_start.x = sgr.column,
+          .drag_start.y = sgr.row,
+          .drag_start.client_x = target->rect.window.x,
+          .drag_start.client_y = target->rect.window.y,
+      };
+      target->dragging = true;
+    } else if (sgr.event_type == mouse_click && sgr.trigger == mouse_up) {
+      /* drop */
+      struct pty_host *drop_target = coord_to_client(v, sgr);
+      target->dragging = false;
+      if (drop_target && drop_target != target) {
+        int a = vec_index(&v->scene.hosts, target);
+        int b = vec_index(&v->scene.hosts, drop_target);
+        vec_swap(&v->scene.hosts, a, b);
+        velvet_scene_set_focus(&v->scene, b);
+      }
+      in->dragging = (struct velvet_input_drag_event) {0};
+    } else if (in->dragging.id && sgr.event_type & mouse_move) {
+      int delta_x = sgr.column - in->dragging.drag_start.x;
+      int delta_y =  sgr.row - in->dragging.drag_start.y;
+      int adj_x = target->rect.window.x - in->dragging.drag_start.client_x;
+      int adj_y = target->rect.window.y - in->dragging.drag_start.client_y;
+      delta_x -= adj_x;
+      delta_y -= adj_y;
+      target->rect.window.x += delta_x;
+      target->rect.client.x += delta_x;
+      target->rect.window.y += delta_y;
+      target->rect.client.y += delta_y;
+      velvet_log("Border drag: %d,%d", delta_x, delta_y);
+    }
+    return;
+  } else if (v->input.options.focus_follows_mouse && target) {
+    velvet_scene_set_focus(&v->scene, vec_index(&v->scene.hosts, target));
+  }
+
   struct mouse_options m = target->emulator.options.mouse;
   if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
   if (m.mode != MOUSE_MODE_SGR) return;
@@ -184,6 +233,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
       ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
        sgr.event_type == mouse_click) ||
       (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none);
+
   // TODO: scroll wheel support
   if (do_send) {
     send_mouse_sgr(target, trans);
@@ -192,7 +242,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
 
 static void send_bracketed_paste(struct velvet *v) {
   struct velvet_input *in = &v->input;
-  struct pty_host *focus = vec_nth(&v->scene.hosts, v->scene.focus);
+  struct pty_host *focus = velvet_scene_get_focus(&v->scene);
   bool enclose = focus->emulator.options.bracketed_paste;
   uint8_t *start = in->command_buffer.content;
   size_t len = in->command_buffer.len;
@@ -485,7 +535,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
 }
 
 static void dispatch_focus(struct velvet *v, const struct csi *const c) {
-  struct pty_host *focus = vec_nth(&v->scene.hosts, v->scene.focus);
+  struct pty_host *focus = velvet_scene_get_focus(&v->scene);
   if (focus->emulator.options.focus_reporting) send(v, c->final == 'O' ? vt_focus_out : vt_focus_in);
 }
 
@@ -499,7 +549,7 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, const struct csi *const c) {
   send_csi_mouse(v, c);
 }
 static void dispatch_arrow_key(struct velvet *v, const struct csi *const c) {
-  struct pty_host *focus = vec_nth(&v->scene.hosts, v->scene.focus);
+  struct pty_host *focus = velvet_scene_get_focus(&v->scene);
   if (focus->emulator.options.application_mode) {
     send_bytes(v, ESC, 'O', c->final);
   } else {

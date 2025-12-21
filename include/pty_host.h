@@ -16,6 +16,7 @@ struct pty_host {
     struct rect window;
     struct rect client;
   } rect;
+  bool dragging;
   struct vte emulator;
 };
 
