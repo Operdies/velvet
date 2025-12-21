@@ -41,12 +41,14 @@ void io_dispatch(struct io *io) {
     vec_push(&io->pollfds, &fd);
   }
 
+  /* TODO: Switch to epoll / kqueue based implementation */
   struct io_schedule *next_schedule = nullptr;
   struct io_schedule *schedule;
   vec_foreach(schedule, io->scheduled_actions) {
     if (!next_schedule) next_schedule = schedule;
     else next_schedule = next_schedule->when < schedule->when ? next_schedule : schedule;
   }
+
   uint64_t now = get_ms_since_startup();
   int timeout = next_schedule ? next_schedule->when - now : -1;
   if (next_schedule && timeout < 0) timeout = 0;
@@ -61,6 +63,8 @@ void io_dispatch(struct io *io) {
     return;
   }
 
+  if (!polled) return;
+
   for (size_t i = 0; i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(&io->pollfds, i);
     struct io_source *src = vec_nth(&io->sources, i);
@@ -68,8 +72,8 @@ void io_dispatch(struct io *io) {
     for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < io->max_iterations; repeats++) {
       const int poll_ms = 0;
       // Read output
-      if (pfd->revents & POLLIN && src->ready_callback) {
-        src->ready_callback(src);
+      if (pfd->revents & POLLIN && src->on_readable) {
+        src->on_readable(src);
       } else if (pfd->revents & POLLIN) {
         int n = read(pfd->fd, io->buffer, sizeof(io->buffer));
         if (n == -1) {
@@ -83,18 +87,18 @@ void io_dispatch(struct io *io) {
             ERROR("EIO:");
             // assume this error is non-recoverable and close.
             struct u8_slice s = {0};
-            src->read_callback(src, s);
+            src->on_read(src, s);
             break;
           }
           ERROR("read:");
         } else {
           struct u8_slice s = {.len = (size_t)n, .content = io->buffer};
-          src->read_callback(src, s);
+          src->on_read(src, s);
         }
       }
       // write input
       if (pfd->revents & POLLOUT) {
-        src->write_callback(src);
+        src->on_writable(src);
       }
       pfd->revents = 0;
       int poll_ret = poll(pfd, 1, poll_ms);

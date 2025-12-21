@@ -435,9 +435,9 @@ static void vv_source(struct velvet_args args, int sock) {
   if (source == -1) velvet_fatal("cannot open %s:", args.source);
 
   struct vv_source context = {.source = source, .sock = sock, .loop = io_default};
-  struct io_source input = {.fd = source, .events = POLLIN, .read_callback = vv_source_input, .data = &context};
+  struct io_source input = {.fd = source, .events = POLLIN, .on_read = vv_source_input, .data = &context};
   io_add_source(&context.loop, input);
-  struct io_source output = {.fd = sock, .events = POLLIN, .read_callback = vv_source_output, .data = &context};
+  struct io_source output = {.fd = sock, .events = POLLIN, .on_read = vv_source_output, .data = &context};
   io_add_source(&context.loop, output);
 
   for (;;) {

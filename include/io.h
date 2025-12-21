@@ -4,9 +4,9 @@
 #include <poll.h>
 
 struct io_source;
-typedef void (*io_ready_callback)(struct io_source *src);
-typedef void (*io_read_callback)(struct io_source *src, struct u8_slice str);
-typedef void (*io_write_callback)(struct io_source *src);
+typedef void (*io_on_read)(struct io_source *src);
+typedef void (*io_on_readable)(struct io_source *src, struct u8_slice str);
+typedef void (*io_on_ritable)(struct io_source *src);
 
 enum IO_SOURCE_EVENT {
   IO_SOURCE_POLLIN = POLLIN,
@@ -19,10 +19,11 @@ struct io_source {
   /* pollfd events */
   enum IO_SOURCE_EVENT events;
   /* called when data is read from the file descriptor */
-  io_read_callback read_callback;
+  io_on_readable on_read;
   /* called in lieu of read_callback in case the client needs to manually read */
-  io_ready_callback ready_callback;
-  io_write_callback write_callback;
+  io_on_read on_readable;
+  /* called when the file descriptor is ready for writing */
+  io_on_ritable on_writable;
   /* user data */
   void *data;
 };

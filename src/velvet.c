@@ -271,7 +271,7 @@ static void session_output_callback(struct io_source *src) {
   }
 }
 
-static void vte_write_callback(struct io_source *src) {
+static void on_pty_writable(struct io_source *src) {
   struct velvet *v = src->data;
   struct pty_host *vte;
   vec_find(vte, v->scene.hosts, vte->pty == src->fd);
@@ -282,7 +282,7 @@ static void vte_write_callback(struct io_source *src) {
   }
 }
 
-static void vte_read_callback(struct io_source *src, struct u8_slice str) {
+static void on_pty_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   struct pty_host *vte;
   vec_find(vte, v->scene.hosts, vte->pty == src->fd);
@@ -355,7 +355,7 @@ void velvet_loop(struct velvet *velvet) {
     // Set up IO
     vec_clear(&loop->sources);
 
-    struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .read_callback = signal_callback, .data = velvet};
+    struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = signal_callback, .data = velvet};
     /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
      * This is because the signal handler will remove closed clients, and the stdin handler
      * processes hotkeys which can rearrange the order of the pointers.
@@ -366,8 +366,8 @@ void velvet_loop(struct velvet *velvet) {
         .data = velvet,
         .fd = h->pty,
         .events = IO_SOURCE_POLLIN,
-        .read_callback = vte_read_callback,
-        .write_callback = vte_write_callback,
+        .on_read = on_pty_output,
+        .on_writable = on_pty_writable,
       };
       if (h->emulator.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
 
@@ -376,18 +376,18 @@ void velvet_loop(struct velvet *velvet) {
 
     io_add_source(loop, signal_src);
 
-    struct io_source socket_src = { .fd = velvet->socket, .events = IO_SOURCE_POLLIN, .ready_callback = socket_accept, .data = velvet };
+    struct io_source socket_src = { .fd = velvet->socket, .events = IO_SOURCE_POLLIN, .on_readable = socket_accept, .data = velvet };
     io_add_source(loop, socket_src);
 
     struct velvet_session *session;
     vec_foreach(session, velvet->sessions) {
-      struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .ready_callback = session_socket_callback, .data = velvet };
+      struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .on_readable = session_socket_callback, .data = velvet };
       io_add_source(loop, socket_src);
-      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .read_callback = session_input_callback, .data = velvet};
+      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .on_read = session_input_callback, .data = velvet};
       if (input_src.fd)
         io_add_source(loop, input_src);
       if (session->pending_output.len) {
-        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .write_callback = session_output_callback, .data = velvet};
+        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = session_output_callback, .data = velvet};
         if (output_src.fd)
           io_add_source(loop, output_src);
       }
