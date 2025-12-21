@@ -2,6 +2,7 @@
 #define SCREEN_H
 
 #include "text.h"
+#include "collections.h"
 
 #define screen_left(g) (0)
 #define screen_right(g) (g->w - 1)
@@ -108,6 +109,7 @@ struct screen {
   struct cursor saved_cursor;
 };
 
+void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap);
 void screen_move_or_scroll_down(struct screen *g);
 void screen_move_or_scroll_up(struct screen *g);
 void screen_backspace(struct screen *g);

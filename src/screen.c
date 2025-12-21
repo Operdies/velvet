@@ -131,12 +131,116 @@ bool cell_wide(struct screen_cell c) {
   return c.codepoint.wide;
 }
 
+static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_cell_style brush, struct u8_slice run) {
+  struct cursor *cur = &g->cursor;
+  struct screen_cell c = {.style = brush};
+
+  struct screen_line *row = screen_row(g);
+  for (size_t i = 0; i < run.len; i++) {
+    if (cur->column == screen_right(g)) {
+      c.codepoint.cp = run.content[run.len - 1];
+      row->cells[cur->column] = c;
+      return;
+    }
+    c.codepoint.cp = run.content[i];
+    row->cells[cur->column++] = c;
+  }
+  cur->column = MIN(cur->column, screen_right(g));
+}
+
+void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap) {
+  assert(run.len > 0);
+
+  if (!wrap) {
+    /* if wrapping is disabled, we can take even more shortcuts */
+    screen_insert_batch_ascii_wrapless(g, brush, run);
+    return;
+  }
+
+  struct cursor *cur = &g->cursor;
+  struct screen_cell c = {.style = brush};
+
+  /* insert the first character normally to ensure perform all normal checks */
+  c.codepoint.cp = run.content[0];
+  screen_insert(g, c, true);
+  if (run.len > 1) {
+    if (run.len > 2) {
+      struct screen_line *row = screen_row(g);
+      for (int i = 1; i < (int)run.len - 1; i++) {
+        c.codepoint.cp = run.content[i];
+        if (cur->column > screen_right(g)) {
+          row->eol = g->w;
+          cur->column = 0;
+          screen_move_or_scroll_down(g);
+          row = screen_row(g);
+        }
+        row->cells[cur->column++] = c;
+      }
+      /* likewise, insert the last character normally */
+      cur->wrap_pending = cur->column > screen_right(g);
+      cur->column = MIN(cur->column, screen_right(g));
+    }
+    c.codepoint.cp = run.content[run.len - 1];
+    screen_insert(g, c, true);
+  }
+}
+
+static void screen_insert_batch_wrap(struct screen *g,
+                                     struct screen_cell_style brush,
+                                     struct unicode_codepoint *symbols,
+                                     int n_symbols) {
+  struct cursor *cur = &g->cursor;
+  struct screen_cell c = {.style = brush};
+  struct screen_line *row = screen_row(g);
+  for (int i = 0; i < n_symbols; i++) {
+    c.codepoint = symbols[i];
+    if ((cur->column + c.codepoint.wide) > screen_right(g)) {
+      row->eol = g->w;
+      cur->column = 0;
+      screen_move_or_scroll_down(g);
+      row = screen_row(g);
+    }
+    row->cells[cur->column++] = c;
+    if (c.codepoint.wide && cur->column <= screen_right(g)) {
+      struct screen_cell space = {.codepoint = codepoint_space};
+      row->cells[cur->column++] = space;
+    }
+  }
+  row->eol = MAX(row->eol, cur->column);
+  cur->wrap_pending = cur->column >= screen_right(g);
+  cur->column = MIN(cur->column, screen_right(g));
+}
+
+static void screen_insert_batch_no_wrap(struct screen *g,
+                                        struct screen_cell_style brush,
+                                        struct unicode_codepoint *symbols,
+                                        int n_symbols) {
+  /* if wrapping is not enabled, we can fast forward if we reach eol */
+  for (int i = 0; i < n_symbols; i++) {
+  }
+}
+
+void screen_insert_batch(
+    struct screen *g, struct screen_cell_style brush, struct unicode_codepoint *symbols, int n_symbols, bool wrap) {
+  assert(n_symbols > 0);
+  struct screen_cell c = {.style = brush, .codepoint = symbols[0]};
+  screen_insert(g, c, wrap);
+  symbols++;
+  n_symbols--;
+  if (n_symbols) {
+    if (wrap) {
+      screen_insert_batch_wrap(g, brush, symbols, n_symbols);
+    } else {
+      screen_insert_batch_no_wrap(g, brush, symbols, n_symbols);
+    }
+  }
+}
+
 void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
   struct cursor *cur = &g->cursor;
   struct screen_line *row = screen_row(g);
 
   if (g->cursor.wrap_pending) {
-  // if (row->end_of_line) {
     g->cursor.wrap_pending = false;
     assert(cur->column == screen_right(g));
     if (wrap) {

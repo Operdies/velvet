@@ -490,32 +490,25 @@ void vte_set_size(struct vte *vte, int w, int h) {
   }
 }
 
-static bool is_ascii_printable(uint8_t ch) {
+static bool is_ascii(uint8_t ch) {
   return ch >= 0x20 && ch < 0x80;
-}
-
-static int consume_printables(struct vte *vte, size_t i, struct u8_slice str) {
-  struct screen *s = vte_get_current_screen(vte);
-  struct screen_cell_style style = s->cursor.brush;
-  bool wrap = vte->options.auto_wrap_mode;
-  struct screen_cell c = {.style = style };
-  for (; i < str.len && is_ascii_printable(str.content[i]); i++) {
-    c.codepoint.cp = str.content[i];
-    screen_insert(s, c, wrap);
-  }
-  vte->pending_symbol = (struct utf8){0};
-  vte->previous_symbol = c.codepoint;
-  return i;
 }
 
 void vte_process(struct vte *vte, struct u8_slice str) {
   assert(vte->rows);
   assert(vte->columns);
   for (size_t i = 0; i < str.len; i++) {
-    // performance optimization for bulk processing ascii characters, which is fairly common
-    if (vte->state == vte_ground && is_ascii_printable(str.content[i])) {
-      i = consume_printables(vte, i, str);
-      if (i >= str.len) break;
+    if (vte->state == vte_ground) {
+      size_t j = i;
+      for (; j < str.len && is_ascii(str.content[j]); j++);
+      if (j > i) {
+        struct screen *s = vte_get_current_screen(vte);
+        struct screen_cell_style style = s->cursor.brush;
+        bool wrap = vte->options.auto_wrap_mode;
+        screen_insert_ascii_run(s, style, u8_slice_range(str, i, j), wrap);
+        i = j;
+      }
+      if (j >= str.len) break;
     }
     uint8_t ch = str.content[i];
     switch (vte->state) {
