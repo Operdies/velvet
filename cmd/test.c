@@ -1,12 +1,12 @@
 #include "collections.h"
 #include "csi.h"
-#include "pty_host.h"
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "velvet_cmd.h"
+#include "velvet_scene.h"
 
 /* the SYM macro is not useful. It exists because of a treesitter parser bug which messes up indentation otherwise */
 #define SYM(X) #X

@@ -3,7 +3,7 @@
 
 #include "collections.h"
 #include "platform.h"
-#include "pty_host.h"
+#include "vte.h"
 
 #define DAMAGE_MAX 10
 
@@ -14,6 +14,28 @@
 #else
 #define N_BUFFERS 2
 #endif
+
+struct pty_host {
+  struct string cmdline;
+  struct string title;
+  struct string icon;
+  struct string cwd;
+  int pty, pid;
+  int border_width;
+  struct {
+    struct rect window;
+    struct rect client;
+  } rect;
+  bool dragging;
+  struct vte emulator;
+};
+
+void pty_host_destroy(struct pty_host *pty_host);
+void pty_host_resize(struct pty_host *pty_host, struct rect window);
+void pty_host_start(struct pty_host *pty_host);
+void pty_host_process_output(struct pty_host *pty_host, struct u8_slice str);
+void pty_host_update_title(struct pty_host *p);
+void pty_host_notify_focus(struct pty_host *p, bool focused);
 
 struct velvet_render_option {
   /* unfortunately some emulators don't support repeating multi-byte characters.
