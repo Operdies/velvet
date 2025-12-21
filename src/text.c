@@ -1,6 +1,7 @@
 #include "text.h"
 #include "utils.h"
 #include <string.h>
+#include <wchar.h>
 
 // assume *str is a valid utf8 string
 int utf8_strlen(char *str) {
@@ -35,12 +36,60 @@ uint8_t utf8_length(struct utf8 u) {
   return 0;
 }
 
+struct unicode_codepoint utf8_to_codepoint(const uint8_t utf8[4], int *len) {
+  struct unicode_codepoint cp = { 0 };
+
+  if (utf8[0] < 0x80) {
+    cp.cp = utf8[0];
+    *len = 1;
+  } else if ((utf8[0] & 0xE0) == 0xC0) {
+    cp.cp = ((utf8[0] & 0x1F) << 6) | (utf8[1] & 0x3F);
+    *len = 2;
+  } else if ((utf8[0] & 0xF0) == 0xE0) {
+    cp.cp = ((utf8[0] & 0x0F) << 12) | ((utf8[1] & 0x3F) << 6) | (utf8[2] & 0x3F);
+    *len = 3;
+  } else if ((utf8[0] & 0xF8) == 0xF0) {
+    cp.cp = ((utf8[0] & 0x07) << 18) | ((utf8[1] & 0x3F) << 12) | ((utf8[2] & 0x3F) << 6) | (utf8[3] & 0x3F);
+    *len = 4;
+  } else {
+    cp.cp = 0xFFFD; // replacement character
+    *len = 1;
+  }
+
+  cp.wide = wcwidth(cp.cp) > 1;
+  return cp;
+}
+
+int codepoint_to_utf8(uint32_t cp, struct utf8 *u) {
+  if (cp <= 0x7F) {
+    u->utf8[0] = cp;
+    return 1;
+  } else if (cp <= 0x7FF) {
+    u->utf8[0] = 0xC0 | (cp >> 6);
+    u->utf8[1] = 0x80 | (cp & 0x3F);
+    return 2;
+  } else if (cp <= 0xFFFF) {
+    u->utf8[0] = 0xE0 | (cp >> 12);
+    u->utf8[1] = 0x80 | ((cp >> 6) & 0x3F);
+    u->utf8[2] = 0x80 | (cp & 0x3F);
+    return 3;
+  } else if (cp <= 0x10FFFF) {
+    u->utf8[0] = 0xF0 | (cp >> 18);
+    u->utf8[1] = 0x80 | ((cp >> 12) & 0x3F);
+    u->utf8[2] = 0x80 | ((cp >> 6) & 0x3F);
+    u->utf8[3] = 0x80 | (cp & 0x3F);
+    return 4;
+  } else {
+    // Invalid Unicode scalar value → U+FFFD
+    u->utf8[0] = 0xEF;
+    u->utf8[1] = 0xBF;
+    u->utf8[2] = 0xBD;
+    return 3;
+  }
+}
+
 void utf8_push(struct utf8 *u, uint8_t byte) {
   assert(u->utf8[3] == 0);
   uint8_t n = utf8_length(*u);
   u->utf8[n] = byte;
-}
-
-bool utf8_equals(struct utf8 a, struct utf8 b) {
-  return a.numeric == b.numeric;
 }

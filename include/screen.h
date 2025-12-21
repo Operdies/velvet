@@ -46,6 +46,7 @@ enum PACK color_command {
   COLOR_RGB,
   COLOR_TABLE,
 };
+
 struct color {
   enum color_command cmd;
   union {
@@ -66,8 +67,8 @@ struct screen_cell_style {
 static const struct screen_cell_style style_default = {0};
 
 struct screen_cell {
-  struct utf8 symbol;
   struct screen_cell_style style;
+  struct unicode_codepoint codepoint;
 };
 
 struct screen_line {
@@ -138,4 +139,6 @@ void screen_scroll_content_up(struct screen *g, int count);
 void screen_scroll_content_down(struct screen *g, int count);
 void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom);
 void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
+bool cell_wide(struct screen_cell c);
+
 #endif /*  SCREEN_H */

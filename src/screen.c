@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <stdlib.h>
 #include "screen.h"
+#include <wchar.h>
 
 #define screen_column(g) (g->cursor.column)
 #define screen_row(g) (&g->lines[g->cursor.line])
@@ -13,7 +14,7 @@
  */
 
 void screen_clear_line(struct screen *g, int n) {
-  struct screen_cell clear = { .symbol = utf8_blank, .style = g->cursor.brush };
+  struct screen_cell clear = { .codepoint = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = &g->lines[n];
   for (int i = 0; i < g->w; i++) {
     row->cells[i] = clear;
@@ -126,11 +127,11 @@ static inline void row_set_cell(struct screen_line *row, int col, struct screen_
   row->eol = MAX(row->eol, col + 1);
 }
 
+bool cell_wide(struct screen_cell c) {
+  return c.codepoint.wide;
+}
+
 void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
-  /* Implementation notes:
-   * 1. The width of a cell depends on the content. Some characters are double width. For now, we assume all
-   * characters are single width.
-   * */
   struct cursor *cur = &g->cursor;
   struct screen_line *row = screen_row(g);
 
@@ -148,7 +149,32 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     }
   }
 
-  row_set_cell(row, cur->column++, c);
+  if (cur->column && cell_wide(row->cells[cur->column-1])) {
+    /* if the previous cell is a wide character, writing this cell clears it */
+    struct screen_cell space = {.codepoint = codepoint_space};
+    row_set_cell(row, cur->column - 1, space);
+  }
+
+  if (cell_wide(c)) {
+    if (cur->column == screen_right(g)) {
+      /* a wide character cannot start on the last column */
+      if (wrap) {
+        cur->column = 0;
+        screen_move_or_scroll_down(g);
+        row = screen_row(g);
+      } else {
+        /* noop -- we cannot insert the character, and we cannot scroll */
+        return;
+      }
+    }
+    row_set_cell(row, cur->column++, c);
+    if (cur->column <= screen_right(g)) {
+      struct screen_cell space = {.codepoint = codepoint_space};
+      row_set_cell(row, cur->column++, space);
+    }
+  } else {
+    row_set_cell(row, cur->column++, c);
+  }
 
   if (cur->column > screen_right(g)) {
     cur->wrap_pending = true;
@@ -165,7 +191,7 @@ void screen_initialize(struct screen *g, int w, int h) {
   g->_lines_size = h;
   screen_reset_scroll_region(g);
 
-  struct screen_cell empty_cell = { .style = style_default, .symbol = utf8_blank };
+  struct screen_cell empty_cell = { .style = style_default, .codepoint = codepoint_space };
   for (int i = 0; i < h; i++) {
     g->lines[i] = (struct screen_line){.cells = &g->_cells[i * w]};
     for (int j = 0; j < w; j++) {
@@ -207,7 +233,7 @@ void screen_set_scroll_region(struct screen *g, int top, int bottom) {
 
 /* inclusive erase between two cursor positions */
 void screen_erase_between_cursors(struct screen *g, struct cursor from, struct cursor to) {
-  struct screen_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
+  struct screen_cell template = { .codepoint = codepoint_space, .style = g->cursor.brush };
 
   for (int r = from.line; r <= to.line; r++) {
     struct screen_line *row = &g->lines[r];
@@ -235,7 +261,7 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
 }
 
 void screen_insert_blanks_at_cursor(struct screen *g, int n) {
-  struct screen_cell template = {.symbol = utf8_blank, .style = g->cursor.brush};
+  struct screen_cell template = {.codepoint = codepoint_space, .style = g->cursor.brush};
   struct screen_line *row = screen_row(g);
   int lcol = screen_column(g);
   for (int col = screen_right(g); col >= lcol; col--) {
@@ -248,7 +274,7 @@ void screen_insert_blanks_at_cursor(struct screen *g, int n) {
 
 void screen_shift_from_cursor(struct screen *g, int n) {
   if (n == 0) return;
-  struct screen_cell template = { .symbol = utf8_blank, .style = g->cursor.brush };
+  struct screen_cell template = { .codepoint = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = screen_row(g);
   for (int col = screen_column(g); col < screen_right(g); col++) {
     int rcol = col + n;
@@ -293,7 +319,7 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
     // with a different background color from the default terminal background
     if (fullscreen) {
       struct screen_cell c = screen_row->cells[src->w - 1];
-      c.symbol = utf8_blank;
+      c.codepoint = codepoint_space;
       for (; col < dst->w; col++) {
         screen_insert(dst, c, false);
         if (row == source_cursor.line && col == source_cursor.column) {

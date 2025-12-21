@@ -501,8 +501,8 @@ bool HPR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("HPR"); 
 static bool REP(struct vte *vte, struct csi *csi) {
   struct screen *g = vte_get_current_screen(vte);
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct screen_cell repeat = { .symbol = vte->previous_symbol, .style = g->cursor.brush };
-  if (utf8_equals(repeat.symbol, utf8_zero)) repeat.symbol = utf8_blank;
+  struct screen_cell repeat = { .codepoint = vte->previous_symbol, .style = g->cursor.brush };
+  if (repeat.codepoint.cp == 0) repeat.codepoint = codepoint_space;
   for (int i = 0; i < count; i++) {
     screen_insert(g, repeat, vte->options.auto_wrap_mode);
   }

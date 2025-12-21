@@ -37,7 +37,7 @@ static const struct special_key keys[] = {
 struct velvet_key {
   bool literal;
   union {
-    struct utf8 symbol;
+    char symbol;
     struct special_key special;
   };
 };

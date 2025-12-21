@@ -563,35 +563,17 @@ bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s) {
   uint8_t expected_length = utf8_expected_length(head);
 
   if (expected_length > remaining) {
-    s->invalid = true;
-    s->current = u8_slice_range(t, s->cursor, s->cursor + remaining);
+    s->current = codepoint_fffd;
     s->cursor = t.len;
     return true;
   }
 
-  bool invalid = expected_length == 0;
+  int len;
+  s->current = utf8_to_codepoint(t.content + s->cursor, &len);
+  s->cursor += len;
 
-  for (int i = 1; i < expected_length; i++) {
-    uint8_t cont = t.content[s->cursor + i];
-    if ((cont & 0xC0) != 0x80) {
-      invalid = true; 
-      break;
-    }
-  }
-
-  if (invalid) {
-    /* fast forward to next character */
-    size_t next = s->cursor + 1;
-    for (; next < t.len && utf8_expected_length(t.content[next]) == 0; next++);
-    s->invalid = true;
-    s->current = u8_slice_range(t, s->cursor, next);
-    s->cursor = next;
-    return true;
-  }
-
-  s->invalid = false;
-  s->current = u8_slice_range(t, s->cursor, s->cursor + expected_length);
-  s->cursor += expected_length;
+  /* do the implemnetations agree? */
+  assert(len == expected_length);
   return true;
 }
 

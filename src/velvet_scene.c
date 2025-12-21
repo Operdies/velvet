@@ -322,17 +322,17 @@ static void velvet_render_render_buffer(struct velvet_render *r,
           cell_style = highlight;
         }
         velvet_render_set_style(r, cell_style);
-        if (c->symbol.numeric == 0) c->symbol.numeric = ' ';
+        if (c->codepoint.cp == 0) c->codepoint.cp = ' ';
 
-        uint8_t utf8_len = 0;
-        struct utf8 sym = c->symbol;
-        for (; utf8_len < 4 && sym.utf8[utf8_len]; utf8_len++);
+        struct utf8 sym;
+        uint8_t utf8_len = codepoint_to_utf8(c->codepoint.cp, &sym);
         struct u8_slice text = {.content = sym.utf8, .len = utf8_len};
         string_push_slice(&r->draw_buffer, text);
 
+        int stride = cell_wide(*c) ? 2 : 1;
         int repeats = 1;
         int remaining = end - col - 1;
-        for (; repeats < remaining && cell_equals(c[0], c[repeats]); repeats++);
+        for (; repeats < remaining && cell_equals(c[0], c[repeats * stride]); repeats++);
         repeats--;
         if (repeats > 0) {
           int num_bytes = utf8_len * repeats;
@@ -345,9 +345,8 @@ static void velvet_render_render_buffer(struct velvet_render *r,
               string_push_slice(&r->draw_buffer, text);
             }
           }
-          col += repeats;
         }
-
+        col += repeats * stride + stride - 1;
         r->cursor.column = MIN(col + 1, r->w - 1);
       }
     }
@@ -397,25 +396,27 @@ static void velvet_render_copy_cells_from_host(struct velvet_render *r, struct p
 }
 
 /* lol very unsafe :) */
-static struct utf8 utf8_from_cstr(char *src) {
+static struct unicode_codepoint utf8_from_cstr(char *src) {
   struct utf8 result = {0};
   char *dst = (char *)result.utf8;
   for (; *src; *dst++ = *src++);
-  return result;
+
+  int len;
+  return utf8_to_codepoint(result.utf8, &len);
 }
 
 static void velvet_render_calculate_borders(struct velvet_render *r, struct velvet_scene *m, struct pty_host *host) {
-  struct utf8 topleft = utf8_from_cstr("┌");
-  struct utf8 topright = utf8_from_cstr("┐");
-  struct utf8 bottomleft = utf8_from_cstr("└");
-  struct utf8 bottomright = utf8_from_cstr("┘");
-  struct utf8 pipe = utf8_from_cstr("│");
-  struct utf8 dash = utf8_from_cstr("─");
+  struct unicode_codepoint topleft = utf8_from_cstr("┌");
+  struct unicode_codepoint topright = utf8_from_cstr("┐");
+  struct unicode_codepoint bottomleft = utf8_from_cstr("└");
+  struct unicode_codepoint bottomright = utf8_from_cstr("┘");
+  struct unicode_codepoint pipe = utf8_from_cstr("│");
+  struct unicode_codepoint dash = utf8_from_cstr("─");
   // struct utf8 top_connector = utf8_from_cstr("┬");
   // struct utf8 left_connector = utf8_from_cstr("├");
   // struct utf8 right_connector = utf8_from_cstr("┤");
   // struct utf8 cross_connector = utf8_from_cstr("┼");
-  struct utf8 elipsis = utf8_from_cstr("…");
+  struct unicode_codepoint elipsis = utf8_from_cstr("…");
   bool is_focused = host == velvet_scene_get_focus(m);
   struct rect w = host->rect.window;
   struct rect c = host->rect.client;
@@ -425,8 +426,8 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
 
   {
     struct screen_cell_style chrome_style = is_focused ? m->style.active.outline : m->style.inactive.outline;
-    struct screen_cell vert = {.symbol = dash, .style = chrome_style};
-    struct screen_cell horz = {.symbol = pipe, .style = chrome_style};
+    struct screen_cell vert = {.codepoint = dash, .style = chrome_style};
+    struct screen_cell horz = {.codepoint = pipe, .style = chrome_style};
 
     /* title chrome */
     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y - 1, column, vert);
@@ -441,31 +442,26 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x + c.w, horz);
 
     struct screen_cell corner = {.style = chrome_style};
-    corner.symbol = topleft;
+    corner.codepoint = topleft;
     velvet_render_set_cell(r, c.y - 1, c.x - 1, corner);
-    corner.symbol = topright;
+    corner.codepoint = topright;
     velvet_render_set_cell(r, c.y - 1, c.x + c.w, corner);
-    corner.symbol = bottomleft;
+    corner.codepoint = bottomleft;
     velvet_render_set_cell(r, c.y + c.h, c.x - 1, corner);
-    corner.symbol = bottomright;
+    corner.codepoint = bottomright;
     velvet_render_set_cell(r, c.y + c.h, c.x + c.w, corner);
   }
 
   {
     struct screen_cell_style title_style = is_focused ? m->style.active.title : m->style.inactive.title;
-    struct screen_cell truncation_symbol = {.symbol = elipsis, .style = title_style};
+    struct screen_cell truncation_symbol = {.codepoint = elipsis, .style = title_style};
 
     int i = c.x + 1;
 
     /* draw each codepoint of the title */
     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
     for (; i < c.x + c.w - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
-      struct screen_cell chr = {.style = title_style};
-      if (it.invalid) {
-        chr.symbol = utf8_fffd;
-      } else {
-        memcpy(chr.symbol.utf8, it.current.content, it.current.len);
-      }
+      struct screen_cell chr = {.style = title_style, .codepoint = it.current};
       velvet_render_set_cell(r, c.y - 1, i, chr);
     }
 
@@ -498,7 +494,7 @@ static void velvet_render_swap_buffers(struct velvet_render *r) {
   string_clear(&r->draw_buffer);
   r->current_buffer = (r->current_buffer + 1) % LENGTH(r->buffers);
   struct velvet_render_buffer *buffer = &r->buffers[r->current_buffer];
-  struct screen_cell space = {.symbol.numeric = ' '};
+  struct screen_cell space = {.codepoint = ' '};
   for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
 }
 
@@ -556,7 +552,6 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_on);
     velvet_render_render_damage_to_buffer(r);
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
-    velvet_log("Damage: %d", damage);
   }
 
   {
@@ -716,12 +711,7 @@ static bool color_equals(struct color a, struct color b) {
 }
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b) {
-  // uint32_t n1, n2;
-  // n1 = a.symbol.numeric;
-  // n2 = b.symbol.numeric;
-  // /* treat 0 as space, and ignore text attributes / foreground color for spaces */
-  // if ((n1 == 0 || n1 == ' ') && (n2 == 0 || n2 == ' ')) return color_equals(a.style.bg, b.style.bg);
-  return utf8_equals(a.symbol, b.symbol) && cell_style_equals(a.style, b.style);
+  return a.codepoint.cp == b.codepoint.cp && cell_style_equals(a.style, b.style);
 }
 
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b) {

@@ -1,6 +1,7 @@
 #ifndef COLLECTIONS_H
 #define COLLECTIONS_H
 
+#include "text.h"
 #ifdef MIN
 #undef MIN
 #undef MAX
@@ -36,9 +37,7 @@ struct u8_slice {
 struct u8_slice_codepoint_iterator {
   struct u8_slice src;
   size_t cursor;
-  struct u8_slice current;
-  bool invalid; /* set if `current` points to an invalid sequence. In that case, next() will attempt to recover
-  by fast forwarding to the start of the next character.  */
+  struct unicode_codepoint current;
 };
 
 // A view into a vector

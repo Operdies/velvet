@@ -49,7 +49,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
 static struct velvet_key_event key_event_from_byte(uint8_t ch) {
   // special case for <C-Space>
   if (ch == 0)
-    return (struct velvet_key_event){.key.literal = true, .key.symbol.numeric = ' ', .modifiers = MODIFIER_CTRL};
+    return (struct velvet_key_event){.key.literal = true, .key.symbol = ' ', .modifiers = MODIFIER_CTRL};
 
   struct velvet_key_event k = {0};
   bool iscntrl = CTRL(ch) == ch;
@@ -65,7 +65,7 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
     isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
   }
 
-  k.key.symbol.utf8[0] = ch;
+  k.key.symbol = ch;
   k.key.literal = true;
   k.modifiers = ((iscntrl * MODIFIER_CTRL) | (isshift * MODIFIER_SHIFT));
   return k;
@@ -354,7 +354,7 @@ static bool keymap_has_mapping(struct velvet_keymap *k) {
 static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
   if (k1.modifiers != k2.modifiers) return false;
   if (k1.key.literal != k2.key.literal) return false;
-  if (k1.key.literal) return k1.key.symbol.numeric == k2.key.symbol.numeric;
+  if (k1.key.literal) return k1.key.symbol == k2.key.symbol;
   return strcmp(k1.key.special.name, k2.key.special.name) == 0;
 }
 
@@ -413,7 +413,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   v->input.last_repeat = 0;
 
   // ESC cancels any pending keybind
-  if (key.key.literal && key.key.symbol.numeric == ESC && current != root) {
+  if (key.key.literal && key.key.symbol == ESC && current != root) {
     v->input.keymap = root;
     return;
   }
@@ -470,17 +470,17 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   }
 }
 
-static void velvet_input_send_literal(struct velvet *v, struct utf8 s, enum velvey_key_modifier m) {
-  if (s.numeric == ESC) {
+static void velvet_input_send_literal(struct velvet *v, char s, enum velvey_key_modifier m) {
+  if (s == ESC) {
     send_byte(v, ESC);
   } else {
     bool iscntrl = m & MODIFIER_CTRL;
     bool is_meta = (m & MODIFIER_ALT) || (m & MODIFIER_META);
     if (is_meta) send_byte(v, ESC);
 
-    if (iscntrl && s.numeric == ' ') send_byte(v, 0);
-    else for (int i = 0; i < 4 && s.utf8[i]; i++)
-      send_byte(v, s.utf8[i] & (iscntrl ? 0x1f : 0xff));
+    if (iscntrl && s == ' ') send_byte(v, 0);
+    if (iscntrl) send_byte(v, s & 0x1f);
+    else send_byte(v, s);
   }
 }
 
@@ -529,7 +529,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
   if (in->state == VELVET_INPUT_STATE_ESC) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    struct velvet_key_event k = {.key.symbol.numeric = ESC, .key.literal = true };
+    struct velvet_key_event k = {.key.symbol = ESC, .key.literal = true };
     dispatch_key_event(v, k);
   }
 }
@@ -602,22 +602,13 @@ static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
   struct velvet_key k = {0};
   assert(s.len > 0);
 
-  if (s.content[0] >= 0xC2 && s.content[0] < 0xF4) {
-    // utf8
-    size_t expected_length = utf8_expected_length(s.content[0]);
-    if (expected_length != s.len) {
-      velvet_log("Unexpected utf8 length: %.*s", (int)s.len, s.content);
-    }
+  if (s.len == 1) {
     k.literal = true;
-    for (size_t i = 0; i < s.len; i++) k.symbol.utf8[i] = s.content[i];
-    *result = k;
-    return true;
-  } else if (s.len == 1) {
-    k.literal = true;
-    k.symbol.utf8[0] = s.content[0];
+    k.symbol = s.content[0];
     *result = k;
     return true;
   }
+
   for (int i = 0; i < LENGTH(keys); i++) {
     struct u8_slice special = u8_slice_from_cstr(keys[i].name);
     if (u8_slice_equals_ignore_case(s, special)) {
@@ -664,7 +655,7 @@ static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
 
   if (key_end == 0 || (key_end - cursor) < 3) {
     /* basic ascii key */
-    it->current = (struct velvet_key_event){.key = {.literal = true, .symbol.numeric = ch}};
+    it->current = (struct velvet_key_event){.key = {.literal = true, .symbol = ch}};
     it->cursor = cursor + 1;
     it->current_range = u8_slice_range(t, cursor, cursor + 1);
     return true;

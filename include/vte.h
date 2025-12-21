@@ -171,8 +171,12 @@ struct vte {
   struct screen alternate;
   struct string pending_input;
   struct string command_buffer;
+  struct {
+    struct string title;
+    struct string icon;
+  } osc;
   struct utf8 pending_symbol;
-  struct utf8 previous_symbol;
+  struct unicode_codepoint previous_symbol;
 };
 
 static const struct emulator_options emulator_options_default = {

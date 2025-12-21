@@ -1,3 +1,4 @@
+#include <locale.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -218,6 +219,7 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
 
 
 int main(int argc, char **argv) {
+  setlocale(LC_CTYPE, "");
   struct velvet_args args = velvet_parse_args(argc, argv);
 
   if (args.attach) {

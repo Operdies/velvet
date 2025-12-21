@@ -66,7 +66,7 @@ static struct dumb_screen *screen_to_dumb_screen(const struct screen *const src)
   for (int row = 0; row < src->h; row++) {
     struct screen_line *screen_row = &src->lines[row];
     for (int col = 0; col < src->w; col++) {
-      screen->cells[row * src->w + col] = screen_row->cells[col].symbol.utf8[0];
+      screen->cells[row * src->w + col] = (char)screen_row->cells[col].codepoint.cp;
     }
   }
   return screen;

@@ -3,7 +3,6 @@
 
 #include <ctype.h>
 #include <string.h>
-#include "pty_host.h"
 
 static bool osc_dispatch_todo(struct vte *vte, struct osc *osc) {
   (void)vte;
@@ -37,25 +36,17 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
   return false;
 }
 
-// TODO: This kinda sucks
-#define container_of(ptr, type, member) ({                      \
-        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
-        (type *)((char *)__mptr - offsetof(type,member));})
-
 static bool osc_set_title(struct vte *vte, struct osc *osc) {
-  struct pty_host *container;
-  container = container_of(vte, struct pty_host, emulator);
-  string_clear(&container->title);
+  string_clear(&vte->osc.title);
   struct u8_slice new_title = { .content = osc->pt.text, .len = osc->pt.len };
-  string_push_slice(&container->title, new_title);
+  string_push_slice(&vte->osc.title, new_title);
   return true;
 }
 
 static bool osc_set_icon(struct vte *vte, struct osc *osc) {
-  struct pty_host *container;
-  container = container_of(vte, struct pty_host, emulator);
-  struct u8_slice new_icon = { .content = osc->pt.text, .len = osc->pt.len };
-  string_push_slice(&container->icon, new_icon);
+  string_clear(&vte->osc.icon);
+  struct u8_slice new_title = { .content = osc->pt.text, .len = osc->pt.len };
+  string_push_slice(&vte->osc.icon, new_title);
   return true;
 }
 
