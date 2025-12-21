@@ -207,9 +207,10 @@ void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
 }
 
 static void velvet_render_set_cell(struct velvet_render *r, int line, int column, struct screen_cell value) {
-  /* out of bounds -- this is allowed for e.g. floating windows and fly-ins */
-  if (line < 0 || column < 0) return;
-  if (line >= r->h || column >= r->w) return;
+  /* out of bounds writes here is not a bug. It is expected for controls which are partially off-screen. */
+  if (!(line >= 0 && line < r->h)) return;
+  if (!(column >= 0 && column < r->w)) return;
+  
   r->buffers[r->current_buffer].lines[line].cells[column] = value;
 }
 
@@ -246,7 +247,7 @@ static bool color_equals(struct color a, struct color b);
 
 static void render_buffer_add_damage(struct velvet_render_buffer_line *f, int start, int end, bool consolidate) {
   /* merge with previous damage if they are reasonably close. The reason being that in most cases, it is cheaper to emit
-   * a few characters than a cursor move. */
+   * a few characters than a cursor move. Consolidation is disabled when `display_damage` is set. */
   constexpr int consolidate_max = 10;
   int n_damage = f->n_damage;
 
@@ -285,7 +286,6 @@ static int velvet_render_calculate_damage(struct velvet_render *r) {
         end--;
         render_buffer_add_damage(f, start, end, !r->options.display_damage);
         start = end;
-        damage += end - start + 1;
         if (end == r->w - 1) break;
       }
     }
@@ -295,13 +295,15 @@ static int velvet_render_calculate_damage(struct velvet_render *r) {
         for (int end = r->w - 1; end >= start; end--) {
           if (!cell_equals(f->cells[end], b->cells[end])) {
             render_buffer_add_damage(f, start, end, !r->options.display_damage);
-            damage += end - start + 1;
             goto next;
           }
         }
       }
     }
+
   next:
+    for (int i = 0; i < f->n_damage; i++)
+      damage += 1 + (f->damage[i].end - f->damage[i].start);
   }
   return damage;
 }
@@ -461,7 +463,7 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
 
     int i = c.x + 1;
 
-    /* draw each codepoint of the title */
+    /* draw the title */
     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
     for (; i < c.x + c.w - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
       struct screen_cell chr = {.style = title_style, .codepoint = it.current};
@@ -493,12 +495,14 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
 }
 
+static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer) {
+  struct screen_cell space = {.codepoint = codepoint_space};
+  for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
+}
+
 static void velvet_render_swap_buffers(struct velvet_render *r) {
   string_clear(&r->draw_buffer);
   r->current_buffer = (r->current_buffer + 1) % LENGTH(r->buffers);
-  struct velvet_render_buffer *buffer = &r->buffers[r->current_buffer];
-  struct screen_cell space = {.codepoint = codepoint_space };
-  for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
 }
 
 void velvet_scene_set_display_damage(struct velvet_scene *m, bool display_damage) {
@@ -528,6 +532,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   struct pty_host *focused = velvet_scene_get_focus(m);
 
   struct velvet_render *r = &m->renderer;
+
+  velvet_render_clear_buffer(r, get_current_buffer(r));
 
   if (r->h != m->ws.h || r->w != m->ws.w) {
     velvet_render_init_buffers(m);
