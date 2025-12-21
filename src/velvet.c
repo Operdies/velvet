@@ -244,7 +244,7 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
     if (sesh) velvet_detach_session(m, sesh);
     return;
   }
-  velvet_process_input(m, str);
+  velvet_input_process(m, str);
 
   if (strncmp((char*)str.content, "\x1b[I", 3) == 0) {
     struct velvet_session *sesh;
