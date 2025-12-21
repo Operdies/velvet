@@ -19,7 +19,7 @@ enum scroll_direction { scroll_up = 0, scroll_down = 1, scroll_left = 2, scroll_
 enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
 enum mouse_state { mouse_left = 0, mouse_middle = 1, mouse_right = 2, mouse_none = 3 };
 enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
-enum mouse_trigger { mouse_down, mouse_up };
+enum mouse_trigger { mouse_down = 1, mouse_up = 2 };
 
 struct mouse_sgr {
   union {
@@ -139,11 +139,7 @@ struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
   return sgr;
 }
 
-static void send_mouse_sgr(struct pty_host *target, struct mouse_sgr sgr) {
-  struct mouse_sgr trans = sgr;
-  trans.row = sgr.row - target->rect.client.y;
-  trans.column = sgr.column - target->rect.client.x;
-
+static void send_mouse_sgr(struct pty_host *target, struct mouse_sgr trans) {
   int btn = trans.button_state | trans.modifiers | trans.event_type;
   int start = target->emulator.pending_input.len;
   string_push_csi(&target->emulator.pending_input,
@@ -158,7 +154,7 @@ static void send_mouse_sgr(struct pty_host *target, struct mouse_sgr sgr) {
 static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
 
-  mouse_debug_logging(sgr);
+  // mouse_debug_logging(sgr);
 
   if (v->input.options.focus_follows_mouse) {
     if (sgr.event_type & mouse_move && sgr.button_state == mouse_none) {
@@ -176,6 +172,9 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   struct pty_host *target = coord_to_client(v, sgr);
   if (!target) return;
 
+  struct mouse_sgr trans = sgr;
+  trans.row = sgr.row - target->rect.client.y;
+  trans.column = sgr.column - target->rect.client.x;
   struct mouse_options m = target->emulator.options.mouse;
   if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
   if (m.mode != MOUSE_MODE_SGR) return;
@@ -187,7 +186,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
       (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none);
   // TODO: scroll wheel support
   if (do_send) {
-    send_mouse_sgr(target, sgr);
+    send_mouse_sgr(target, trans);
   }
 }
 
