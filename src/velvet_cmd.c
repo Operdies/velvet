@@ -106,7 +106,7 @@ bool velvet_cmd_arg_iterator_next(struct velvet_cmd_arg_iterator *it) {
       escape = false;
     } else if (ch == terminator) {
       break;
-    } else if (ch == ';') {
+    } else if (ch == ';' && !terminator) {
       break;
     }
   }

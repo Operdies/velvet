@@ -1010,7 +1010,8 @@ void test_velvet_cmd() {
                                               ";'detach'\n"
                                               ";"
                                               "map '<C-S-f>' do something   ;"
-                                              "detach");
+                                              "detach\n"
+                                              "map <C-x>pp notify --title hello 'ls -lah ; sleep 10' ; \n");
   it = (struct velvet_cmd_iterator){.src = config};
   {
     assert(velvet_cmd_iterator_next(&it));
@@ -1078,6 +1079,18 @@ void test_velvet_cmd() {
     }
     assert(!velvet_cmd_arg_iterator_next(&argit));
   }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "map <C-x>pp notify --title hello 'ls -lah ; sleep 10'");
+    char *expected[] = {"map", "<C-x>pp", "notify", "--title", "hello", "ls -lah ; sleep 10"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  assert(!velvet_cmd_iterator_next(&it));
 }
 
 int main(void) {
