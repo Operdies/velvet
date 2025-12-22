@@ -194,7 +194,7 @@ static void velvet_render(struct u8_slice str, void *context) {
   vec_where(s, a->sessions, s->output) session_write_pending(s);
 }
 
-static void session_input_callback(struct io_source *src, struct u8_slice str) {
+static void on_session_input(struct io_source *src, struct u8_slice str) {
   struct velvet *m = src->data;
   if (str.len == 0) {
     struct velvet_session *sesh;
@@ -217,7 +217,7 @@ static void session_input_callback(struct io_source *src, struct u8_slice str) {
   }
 }
 
-static void session_output_callback(struct io_source *src) {
+static void on_session_writable(struct io_source *src) {
   struct velvet *velvet = src->data;
   struct velvet_session *sesh;
   vec_find(sesh, velvet->sessions, sesh->output == src->fd);
@@ -229,7 +229,7 @@ static void session_output_callback(struct io_source *src) {
   }
 }
 
-static void on_pty_writable(struct io_source *src) {
+static void on_window_writable(struct io_source *src) {
   struct velvet *v = src->data;
   struct velvet_window *vte;
   vec_find(vte, v->scene.windows, vte->pty == src->fd);
@@ -240,7 +240,7 @@ static void on_pty_writable(struct io_source *src) {
   }
 }
 
-static void on_pty_output(struct io_source *src, struct u8_slice str) {
+static void on_window_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   struct velvet_window *vte;
   vec_find(vte, v->scene.windows, vte->pty == src->fd);
@@ -316,8 +316,8 @@ void velvet_loop(struct velvet *velvet) {
         .data = velvet,
         .fd = h->pty,
         .events = IO_SOURCE_POLLIN,
-        .on_read = on_pty_output,
-        .on_writable = on_pty_writable,
+        .on_read = on_window_output,
+        .on_writable = on_window_writable,
       };
       if (h->emulator.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
 
@@ -333,11 +333,11 @@ void velvet_loop(struct velvet *velvet) {
     vec_foreach(session, velvet->sessions) {
       struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .on_readable = session_socket_callback, .data = velvet };
       io_add_source(loop, socket_src);
-      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .on_read = session_input_callback, .data = velvet};
+      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .on_read = on_session_input, .data = velvet};
       if (input_src.fd)
         io_add_source(loop, input_src);
       if (session->pending_output.len) {
-        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = session_output_callback, .data = velvet};
+        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_session_writable, .data = velvet};
         if (output_src.fd)
           io_add_source(loop, output_src);
       }
