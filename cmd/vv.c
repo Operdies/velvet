@@ -510,6 +510,9 @@ static void vv_attach(struct velvet_args args) {
   bool quit = false;
   for (; !detach && !quit;) {
     int n_polled = poll(pollset, LENGTH(pollset), -1);
+    for (int i = 0; i < LENGTH(pollset); i++) {
+      if (pollset[i].revents & POLLNVAL) velvet_die("Poll invalid:");
+    }
     if (n_polled == -1) {
       if (errno == EINTR) {
         // assume SIGWINCH
@@ -543,7 +546,7 @@ static void vv_attach(struct velvet_args args) {
           velvet_die("write pending:");
         }
       }
-      assert(written == n);
+      assert(written == (int)pending.len);
     }
 
     if (pollset[1].revents & POLLIN) {

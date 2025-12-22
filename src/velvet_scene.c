@@ -496,6 +496,7 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->h = m->ws.h;
   r->w = m->ws.w;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
+  r->current_style = (struct screen_cell_style) { 0 };
 }
 
 static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer) {
@@ -503,8 +504,7 @@ static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_re
   for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
 }
 
-static void velvet_render_swap_buffers(struct velvet_render *r) {
-  string_clear(&r->draw_buffer);
+static void velvet_render_cycle_buffer(struct velvet_render *r) {
   r->current_buffer = (r->current_buffer + 1) % LENGTH(r->buffers);
 }
 
@@ -526,7 +526,7 @@ void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func
   if (!m->renderer.buffers[0].cells) return;
 
   /* fully swap buffers to simulate full damage */
-  for (int i = 0; i < LENGTH(m->renderer.buffers); i++) velvet_render_swap_buffers(&m->renderer);
+  for (int i = 0; i < LENGTH(m->renderer.buffers); i++) velvet_render_cycle_buffer(&m->renderer);
   velvet_scene_render_damage(m, render_func, context);
 }
 
@@ -536,11 +536,12 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   struct velvet_render *r = &m->renderer;
 
-  velvet_render_clear_buffer(r, get_current_buffer(r));
-
+  string_clear(&r->draw_buffer);
   if (r->h != m->ws.h || r->w != m->ws.w) {
     velvet_render_init_buffers(m);
-    string_push_cstr(&r->draw_buffer, "\x1b[2J");
+    string_push_cstr(&r->draw_buffer, "\x1b[m\x1b[2J");
+  } else {
+    velvet_render_clear_buffer(r, get_current_buffer(r));
   }
 
   struct pty_host *h;
@@ -550,12 +551,13 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   /* TODO: enum of layers */
   vec_where(h, m->hosts, !h->dragging) {
-    velvet_render_copy_cells_from_host(r, h);
+    /* the order doesn't matter here, but we draw borders first to make errors more visible */
     velvet_render_calculate_borders(r, m, h);
+    velvet_render_copy_cells_from_host(r, h);
   }
   vec_where(h, m->hosts, h->dragging) {
-    velvet_render_copy_cells_from_host(r, h);
     velvet_render_calculate_borders(r, m, h);
+    velvet_render_copy_cells_from_host(r, h);
   }
 
   int damage = velvet_render_calculate_damage(r);
@@ -577,7 +579,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   struct u8_slice render = string_as_u8_slice(r->draw_buffer);
   render_func(render, context);
-  if (damage) velvet_render_swap_buffers(r);
+  if (damage) velvet_render_cycle_buffer(r);
 }
 
 struct sgr_param {

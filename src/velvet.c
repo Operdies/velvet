@@ -171,49 +171,6 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
   }
 }
 
-static void draw_no_mans_land(struct velvet *velvet) {
-  static struct string scratch = {0};
-  struct velvet_session *focused = velvet_get_focused_session(velvet);
-  struct velvet_session *s;
-  char *pipe = "│";
-  char *dash = "─";
-  char *corner = "┘";
-  vec_foreach(s, velvet->sessions) {
-    if (s->ws.w && s->ws.h) {
-      string_clear(&scratch);
-      string_push_csi(&scratch, 0, INT_SLICE(38, 2, 0x5e, 0x5e, 0x6e), "m");
-      // 1. Draw the empty space to the right of this client
-      if (s->ws.w > focused->ws.w) {
-        for (int i = 0; i < focused->ws.h; i++) {
-          string_push_csi(&scratch, 0, INT_SLICE(i + 1, focused->ws.w + 1), "H");
-          int draw_count = s->ws.w - focused->ws.w;
-          string_push_slice(&scratch, u8_slice_from_cstr(pipe));
-          if (--draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr("·"));
-          if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
-        }
-      }
-      // 2. Draw the empty space below this client
-      for (int i = focused->ws.h; i < s->ws.h; i++) {
-        int draw_count = s->ws.w;
-        string_push_csi(&scratch, 0, INT_SLICE(i + 1, 1), "H");
-        if (i == focused->ws.h) {
-          string_push_slice(&scratch, u8_slice_from_cstr(dash));
-          draw_count--;
-          int n_dashes = MIN(draw_count, focused->ws.w - 1);
-          string_push_csi(&scratch, 0, INT_SLICE(n_dashes), "b");
-          draw_count -= n_dashes;
-          if (draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr(corner));
-          draw_count--;
-        }
-        if (draw_count > 0) string_push_slice(&scratch, u8_slice_from_cstr("·"));
-        if (--draw_count > 0) string_push_csi(&scratch, 0, INT_SLICE(draw_count), "b");
-      }
-      string_push_csi(&scratch, 0, INT_SLICE(0), "m");
-      string_push_slice(&s->pending_output, string_as_u8_slice(scratch));
-    }
-  }
-}
-
 static ssize_t session_write_pending(struct velvet_session *sesh) {
   assert(sesh->input);
   assert(sesh->output);
@@ -329,16 +286,12 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_default_config(velvet);
 
-  bool did_resize = false;
   for (;;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
     if (focus) {
       if (focus->ws.w && focus->ws.h && (focus->ws.w != velvet->scene.ws.w || focus->ws.h != velvet->scene.ws.h)) {
         velvet_scene_resize(&velvet->scene, focus->ws);
-        did_resize = true;
-        // Defer redraw until the clients have actually updated. Redrawing right away leads to flickering
-        // redraw_needed = true;
       }
 
       // arrange
@@ -346,10 +299,6 @@ void velvet_loop(struct velvet *velvet) {
       // Render the current velvet state
       velvet->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
       velvet_scene_render_damage(&velvet->scene, velvet_render, velvet);
-      if (did_resize) {
-        did_resize = false;
-        draw_no_mans_land(velvet);
-      }
     }
 
     // Set up IO
