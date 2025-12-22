@@ -40,6 +40,32 @@ def vec_summary(valobj, x, y):
     prov.update()
     return f'vec<{prov.typename}>[{prov.num_elements}]'
 
+def unicode_codepoint_summary(valobj, x, y):
+    cp = valobj.GetChildMemberWithName('cp').GetValueAsUnsigned(0)
+    return chr(cp)
+
+def screen_cell_style_summary(valobj, x, y):
+    bg = valobj.GetChildMemberWithName('bg').GetSummary()
+    fg = valobj.GetChildMemberWithName('fg').GetSummary()
+    attr = valobj.GetChildMemberWithName('attr').GetSummary()
+    return f'{attr}, bg={bg}, fg={fg}'
+
+def screen_cell_summary(valobj, x, y):
+    codepoint = valobj.GetChildMemberWithName('codepoint');
+    cp = codepoint.GetChildMemberWithName('cp').GetValueAsUnsigned(0)
+    return chr(cp)
+
+def color_summary(valobj, x, y):
+    cmd = valobj.GetChildMemberWithName('cmd').GetValueAsUnsigned(0)
+    table = valobj.GetChildMemberWithName('table').GetValueAsUnsigned(0)
+    r = valobj.GetChildMemberWithName('r').GetValueAsUnsigned(0)
+    g = valobj.GetChildMemberWithName('g').GetValueAsUnsigned(0)
+    b = valobj.GetChildMemberWithName('b').GetValueAsUnsigned(0)
+
+    if cmd == 1:
+        return f"#{r:02x}{g:02x}{b:02x}"
+    return f"{table}"
+
 def screen_row_summary(valobj, x, y):
     dirty = valobj.GetChildMemberWithName('dirty').GetValueAsUnsigned(0)
     eol = valobj.GetChildMemberWithName('eol').GetValueAsUnsigned(0)
@@ -286,8 +312,18 @@ def configure(debugger):
     debugger.HandleCommand(
         'type summary add -F display.vec_summary -e -x "^vec$"'
     )
-
-
+    debugger.HandleCommand(
+        'type summary add -F display.color_summary -e -x "^color$"'
+    )
+    debugger.HandleCommand(
+        'type summary add -F display.unicode_codepoint_summary -e -x "^unicode_codepoint$"'
+    )
+    debugger.HandleCommand(
+        'type summary add -F display.screen_cell_style_summary -e -x "^screen_cell_style$"'
+    )
+    debugger.HandleCommand(
+        'type summary add -F display.screen_cell_summary -e -x "^screen_cell$"'
+    )
 def __lldb_init_module(debugger, dict):
     configure(debugger)
 
