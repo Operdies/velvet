@@ -2,6 +2,7 @@
 #include "utils.h"
 #include <string.h>
 #include <wchar.h>
+#include <string.h>
 
 // assume *str is a valid utf8 string
 int utf8_strlen(char *str) {

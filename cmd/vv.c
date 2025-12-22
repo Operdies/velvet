@@ -559,6 +559,7 @@ static void vv_attach(struct velvet_args args) {
     }
   }
 
+  free(buf);
   close(sockfd);
   close(output_pipe[0]);
   close(output_pipe[1]);

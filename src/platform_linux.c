@@ -19,7 +19,7 @@ bool get_cwd_from_pty(int pty, char *buffer, int len) {
 
 char *platform_get_exe_path() {
   char *buf = calloc(PATH_MAX + 1, 1);
-  if (!realpath("/proc/self/exe", buf)) die("realpath:");
+  if (!realpath("/proc/self/exe", buf)) velvet_die("realpath:");
   return buf;
 }
 

@@ -11,7 +11,7 @@ else
 	UNAME_S := $(shell uname -s)
 	OBJECTS += platform_unix
 	ifeq ($(UNAME_S),Linux)
-		DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE
+		DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700
 		OBJECTS += platform_linux
 	endif
 

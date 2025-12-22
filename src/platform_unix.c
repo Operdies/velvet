@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <virtual_terminal_sequences.h>
 #include "io.h"
+#include <time.h>
 
 bool terminfo_initialized = false;
 struct termios original_terminfo = {0};

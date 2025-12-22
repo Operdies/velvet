@@ -6,6 +6,7 @@
 #include <csi.h>
 #include <string.h>
 #include "velvet_cmd.h"
+#include <signal.h>
 
 static void velvet_session_render(struct u8_slice str, void *context) {
   struct velvet_session *s = context;

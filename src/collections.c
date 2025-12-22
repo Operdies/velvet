@@ -483,6 +483,20 @@ void string_ensure_null_terminated(struct string *s) {
   s->len--;
 }
 
+ssize_t u8_slice_indexof(struct u8_slice big, struct u8_slice small) {
+  const uint8_t *base = big.content;
+  for (; big.len >= small.len; ) {
+    size_t i = 0;
+    for (; i < small.len; i++) {
+      if (small.content[i] != big.content[i]) break;
+    }
+    if (i == small.len) 
+      return big.content - base;
+    big = u8_slice_range(big, 1, big.len);
+  }
+  return -1;
+}
+
 int string_replace_inplace_slow(struct string *str, const char *const _old, const char *const _new) {
   static struct string buffer = {0};
   string_clear(&buffer);
@@ -496,18 +510,19 @@ int string_replace_inplace_slow(struct string *str, const char *const _old, cons
   uint8_t *cursor = str->content;
   uint8_t *end = str->content + str->len;
   for (; end - cursor > (int)old.len;) {
-    uint8_t *next = (uint8_t*)strnstr((char*)cursor, _old, end - cursor);
-    if (!next) { 
+    struct u8_slice big = { .content = cursor, .len = end - cursor };
+    ssize_t substring = u8_slice_indexof(big, old);
+    if (substring == -1) { 
       struct u8_slice remaining = { .content = (uint8_t*)cursor, .len = end - cursor };
       string_push_slice(&buffer, remaining);
       break;
     }
-    struct u8_slice before_match = { .content = (uint8_t*)cursor, .len = next - cursor };
+    struct u8_slice before_match = { .content = (uint8_t*)cursor, .len = substring };
     if (before_match.len) {
       string_push_slice(&buffer, before_match);
     }
     string_push_slice(&buffer, new);
-    cursor = next + old.len;
+    cursor += substring + old.len;
     replacements++;
   }
 
@@ -541,7 +556,9 @@ void hashmap_destroy(struct hashmap *h) {
 }
 
 void string_push_vformat_slow(struct string *s, char *fmt, va_list ap) {
-  size_t required = vsnprintf(nullptr, 0, fmt, ap);
+  va_list copy;
+  va_copy(copy, ap);
+  size_t required = vsnprintf(nullptr, 0, fmt, copy);
   string_ensure_capacity(s, s->len + required + 1);
   s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
 }
