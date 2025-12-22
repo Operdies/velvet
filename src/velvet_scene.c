@@ -12,7 +12,18 @@
 
 static int nmaster = 1;
 static float factor = 0.5;
+static struct pty_host *next_tiled(struct vec v, struct pty_host *from) {
+  size_t start = 0;
+  if (from) start = vec_index(&v, from) + 1;
+  for (; start < v.length; start++) {
+    from = vec_nth(&v, start);
+    if (from->layer == VELVET_LAYER_TILED) return from;
+  }
+  return nullptr;
+}
+
 void velvet_scene_arrange(struct velvet_scene *m) {
+  struct pty_host *h;
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->ws.w, .ws_row = m->ws.h};
@@ -22,6 +33,8 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.h);
 
   n = m->hosts.length;
+  n = 0;
+  vec_where(h, m->hosts, h->layer == VELVET_LAYER_TILED) n++;
 
   i = my = sy = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -40,8 +53,10 @@ void velvet_scene_arrange(struct velvet_scene *m) {
     sw = 0;
   }
 
+  struct pty_host *p = nullptr;
+
   for (; i < nmaster && i < n; i++) {
-    struct pty_host *p = vec_nth(&m->hosts, i);
+    p = next_tiled(m->hosts, p);
     struct rect b = {.x = mx, .y = my, .w = mw, .h = mh};
     b.x_pixel = b.w * pixels_per_column;
     b.y_pixel = b.h * pixels_per_row;
@@ -53,7 +68,7 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   int stack_items_left = ns;
 
   for (; i < n; i++) {
-    struct pty_host *p = vec_nth(&m->hosts, i);
+    p = next_tiled(m->hosts, p);
     int height = (float)stack_height_left / stack_items_left;
     struct rect b = {.x = mw, .y = sy, .w = sw, .h = height};
     b.x_pixel = b.w * pixels_per_column;
@@ -144,6 +159,7 @@ void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline)
   string_push_slice(&host->cmdline, cmdline);
   host->emulator = vte_default;
   host->border_width = 1;
+  host->layer = VELVET_LAYER_TILED;
   velvet_scene_arrange(m);
   pty_host_start(host);
 }
@@ -549,15 +565,12 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     pty_host_update_title(h);
   }
 
-  /* TODO: enum of layers */
-  vec_where(h, m->hosts, !h->dragging) {
-    /* the order doesn't matter here, but we draw borders first to make errors more visible */
-    velvet_render_calculate_borders(r, m, h);
-    velvet_render_copy_cells_from_host(r, h);
-  }
-  vec_where(h, m->hosts, h->dragging) {
-    velvet_render_calculate_borders(r, m, h);
-    velvet_render_copy_cells_from_host(r, h);
+  for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
+    vec_where(h, m->hosts, h->layer == layer) {
+      /* the order doesn't matter here, but we draw borders first to make errors more visible */
+      velvet_render_calculate_borders(r, m, h);
+      velvet_render_copy_cells_from_host(r, h);
+    }
   }
 
   int damage = velvet_render_calculate_damage(r);
@@ -789,7 +802,6 @@ static bool rect_same_size(struct rect b1, struct rect b2) {
 }
 
 void pty_host_resize(struct pty_host *pty_host, struct rect outer) {
-  if (pty_host->dragging) return;
   int bw = pty_host->border_width;
   // Refuse to go below a minimum size
   int min_size = bw * 2 + 1;

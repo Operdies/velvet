@@ -15,6 +15,14 @@
 #define N_BUFFERS 2
 #endif
 
+enum velvet_scene_layer {
+  VELVET_LAYER_TILED    = 1,
+  VELVET_LAYER_FLOATING = 2,
+  VELVET_LAYER_POPUP    = 4,
+  VELVET_LAYER_DRAGGING = 8,
+  VELVET_LAYER_LAST     = 16,
+};
+
 struct pty_host {
   struct string cmdline;
   struct string title;
@@ -26,8 +34,8 @@ struct pty_host {
     struct rect window;
     struct rect client;
   } rect;
-  bool dragging;
   struct vte emulator;
+  enum velvet_scene_layer layer;
 };
 
 void pty_host_destroy(struct pty_host *pty_host);
