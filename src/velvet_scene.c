@@ -78,6 +78,29 @@ void velvet_scene_arrange(struct velvet_scene *m) {
     stack_items_left--;
     stack_height_left -= height;
   }
+
+  { 
+    int notification_width = 40;
+    int notification_height = 5;
+    int top_pad = 1;
+    int right_pad = 1;
+    if (notification_width + right_pad > m->ws.w) {
+      notification_width = m->ws.w - 2;
+    }
+    int x = m->ws.w - notification_width - right_pad;
+    int y = top_pad;
+
+    vec_rwhere(p, m->windows, p->layer == VELVET_LAYER_NOTIFICATION) {
+      struct rect r = { .w = notification_width, .h = notification_height, .x = x, .y = y };
+      if (!p->close.exited_at) {
+        /* ony show notifications after they exit */
+        r.x = m->ws.w + 1; /* move off screen */
+      } else {
+        y += r.h;
+      }
+      velvet_window_resize(p, r);
+    }
+  }
 }
 
 #ifndef CTRL
@@ -187,10 +210,12 @@ void velvet_scene_destroy(struct velvet_scene *m) {
   velvet_render_destroy(&m->renderer);
 }
 
-static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
-  vec_remove_at(&m->hosts, index);
+void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
+  size_t index = vec_index(&m->windows, w);
+  assert(index >= 0);
+  vec_remove(&m->windows, w);
 
-  if (m->hosts.length == 0) return;
+  if (m->windows.length == 0) return;
 
   // Update focus
   if (m->focus > index) {
@@ -204,20 +229,6 @@ static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
     m->focus = next_focus;
     struct velvet_window *new_focus = vec_nth(&m->windows, next_focus);
     host_notify_focus(new_focus, true);
-  }
-}
-
-void velvet_scene_remove_exited(struct velvet_scene *m) {
-  int status;
-  pid_t pid = 0;
-
-  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    struct velvet_window *h;
-    vec_find(h, m->hosts, h->pid == pid);
-    if (!h) continue;
-    h->pid = 0;
-    velvet_window_destroy(h);
-    velvet_scene_remove_host(m, vec_index(&m->hosts, h));
   }
 }
 

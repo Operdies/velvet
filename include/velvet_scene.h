@@ -17,6 +17,12 @@ enum velvet_scene_layer {
   VELVET_LAYER_LAST,
 };
 
+enum velvet_window_close_when {
+  VELVET_WINDOW_CLOSE_ON_EXIT = 0,
+  VELVET_WINDOW_CLOSE_ON_ESCAPE = 1,
+  VELVET_WINDOW_CLOSE_AFTER_DELAY = 2,
+};
+
 struct velvet_window {
   struct string cmdline;
   struct string title;
@@ -29,6 +35,11 @@ struct velvet_window {
     struct rect client;
   } rect;
   struct vte emulator;
+  struct {
+    enum velvet_window_close_when when;
+    uint64_t delay_ms;
+    uint64_t exited_at;
+  } close;
   enum velvet_scene_layer layer;
 };
 
@@ -119,7 +130,7 @@ static const struct velvet_scene velvet_scene_default = {
 
 void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
-void velvet_scene_remove_exited(struct velvet_scene *m);
+void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
 void velvet_scene_resize(struct velvet_scene *m, struct rect w);
 void velvet_scene_arrange(struct velvet_scene *m);
 void velvet_scene_destroy(struct velvet_scene *m);

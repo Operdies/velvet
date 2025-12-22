@@ -137,7 +137,45 @@ static void socket_accept(struct io_source *src) {
   vec_push(&velvet->sessions, &c);
 }
 
-static void signal_callback(struct io_source *src, struct u8_slice str) {
+static void velvet_remove_window(struct velvet *v, struct velvet_window *h) {
+  struct velvet_scene *m = &v->scene;
+  h->pid = 0;
+  velvet_window_destroy(h);
+  velvet_scene_remove_window(m, h);
+}
+
+static void velvet_scene_remove_schedule(void *data) {
+  struct velvet *v = data;
+  uint64_t now = get_ms_since_startup();
+  struct velvet_window *h;
+  vec_rwhere(h,
+             v->scene.windows,
+             (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->close.exited_at &&
+                 h->close.exited_at + h->close.delay_ms <= now) {
+    velvet_remove_window(v, h);
+  }
+}
+
+void velvet_scene_remove_exited(struct velvet *v) {
+  int status;
+  pid_t pid = 0;
+  struct velvet_scene *m = &v->scene;
+
+  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    struct velvet_window *h;
+    vec_find(h, m->windows, h->pid == pid);
+    if (h) {
+      h->close.exited_at = get_ms_since_startup();
+      if (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY && h->close.delay_ms > 0) {
+        io_schedule(&v->event_loop, h->close.delay_ms, velvet_scene_remove_schedule, v);
+      } else {
+        velvet_remove_window(v, h);
+      }
+    }
+  }
+}
+
+static void on_signal(struct io_source *src, struct u8_slice str) {
   struct velvet *velvet = src->data;
   // 1. Dispatch any pending signals
   bool did_sigchld = false;
@@ -168,7 +206,7 @@ static void signal_callback(struct io_source *src, struct u8_slice str) {
   }
 
   if (did_sigchld) {
-    velvet_scene_remove_exited(&velvet->scene);
+    velvet_scene_remove_exited(velvet);
   }
 }
 
@@ -305,7 +343,7 @@ void velvet_loop(struct velvet *velvet) {
     // Set up IO
     vec_clear(&loop->sources);
 
-    struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = signal_callback, .data = velvet};
+    struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = on_signal, .data = velvet};
     /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
      * This is because the signal handler will remove closed clients, and the stdin handler
      * processes hotkeys which can rearrange the order of the pointers.

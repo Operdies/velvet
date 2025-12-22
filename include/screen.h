@@ -68,8 +68,8 @@ struct screen_cell_style {
 static const struct screen_cell_style style_default = {0};
 
 struct screen_cell {
-  struct screen_cell_style style;
   struct unicode_codepoint codepoint;
+  struct screen_cell_style style;
 };
 
 struct screen_line {

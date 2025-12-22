@@ -1,6 +1,6 @@
 # don't break on SIGWINCH or SIGCHLD
 process handle -p true -n false -s false SIGWINCH
 process handle -p true -n false -s false SIGCHLD
-type summary add pty_host --summary-string "[${var.rect.client.h}x${var.rect.client.w}] ${var.title%s}"
+type summary add velvet_window --summary-string "[${var.rect.client.h}x${var.rect.client.w}] ${var.title%s}"
 
 command script import ./debugging/display.py 

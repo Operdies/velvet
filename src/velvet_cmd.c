@@ -243,6 +243,34 @@ static void velvet_cmd_put(struct velvet *v, struct velvet_cmd_arg_iterator *it)
   velvet_input_put(v, keys);
 }
 
+static void velvet_cmd_notify(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+  struct u8_slice title = {0};
+  struct u8_slice cmdline = {0};
+
+
+  if (!velvet_cmd_arg_iterator_next(it)) return;
+  if (u8_match(it->current, "--title")) {
+    if (!velvet_cmd_arg_iterator_next(it))
+      return;
+    title = it->current;
+    if (!velvet_cmd_arg_iterator_next(it))
+      return;
+  }
+  cmdline = it->current;
+
+  struct velvet_window notification = {
+      .border_width = 1,
+      .emulator = vte_default,
+      .layer = VELVET_LAYER_NOTIFICATION,
+      .close = { .when = VELVET_WINDOW_CLOSE_AFTER_DELAY, .delay_ms = 2500 },
+  };
+  string_push_slice(&notification.cmdline, cmdline);
+  if (title.len) {
+    string_push_slice(&notification.emulator.osc.title, title);
+  }
+  velvet_scene_spawn_process_from_template(&v->scene, notification);
+}
+
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   struct velvet_session *sender = nullptr;
   velvet_log("velvet_cmd: %.*s", (int)cmd.len, cmd.content);
@@ -289,6 +317,8 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       } else {
         velvet_log("`unmap' command missing `keys' parameter.");
       }
+    } else if (u8_match(command, "notify")) {
+      velvet_cmd_notify(v, &it);
     } else if (u8_match(command, "set")) {
       velvet_cmd_set(v, sender, &it);
     } else {
