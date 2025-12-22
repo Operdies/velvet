@@ -72,17 +72,6 @@ def screen_row_summary(valobj, x, y):
     dirty_string = 'dirty' if dirty else 'clean'
     return f'{dirty_string}, eol={eol}'
 
-# struct screen {
-#   int w, h;
-#   /* scroll region is local to the screen and is not persisted when the window /
-#    * pty_host is resized or alternate screen is entered */
-#   int scroll_top, scroll_bottom;
-#   struct screen_cell *_cells; // cells[w*h]
-#   struct screen_row *rows;   // rows[h]
-#   struct cursor cursor;
-#   struct cursor saved_cursor;
-# };
-# objective: expand row to reveal `h` rows
 class screen_SynthProvider:
     def __init__(self, o, dict):
         self.o = o

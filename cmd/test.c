@@ -182,27 +182,27 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   struct dumb_screen *expected = make_dumb_screen(5, 8, expected1);
 
   struct velvet_scene v = velvet_scene_default;
-  struct pty_host *p = vec_new_element(&v.hosts);
+  struct velvet_window *p = vec_new_element(&v.windows);
   p->emulator = vte_default;
   velvet_scene_resize(&v, blarge);
-  pty_host_resize(p, blarge);
+  velvet_window_resize(p, blarge);
 
   {
     // 1. Write the input and verify the output
-    pty_host_process_output(p, u8_slice_from_cstr(input));
+    velvet_window_process_output(p, u8_slice_from_cstr(input));
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(expected, vte_get_current_screen(&p->emulator), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
-    pty_host_process_output(p, string_as_u8_slice(v.renderer.draw_buffer));
+    velvet_window_process_output(p, string_as_u8_slice(v.renderer.draw_buffer));
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
     assert_screen_equals(expected, vte_get_current_screen(&p->emulator), testname2);
   }
   free(expected);
-  pty_host_destroy(p);
+  velvet_window_destroy(p);
   velvet_scene_destroy(&v);
 }
 
@@ -212,12 +212,12 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
   struct velvet_scene v = velvet_scene_default;
-  struct pty_host *p = vec_new_element(&v.hosts);
+  struct velvet_window *p = vec_new_element(&v.windows);
   p->emulator = vte_default;
   velvet_scene_resize(&v, bsmall);
-  pty_host_resize(p, bsmall);
+  velvet_window_resize(p, bsmall);
 
-  pty_host_process_output(p, u8_slice_from_cstr(input));
+  velvet_window_process_output(p, u8_slice_from_cstr(input));
   struct string output = {0};
   {
     string_clear(&output);
@@ -227,21 +227,21 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   }
   {
     string_clear(&output);
-    pty_host_resize(p, blarge);
+    velvet_window_resize(p, blarge);
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(large, vte_get_current_screen(&p->emulator), test_name);
   }
   {
     string_clear(&output);
-    pty_host_resize(p, bsmall);
+    velvet_window_resize(p, bsmall);
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     // It is always possibly to losslessly convert back to the initial screen, so let's verify that
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
   }
 
-  pty_host_destroy(p);
+  velvet_window_destroy(p);
   free(small), free(large), string_destroy(&output);
 }
 
@@ -251,23 +251,23 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
   struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
   struct velvet_scene v = velvet_scene_default;
-  struct pty_host p = {.emulator = vte_default, .border_width = 0};
-  vec_push(&v.hosts, &p);
+  struct velvet_window p = {.emulator = vte_default, .border_width = 0};
+  vec_push(&v.windows, &p);
   velvet_scene_resize(&v, blarge);
-  pty_host_resize(&p, blarge);
-  pty_host_process_output(&p, u8_slice_from_cstr(input));
+  velvet_window_resize(&p, blarge);
+  velvet_window_process_output(&p, u8_slice_from_cstr(input));
   {
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(large, vte_get_current_screen(&p.emulator), test_name);
   }
   {
-    pty_host_resize(&p, bsmall);
+    velvet_window_resize(&p, bsmall);
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(small, vte_get_current_screen(&p.emulator), test_name);
   }
-  pty_host_destroy(&p);
+  velvet_window_destroy(&p);
   free(small), free(large);
 }
 

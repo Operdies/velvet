@@ -101,7 +101,7 @@ struct cursor {
 struct screen {
   int w, h, _cells_size, _lines_size;
   /* scroll region is local to the screen and is not persisted when the window /
-   * pty_host is resized or alternate screen is entered */
+   * velvet_window is resized or alternate screen is entered */
   int scroll_top, scroll_bottom;
   struct screen_cell *_cells; // cells[w*h]
   struct screen_line *lines;   // lines[h]

@@ -12,7 +12,7 @@
 
 static int nmaster = 1;
 static float factor = 0.5;
-static struct pty_host *next_tiled(struct vec v, struct pty_host *from) {
+static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from) {
   size_t start = 0;
   if (from) start = vec_index(&v, from) + 1;
   for (; start < v.length; start++) {
@@ -23,7 +23,7 @@ static struct pty_host *next_tiled(struct vec v, struct pty_host *from) {
 }
 
 void velvet_scene_arrange(struct velvet_scene *m) {
-  struct pty_host *h;
+  struct velvet_window *h;
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->ws.w, .ws_row = m->ws.h};
@@ -32,9 +32,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.w);
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.h);
 
-  n = m->hosts.length;
+  n = m->windows.length;
   n = 0;
-  vec_where(h, m->hosts, h->layer == VELVET_LAYER_TILED) n++;
+  vec_where(h, m->windows, h->layer == VELVET_LAYER_TILED) n++;
 
   i = my = sy = mx = 0;
   nm = n > nmaster ? nmaster : n;
@@ -53,14 +53,14 @@ void velvet_scene_arrange(struct velvet_scene *m) {
     sw = 0;
   }
 
-  struct pty_host *p = nullptr;
+  struct velvet_window *p = nullptr;
 
   for (; i < nmaster && i < n; i++) {
-    p = next_tiled(m->hosts, p);
+    p = next_tiled(m->windows, p);
     struct rect b = {.x = mx, .y = my, .w = mw, .h = mh};
     b.x_pixel = b.w * pixels_per_column;
     b.y_pixel = b.h * pixels_per_row;
-    pty_host_resize(p, b);
+    velvet_window_resize(p, b);
     my += mh;
   }
 
@@ -68,12 +68,12 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   int stack_items_left = ns;
 
   for (; i < n; i++) {
-    p = next_tiled(m->hosts, p);
+    p = next_tiled(m->windows, p);
     int height = (float)stack_height_left / stack_items_left;
     struct rect b = {.x = mw, .y = sy, .w = sw, .h = height};
     b.x_pixel = b.w * pixels_per_column;
     b.y_pixel = b.h * pixels_per_row;
-    pty_host_resize(p, b);
+    velvet_window_resize(p, b);
     sy += height;
     stack_items_left--;
     stack_height_left -= height;
@@ -86,28 +86,28 @@ void velvet_scene_arrange(struct velvet_scene *m) {
 
 static void velvet_scene_swap_clients(struct velvet_scene *m, size_t c1, size_t c2) {
   if (c1 != c2) {
-    vec_swap(&m->hosts, c1, c2);
+    vec_swap(&m->windows, c1, c2);
   }
 }
 
-static void host_notify_focus(struct pty_host *host, bool focus) {
+static void host_notify_focus(struct velvet_window *host, bool focus) {
   if (host->pty && host->emulator.options.focus_reporting) {
     string_push_slice(&host->emulator.pending_input, focus ? vt_focus_in : vt_focus_out);
   }
 }
 
-struct pty_host *velvet_scene_get_focus(struct velvet_scene *m) {
-  if (m->hosts.length > 0) {
-    if (m->focus >= m->hosts.length) m->focus = m->hosts.length - 1;
-    return vec_nth(&m->hosts, m->focus);
+struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
+  if (m->windows.length > 0) {
+    if (m->focus >= m->windows.length) m->focus = m->windows.length - 1;
+    return vec_nth(&m->windows, m->focus);
   }
   return nullptr;
 }
 
 void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
   if (m->focus != focus) {
-    struct pty_host *current_focus = vec_nth(&m->hosts, m->focus);
-    struct pty_host *new_focus = vec_nth(&m->hosts, focus);
+    struct velvet_window *current_focus = vec_nth(&m->windows, m->focus);
+    struct velvet_window *new_focus = vec_nth(&m->windows, focus);
     m->focus = focus;
     host_notify_focus(current_focus, false);
     host_notify_focus(new_focus, true);
@@ -115,29 +115,29 @@ void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
 }
 
 static void velvet_scene_swap_previous(struct velvet_scene *m) {
-  if (m->focus > 0 && m->hosts.length > 1) {
+  if (m->focus > 0 && m->windows.length > 1) {
     velvet_scene_swap_clients(m, m->focus, m->focus - 1);
     velvet_scene_set_focus(m, m->focus - 1);
   }
 }
 
 static void velvet_scene_swap_next(struct velvet_scene *m) {
-  if (m->focus < m->hosts.length - 1 && m->hosts.length > 1) {
+  if (m->focus < m->windows.length - 1 && m->windows.length > 1) {
     velvet_scene_swap_clients(m, m->focus, m->focus + 1);
     velvet_scene_set_focus(m, m->focus + 1);
   }
 }
 
 static void velvet_scene_focus_next(struct velvet_scene *m) {
-  velvet_scene_set_focus(m, (m->focus + 1) % m->hosts.length);
+  velvet_scene_set_focus(m, (m->focus + 1) % m->windows.length);
 }
 
 static void velvet_scene_focus_previous(struct velvet_scene *m) {
-  velvet_scene_set_focus(m, (m->focus + m->hosts.length - 1) % m->hosts.length);
+  velvet_scene_set_focus(m, (m->focus + m->windows.length - 1) % m->windows.length);
 }
 
 static void velvet_scene_zoom(struct velvet_scene *m) {
-  if (m->hosts.length < 2) return;
+  if (m->windows.length < 2) return;
   if (m->focus == 0) {
     velvet_scene_swap_clients(m, 0, 1);
     velvet_scene_set_focus(m, 0);
@@ -149,19 +149,25 @@ static void velvet_scene_zoom(struct velvet_scene *m) {
 
 static void velvet_scene_spawn_and_focus(struct velvet_scene *m, char *cmdline) {
   velvet_scene_spawn_process(m, u8_slice_from_cstr(cmdline));
-  velvet_scene_set_focus(m, m->hosts.length - 1);
+  velvet_scene_set_focus(m, m->windows.length - 1);
+}
+
+void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template) {
+  assert(m->windows.element_size == sizeof(struct velvet_window));
+  struct velvet_window *host = vec_new_element(&m->windows);
+  *host = template;
+  velvet_scene_arrange(m);
+  velvet_window_start(host);
 }
 
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
-  assert(m->hosts.element_size == sizeof(struct pty_host));
-  struct pty_host *host = vec_new_element(&m->hosts);
-  string_clear(&host->cmdline);
-  string_push_slice(&host->cmdline, cmdline);
-  host->emulator = vte_default;
-  host->border_width = 1;
-  host->layer = VELVET_LAYER_TILED;
-  velvet_scene_arrange(m);
-  pty_host_start(host);
+  assert(m->hosts.element_size == sizeof(struct velvet_window));
+  struct velvet_window host = { 0 };
+  string_push_slice(&host.cmdline, cmdline);
+  host.emulator = vte_default;
+  host.border_width = 1;
+  host.layer = VELVET_LAYER_TILED;
+  velvet_scene_spawn_process_from_template(m, host);
 }
 
 static void velvet_render_destroy(struct velvet_render *renderer) {
@@ -173,9 +179,9 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
 }
 
 void velvet_scene_destroy(struct velvet_scene *m) {
-  struct pty_host *h;
+  struct velvet_window *h;
   vec_foreach(h, m->hosts) {
-    pty_host_destroy(h);
+    velvet_window_destroy(h);
   }
   vec_destroy(&m->hosts);
   velvet_render_destroy(&m->renderer);
@@ -196,7 +202,7 @@ static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
     // If the removed host was the last host, set the focus to the new last host.
     if (next_focus >= m->hosts.length) next_focus = m->hosts.length - 1;
     m->focus = next_focus;
-    struct pty_host *new_focus = vec_nth(&m->hosts, next_focus);
+    struct velvet_window *new_focus = vec_nth(&m->hosts, next_focus);
     host_notify_focus(new_focus, true);
   }
 }
@@ -206,11 +212,11 @@ void velvet_scene_remove_exited(struct velvet_scene *m) {
   pid_t pid = 0;
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    struct pty_host *h;
+    struct velvet_window *h;
     vec_find(h, m->hosts, h->pid == pid);
     if (!h) continue;
     h->pid = 0;
-    pty_host_destroy(h);
+    velvet_window_destroy(h);
     velvet_scene_remove_host(m, vec_index(&m->hosts, h));
   }
 }
@@ -402,7 +408,7 @@ static void velvet_render_render_damage_to_buffer(struct velvet_render *r) {
   }
 }
 
-static void velvet_render_copy_cells_from_host(struct velvet_render *r, struct pty_host *h) {
+static void velvet_render_copy_cells_from_host(struct velvet_render *r, struct velvet_window *h) {
   struct screen *active = vte_get_current_screen(&h->emulator);
   assert(active);
   assert(active->w == h->rect.client.w);
@@ -429,7 +435,7 @@ static struct unicode_codepoint utf8_from_cstr(char *src) {
   return utf8_to_codepoint(result.utf8, &len);
 }
 
-static void velvet_render_calculate_borders(struct velvet_render *r, struct velvet_scene *m, struct pty_host *host) {
+static void velvet_render_calculate_borders(struct velvet_render *r, struct velvet_scene *m, struct velvet_window *host) {
   struct unicode_codepoint topleft = utf8_from_cstr("┌");
   struct unicode_codepoint topright = utf8_from_cstr("┐");
   struct unicode_codepoint bottomleft = utf8_from_cstr("└");
@@ -548,7 +554,7 @@ void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func
 
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
   if (m->hosts.length == 0) return;
-  struct pty_host *focused = velvet_scene_get_focus(m);
+  struct velvet_window *focused = velvet_scene_get_focus(m);
 
   struct velvet_render *r = &m->renderer;
 
@@ -560,9 +566,9 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_render_clear_buffer(r, get_current_buffer(r));
   }
 
-  struct pty_host *h;
+  struct velvet_window *h;
   vec_foreach(h, m->hosts) {
-    pty_host_update_title(h);
+    velvet_window_update_title(h);
   }
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
@@ -589,7 +595,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     bool is_obscured = false;
 
     /* if a window is above the current window and obscures the cursor, we should not show it */
-    struct pty_host *window;
+    struct velvet_window *window;
     vec_where(window, m->hosts, window->layer > focused->layer) {
       struct rect w = window->rect.window;
       if (w.y <= line && w.y + w.h > line && w.x <= col && w.x + w.w > col) {
@@ -763,26 +769,26 @@ static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_sty
 }
 
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-void pty_host_destroy(struct pty_host *pty_host) {
-  if (pty_host->pty > 0) {
-    close(pty_host->pty);
-    pty_host->pty = 0;
+void velvet_window_destroy(struct velvet_window *velvet_window) {
+  if (velvet_window->pty > 0) {
+    close(velvet_window->pty);
+    velvet_window->pty = 0;
   }
-  if (pty_host->pid > 0) {
+  if (velvet_window->pid > 0) {
     int status;
-    kill(pty_host->pid, SIGTERM);
-    pid_t result = waitpid(pty_host->pid, &status, WNOHANG);
+    kill(velvet_window->pid, SIGTERM);
+    pid_t result = waitpid(velvet_window->pid, &status, WNOHANG);
     if (result == -1) velvet_die("waitpid:");
   }
-  vte_destroy(&pty_host->emulator);
-  string_destroy(&pty_host->cmdline);
-  string_destroy(&pty_host->title);
-  string_destroy(&pty_host->icon);
-  string_destroy(&pty_host->cwd);
-  pty_host->pty = pty_host->pid = 0;
+  vte_destroy(&velvet_window->emulator);
+  string_destroy(&velvet_window->cmdline);
+  string_destroy(&velvet_window->title);
+  string_destroy(&velvet_window->icon);
+  string_destroy(&velvet_window->cwd);
+  velvet_window->pty = velvet_window->pid = 0;
 }
 
-void pty_host_update_title(struct pty_host *p) {
+void velvet_window_update_title(struct velvet_window *p) {
   if (p->emulator.osc.title.len > 0) {
     string_clear(&p->title);
     string_push_string(&p->title, p->emulator.osc.title);
@@ -810,18 +816,18 @@ void pty_host_update_title(struct pty_host *p) {
 }
 
 
-void pty_host_process_output(struct pty_host *pty_host, struct u8_slice str) {
+void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
-  vte_process(&pty_host->emulator, str);
+  vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
+  vte_process(&velvet_window->emulator, str);
 }
 
 static bool rect_same_size(struct rect b1, struct rect b2) {
   return b1.w == b2.w && b1.h == b2.h;
 }
 
-void pty_host_resize(struct pty_host *pty_host, struct rect outer) {
-  int bw = pty_host->border_width;
+void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer) {
+  int bw = velvet_window->border_width;
   // Refuse to go below a minimum size
   int min_size = bw * 2 + 1;
   if (outer.w < min_size) outer.w = min_size;
@@ -839,34 +845,34 @@ void pty_host_resize(struct pty_host *pty_host, struct rect outer) {
       .y_pixel = inner.h * pixels_per_row,
   };
 
-  if (!rect_same_size(pty_host->rect.client, inner)) {
+  if (!rect_same_size(velvet_window->rect.client, inner)) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
-    if (pty_host->pty) ioctl(pty_host->pty, TIOCSWINSZ, &ws);
-    if (pty_host->pid) kill(pty_host->pid, SIGWINCH);
+    if (velvet_window->pty) ioctl(velvet_window->pty, TIOCSWINSZ, &ws);
+    if (velvet_window->pid) kill(velvet_window->pid, SIGWINCH);
   }
 
-  pty_host->rect.window = outer;
-  pty_host->rect.client = inner;
+  velvet_window->rect.window = outer;
+  velvet_window->rect.client = inner;
 
-  vte_set_size(&pty_host->emulator, pty_host->rect.client.w, pty_host->rect.client.h);
+  vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
 }
 
-void pty_host_start(struct pty_host *pty_host) {
-  struct winsize pty_hostsize = {
-      .ws_col = pty_host->rect.client.w,
-      .ws_row = pty_host->rect.client.h,
-      .ws_xpixel = pty_host->rect.client.x_pixel,
-      .ws_ypixel = pty_host->rect.client.y_pixel,
+void velvet_window_start(struct velvet_window *velvet_window) {
+  struct winsize velvet_windowsize = {
+      .ws_col = velvet_window->rect.client.w,
+      .ws_row = velvet_window->rect.client.h,
+      .ws_xpixel = velvet_window->rect.client.x_pixel,
+      .ws_ypixel = velvet_window->rect.client.y_pixel,
   };
-  pid_t pid = forkpty(&pty_host->pty, NULL, NULL, &pty_hostsize);
+  pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
   if (pid < 0) velvet_die("forkpty:");
 
   if (pid == 0) {
-    string_ensure_null_terminated(&pty_host->cmdline);
-    char *argv[] = {"sh", "-c", (char*)pty_host->cmdline.content, NULL};
+    string_ensure_null_terminated(&velvet_window->cmdline);
+    char *argv[] = {"sh", "-c", (char*)velvet_window->cmdline.content, NULL};
     execvp("sh", argv);
     velvet_die("execlp:");
   }
-  pty_host->pid = pid;
-  set_nonblocking(pty_host->pty);
+  velvet_window->pid = pid;
+  set_nonblocking(velvet_window->pty);
 }

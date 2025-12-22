@@ -4,9 +4,9 @@ Tasks that need doing in no particular order of priority:
 * Support multi-width characters (emojis, characters in other scripts?)
 * Scrollback buffer (unless?)
 * CSI: Configurable scroll region (needed for vim)
-* Floating pty_hosts
+* Floating velvet_windows
 
-Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled pty_hosts and then naively fully redraw floating pty_hosts on every frame
+Implement an efficient redraw algorithm. We definitely don't want to naively draw tiled velvet_windows and then naively fully redraw floating velvet_windows on every frame
 
 * Replay mechanism
 
@@ -26,15 +26,15 @@ Don't spend time on this before before all basic terminal emulator features are 
 
 * Improve IO
 
-Right now, pty_host->pty is being accessed willy-nilly. We have a `pending_output` buffer
-which is flushed to the pty after a pty_host is processed. All writing can be handled from there.
+Right now, velvet_window->pty is being accessed willy-nilly. We have a `pending_output` buffer
+which is flushed to the pty after a velvet_window is processed. All writing can be handled from there.
 
 Additionally, string buffers are being synchronously flushed to streams.
 It would be great to early return on EAGAIN and add the write task to the main loop instead.
 
 * Layout system
 
-Tagging pty_hosts / toggling visible tags / keybind system, what this project is
+Tagging velvet_windows / toggling visible tags / keybind system, what this project is
 all about..
 
 Formally separate rendering, io dispatch, and layout systems. Currently
@@ -84,8 +84,8 @@ which is likely never.
 
 Something similar to the stock dwm bar. Make focusable (probably make it
 special..) Use it as a launcher so focusing it and typing e.g. vim opens vim in
-a new pty_host Maybe some keyboard shortcuts are only available in the status bar
-(per pty_host bindings?) so it can be used as a management pty_host Consider making the
+a new velvet_window Maybe some keyboard shortcuts are only available in the status bar
+(per velvet_window bindings?) so it can be used as a management velvet_window Consider making the
 status bar a regular binary (rely on ^[[I/^[[O to switch mode)
 
 If the status bar is a regular binary, how does it know about vv internals it
