@@ -334,7 +334,8 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         struct u8_slice text = {.content = sym.utf8, .len = utf8_len};
         string_push_slice(&r->draw_buffer, text);
 
-        int stride = cell_wide(*c) ? 2 : 1;
+        bool wide = c->codepoint.wide;
+        int stride = wide ? 2 : 1;
         int repeats = 1;
         int remaining = end - col - 1;
         for (; repeats < remaining && cell_equals(c[0], c[repeats * stride]); repeats++);
@@ -351,7 +352,9 @@ static void velvet_render_render_buffer(struct velvet_render *r,
             }
           }
         }
-        col += repeats * stride + stride - 1;
+        col += repeats * stride;
+        if (wide) 
+          col++;
         r->cursor.column = MIN(col + 1, r->w - 1);
       }
     }

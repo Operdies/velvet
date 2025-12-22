@@ -253,10 +253,11 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     }
   }
 
-  if (cur->column && cell_wide(row->cells[cur->column-1])) {
+  struct screen_cell *this = &row->cells[cur->column];
+  if (cur->column && cell_wide(this[-1])) {
     /* if the previous cell is a wide character, writing this cell clears it */
-    struct screen_cell space = {.codepoint = codepoint_space};
-    row_set_cell(row, cur->column - 1, space);
+    /* the cleared cell keeps its current styling */
+    this[-1].codepoint = codepoint_space;
   }
 
   if (cell_wide(c)) {
@@ -273,8 +274,13 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     }
     row_set_cell(row, cur->column++, c);
     if (cur->column <= screen_right(g)) {
-      struct screen_cell space = {.codepoint = codepoint_space};
-      row_set_cell(row, cur->column++, space);
+      /* If this is a wide character, clear the cell following it.
+       * Note that unlike when clearing the previous character,
+       * we also overwrite the style here. */
+      struct screen_cell next = c;
+      next.codepoint = codepoint_space;
+      this[1] = next;
+      cur->column++;
     }
   } else {
     row_set_cell(row, cur->column++, c);

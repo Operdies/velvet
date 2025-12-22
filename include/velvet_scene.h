@@ -5,7 +5,7 @@
 #include "platform.h"
 #include "vte.h"
 
-#define DAMAGE_MAX 100
+#define DAMAGE_MAX 20
 
 /* We use 4 buffers for debugging damage tracking across draws.
  * In release builds, we only need two buffers. */
