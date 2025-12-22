@@ -176,7 +176,7 @@ struct vte {
     struct string icon;
   } osc;
   struct utf8 pending_symbol;
-  struct unicode_codepoint previous_symbol;
+  struct codepoint previous_symbol;
 };
 
 static const struct emulator_options emulator_options_default = {

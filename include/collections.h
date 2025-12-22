@@ -37,7 +37,7 @@ struct u8_slice {
 struct u8_slice_codepoint_iterator {
   struct u8_slice src;
   size_t cursor;
-  struct unicode_codepoint current;
+  struct codepoint current;
 };
 
 // A view into a vector

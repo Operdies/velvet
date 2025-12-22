@@ -14,7 +14,7 @@
  */
 
 void screen_clear_line(struct screen *g, int n) {
-  struct screen_cell clear = { .codepoint = codepoint_space, .style = g->cursor.brush };
+  struct screen_cell clear = { .cp = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = &g->lines[n];
   for (int i = 0; i < g->w; i++) {
     row->cells[i] = clear;
@@ -128,7 +128,7 @@ static inline void row_set_cell(struct screen_line *row, int col, struct screen_
 }
 
 bool cell_wide(struct screen_cell c) {
-  return c.codepoint.wide;
+  return c.cp.is_wide;
 }
 
 static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_cell_style brush, struct u8_slice run) {
@@ -138,11 +138,11 @@ static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_c
   struct screen_line *row = screen_row(g);
   for (size_t i = 0; i < run.len; i++) {
     if (cur->column == screen_right(g)) {
-      c.codepoint.cp = run.content[run.len - 1];
+      c.cp.value = run.content[run.len - 1];
       row->cells[cur->column] = c;
       return;
     }
-    c.codepoint.cp = run.content[i];
+    c.cp.value = run.content[i];
     row->cells[cur->column++] = c;
   }
   cur->column = MIN(cur->column, screen_right(g));
@@ -167,12 +167,12 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
   struct screen_line *row = screen_row(g);
   if (column) {
     struct screen_cell *prev = &row->cells[column - 1];
-    if (prev->codepoint.wide) prev->codepoint = codepoint_space;
+    if (prev->cp.is_wide) prev->cp = codepoint_space;
   }
 
   for (size_t i = 0; i < run.len;) {
     for (; column < g->w && i < run.len; ) {
-      c.codepoint.cp = run.content[i++];
+      c.cp.value = run.content[i++];
       row->cells[column++] = c;
     }
 
@@ -210,7 +210,7 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
   if (cur->column && cell_wide(this[-1])) {
     /* if the previous cell is a wide character, writing this cell clears it */
     /* the cleared cell keeps its current styling */
-    this[-1].codepoint = codepoint_space;
+    this[-1].cp = codepoint_space;
   }
 
   if (cell_wide(c)) {
@@ -231,7 +231,7 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
        * Note that unlike when clearing the previous character,
        * we also overwrite the style here. */
       struct screen_cell next = c;
-      next.codepoint = codepoint_space;
+      next.cp = codepoint_space;
       this[1] = next;
       cur->column++;
     }
@@ -254,7 +254,7 @@ void screen_initialize(struct screen *g, int w, int h) {
   g->_lines_size = h;
   screen_reset_scroll_region(g);
 
-  struct screen_cell empty_cell = { .style = style_default, .codepoint = codepoint_space };
+  struct screen_cell empty_cell = { .style = style_default, .cp = codepoint_space };
   for (int i = 0; i < h; i++) {
     g->lines[i] = (struct screen_line){.cells = &g->_cells[i * w]};
     for (int j = 0; j < w; j++) {
@@ -296,7 +296,7 @@ void screen_set_scroll_region(struct screen *g, int top, int bottom) {
 
 /* inclusive erase between two cursor positions */
 void screen_erase_between_cursors(struct screen *g, struct cursor from, struct cursor to) {
-  struct screen_cell template = { .codepoint = codepoint_space, .style = g->cursor.brush };
+  struct screen_cell template = { .cp = codepoint_space, .style = g->cursor.brush };
 
   for (int r = from.line; r <= to.line; r++) {
     struct screen_line *row = &g->lines[r];
@@ -324,7 +324,7 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
 }
 
 void screen_insert_blanks_at_cursor(struct screen *g, int n) {
-  struct screen_cell template = {.codepoint = codepoint_space, .style = g->cursor.brush};
+  struct screen_cell template = {.cp = codepoint_space, .style = g->cursor.brush};
   struct screen_line *row = screen_row(g);
   int lcol = screen_column(g);
   for (int col = screen_right(g); col >= lcol; col--) {
@@ -337,7 +337,7 @@ void screen_insert_blanks_at_cursor(struct screen *g, int n) {
 
 void screen_shift_from_cursor(struct screen *g, int n) {
   if (n == 0) return;
-  struct screen_cell template = { .codepoint = codepoint_space, .style = g->cursor.brush };
+  struct screen_cell template = { .cp = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = screen_row(g);
   for (int col = screen_column(g); col < screen_right(g); col++) {
     int rcol = col + n;
@@ -382,7 +382,7 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
     // with a different background color from the default terminal background
     if (fullscreen) {
       struct screen_cell c = screen_row->cells[src->w - 1];
-      c.codepoint = codepoint_space;
+      c.cp = codepoint_space;
       for (; col < dst->w; col++) {
         screen_insert(dst, c, false);
         if (row == source_cursor.line && col == source_cursor.column) {

@@ -361,14 +361,14 @@ static void velvet_render_render_buffer(struct velvet_render *r,
           cell_style = highlight;
         }
         velvet_render_set_style(r, cell_style);
-        if (c->codepoint.cp == 0) c->codepoint.cp = ' ';
+        if (c->cp.value == 0) c->cp.value = ' ';
 
         struct utf8 sym;
-        uint8_t utf8_len = codepoint_to_utf8(c->codepoint.cp, &sym);
+        uint8_t utf8_len = codepoint_to_utf8(c->cp.value, &sym);
         struct u8_slice text = {.content = sym.utf8, .len = utf8_len};
         string_push_slice(&r->draw_buffer, text);
 
-        bool wide = c->codepoint.wide;
+        bool wide = c->cp.is_wide;
         int stride = wide ? 2 : 1;
         int repeats = 1;
         int remaining = end - col - 1;
@@ -438,7 +438,7 @@ static void velvet_render_copy_cells_from_window(struct velvet_render *r, struct
 }
 
 /* lol very unsafe :) */
-static struct unicode_codepoint utf8_from_cstr(char *src) {
+static struct codepoint utf8_from_cstr(char *src) {
   struct utf8 result = {0};
   char *dst = (char *)result.utf8;
   for (; *src; *dst++ = *src++);
@@ -448,17 +448,17 @@ static struct unicode_codepoint utf8_from_cstr(char *src) {
 }
 
 static void velvet_render_calculate_borders(struct velvet_render *r, struct velvet_scene *m, struct velvet_window *host) {
-  struct unicode_codepoint topleft = utf8_from_cstr("┌");
-  struct unicode_codepoint topright = utf8_from_cstr("┐");
-  struct unicode_codepoint bottomleft = utf8_from_cstr("└");
-  struct unicode_codepoint bottomright = utf8_from_cstr("┘");
-  struct unicode_codepoint pipe = utf8_from_cstr("│");
-  struct unicode_codepoint dash = utf8_from_cstr("─");
+  struct codepoint topleft = utf8_from_cstr("┌");
+  struct codepoint topright = utf8_from_cstr("┐");
+  struct codepoint bottomleft = utf8_from_cstr("└");
+  struct codepoint bottomright = utf8_from_cstr("┘");
+  struct codepoint pipe = utf8_from_cstr("│");
+  struct codepoint dash = utf8_from_cstr("─");
   // struct utf8 top_connector = utf8_from_cstr("┬");
   // struct utf8 left_connector = utf8_from_cstr("├");
   // struct utf8 right_connector = utf8_from_cstr("┤");
   // struct utf8 cross_connector = utf8_from_cstr("┼");
-  struct unicode_codepoint elipsis = utf8_from_cstr("…");
+  struct codepoint elipsis = utf8_from_cstr("…");
   bool is_focused = host == velvet_scene_get_focus(m);
   struct rect w = host->rect.window;
   struct rect c = host->rect.client;
@@ -468,8 +468,8 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
 
   {
     struct screen_cell_style chrome_style = is_focused ? m->style.active.outline : m->style.inactive.outline;
-    struct screen_cell vert = {.codepoint = dash, .style = chrome_style};
-    struct screen_cell horz = {.codepoint = pipe, .style = chrome_style};
+    struct screen_cell vert = {.cp = dash, .style = chrome_style};
+    struct screen_cell horz = {.cp = pipe, .style = chrome_style};
 
     /* title chrome */
     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y - 1, column, vert);
@@ -484,26 +484,26 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x + c.w, horz);
 
     struct screen_cell corner = {.style = chrome_style};
-    corner.codepoint = topleft;
+    corner.cp = topleft;
     velvet_render_set_cell(r, c.y - 1, c.x - 1, corner);
-    corner.codepoint = topright;
+    corner.cp = topright;
     velvet_render_set_cell(r, c.y - 1, c.x + c.w, corner);
-    corner.codepoint = bottomleft;
+    corner.cp = bottomleft;
     velvet_render_set_cell(r, c.y + c.h, c.x - 1, corner);
-    corner.codepoint = bottomright;
+    corner.cp = bottomright;
     velvet_render_set_cell(r, c.y + c.h, c.x + c.w, corner);
   }
 
   {
     struct screen_cell_style title_style = is_focused ? m->style.active.title : m->style.inactive.title;
-    struct screen_cell truncation_symbol = {.codepoint = elipsis, .style = title_style};
+    struct screen_cell truncation_symbol = {.cp = elipsis, .style = title_style};
 
     int i = c.x + 1;
 
     /* draw the title */
     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
     for (; i < c.x + c.w - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
-      struct screen_cell chr = {.style = title_style, .codepoint = it.current};
+      struct screen_cell chr = {.style = title_style, .cp = it.current};
       velvet_render_set_cell(r, c.y - 1, i, chr);
     }
 
@@ -534,7 +534,7 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
 }
 
 static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer) {
-  struct screen_cell space = {.codepoint = codepoint_space};
+  struct screen_cell space = {.cp = codepoint_space};
   for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
 }
 
@@ -776,7 +776,7 @@ static bool color_equals(struct color a, struct color b) {
 }
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b) {
-  return a.codepoint.cp == b.codepoint.cp && cell_style_equals(a.style, b.style);
+  return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style);
 }
 
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b) {

@@ -128,7 +128,7 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
   case '5': OMITTED("DECSWL"); break;
   case '6': OMITTED("DECDWL"); break;
   case '8': { /* DECALN */
-    struct screen_cell E = {.codepoint.cp = 'E'};
+    struct screen_cell E = {.cp.value = 'E'};
     struct screen *g = vte_get_current_screen(vte);
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
       struct screen_line *row = &g->lines[rowidx];
@@ -178,7 +178,7 @@ static void ground_tab(struct vte *vte, uint8_t ch) {
   int x = vte_get_current_screen(vte)->cursor.column;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
-  struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .codepoint = codepoint_space };
+  struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .cp = codepoint_space };
   screen_insert(vte_get_current_screen(vte), c, vte->options.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
     screen_insert(vte_get_current_screen(vte), c, false);
@@ -199,8 +199,8 @@ static void ground_accept(struct vte *vte) {
   struct screen *g = vte_get_current_screen(vte);
 
   int len;
-  struct unicode_codepoint symbol = utf8_to_codepoint(vte->pending_symbol.utf8, &len);
-  struct screen_cell c = { .codepoint = symbol, .style = vte_get_current_screen(vte)->cursor.brush };
+  struct codepoint symbol = utf8_to_codepoint(vte->pending_symbol.utf8, &len);
+  struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush };
   screen_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = symbol;
   vte->pending_symbol = (struct utf8){0};
@@ -212,7 +212,7 @@ static void ground_reject(struct vte *vte) {
   vte->pending_symbol = clear;
   // If we are rejecting this symbol, we should
   // Render a replacement char for this sequence (U+FFFD)
-  struct screen_cell replacement = {.codepoint = codepoint_fffd};
+  struct screen_cell replacement = {.cp = codepoint_fffd};
   struct screen *g = vte_get_current_screen(vte);
   screen_insert(g, replacement, vte->options.auto_wrap_mode);
   uint8_t n = utf8_length(copy);
