@@ -42,7 +42,7 @@ OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 CFLAGS = -std=c23 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = 
 
-DEBUG_CFLAGS = -O0 -g -fsanitize=address -DVELVET_RENDERER_EXTENDED_DAMAGE_DISPLAY
+DEBUG_CFLAGS = -O0 -g -fsanitize=address
 DEBUG_LDFLAGS = -fsanitize=address
 
 RELEASE_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD

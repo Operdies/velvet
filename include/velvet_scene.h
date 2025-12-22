@@ -7,14 +7,6 @@
 
 #define DAMAGE_MAX 20
 
-/* We use 4 buffers for debugging damage tracking across draws.
- * In release builds, we only need two buffers. */
-#ifdef VELVET_RENDERER_EXTENDED_DAMAGE_DISPLAY
-#define N_BUFFERS 4
-#else
-#define N_BUFFERS 2
-#endif
-
 enum velvet_scene_layer {
   VELVET_LAYER_BACKGROUND,
   VELVET_LAYER_TILED,
@@ -73,7 +65,7 @@ struct velvet_render_buffer {
 struct velvet_render {
   int w, h;
   /* multiple buffers used for damage tracking over time */
-  struct velvet_render_buffer buffers[N_BUFFERS];
+  struct velvet_render_buffer buffers[4];
   int current_buffer;
   struct string draw_buffer;
   struct screen_cell_style current_style;
@@ -92,7 +84,7 @@ struct velvet_scene_style {
 };
 
 struct velvet_scene {
-  struct vec /*velvet_window*/ hosts;
+  struct vec /*velvet_window*/ windows;
   struct rect ws;
   size_t focus;
   struct velvet_render renderer;
@@ -107,7 +99,7 @@ struct velvet_scene {
    .b = (HEX_TO_NUM(color[5]) << 4) | (HEX_TO_NUM(color[5]))}
 
 static const struct velvet_scene velvet_scene_default = {
-    .hosts = vec(struct velvet_window),
+    .windows = vec(struct velvet_window),
     .style = {.active =
                   {
                       .outline = {.attr = 0, .fg = RGB("#f38ba8"), .bg = RGB("#181825")},

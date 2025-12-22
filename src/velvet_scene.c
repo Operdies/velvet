@@ -161,7 +161,7 @@ void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct vel
 }
 
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
-  assert(m->hosts.element_size == sizeof(struct velvet_window));
+  assert(m->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window host = { 0 };
   string_push_slice(&host.cmdline, cmdline);
   host.emulator = vte_default;
@@ -180,10 +180,10 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
 
 void velvet_scene_destroy(struct velvet_scene *m) {
   struct velvet_window *h;
-  vec_foreach(h, m->hosts) {
+  vec_foreach(h, m->windows) {
     velvet_window_destroy(h);
   }
-  vec_destroy(&m->hosts);
+  vec_destroy(&m->windows);
   velvet_render_destroy(&m->renderer);
 }
 
@@ -200,9 +200,9 @@ static void velvet_scene_remove_host(struct velvet_scene *m, size_t index) {
     // if the removed host was focused, keep the same focus index if possible.
     size_t next_focus = index;
     // If the removed host was the last host, set the focus to the new last host.
-    if (next_focus >= m->hosts.length) next_focus = m->hosts.length - 1;
+    if (next_focus >= m->windows.length) next_focus = m->windows.length - 1;
     m->focus = next_focus;
-    struct velvet_window *new_focus = vec_nth(&m->hosts, next_focus);
+    struct velvet_window *new_focus = vec_nth(&m->windows, next_focus);
     host_notify_focus(new_focus, true);
   }
 }
@@ -283,7 +283,8 @@ static void render_buffer_add_damage(struct velvet_render_buffer_line *f, int st
 }
 
 static struct velvet_render_buffer *get_previous_buffer(struct velvet_render *r) {
-  return &r->buffers[(r->current_buffer + LENGTH(r->buffers) - 1) % LENGTH(r->buffers)];
+  int mod = r->options.display_damage ? 4 : 2;
+  return &r->buffers[(r->current_buffer + LENGTH(r->buffers) - 1) % mod];
 }
 
 static struct velvet_render_buffer *get_current_buffer(struct velvet_render *r) {
@@ -408,7 +409,7 @@ static void velvet_render_render_damage_to_buffer(struct velvet_render *r) {
   }
 }
 
-static void velvet_render_copy_cells_from_host(struct velvet_render *r, struct velvet_window *h) {
+static void velvet_render_copy_cells_from_window(struct velvet_render *r, struct velvet_window *h) {
   struct screen *active = vte_get_current_screen(&h->emulator);
   assert(active);
   assert(active->w == h->rect.client.w);
@@ -527,7 +528,8 @@ static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_re
 }
 
 static void velvet_render_cycle_buffer(struct velvet_render *r) {
-  r->current_buffer = (r->current_buffer + 1) % LENGTH(r->buffers);
+  int mod = r->options.display_damage ? 4 : 2;
+  r->current_buffer = (r->current_buffer + 1) % mod;
 }
 
 void velvet_scene_set_display_damage(struct velvet_scene *m, bool display_damage) {
@@ -544,16 +546,18 @@ void velvet_scene_set_display_damage(struct velvet_scene *m, bool display_damage
 }
 
 void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context) {
-  if (m->hosts.length == 0) return;
+  if (m->windows.length == 0) return;
   if (!m->renderer.buffers[0].cells) return;
 
-  /* fully swap buffers to simulate full damage */
-  for (int i = 0; i < LENGTH(m->renderer.buffers); i++) velvet_render_cycle_buffer(&m->renderer);
+  /* fully damage buffers */
+  for (int i = 0; i < LENGTH(m->renderer.buffers); i++) {
+    memset(m->renderer.buffers[i].cells, 0, sizeof(struct screen_cell) * m->renderer.w * m->renderer.h);
+  }
   velvet_scene_render_damage(m, render_func, context);
 }
 
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
-  if (m->hosts.length == 0) return;
+  if (m->windows.length == 0) return;
   struct velvet_window *focused = velvet_scene_get_focus(m);
 
   struct velvet_render *r = &m->renderer;
@@ -567,15 +571,15 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   }
 
   struct velvet_window *h;
-  vec_foreach(h, m->hosts) {
+  vec_foreach(h, m->windows) {
     velvet_window_update_title(h);
   }
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
-    vec_where(h, m->hosts, h->layer == layer) {
+    vec_rwhere(h, m->windows, h->layer == layer) {
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_render_calculate_borders(r, m, h);
-      velvet_render_copy_cells_from_host(r, h);
+      velvet_render_copy_cells_from_window(r, h);
     }
   }
 
@@ -596,7 +600,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
     /* if a window is above the current window and obscures the cursor, we should not show it */
     struct velvet_window *window;
-    vec_where(window, m->hosts, window->layer > focused->layer) {
+    vec_where(window, m->windows, window->layer > focused->layer) {
       struct rect w = window->rect.window;
       if (w.y <= line && w.y + w.h > line && w.x <= col && w.x + w.w > col) {
         is_obscured = true;
