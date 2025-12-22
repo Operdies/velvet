@@ -28,7 +28,7 @@ struct velvet_window {
   struct string title;
   struct string icon;
   struct string cwd;
-  int pty, pid;
+  int pty, pid, id;
   int border_width;
   struct {
     struct rect window;

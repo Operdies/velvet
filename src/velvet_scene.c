@@ -872,6 +872,11 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer
   vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
 }
 
+static uint64_t get_id() {
+  static uint64_t id = 1;
+  return id++;
+}
+
 void velvet_window_start(struct velvet_window *velvet_window) {
   struct winsize velvet_windowsize = {
       .ws_col = velvet_window->rect.client.w,
@@ -879,11 +884,16 @@ void velvet_window_start(struct velvet_window *velvet_window) {
       .ws_xpixel = velvet_window->rect.client.x_pixel,
       .ws_ypixel = velvet_window->rect.client.y_pixel,
   };
+
+  velvet_window->id = get_id();
   pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
   if (pid < 0) velvet_die("forkpty:");
 
   if (pid == 0) {
     string_ensure_null_terminated(&velvet_window->cmdline);
+    char id[20];
+    snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
+    setenv("VELVET_WINID", id, true);
     char *argv[] = {"sh", "-c", (char*)velvet_window->cmdline.content, NULL};
     execvp("sh", argv);
     velvet_die("execlp:");
