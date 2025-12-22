@@ -581,13 +581,32 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   }
 
   {
-    /* move cursor to focused host and update cursor */
     struct screen *screen = vte_get_current_screen(&focused->emulator);
     struct cursor *cursor = &screen->cursor;
     int line = cursor->line + focused->rect.client.y;
     int col = cursor->column + focused->rect.client.x;
-    velvet_render_position_cursor(r, line, col);
-    velvet_render_set_cursor_style(r, focused->emulator.options.cursor);
+
+    bool is_obscured = false;
+
+    /* if a window is above the current window and obscures the cursor, we should not show it */
+    struct pty_host *window;
+    vec_where(window, m->hosts, window->layer > focused->layer) {
+      struct rect w = window->rect.window;
+      if (w.y <= line && w.y + w.h > line && w.x <= col && w.x + w.w > col) {
+        is_obscured = true;
+        break;
+      }
+    }
+
+    if (is_obscured) {
+      /* hide the cursor */
+      struct cursor_options hidden = {.visible = false};
+      velvet_render_set_cursor_style(r, hidden);
+    } else {
+      /* move cursor to focused host and update cursor */
+      velvet_render_position_cursor(r, line, col);
+      velvet_render_set_cursor_style(r, focused->emulator.options.cursor);
+    }
   }
 
   struct u8_slice render = string_as_u8_slice(r->draw_buffer);
