@@ -302,9 +302,9 @@ int main(int argc, char **argv) {
 }
 
 static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
-  (void)sig;
-  (void)siginfo;
-  (void)context;
+  (void)siginfo, (void)context;
+  ssize_t written = write(signal_write, &sig, sizeof(sig));
+  if (written < (int)sizeof(sig)) velvet_die("signal write:");
 }
 
 static struct string vv_attach_option_buffer = {0};
@@ -482,13 +482,49 @@ static void vv_configure(struct velvet_args args) {
   close(sockfd);
 }
 
+struct vv_attach_context {
+  int socket;
+  bool detach;
+  bool quit;
+};
+
+static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
+  io_write(STDOUT_FILENO, str);
+}
+
+static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
+  struct vv_attach_context *ctx = src->data;
+  if (str.len == 0) ctx->quit = true;
+  else if (str.len == 1 && str.content[0] == 'D') ctx->detach = true;
+}
+
+static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
+  struct vv_attach_context *ctx = src->data;
+  // 1. Dispatch any pending signals
+  struct int_slice signals = {.content = (int *)str.content, .n = str.len / 4};
+  for (size_t i = 0; i < signals.n; i++) {
+    int signal = signals.content[i];
+    switch (signal) {
+    case SIGWINCH: {
+      vv_attach_update_size(ctx->socket);
+    } break;
+    default: ctx->quit = true; break;
+    }
+  }
+}
+
 /* TODO: This loop sucks.
  * Update it to use `struct io` and proper signal handling.
  */
 static void vv_attach(struct velvet_args args) {
+  int signal_pipes[2];
+  if (pipe(signal_pipes) < 0) velvet_die("pipe:");
+  signal_write = signal_pipes[1];
+  int signal_read = signal_pipes[0];
+
   struct sigaction sa = {0};
   sa.sa_sigaction = &attach_sighandler;
-  sa.sa_flags = SA_SIGINFO;
+  sa.sa_flags = SA_RESTART;
 
   if (sigaction(SIGWINCH, &sa, NULL) == -1) velvet_die("sigaction:");
 
@@ -502,70 +538,44 @@ static void vv_attach(struct velvet_args args) {
   if (pipe(output_pipe) < 0) velvet_fatal("pipe:");
   vv_attach_handshake(sockfd, ws, STDIN_FILENO, output_pipe[1]);
 
-  struct pollfd pollset[] = {{.events = POLLIN, .fd = output_pipe[0]}, {.events = POLLIN, .fd = sockfd}};
+  struct io io = io_default;
+  struct vv_attach_context ctx = { .socket = sockfd };
 
-  constexpr int bufsize = 1 << 16;
-  uint8_t *buf = velvet_calloc(1, bufsize);
-  bool detach = false;
-  bool quit = false;
-  for (; !detach && !quit;) {
-    int n_polled = poll(pollset, LENGTH(pollset), -1);
-    for (int i = 0; i < LENGTH(pollset); i++) {
-      if (pollset[i].revents & POLLNVAL) velvet_die("Poll invalid:");
-    }
-    if (n_polled == -1) {
-      if (errno == EINTR) {
-        // assume SIGWINCH
-        vv_attach_update_size(sockfd);
-      } else {
-        velvet_die("poll:");
-      }
-    }
+  while (!ctx.detach && !ctx.quit) {
+    io_clear_sources(&io);
+    struct io_source signal_source = {
+        .data = &ctx,
+        .fd = signal_read,
+        .events = IO_SOURCE_POLLIN,
+        .on_read = vv_attach_on_signal,
+    };
+    io_add_source(&io, signal_source);
+    struct io_source output_source = {
+        .data = &ctx,
+        .fd = output_pipe[0],
+        .events = IO_SOURCE_POLLIN,
+        .on_read = vv_attach_on_output,
+    };
+    io_add_source(&io, output_source);
+    struct io_source socket_source = {
+        .data = &ctx,
+        .fd = sockfd,
+        .events = IO_SOURCE_POLLIN,
+        .on_read = vv_attach_on_socket,
+    };
+    io_add_source(&io, socket_source);
 
-    if (pollset[0].revents & POLLIN) {
-      int n = read(output_pipe[0], buf, bufsize);
-      if (n == -1) {
-        if (errno == EINTR) {
-          /* assume SIGWINCH */
-          vv_attach_update_size(sockfd);
-          continue;
-        } else {
-          velvet_die("read:");
-        }
-      } else if (n == 0) {
-        quit = true;
-        break;
-      }
-      struct u8_slice pending = {.content = buf, .len = n};
-      ssize_t written = io_write(STDOUT_FILENO, pending);
-      if (written == -1) {
-        if (errno == EINTR) {
-          written = io_write(STDOUT_FILENO, pending);
-          vv_attach_update_size(sockfd);
-        } else {
-          velvet_die("write pending:");
-        }
-      }
-      assert(written == (int)pending.len);
-    }
-
-    if (pollset[1].revents & POLLIN) {
-      int n = read(sockfd, buf, bufsize);
-      if (n == 0) {
-        quit = true;
-        break;
-      }
-      if (n > 0 && buf[0] == 'D') detach = true;
-    }
+    io_dispatch(&io);
   }
 
-  free(buf);
   close(sockfd);
   close(output_pipe[0]);
   close(output_pipe[1]);
+  close(signal_pipes[0]);
+  close(signal_pipes[1]);
   terminal_reset();
 
-  if (detach) {
+  if (ctx.detach) {
     velvet_log("[Detached]");
   } else {
     velvet_log("[Shutdown]");
