@@ -298,6 +298,13 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       if (focused) velvet_detach_session(v, focused);
     } else if (u8_match(command, "put")) {
       velvet_cmd_put(v, &it);
+    } else if (u8_match(command, "incborder")) {
+      struct velvet_window *focused = velvet_scene_get_focus(&v->scene);
+      int max_border = MIN(focused->rect.window.h, focused->rect.window.w) / 2;
+      focused->border_width = MIN(focused->border_width + 1, max_border);
+    } else if (u8_match(command, "decborder")) {
+      struct velvet_window *focused = velvet_scene_get_focus(&v->scene);
+      focused->border_width = MAX(focused->border_width - 1, 0);
     } else if (u8_match(command, "map")) {
       velvet_cmd_map(v, &it);
     } else if (u8_match(command, "spawn")) {
