@@ -3,6 +3,7 @@
 #include "virtual_terminal_sequences.h"
 #include "velvet.h"
 #include <string.h>
+#include "velvet_keyboard.h"
 
 #define ESC 0x1b
 #define BRACKETED_PASTE_MAX (1 << 20)
@@ -196,6 +197,8 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
   velvet_log("send sgr: %.*s", (int)s.len, s.content);
 }
 
+static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m);
+
 static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   struct velvet_input *in = &v->input;
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
@@ -263,18 +266,31 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   trans.column = sgr.column - target->rect.client.x;
 
   struct mouse_options m = target->emulator.options.mouse;
-  if (m.tracking == MOUSE_TRACKING_OFF || m.tracking == MOUSE_TRACKING_LEGACY) return;
-  if (m.mode != MOUSE_MODE_SGR) return;
 
   bool do_send =
       (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
       ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
        sgr.event_type == mouse_click) ||
-      (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none);
+      (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none) ||
+      (m.tracking && sgr.event_type == mouse_scroll);
 
   // TODO: scroll wheel support
   if (do_send) {
     send_mouse_sgr(target, trans);
+  } else if (sgr.event_type == mouse_scroll && target->emulator.options.alternate_screen) {
+    /* In the absence of mouse tracking,
+     * scroll up/down is treated as arrow keys in the alternate screen
+     * Deliberately don't process this key in any keymaps.
+     * Mappings related to scrolling should be handled by sequences such as '<S-M-ScrollWheelUp>'
+     */
+    if (sgr.scroll_direction == scroll_up) {
+      velvet_input_send_special(v, VELVET_KEY_SS3_UP, 0);
+    } else if (sgr.scroll_direction == scroll_down) {
+      velvet_input_send_special(v, VELVET_KEY_SS3_DOWN, 0);
+    }
+  } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
+    /* in the primary screen, scrolling affects the current view */
+    // TODO: Set visible screen region
   }
 }
 
@@ -398,6 +414,7 @@ static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event
 
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
+
   assert(v);
   assert(v->input.keymap);
   struct velvet_keymap *k, *root, *current;
