@@ -308,6 +308,9 @@ static void velvet_default_config(struct velvet *v) {
   }
 }
 
+static void wakeup(void *) {
+}
+
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
@@ -335,17 +338,19 @@ void velvet_loop(struct velvet *velvet) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
     if (focus) {
-      /* apply layout changes */
-      velvet_scene_arrange(&velvet->scene);
-
-      /* Render the current velvet state.
-       * Note that we render *before* resizing in order to transmit the current state,
-       * and then give clients an opportunity to adjust to the resize. */
-      velvet->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
-      velvet_scene_render_damage(&velvet->scene, velvet_render, velvet);
-
       if (focus->ws.w && focus->ws.h && (focus->ws.w != velvet->scene.ws.w || focus->ws.h != velvet->scene.ws.h)) {
         velvet_scene_resize(&velvet->scene, focus->ws);
+        velvet_scene_arrange(&velvet->scene);
+        /* after resizing, we want to give clients a bit of time to respond before rendering.
+         * They may not respond at all, so we schedule a wakeup a brief amount of time in the future */
+        io_schedule(loop, 30, wakeup, nullptr);
+      } else {
+        velvet_scene_arrange(&velvet->scene);
+        /* Render the current velvet state.
+         * Note that we render *before* resizing in order to transmit the current state,
+         * and then give clients an opportunity to adjust to the resize. */
+        velvet->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
+        velvet_scene_render_damage(&velvet->scene, velvet_render, velvet);
       }
     }
 
