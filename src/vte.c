@@ -505,7 +505,9 @@ void vte_process(struct vte *vte, struct u8_slice str) {
         struct screen *s = vte_get_current_screen(vte);
         struct screen_cell_style style = s->cursor.brush;
         bool wrap = vte->options.auto_wrap_mode;
-        screen_insert_ascii_run(s, style, u8_slice_range(str, i, j), wrap);
+        struct u8_slice run = u8_slice_range(str, i, j);
+        screen_insert_ascii_run(s, style, run, wrap);
+        vte->previous_symbol = (struct codepoint){.value = run.content[run.len - 1]};
         i = j;
       }
       if (j >= str.len) break;
