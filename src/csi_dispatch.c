@@ -610,6 +610,7 @@ static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) 
   case 12: return resp(o.cursor.style & 1);
   case 25: return resp(o.cursor.visible);
   case 1004: return resp(o.focus_reporting);
+  case 1047: return resp(o.alternate_screen);
   case 1049: return resp(o.alternate_screen);
   case 2004: return resp(o.bracketed_paste);
   case 9:
@@ -626,63 +627,84 @@ static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) 
 }
 #undef resp
 
-static bool DECSET(struct vte *vte, struct csi *csi) {
-  struct screen *active = vte_get_current_screen(vte);
+static void decset_set(struct vte *vte, int mode, bool on) {
   struct mouse_options *m = &vte->options.mouse;
+  struct screen *screen = vte_get_current_screen(vte);
+  switch (mode) {
+  case 1: vte->options.application_mode = on; break;
+  case 6: screen->cursor.origin = on; break;
+  case 7: vte->options.auto_wrap_mode = on; break;
+  case 12: set_cursor_blinking(vte, on); break;
+  case 25: vte->options.cursor.visible = on; break;
+  case 1004: vte->options.focus_reporting = on; break;
+  case 1047: {
+    if (on) {
+      vte_enter_alternate_screen(vte);
+    } else {
+      vte_enter_primary_screen(vte);
+    }
+  } break;
+  case 1048: {
+      if (on) {
+        screen_save_cursor(screen);
+      } else {
+        screen_restore_cursor(screen);
+      }
+    } break;
+  case 1049: {
+      if (on) {
+        screen_save_cursor(screen);
+        vte_enter_alternate_screen(vte);
+      } else {
+        vte_enter_primary_screen(vte);
+        screen_restore_cursor(screen);
+      }
+    }
+  case 2004: vte->options.bracketed_paste = on; break;
+  case 1007: m->alternate_scroll_mode = on; break;
+  case 9:
+  case 1000:
+  case 1001:
+  case 1002:
+  case 1003: {
+    if (on) {
+      m->tracking = mode;
+    } else {
+      // mouse tracking should only reset if the specified mode was active
+      if ((int)m->tracking == mode) {
+        m->tracking = MOUSE_TRACKING_OFF;
+        m->mode = MOUSE_MODE_DEFAULT;
+      }
+    }
+  } break;
+  case 1005:
+  case 1006:
+  case 1015:
+  case 1016: {
+    if (on) {
+      m->mode = mode;
+    } else {
+      if ((int)m->mode == mode) {
+        m->mode = MOUSE_MODE_DEFAULT;
+      }
+    }
+  } break;
+  case 2026:
+    TODO("Synchronized rendering: "
+         "https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md");
+    break;
+  default: TODO("DECSET mode %d", mode); break;
+  }
+}
+
+static bool DECSET(struct vte *vte, struct csi *csi) {
   bool on = csi->final == 'h';
   bool off = csi->final == 'l';
   assert(on || off);
 
   for (int i = 0; i < csi->n_params; i++) {
     int mode = csi->params[i].primary;
-    switch (mode) {
-    case 1: vte->options.application_mode = on; break;
-    case 6: active->cursor.origin = on; break;
-    case 7: vte->options.auto_wrap_mode = on; break;
-    case 12: set_cursor_blinking(vte, on); break;
-    case 25: vte->options.cursor.visible = on; break;
-    case 1004: vte->options.focus_reporting = on; break;
-    case 1049: {
-      if (on)
-        vte_enter_alternate_screen(vte);
-      else
-        vte_enter_primary_screen(vte);
-    } break;
-    case 2004: vte->options.bracketed_paste = on; break;
-    case 1007: m->alternate_scroll_mode = on; break;
-    case 9:
-    case 1000:
-    case 1001:
-    case 1002:
-    case 1003: {
-      if (on) {
-        m->tracking = mode;
-      } else {
-        // mouse tracking should only reset if the specified mode was active
-        if ((int)m->tracking == mode) {
-          m->tracking = MOUSE_TRACKING_OFF;
-          m->mode = MOUSE_MODE_DEFAULT;
-        }
-      }
-    } break;
-    case 1005:
-    case 1006:
-    case 1015:
-    case 1016: {
-      if (on) {
-        m->mode = mode;
-      } else {
-        if ((int)m->mode == mode) {
-          m->mode = MOUSE_MODE_DEFAULT;
-        }
-      }
-    } break;
-    case 2026:
-      TODO("Synchronized rendering: "
-           "https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md");
-      break;
-    default: csi_dispatch_todo(vte, csi); break;
-    }
+    decset_set(vte, mode, on);
   }
   return true;
 }
