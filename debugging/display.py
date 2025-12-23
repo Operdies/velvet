@@ -19,7 +19,7 @@ def get_string(valobj):
     return strval
 
 def velvet_scene_summary(valobj, internal_dict, options):
-    height_val = valobj.GetChildMemberWithName('rows')
+    height_val = valobj.GetChildMemberWithName('lines')
     width_val = valobj.GetChildMemberWithName('columns')
     height = height_val.GetValueAsUnsigned(0)
     width = width_val.GetValueAsUnsigned(0)
@@ -41,8 +41,8 @@ def vec_summary(valobj, x, y):
     return f'vec<{prov.typename}>[{prov.num_elements}]'
 
 def unicode_codepoint_summary(valobj, x, y):
-    cp = valobj.GetChildMemberWithName('cp').GetValueAsUnsigned(0)
-    return chr(cp)
+    value = valobj.GetChildMemberWithName('value').GetValueAsUnsigned(0)
+    return chr(value)
 
 def screen_cell_style_summary(valobj, x, y):
     bg = valobj.GetChildMemberWithName('bg').GetSummary()
@@ -51,9 +51,9 @@ def screen_cell_style_summary(valobj, x, y):
     return f'{attr}, bg={bg}, fg={fg}'
 
 def screen_cell_summary(valobj, x, y):
-    codepoint = valobj.GetChildMemberWithName('codepoint');
-    cp = codepoint.GetChildMemberWithName('cp').GetValueAsUnsigned(0)
-    return chr(cp)
+    cp = valobj.GetChildMemberWithName('cp');
+    value = cp.GetChildMemberWithName('value').GetValueAsUnsigned(0)
+    return chr(value)
 
 def color_summary(valobj, x, y):
     cmd = valobj.GetChildMemberWithName('cmd').GetValueAsUnsigned(0)
@@ -66,11 +66,22 @@ def color_summary(valobj, x, y):
         return f"#{r:02x}{g:02x}{b:02x}"
     return f"{table}"
 
-def screen_row_summary(valobj, x, y):
-    dirty = valobj.GetChildMemberWithName('dirty').GetValueAsUnsigned(0)
+def screen_line_summary(valobj, x, y):
     eol = valobj.GetChildMemberWithName('eol').GetValueAsUnsigned(0)
-    dirty_string = 'dirty' if dirty else 'clean'
-    return f'{dirty_string}, eol={eol}'
+    cells = valobj.GetChildMemberWithName('cells')
+    cell_type = cells.GetType().GetPointeeType()
+    cell_size = cell_type.GetByteSize()
+
+    summary = f'[n={eol}]'
+    for i in range(eol):
+        cell = cells.CreateChildAtOffset(
+            f'cell[{i}]',
+            i * cell_size,
+            cell_type
+        )
+        character = cell.GetChildMemberWithName('cp').GetChildMemberWithName('value').GetValueAsUnsigned(0)
+        summary += chr(character)
+    return summary
 
 class screen_SynthProvider:
     def __init__(self, o, dict):
@@ -100,19 +111,19 @@ class screen_SynthProvider:
         self.child_lookup = {}
         index = 0
         for chld in self.o.children:
-            if chld.name != 'rows':
+            if chld.name != 'lines':
                 self.add_child(index, chld)
                 index = index + 1
 
-        rows = self.o.GetChildMemberWithName('rows')
-        rows_address = rows.GetValueAsUnsigned(0)
-        row_type = rows.GetType().GetPointeeType()
-        num_rows = self.o.GetChildMemberWithName('h').GetValueAsUnsigned(0)
+        lines = self.o.GetChildMemberWithName('lines')
+        lines_address = lines.GetValueAsUnsigned(0)
+        row_type = lines.GetType().GetPointeeType()
+        num_lines = self.o.GetChildMemberWithName('h').GetValueAsUnsigned(0)
 
-        expr = f'*({row_type.name} (*)[{num_rows}])((void*){rows_address})'
+        expr = f'*({row_type.name} (*)[{num_lines}])((void*){lines_address})'
 
-        static_rows = self.o.CreateValueFromExpression("rows", expr)
-        self.add_child(index, static_rows)
+        static_lines = self.o.CreateValueFromExpression("lines", expr)
+        self.add_child(index, static_lines)
 
     def has_children(self):
         return True
@@ -291,28 +302,19 @@ def configure(debugger):
     configure_velvet_scene(debugger)
     configure_string(debugger)
     summarize(debugger, 'int_slice')
-    summarize(debugger, "screen_row")
+    summarize(debugger, "screen_line")
     summarize(debugger, 'u8_slice')
     debugger.HandleCommand(f'type synthetic add int_slice --python-class display.intslice_SynthProvider')
     debugger.HandleCommand(f'type synthetic add vec --python-class display.vector_SynthProvider')
     debugger.HandleCommand(f'type synthetic add string --python-class display.string_SynthProvider')
     debugger.HandleCommand(f'type synthetic add u8_slice --python-class display.string_SynthProvider')
     debugger.HandleCommand(f'type synthetic add screen --python-class display.screen_SynthProvider')
-    debugger.HandleCommand(
-        'type summary add -F display.vec_summary -e -x "^vec$"'
-    )
-    debugger.HandleCommand(
-        'type summary add -F display.color_summary -e -x "^color$"'
-    )
-    debugger.HandleCommand(
-        'type summary add -F display.unicode_codepoint_summary -e -x "^unicode_codepoint$"'
-    )
-    debugger.HandleCommand(
-        'type summary add -F display.screen_cell_style_summary -e -x "^screen_cell_style$"'
-    )
-    debugger.HandleCommand(
-        'type summary add -F display.screen_cell_summary -e -x "^screen_cell$"'
-    )
+    debugger.HandleCommand( 'type summary add -F display.vec_summary -e -x "^vec$"')
+    debugger.HandleCommand( 'type summary add -F display.color_summary -e -x "^color$"')
+    debugger.HandleCommand( 'type summary add -F display.unicode_codepoint_summary -e -x "^codepoint$"')
+    debugger.HandleCommand( 'type summary add -F display.screen_cell_style_summary -e -x "^screen_cell_style$"')
+    debugger.HandleCommand( 'type summary add -F display.screen_cell_summary -e -x "^screen_cell$"')
+    debugger.HandleCommand( 'type summary add -F display.screen_line_summary -e -x "^screen_line$"')
 def __lldb_init_module(debugger, dict):
     configure(debugger)
 
