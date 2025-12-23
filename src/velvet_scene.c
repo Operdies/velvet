@@ -180,7 +180,10 @@ void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct vel
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
   velvet_scene_arrange(m);
-  velvet_window_start(host);
+  bool started = velvet_window_start(host);
+  if (!started) {
+    velvet_scene_remove_window(m, host);
+  }
 }
 
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
@@ -882,7 +885,7 @@ static uint64_t get_id() {
   return id++;
 }
 
-void velvet_window_start(struct velvet_window *velvet_window) {
+bool velvet_window_start(struct velvet_window *velvet_window) {
   struct winsize velvet_windowsize = {
       .ws_col = velvet_window->rect.client.w,
       .ws_row = velvet_window->rect.client.h,
@@ -892,7 +895,10 @@ void velvet_window_start(struct velvet_window *velvet_window) {
 
   velvet_window->id = get_id();
   pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
-  if (pid < 0) velvet_die("forkpty:");
+  if (pid < 0) {
+    ERROR("Unable to spawn process:");
+    return false;
+  }
 
   if (pid == 0) {
     string_ensure_null_terminated(&velvet_window->cmdline);
@@ -905,4 +911,5 @@ void velvet_window_start(struct velvet_window *velvet_window) {
   }
   velvet_window->pid = pid;
   set_nonblocking(velvet_window->pty);
+  return true;
 }
