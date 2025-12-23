@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (getenv("VELVET")) velvet_fatal("Nesting velvet is not supported.");
+  // if (getenv("VELVET")) velvet_fatal("Nesting velvet is not supported.");
   int sock_fd = create_socket(args.socket);
   args.socket = getenv("VELVET");
 
