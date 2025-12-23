@@ -103,6 +103,8 @@ void string_push_csi(struct string *str, uint8_t leading, struct int_slice param
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_drop_left(struct string *str, size_t n);
+/* insert `elem` and index `i` and move succeeding elements as needed. */
+void vec_insert(struct vec *v, size_t i, const void *elem);
 /* set the `ith` element of `v` to `elem`. If `i` is out of range, resize `v` to accomodate it. */
 void vec_set(struct vec *v, size_t i, const void *elem);
 /* push `elem` to `v` */

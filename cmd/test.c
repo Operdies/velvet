@@ -931,14 +931,20 @@ void test_vec() {
   }
   vec_find(item, v, *item == 1);
   assert(item == nullptr);
-  int expected[] = {3, 6, 7, 8, 0, 1, 3, 5, 1};
-  for (int i = 0; i < LENGTH(expected); i++) {
-    vec_push(&v, expected + i);
+  int push[] = {3, 6, 7, 8, 0, 1, 3, 5, 1};
+  for (int i = 0; i < LENGTH(push); i++) {
+    vec_push(&v, push + i);
   }
+  int expected[] = {
+      /* insert[0] */ 6, 3, 6, 7, /*insert[4] #2 */ 4, /* insert[4] */ 9, 8, 0, 1, 3, 5, 1, /* insert[length] */ 7};
+  vec_insert(&v, 0, &(int){6});
+  vec_insert(&v, v.length, &(int){7});
+  vec_insert(&v, 4, &(int){9});
+  vec_insert(&v, 4, &(int){4});
   vec_find(item, v, *item == 1);
   assert(item != nullptr);
   assert(*item == 1);
-  assert(vec_index(&v, item) == 5);
+  assert(vec_index(&v, item) == 8);
   vec_find(item, v, *item == 99);
   assert(item == nullptr);
   ssize_t index = 0;
@@ -963,7 +969,7 @@ void test_vec() {
 
   int where = 0;
   vec_where(item, v, *item > 3) where++;
-  assert(where == 4);
+  assert(where == 8);
   where = 0;
   vec_rwhere(item, v, *item < 3) where++;
   assert(where == 3);
@@ -994,6 +1000,14 @@ void test_vec() {
   for (int i = 0; i < 5; i++) {
     assert(*(int *)vec_nth(&v, i) == 0);
   }
+
+  assert(*(int*)vec_pop(&v) == 9);
+  assert(*(int*)vec_pop(&v) == 7);
+  for (int i = 0; i < 5; i++) {
+    assert(*(int*)vec_pop(&v) == 0);
+  }
+  assert(vec_pop(&v) == nullptr);
+  assert(vec_pop(&v) == nullptr);
 
   vec_destroy(&v);
 }

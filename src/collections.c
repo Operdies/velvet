@@ -12,6 +12,12 @@ static size_t next_size(size_t min) {
   return next;
 }
 
+static void *vec_nth_unchecked(const struct vec *const v, size_t i) {
+  const char *const base = v->content;
+  size_t offset = i * v->element_size;
+  return (void *)base + offset;
+}
+
 static void string_ensure_capacity(struct string *str, size_t required) {
   if (str->content == nullptr || str->cap < required) {
     uint8_t *prev = str->content;
@@ -175,7 +181,7 @@ void vec_swap_remove(struct vec *v, void *e) {
 void *vec_pop(struct vec *v) {
   if (v->length == 0) return nullptr;
   v->length--;
-  return vec_nth(v, v->length);
+  return vec_nth_unchecked(v, v->length);
 }
 
 void vec_remove(struct vec *v, void *e) {
@@ -194,6 +200,18 @@ void vec_remove_at(struct vec *v, size_t n) {
   v->length--;
 }
 
+void vec_insert(struct vec *v, size_t i, const void *elem) {
+  assert(i <= v->length);
+  vec_ensure_capacity(v, v->length + 1);
+
+  v->length++;
+  void *this = vec_nth_unchecked(v, i);
+  void *next = vec_nth_unchecked(v, i + 1);
+  void *end = vec_nth_unchecked(v, v->length);
+  memmove(next, this, end - next);
+  memcpy(this, elem, v->element_size);
+}
+
 void vec_set(struct vec *v, size_t i, const void *elem) {
   size_t initial_length = v->length;
   v->length = MAX(i + 1, v->length);
@@ -204,10 +222,12 @@ void vec_set(struct vec *v, size_t i, const void *elem) {
   else
     memset(item, 0, v->element_size);
 
-  void *start = vec_nth(v, initial_length);
-  void *end = (char*)v->content + (i * v->element_size);
-  if (start < end) {
-    memset(start, 0, end - start);
+  if (initial_length <= i) {
+    void *start = vec_nth(v, initial_length);
+    void *end = vec_nth(v, i);
+    if (start < end) {
+      memset(start, 0, end - start);
+    }
   }
 }
 
@@ -546,9 +566,7 @@ void vec_swap(struct vec *v, size_t i, size_t j) {
 
 void *vec_nth(const struct vec *const v, size_t i) {
   assert(i < v->length);
-  const char *const base = v->content;
-  size_t offset = i * v->element_size;
-  return (void*)base + offset;
+  return vec_nth_unchecked(v, i);
 }
 
 void hashmap_destroy(struct hashmap *h) {
