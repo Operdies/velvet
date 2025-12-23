@@ -377,7 +377,6 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         if (repeats > 0) {
           int num_bytes = utf8_len * repeats;
           bool can_repeat = utf8_len == 1 || r->options.no_repeat_wide_chars == false;
-          can_repeat = false;
           if (num_bytes > 10 && can_repeat) {
             string_push_csi(&r->draw_buffer, 0, INT_SLICE(repeats), "b");
           } else {
@@ -531,6 +530,8 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->w = m->ws.w;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
   r->current_style = (struct screen_cell_style) { 0 };
+  r->cursor.column = -1;
+  r->cursor.line = -1;
 }
 
 static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer) {
