@@ -318,6 +318,8 @@ static int velvet_render_calculate_damage(struct velvet_render *r) {
         int end = start + 1;
         for (; end < r->w && !cell_equals(f->cells[end], b->cells[end]); end++);
         end--;
+        assert(start <= end);
+        assert(end < r->w);
         render_buffer_add_damage(f, start, end, !r->options.display_damage);
         start = end;
         if (end == r->w - 1) break;
@@ -328,6 +330,8 @@ static int velvet_render_calculate_damage(struct velvet_render *r) {
       if (!cell_equals(f->cells[start], b->cells[start])) {
         for (int end = r->w - 1; end >= start; end--) {
           if (!cell_equals(f->cells[end], b->cells[end])) {
+            assert(start <= end);
+            assert(end < r->w);
             render_buffer_add_damage(f, start, end, !r->options.display_damage);
             goto next;
           }
@@ -351,8 +355,6 @@ static void velvet_render_render_buffer(struct velvet_render *r,
     for (int dmg = 0; dmg < f->n_damage; dmg++) {
       int start = f->damage[dmg].start;
       int end = f->damage[dmg].end;
-      if (start > end) continue;
-      assert(end < r->w);
       velvet_render_position_cursor(r, line, start);
       for (int col = start; col <= end; col++) {
         struct screen_cell *c = &f->cells[col];
@@ -619,6 +621,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
         break;
       }
     }
+
+    if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) is_obscured = true;
 
     if (is_obscured) {
       /* hide the cursor */
