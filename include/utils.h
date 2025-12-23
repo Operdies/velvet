@@ -56,7 +56,7 @@ void set_nonblocking(int fd);
       "OMITTED: " __VA_ARGS__)
 #define FAIL_ASSERT(cond)                                                                                              \
   terminal_reset();                                                                                                    \
-  ERROR("Assertion failed: %s, file %s, line %d\r\n", #cond, __FILE__, __LINE__);                                      \
+  ERROR("Assertion failed: %s, file %s, line %d", #cond, __FILE__, __LINE__);                                      \
   __builtin_trap();
 #endif /* RELEASE_BUILD */
 
