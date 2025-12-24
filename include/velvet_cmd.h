@@ -20,6 +20,7 @@ struct velvet_cmd_arg_iterator {
 
 bool velvet_cmd_iterator_next(struct velvet_cmd_iterator *s);
 bool velvet_cmd_arg_iterator_next(struct velvet_cmd_arg_iterator *s);
+bool velvet_cmd_arg_iterator_unget(struct velvet_cmd_arg_iterator *it);
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd);
 
 #endif

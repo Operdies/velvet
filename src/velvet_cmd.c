@@ -85,6 +85,17 @@ static bool velvet_cmd_arg_iterator_rest(struct velvet_cmd_arg_iterator *it) {
   return true;
 };
 
+bool velvet_cmd_arg_iterator_unget(struct velvet_cmd_arg_iterator *it) {
+  if (it->current.content) {
+    char *base = (char*)it->src.content;
+    size_t new_cursor = (char*)it->current.content - base;
+    it->cursor = new_cursor;
+    it->current = (struct u8_slice){0};
+    return true;
+  }
+  return false;
+}
+
 bool velvet_cmd_arg_iterator_next(struct velvet_cmd_arg_iterator *it) {
   struct u8_slice t = it->src;
   size_t start = it->cursor;
@@ -254,7 +265,6 @@ static void velvet_cmd_notify(struct velvet *v, struct velvet_cmd_arg_iterator *
   struct u8_slice title = {0};
   struct u8_slice cmdline = {0};
 
-
   if (!velvet_cmd_arg_iterator_next(it)) return;
   if (u8_match(it->current, "--title")) {
     if (!velvet_cmd_arg_iterator_next(it))
@@ -263,6 +273,9 @@ static void velvet_cmd_notify(struct velvet *v, struct velvet_cmd_arg_iterator *
     if (!velvet_cmd_arg_iterator_next(it))
       return;
   }
+
+  velvet_cmd_arg_iterator_unget(it);
+  velvet_cmd_arg_iterator_rest(it);
   cmdline = it->current;
 
   struct velvet_window notification = {
