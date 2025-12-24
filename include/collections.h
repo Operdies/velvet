@@ -103,10 +103,15 @@ void string_push_csi(struct string *str, uint8_t leading, struct int_slice param
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_drop_left(struct string *str, size_t n);
+/* truncate `v` to size `len`. If `len` is greater than the current size,
+ * `v` will be resized and elements zero'd */
+void vec_truncate(struct vec *v, size_t len);
 /* insert `elem` and index `i` and move succeeding elements as needed. */
 void vec_insert(struct vec *v, size_t i, const void *elem);
 /* set the `ith` element of `v` to `elem`. If `i` is out of range, resize `v` to accomodate it. */
 void vec_set(struct vec *v, size_t i, const void *elem);
+/* push `count` elements from `elems` to `v` */
+void vec_push_range(struct vec *v, const void *elems, size_t count);
 /* push `elem` to `v` */
 void vec_push(struct vec *v, const void *elem);
 /* remove the element represented by `e` from the vector by swapping with the last element.
@@ -124,6 +129,7 @@ void vec_clear(struct vec *v);
 void vec_destroy(struct vec *v);
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
+void *vec_nth_unchecked(const struct vec *const v, size_t i);
 void *vec_nth(const struct vec *const v, size_t i);
 struct u8_slice string_as_u8_slice(struct string s);
 struct u8_slice u8_slice_from_cstr(const char *const str);

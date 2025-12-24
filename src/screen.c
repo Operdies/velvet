@@ -8,10 +8,52 @@
 #define screen_column(g) (g->cursor.column)
 #define screen_row(g) (&g->lines[g->cursor.line])
 
-/* Missing features:
- * Scrollback
- * Better dirty tracking (maybe that should happen entirely in the renderer)
- */
+bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l) {
+  assert(s->enabled);
+  struct scrollback_line *last = vec_pop(&s->lines);
+  if (last) {
+    struct screen_cell *start = vec_nth_unchecked(&s->cells, last->cell_offset);
+    l->cells = start;
+    l->has_newline = last->has_newline;
+    l->eol = last->length;
+    vec_truncate(&s->cells, s->cells.length - last->length);
+    return true;
+  }
+  return false;
+}
+
+void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l) {
+  assert(s->enabled);
+  if (l->has_newline) {
+    /* trim trailing spaces. */
+    while (l->eol && l->cells[l->eol-1].cp.value == ' ') l->eol--;
+  }
+  vec_push_range(&s->cells, l->cells, l->eol);
+  if (s->lines.length) {
+    /* if the previous line was not terminated, append this line to the previous one */
+    struct scrollback_line *prev = vec_nth(&s->lines, s->lines.length - 1);
+    if (!prev->has_newline) {
+      prev->length += l->eol;
+      prev->has_newline = l->has_newline;
+      return;
+    }
+  }
+
+  struct scrollback_line *new = vec_new_element(&s->lines);
+  new->has_newline = l->has_newline;
+  new->cell_offset = s->cells.length - l->eol;
+  new->length = l->eol;
+
+  static struct vec debug = vec(struct screen_line);
+  for (size_t i = 0; i < s->lines.length; i++) {
+    struct scrollback_line *last = vec_nth(&s->lines, i);
+    struct screen_cell *start = vec_nth_unchecked(&s->cells, last->cell_offset);
+    struct screen_line l2 = { .cells = start, .has_newline = last->has_newline, .eol = last->length };
+    vec_push(&debug, &l2);
+  }
+  vec_clear(&debug);
+  velvet_log("Scrollback size: %zu lines %zu cells", s->lines.length, s->cells.length);
+}
 
 void screen_clear_line(struct screen *g, int n) {
   struct screen_cell clear = { .cp = codepoint_space, .style = g->cursor.brush };
@@ -98,6 +140,10 @@ void screen_scroll_content_up(struct screen *g, int count) {
 void screen_move_or_scroll_down(struct screen *g) {
   struct cursor *c = &g->cursor;
   if (c->line == g->scroll_bottom) {
+    if (g->scrollback.enabled) {
+      struct screen_line *evicted = &g->lines[0];
+      screen_scrollback_push(&g->scrollback, evicted);
+    }
     screen_shuffle_rows_up(g, 1, g->scroll_top, g->scroll_bottom);
   } else {
     c->line = c->line + 1;
@@ -178,13 +224,13 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
 
     if (i == run.len) break;
 
-    row->eol = column;
+    row->eol = MAX(row->eol, column);
     screen_move_or_scroll_down(g);
     column = 0;
     row = screen_row(g);
   }
 
-  row->eol = column;
+  row->eol = MAX(row->eol, column);
   g->cursor.wrap_pending = column == g->w;
   g->cursor.column = MIN(column, screen_right(g));
 }
@@ -246,6 +292,8 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
 }
 
 void screen_initialize(struct screen *g, int w, int h) {
+  assert(!g->lines);
+  assert(!g->_cells);
   g->lines = velvet_calloc(h, sizeof(*g->lines));
   g->_cells = velvet_calloc(w * h, sizeof(*g->_cells));
   g->h = h;
@@ -270,7 +318,7 @@ void screen_resize_if_needed(struct screen *g, int w, int h, bool wrap) {
     screen_initialize(g, w, h);
   } else if (g->h != h || g->w != w) {
     struct screen new = {.w = w, .h = h};
-    screen_resize_if_needed(&new, w, h, false);
+    screen_initialize(&new, w, h);
     screen_copy(&new, g, wrap);
     screen_destroy(g);
     *g = new;
@@ -350,11 +398,14 @@ void screen_carriage_return(struct screen *g) {
   screen_set_cursor_column(g, 0);
 }
 void screen_destroy(struct screen *screen) {
+  vec_destroy(&screen->scrollback.cells);
+  vec_destroy(&screen->scrollback.lines);
   free(screen->_cells);
   free(screen->lines);
   screen->_cells = NULL;
   screen->lines = NULL;
 }
+
 /* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
  * and counts on the final screen to be accurate */
 void screen_copy(struct screen *restrict dst, const struct screen *const restrict src, bool wrap) {
@@ -365,7 +416,7 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
   // The easiest way is to just put the cursor wherever it is when the cursor from the source screen is encountered.
   struct cursor source_cursor = src->cursor;
   struct cursor dst_cursor = {.line = -1, .column = -1};
-  for (int row = 0; row < src->h; row++) {
+  for (int row = 0; row < src->h && (wrap || row < dst->h); row++) {
     struct screen_line *screen_row = &src->lines[row];
 
     int col = 0;

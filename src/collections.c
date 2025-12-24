@@ -12,7 +12,7 @@ static size_t next_size(size_t min) {
   return next;
 }
 
-static void *vec_nth_unchecked(const struct vec *const v, size_t i) {
+void *vec_nth_unchecked(const struct vec *const v, size_t i) {
   const char *const base = v->content;
   size_t offset = i * v->element_size;
   return (void *)base + offset;
@@ -212,23 +212,31 @@ void vec_insert(struct vec *v, size_t i, const void *elem) {
   memcpy(this, elem, v->element_size);
 }
 
+void vec_truncate(struct vec *v, size_t len) {
+  vec_ensure_capacity(v, len);
+  if (len > v->length) {
+    void *start = vec_nth_unchecked(v, v->length);
+    void *end = vec_nth_unchecked(v, len);
+    memset(start, 0, end - start);
+  }
+  v->length = len;
+}
+
 void vec_set(struct vec *v, size_t i, const void *elem) {
-  size_t initial_length = v->length;
-  v->length = MAX(i + 1, v->length);
-  vec_ensure_capacity(v, v->length);
+  if (i >= v->length) vec_truncate(v, i + 1);
   void *item = vec_nth(v, i);
   if (elem)
     memcpy(item, elem, v->element_size);
   else
     memset(item, 0, v->element_size);
+}
 
-  if (initial_length <= i) {
-    void *start = vec_nth(v, initial_length);
-    void *end = vec_nth(v, i);
-    if (start < end) {
-      memset(start, 0, end - start);
-    }
-  }
+void vec_push_range(struct vec *v, const void *elems, size_t count) {
+  assert(v->element_size && "Element size cannot be 0");
+  vec_ensure_capacity(v, v->length + count);
+  void *last = vec_nth_unchecked(v, v->length);
+  v->length += count;
+  memmove(last, elems, count * v->element_size);
 }
 
 void vec_push(struct vec *v, const void *elem) {

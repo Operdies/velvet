@@ -98,6 +98,18 @@ struct cursor {
   bool origin;
 };
 
+struct scrollback_line {
+  int cell_offset;
+  int length;
+  bool has_newline;
+};
+
+struct screen_scrollback {
+  bool enabled;
+  struct vec /* screen_cell */ cells;
+  struct vec /* scrollback_line */ lines;
+};
+
 struct screen {
   int w, h, _cells_size, _lines_size;
   /* scroll region is local to the screen and is not persisted when the window /
@@ -105,8 +117,19 @@ struct screen {
   int scroll_top, scroll_bottom;
   struct screen_cell *_cells; // cells[w*h]
   struct screen_line *lines;   // lines[h]
+  struct screen_scrollback scrollback;
   struct cursor cursor;
   struct cursor saved_cursor;
+};
+
+static const struct screen_scrollback screen_scrollback_enabled = {
+    .cells = vec(struct screen_cell),
+    .lines = vec(struct scrollback_line),
+    .enabled = true,
+};
+
+static const struct screen_scrollback screen_scrollback_disabled = {
+    .enabled = false,
 };
 
 void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap);
@@ -142,5 +165,7 @@ void screen_scroll_content_down(struct screen *g, int count);
 void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom);
 void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
 bool cell_wide(struct screen_cell c);
+void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l);
+bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l);
 
 #endif /*  SCREEN_H */
