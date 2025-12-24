@@ -29,6 +29,11 @@ enum velvet_window_kind {
   VELVET_WINDOW_HINT,
 };
 
+struct velvet_window_close_behavior {
+  enum velvet_window_close_when when;
+  uint64_t delay_ms;
+};
+
 struct velvet_window {
   struct string cmdline;
   struct string title;
@@ -40,12 +45,9 @@ struct velvet_window {
     struct rect window;
     struct rect client;
   } rect;
+  uint64_t exited_at;
   struct vte emulator;
-  struct {
-    enum velvet_window_close_when when;
-    uint64_t delay_ms;
-    uint64_t exited_at;
-  } close;
+  struct velvet_window_close_behavior close;
   enum velvet_window_kind kind;
   enum velvet_scene_layer layer;
 };

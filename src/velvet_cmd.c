@@ -261,7 +261,15 @@ static void velvet_cmd_put(struct velvet *v, struct velvet_cmd_arg_iterator *it)
   velvet_input_put(v, keys);
 }
 
-static void velvet_cmd_notify(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+struct window_create_options {
+  struct velvet_window_close_behavior close;
+  int border_width;
+  enum velvet_window_kind kind;
+  enum velvet_scene_layer layer;
+};
+
+
+static void velvet_cmd_create_window(struct velvet *v, struct velvet_cmd_arg_iterator *it, struct window_create_options o) {
   struct u8_slice title = {0};
   struct u8_slice cmdline = {0};
 
@@ -279,16 +287,30 @@ static void velvet_cmd_notify(struct velvet *v, struct velvet_cmd_arg_iterator *
   cmdline = it->current;
 
   struct velvet_window notification = {
-      .border_width = 1,
+      .border_width = o.border_width,
       .emulator = vte_default,
-      .layer = VELVET_LAYER_NOTIFICATION,
-      .close = { .when = VELVET_WINDOW_CLOSE_AFTER_DELAY, .delay_ms = 2500 },
+      .layer = o.layer,
+      .close = o.close,
+      .kind = o.kind,
   };
+
   string_push_slice(&notification.cmdline, cmdline);
   if (title.len) {
     string_push_slice(&notification.emulator.osc.title, title);
   }
   velvet_scene_spawn_process_from_template(&v->scene, notification);
+}
+
+static void velvet_cmd_spawn_notification(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+  struct window_create_options o = {.border_width = 1,
+                                    .close = {.when = VELVET_WINDOW_CLOSE_AFTER_DELAY, .delay_ms = 1500},
+                                    .layer = VELVET_LAYER_NOTIFICATION};
+  velvet_cmd_create_window(v, it, o);
+}
+
+static void velvet_cmd_spawn_tiled(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+  struct window_create_options o = {.border_width = 1, .layer = VELVET_LAYER_TILED};
+  velvet_cmd_create_window(v, it, o);
 }
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
@@ -339,13 +361,7 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     } else if (u8_match(command, "map")) {
       velvet_cmd_map(v, &it);
     } else if (u8_match(command, "spawn")) {
-      struct u8_slice spawn;
-      if (velvet_cmd_arg_iterator_rest(&it)) {
-        spawn = u8_slice_strip_quotes(it.current);
-        velvet_scene_spawn_process(&v->scene, spawn);
-      } else {
-        velvet_log("`spawn' command missing argument.");
-      }
+      velvet_cmd_spawn_tiled(v, &it);
     } else if (u8_match(command, "unmap")) {
       struct u8_slice keys;
       if (velvet_cmd_arg_iterator_next(&it)) {
@@ -356,7 +372,7 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
         velvet_log("`unmap' command missing `keys' parameter.");
       }
     } else if (u8_match(command, "notify")) {
-      velvet_cmd_notify(v, &it);
+      velvet_cmd_spawn_notification(v, &it);
     } else if (u8_match(command, "set")) {
       velvet_cmd_set(v, sender, &it);
     } else {

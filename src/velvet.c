@@ -151,8 +151,8 @@ static void velvet_scene_remove_schedule(void *data) {
   struct velvet_window *h;
   vec_rwhere(h,
              v->scene.windows,
-             (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->close.exited_at &&
-                 h->close.exited_at + h->close.delay_ms <= now) {
+             (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->exited_at &&
+                 h->exited_at + h->close.delay_ms <= now) {
     velvet_remove_window(v, h);
   }
 }
@@ -166,7 +166,7 @@ void velvet_scene_remove_exited(struct velvet *v) {
     struct velvet_window *h;
     vec_find(h, m->windows, h->pid == pid);
     if (h) {
-      h->close.exited_at = get_ms_since_startup();
+      h->exited_at = get_ms_since_startup();
       if (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY && h->close.delay_ms > 0) {
         io_schedule(&v->event_loop, h->close.delay_ms, velvet_scene_remove_schedule, v);
       } else {
