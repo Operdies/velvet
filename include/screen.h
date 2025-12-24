@@ -106,6 +106,8 @@ struct scrollback_line {
 
 struct screen_scrollback {
   bool enabled;
+  /* evict old lines if lines are pushed at max */
+  size_t max_lines;
   /* scroll offset[x] => line `x` of the scroll buffer is visible and shown on line 1 */
   int scroll_offset;
   struct vec /* screen_cell */ cells;
@@ -128,6 +130,7 @@ static const struct screen_scrollback screen_scrollback_enabled = {
     .cells = vec(struct screen_cell),
     .lines = vec(struct scrollback_line),
     .enabled = true,
+    .max_lines = 10000,
 };
 
 static const struct screen_scrollback screen_scrollback_disabled = {
@@ -169,6 +172,7 @@ void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
 bool cell_wide(struct screen_cell c);
 void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l);
 bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l);
+void screen_scrollback_drop_excess(struct screen_scrollback *s);
 int screen_calc_line_height(struct screen *s, int width);
 int scrollback_count_lines(struct screen *s);
 

@@ -590,20 +590,22 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
     struct screen *active = vte_get_current_screen(&host->emulator);
     if (active->scrollback.scroll_offset) {
       int scroll_height = scrollback_count_lines(active);
-      char buf[30];
-      int n = snprintf(buf, 30, "┤%d/%d├", active->scrollback.scroll_offset, scroll_height);
-      // int n = snprintf(buf, 99, "[%d/%d]", active->scrollback.scroll_offset, scroll_height);
-      struct u8_slice buf_slice = { .content = (uint8_t*)buf, .len = n };
-      struct u8_slice_codepoint_iterator it = {.src = buf_slice};
-      int strlen = u8_slice_codepoint_iterator_length(it);
-      int start = c.x + c.w - strlen;
+      char buf[40] = {0};
+      struct string tmp = { .content = (uint8_t*)buf, .len = 0, .cap = sizeof(buf) };
+      string_push_char(&tmp, '[');
+      string_push_int(&tmp, active->scrollback.scroll_offset);
+      string_push_char(&tmp, '/');
+      string_push_int(&tmp, scroll_height);
+      string_push_char(&tmp, ']');
+      struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(tmp)};
+      int start = c.x + c.w - tmp.len;
       if (start > c.x) {
         while (u8_slice_codepoint_iterator_next(&it)) {
           struct screen_cell chr = {.style = title_style, .cp = it.current};
           velvet_render_set_cell(r, c.y - 1, start++, chr);
         }
       }
-      title_end -= strlen;
+      title_end -= tmp.len;
     }
 
     int i = c.x + 1;
@@ -952,8 +954,10 @@ void velvet_window_process_output(struct velvet_window *velvet_window, struct u8
   size_t lines = sb->lines.length;;
   vte_process(&velvet_window->emulator, str);
   size_t new_lines = sb->lines.length;
+  screen_scrollback_drop_excess(&velvet_window->emulator.primary.scrollback);
   if (sb->scroll_offset && new_lines > lines) {
-    sb->scroll_offset += new_lines - lines;
+    size_t added = new_lines - lines;
+    sb->scroll_offset = CLAMP(sb->scroll_offset + added, 0, sb->lines.length);
   }
 }
 

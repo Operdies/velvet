@@ -104,13 +104,23 @@ bool string_ends_with(struct string *str, struct u8_slice slice) {
   return memcmp(str->content + str->len - slice.len, slice.content, slice.len) == 0;
 }
 
-void string_drop_left(struct string *str, size_t n) {
+void string_shift_left(struct string *str, size_t n) {
   assert(n <= str->len);
   size_t copy = str->len - n;
   if (n && copy) {
     memmove(str->content, str->content + n, copy);
   }
   str->len -= n;
+}
+
+void vec_shift_left(struct vec *v, size_t n) {
+  assert(n <= v->length);
+  size_t copy = v->element_size * (v->length - n);
+  if (n && copy) {
+    char *base = v->content;
+    memmove(base, base + (n * v->element_size), copy);
+  }
+  v->length -= n;
 }
 
 

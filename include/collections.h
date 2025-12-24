@@ -102,7 +102,7 @@ void string_destroy(struct string *str);
 void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const char *const final);
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
-void string_drop_left(struct string *str, size_t n);
+void string_shift_left(struct string *str, size_t n);
 /* truncate `v` to size `len`. If `len` is greater than the current size,
  * `v` will be resized and elements zero'd */
 void vec_truncate(struct vec *v, size_t len);
@@ -151,6 +151,7 @@ size_t string_strlen(struct string s);
 void string_ensure_null_terminated(struct string *s);
 bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s);
 int u8_slice_codepoint_iterator_length(struct u8_slice_codepoint_iterator s);
+void vec_shift_left(struct vec *v, size_t n);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }

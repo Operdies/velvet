@@ -22,6 +22,26 @@ bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l) {
   return false;
 }
 
+void screen_scrollback_drop_excess(struct screen_scrollback *s) {
+  if (s->max_lines && s->lines.length > s->max_lines) {
+    size_t drop = s->lines.length - s->max_lines;
+    size_t line_drop_count = 0;
+    size_t cell_drop_count = 0;
+    struct scrollback_line *l;
+    vec_foreach(l, s->lines) {
+      line_drop_count++;
+      if (l->has_newline) drop--;
+      cell_drop_count += l->length;
+      if (!drop) break;
+    }
+    vec_shift_left(&s->lines, line_drop_count);
+    vec_shift_left(&s->cells, cell_drop_count);
+    vec_foreach(l, s->lines) {
+      l->cell_offset -= cell_drop_count;
+    }
+  }
+}
+
 void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l) {
   assert(s->enabled);
   if (l->has_newline) {
@@ -43,15 +63,6 @@ void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l) 
   new->has_newline = l->has_newline;
   new->cell_offset = s->cells.length - l->eol;
   new->length = l->eol;
-
-  static struct vec debug = vec(struct screen_line);
-  for (size_t i = 0; i < s->lines.length; i++) {
-    struct scrollback_line *last = vec_nth(&s->lines, i);
-    struct screen_cell *start = vec_nth_unchecked(&s->cells, last->cell_offset);
-    struct screen_line l2 = { .cells = start, .has_newline = last->has_newline, .eol = last->length };
-    vec_push(&debug, &l2);
-  }
-  vec_clear(&debug);
 }
 
 void screen_clear_line(struct screen *g, int n) {

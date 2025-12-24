@@ -910,10 +910,10 @@ void test_string() {
   assert(middle.content[3] == 'o');
   assert(string_starts_with(&s, start));
   assert(string_ends_with(&s, end));
-  string_drop_left(&s, 1);
+  string_shift_left(&s, 1);
   assert(s.len == 5);
   assert(string_starts_with(&s, u8_slice_from_cstr("ello!")));
-  string_drop_left(&s, 2);
+  string_shift_left(&s, 2);
   assert(s.len == 3);
   assert(string_starts_with(&s, u8_slice_from_cstr("lo!")));
   string_destroy(&s);

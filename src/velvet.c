@@ -64,7 +64,7 @@ static void session_handle_command_buffer(struct velvet *v, struct velvet_sessio
    * Drop all the commands we have actually handled and buffer the partial command for later.
    */
   if (it.cursor) {
-    string_drop_left(&src->commands.buffer, it.cursor);
+    string_shift_left(&src->commands.buffer, it.cursor);
     src->commands.lines += it.line_count;
   }
 }
@@ -218,7 +218,7 @@ static ssize_t session_write_pending(struct velvet_session *sesh) {
     struct u8_slice pending = string_as_u8_slice(sesh->pending_output);
     ssize_t written = io_write(sesh->output, pending);
     velvet_log("Write %zu / %zu", written, sesh->pending_output.len);
-    if (written > 0) string_drop_left(&sesh->pending_output, (size_t)written);
+    if (written > 0) string_shift_left(&sesh->pending_output, (size_t)written);
     return written;
   }
   return -1;
@@ -267,7 +267,7 @@ static void on_window_writable(struct io_source *src) {
   assert(vte);
   if (vte->emulator.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(vte->emulator.pending_input));
-    if (written > 0) string_drop_left(&vte->emulator.pending_input, (size_t)written);
+    if (written > 0) string_shift_left(&vte->emulator.pending_input, (size_t)written);
   }
 }
 

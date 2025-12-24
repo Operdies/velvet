@@ -296,6 +296,11 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   }
 }
 
+static void scroll_to_bottom(struct velvet *v) {
+  struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+  if (focus) focus->emulator.primary.scrollback.scroll_offset = 0;
+}
+
 static void send_bracketed_paste(struct velvet *v) {
   struct velvet_input *in = &v->input;
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
@@ -310,6 +315,7 @@ static void send_bracketed_paste(struct velvet *v) {
   string_push_slice(&focus->emulator.pending_input, s);
   string_clear(&v->input.command_buffer);
   in->state = VELVET_INPUT_STATE_NORMAL;
+  scroll_to_bottom(v);
 }
 
 static void dispatch_csi(struct velvet *v, uint8_t ch) {
@@ -563,9 +569,9 @@ static void velvet_input_send_special(struct velvet *v, struct special_key s, en
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
   // TODO: check keyboard settings of recipient and modify event accordingly
   struct velvet *v = k->data;
+  scroll_to_bottom(v);
   if (e.key.literal) velvet_input_send_literal(v, e.key.symbol, e.modifiers);
   else velvet_input_send_special(v, e.key.special, e.modifiers);
-  
 }
 
 static void dispatch_normal(struct velvet *v, uint8_t ch) {
