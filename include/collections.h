@@ -150,6 +150,7 @@ size_t u8_slice_strlen(struct u8_slice s);
 size_t string_strlen(struct string s);
 void string_ensure_null_terminated(struct string *s);
 bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s);
+int u8_slice_codepoint_iterator_length(struct u8_slice_codepoint_iterator s);
 
 #ifdef RELEASE_BUILD
 #define vec(type) (struct vec) { .element_size = sizeof(type) }

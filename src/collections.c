@@ -620,3 +620,9 @@ bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s) {
   return true;
 }
 
+int u8_slice_codepoint_iterator_length(struct u8_slice_codepoint_iterator s) {
+  int i = 0;
+  while (u8_slice_codepoint_iterator_next(&s)) i++;
+  return i;
+}
+

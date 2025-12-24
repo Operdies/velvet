@@ -584,17 +584,38 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
     struct screen_cell_style title_style = is_focused ? m->style.active.title : m->style.inactive.title;
     struct screen_cell truncation_symbol = {.cp = elipsis, .style = title_style};
 
-    int i = c.x + 1;
+    int title_end = c.x + c.w;
 
+    /* draw scroll offset */
+    struct screen *active = vte_get_current_screen(&host->emulator);
+    if (active->scrollback.scroll_offset) {
+      int scroll_height = scrollback_count_lines(active);
+      char buf[30];
+      int n = snprintf(buf, 30, "┤%d/%d├", active->scrollback.scroll_offset, scroll_height);
+      // int n = snprintf(buf, 99, "[%d/%d]", active->scrollback.scroll_offset, scroll_height);
+      struct u8_slice buf_slice = { .content = (uint8_t*)buf, .len = n };
+      struct u8_slice_codepoint_iterator it = {.src = buf_slice};
+      int strlen = u8_slice_codepoint_iterator_length(it);
+      int start = c.x + c.w - strlen;
+      if (start > c.x) {
+        while (u8_slice_codepoint_iterator_next(&it)) {
+          struct screen_cell chr = {.style = title_style, .cp = it.current};
+          velvet_render_set_cell(r, c.y - 1, start++, chr);
+        }
+      }
+      title_end -= strlen;
+    }
+
+    int i = c.x + 1;
     /* draw the title */
     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
-    for (; i < c.x + c.w - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
+    for (; i < title_end - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
       struct screen_cell chr = {.style = title_style, .cp = it.current};
       velvet_render_set_cell(r, c.y - 1, i, chr);
     }
 
     /* add a space or truncation symbol */
-    if (i < c.x + c.w - 1 && u8_slice_codepoint_iterator_next(&it)) {
+    if (i < title_end - 1 && u8_slice_codepoint_iterator_next(&it)) {
       /* title was truncated */
       velvet_render_set_cell(r, c.y - 1, i, truncation_symbol);
     }
