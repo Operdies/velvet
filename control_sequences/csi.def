@@ -126,9 +126,9 @@ CSI('>',    ___,  'm', XTMODKEYS,                  "CSI Ps ; Ps ; Ps t Window ma
 
 // Kitty {{{1
 CSI('?',    ___,  'u', KITTY_KEYBOARD_QUERY,       "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
-CSI('>',    ___,  'u', KITTY_KEYBOARD_PUSH,        "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
-CSI('<',    ___,  'u', KITTY_KEYBOARD_POP,         "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
-CSI('=',    ___,  'u', KITTY_KEYBOARD_MODIFY,      "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
+CSI('>',    ___,  'u', KITTY_KEYBOARD_PUSH,        "CSI > flags u Push `flags` to the key settings stack")
+CSI('<',    ___,  'u', KITTY_KEYBOARD_POP,         "CSI < count u Pop `count` entries from the key settings stack")
+CSI('=',    ___,  'u', KITTY_KEYBOARD_MODIFY,      "CSI = flags ; mode u Modify current flags; modes: 1 => assing flags, 2 => set flags, 3 => unset flags")
 CSI(___,    '+',  'T', KITTY_UNSCROLL,             "CSI Ps + T https://sw.kovidgoyal.net/kitty/unscroll/")
 
 #undef ___
