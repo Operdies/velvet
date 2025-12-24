@@ -81,10 +81,6 @@ static void send_csi_todo(struct velvet *v) {
 static void DISPATCH_FOCUS_OUT(struct velvet *v, const struct csi *const c);
 static void DISPATCH_FOCUS_IN(struct velvet *v, const struct csi *const c);
 static void DISPATCH_SGR_MOUSE(struct velvet *v, const struct csi *const c);
-static void DISPATCH_ARROW_KEY_UP(struct velvet *v, const struct csi *const c);
-static void DISPATCH_ARROW_KEY_DOWN(struct velvet *v, const struct csi *const c);
-static void DISPATCH_ARROW_KEY_LEFT(struct velvet *v, const struct csi *const c);
-static void DISPATCH_ARROW_KEY_RIGHT(struct velvet *v, const struct csi *const c);
 
 static void mouse_debug_logging(struct mouse_sgr sgr) {
   char *mousebuttons[] = {"left", "middle", "right", "none"};
@@ -344,6 +340,19 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
   // TODO: Is this accurate?
   if (ch >= 0x40 && ch <= 0x7E) {
     if (!v->scene.windows.length) return;
+    {
+      struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
+      for (int i = 0; i < LENGTH(keys); i++) {
+        struct special_key k = keys[i];
+        if (u8_slice_equals(raw, u8_slice_from_cstr(k.escape))) {
+          string_clear(&v->input.command_buffer);
+          in->state = VELVET_INPUT_STATE_NORMAL;
+          struct velvet_key_event evt = {.key.special = k};
+          dispatch_key_event(v, evt);
+          return;
+        }
+      }
+    }
     struct csi c = {0};
     struct u8_slice s = string_range(&v->input.command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
@@ -610,26 +619,6 @@ void DISPATCH_FOCUS_IN(struct velvet *v, const struct csi *const c) {
 }
 void DISPATCH_SGR_MOUSE(struct velvet *v, const struct csi *const c) {
   send_csi_mouse(v, c);
-}
-static void dispatch_arrow_key(struct velvet *v, const struct csi *const c) {
-  struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  if (focus->emulator.options.application_mode) {
-    send_bytes(v, ESC, 'O', c->final);
-  } else {
-    send(v, string_as_u8_slice(v->input.command_buffer));
-  }
-}
-void DISPATCH_ARROW_KEY_UP(struct velvet *v, const struct csi *const c) {
-  dispatch_arrow_key(v, c);
-}
-void DISPATCH_ARROW_KEY_DOWN(struct velvet *v, const struct csi *const c) {
-  dispatch_arrow_key(v, c);
-}
-void DISPATCH_ARROW_KEY_LEFT(struct velvet *v, const struct csi *const c) {
-  dispatch_arrow_key(v, c);
-}
-void DISPATCH_ARROW_KEY_RIGHT(struct velvet *v, const struct csi *const c) {
-  dispatch_arrow_key(v, c);
 }
 
 void velvet_input_destroy(struct velvet_input *in) {
