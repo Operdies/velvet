@@ -478,11 +478,6 @@ static struct cursor clamp_cursor(struct cursor c, int l_max, int c_max) {
   return c2;
 }
 
-static int calc_line_height(struct screen *s, int width) {
-  if (width <= s->w) return 1;
-  return (width + s->w - 1) / s->w;
-}
-
 static void vte_init_primary_screen(struct vte *vte) {
   struct screen *g = &vte->primary;
 
@@ -516,7 +511,7 @@ static void vte_init_primary_screen(struct vte *vte) {
 
   struct screen_line popped = {0};
   for (; lines_added < target_line && screen_scrollback_pop(s, &popped);) {
-    int line_height = calc_line_height(&new, popped.eol);
+    int line_height = screen_calc_line_height(&new, popped.eol);
 
     int remaining = new.h - lines_added;
     if (line_height > remaining) {

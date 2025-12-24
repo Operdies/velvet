@@ -52,7 +52,6 @@ void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l) 
     vec_push(&debug, &l2);
   }
   vec_clear(&debug);
-  velvet_log("Scrollback size: %zu lines %zu cells", s->lines.length, s->cells.length);
 }
 
 void screen_clear_line(struct screen *g, int n) {
@@ -93,6 +92,21 @@ static void screen_swap_rows(struct screen *g, int r1, int r2) {
   }
 }
 
+int screen_calc_line_height(struct screen *s, int width) {
+  if (width <= s->w) return 1;
+  return (width + s->w - 1) / s->w;
+}
+
+int scrollback_count_lines(struct screen *s) {
+  int lines = 0;
+  for (size_t i = 0; i < s->scrollback.lines.length; i++) {
+    struct scrollback_line *l = vec_nth(&s->scrollback.lines, i);
+    int height = screen_calc_line_height(s, l->length);
+    assert(height >= 1);
+    lines += height;
+  }
+  return lines;
+}
 
 // If the cursor is outside the scroll region, this should do nothing.
 // Lines outside the scroll region must not be affected by this.

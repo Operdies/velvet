@@ -106,6 +106,8 @@ struct scrollback_line {
 
 struct screen_scrollback {
   bool enabled;
+  /* scroll offset[x] => line `x` of the scroll buffer is visible and shown on line 1 */
+  int scroll_offset;
   struct vec /* screen_cell */ cells;
   struct vec /* scrollback_line */ lines;
 };
@@ -167,5 +169,7 @@ void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
 bool cell_wide(struct screen_cell c);
 void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l);
 bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l);
+int screen_calc_line_height(struct screen *s, int width);
+int scrollback_count_lines(struct screen *s);
 
 #endif /*  SCREEN_H */

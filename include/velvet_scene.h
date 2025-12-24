@@ -23,6 +23,11 @@ enum velvet_window_close_when {
   VELVET_WINDOW_CLOSE_AFTER_DELAY = 2,
 };
 
+enum velvet_window_kind {
+  VELVET_WINDOW_PTY_HOST,
+  VELVET_WINDOW_HINT,
+};
+
 struct velvet_window {
   struct string cmdline;
   struct string title;
@@ -40,12 +45,13 @@ struct velvet_window {
     uint64_t delay_ms;
     uint64_t exited_at;
   } close;
+  enum velvet_window_kind kind;
   enum velvet_scene_layer layer;
 };
 
 void velvet_window_destroy(struct velvet_window *velvet_window);
 void velvet_window_resize(struct velvet_window *velvet_window, struct rect window);
-void velvet_window_start(struct velvet_window *velvet_window);
+bool velvet_window_start(struct velvet_window *velvet_window);
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
 void velvet_window_update_title(struct velvet_window *p);
 void velvet_window_notify_focus(struct velvet_window *p, bool focused);
@@ -58,6 +64,8 @@ struct velvet_render_option {
   bool no_repeat_wide_chars;
   /* debugging option for highlighting changed regions */
   bool display_damage;
+  /* debugging option for highlighting line ends */
+  bool display_eol;
 };
 
 struct velvet_render_buffer_line {
@@ -103,11 +111,11 @@ struct velvet_scene {
 };
 
 #define HEX_TO_NUM(x) (((x) >= '0' && (x) <= '9') ? (x) - '0' : (x) - 'a' + 10)
-#define RGB(color)                                                                                                     \
-  {.cmd = COLOR_RGB,                                                                                                   \
-   .r = (HEX_TO_NUM(color[1]) << 4) | (HEX_TO_NUM(color[2])),                                                          \
-   .g = (HEX_TO_NUM(color[3]) << 4) | (HEX_TO_NUM(color[4])),                                                          \
-   .b = (HEX_TO_NUM(color[5]) << 4) | (HEX_TO_NUM(color[5]))}
+#define RGB(rgb)                                                                                                       \
+  (struct color) {                                                                                                     \
+    .cmd = COLOR_RGB, .r = (HEX_TO_NUM(rgb[1]) << 4) | (HEX_TO_NUM(rgb[2])),                                           \
+    .g = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])), .b = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[5]))       \
+  }
 
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
@@ -123,7 +131,7 @@ static const struct velvet_scene velvet_scene_default = {
                   }},
     .renderer =
         {
-            .options = {.no_repeat_wide_chars = false},
+            .options = {.no_repeat_wide_chars = false, .display_eol = false,},
             .cursor = {.column = -1, .line = -1},
         },
 };

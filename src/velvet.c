@@ -399,7 +399,13 @@ void velvet_loop(struct velvet *velvet) {
     io_dispatch(loop);
 
     // quit ?
-    if (velvet->scene.windows.length == 0 || velvet->quit) break;
+    struct velvet_window *real_client;
+    vec_find(real_client,
+             velvet->scene.windows,
+             real_client->kind == VELVET_WINDOW_PTY_HOST && real_client->layer != VELVET_LAYER_NOTIFICATION &&
+                 real_client->layer != VELVET_LAYER_BACKGROUND);
+
+    if (!real_client || velvet->quit) break;
   }
 
   close(velvet->socket);

@@ -289,8 +289,14 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
       velvet_input_send_special(v, VELVET_KEY_SS3_DOWN, 0);
     }
   } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
+    struct screen *screen = vte_get_current_screen(&target->emulator);
     /* in the primary screen, scrolling affects the current view */
-    // TODO: Set visible screen region
+    if (sgr.scroll_direction == scroll_up) {
+      int num_lines = scrollback_count_lines(screen);
+      screen->scrollback.scroll_offset = MIN(num_lines, screen->scrollback.scroll_offset + 1);
+    } else if (sgr.scroll_direction == scroll_down) {
+      screen->scrollback.scroll_offset = MAX(0, screen->scrollback.scroll_offset - 1);
+    }
   }
 }
 
