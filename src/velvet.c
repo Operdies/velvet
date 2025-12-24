@@ -14,6 +14,7 @@ static void velvet_session_render(struct u8_slice str, void *context) {
 }
 
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
+  if (!s) return;
   int sock = s->socket;
   if (s->socket) {
     uint8_t detach = 'D';
@@ -234,25 +235,17 @@ static void velvet_render(struct u8_slice str, void *context) {
 
 static void on_session_input(struct io_source *src, struct u8_slice str) {
   struct velvet *m = src->data;
+  struct velvet_session *session;
+  vec_find(session, m->sessions, session->input == src->fd);
+
   if (str.len == 0) {
-    struct velvet_session *sesh;
-    vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) velvet_detach_session(m, sesh);
+    velvet_detach_session(m, session);
     return;
   }
+
+  if (session) m->input.input_socket = session->socket;
   velvet_input_process(m, str);
-
-  if (strncmp((char*)str.content, "\x1b[I", 3) == 0) {
-    struct velvet_session *sesh;
-    vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) m->focused_socket = sesh->socket;
-  }
-
-  if (str.len == 2 && strncmp((char*)str.content, "\x1b]", 2) == 0) {
-    struct velvet_session *sesh;
-    vec_find(sesh, m->sessions, sesh->input == src->fd);
-    if (sesh) velvet_detach_session(m, sesh);
-  }
+  m->input.input_socket = 0;
 }
 
 static void on_session_writable(struct io_source *src) {

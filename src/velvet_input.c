@@ -598,6 +598,8 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
 static void dispatch_focus(struct velvet *v, const struct csi *const c) {
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
   if (focus->emulator.options.focus_reporting) send(v, c->final == 'O' ? vt_focus_out : vt_focus_in);
+  if (c->final == 'I' && v->input.input_socket)
+    v->focused_socket = v->input.input_socket;
 }
 
 void DISPATCH_FOCUS_OUT(struct velvet *v, const struct csi *const c) {

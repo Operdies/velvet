@@ -86,6 +86,7 @@ struct velvet_input {
   struct velvet_keymap *keymap;
   uint64_t last_repeat;
   struct velvet_input_drag_event dragging;
+  int input_socket;
 };
 
 struct velvet_session_features {
