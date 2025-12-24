@@ -10,8 +10,6 @@
 #include <signal.h>
 
 
-static int nmaster = 1;
-static float factor = 0.5;
 static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from) {
   size_t start = 0;
   if (from) start = vec_index(&v, from) + 1;
@@ -23,12 +21,14 @@ static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from
 }
 
 void velvet_scene_arrange(struct velvet_scene *m) {
+  int nmaster = m->layout.nmaster;
+  float factor = m->layout.mfact;
   struct velvet_window *h;
   struct {
     int ws_col, ws_row;
   } ws = {.ws_col = m->ws.w, .ws_row = m->ws.h};
   int i, n;
-  int mh, mx, mw, my, sy, sw, nm, ns;
+  int mw, my, sy, sw, nm, ns;
   int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.w);
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.h);
 
@@ -36,11 +36,18 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   n = 0;
   vec_where(h, m->windows, h->layer == VELVET_LAYER_TILED) n++;
 
-  i = my = sy = mx = 0;
+  i = my = sy = 0;
   nm = n > nmaster ? nmaster : n;
   ns = n > nmaster ? n - nmaster : 0;
 
-  mh = (int)((float)ws.ws_row / (float)nm);
+  int status_height = 0;
+  vec_where(h, m->windows, h->layer == VELVET_LAYER_STATUS) {
+    ws.ws_row -= h->rect.window.h;
+    h->border_width = 0;
+    struct rect b = { .x = 0, .y = status_height, .h = 1, .w = ws.ws_col };
+    velvet_window_resize(h, b);
+    status_height += b.h;
+  }
 
   if (nmaster <= 0) {
     mw = 0;
@@ -54,17 +61,22 @@ void velvet_scene_arrange(struct velvet_scene *m) {
   }
 
   struct velvet_window *p = nullptr;
+  int master_height_left = ws.ws_row - status_height;
+  int master_items_left = nm;
 
   for (; i < nmaster && i < n; i++) {
     p = next_tiled(m->windows, p);
-    struct rect b = {.x = mx, .y = my, .w = mw, .h = mh};
+    int height = (float)master_height_left / master_items_left;
+    struct rect b = {.x = 0, .y = my, .w = mw, .h = height};
     b.x_pixel = b.w * pixels_per_column;
     b.y_pixel = b.h * pixels_per_row;
     velvet_window_resize(p, b);
-    my += mh;
+    my += height;
+    master_items_left--;
+    master_height_left -= height;
   }
 
-  int stack_height_left = ws.ws_row;
+  int stack_height_left = ws.ws_row - status_height;
   int stack_items_left = ns;
 
   for (; i < n; i++) {
@@ -174,7 +186,7 @@ void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct vel
   assert(m->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
-  velvet_scene_arrange(m);
+  m->arrange(m);
   bool started = velvet_window_start(host);
   if (!started) {
     velvet_scene_remove_window(m, host);
@@ -233,7 +245,7 @@ void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w)
 void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
   if (m->ws.w != w.w || m->ws.h != w.h || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
     m->ws = w;
-    velvet_scene_arrange(m);
+    m->arrange(m);
   }
 }
 
@@ -438,15 +450,11 @@ static void velvet_render_copy_cells_from_scrollback(struct velvet_render *r, st
     }
   }
 
-  struct screen_line debug = { 0 };
-  struct screen_line inner_debug = { 0 };
-
   int line = 0;
   for (size_t idx = new_offset; idx < sb->lines.length; idx++) {
     struct scrollback_line *sbl = vec_nth(&sb->lines, idx);
     int count = sbl->length;
     struct screen_cell *cells = vec_nth_unchecked(&sb->cells, sbl->cell_offset);
-    debug = (struct screen_line) { .cells = cells, .eol = count, .has_newline = sbl->has_newline };
     if (allowance < 0) {
       int discard = active->w * -allowance;
       cells += discard;
@@ -457,7 +465,6 @@ static void velvet_render_copy_cells_from_scrollback(struct velvet_render *r, st
     int line_height = screen_calc_line_height(active, count);
     for (int i = 0; i < line_height; i++, line++) {
       if (line >= active->h) return;
-      inner_debug = (struct screen_line){ .cells = cells, .eol = count, .has_newline = sbl->has_newline };
       int render_line = h->rect.client.y + line;
       if (render_line >= r->h) break;
       int column = 0;

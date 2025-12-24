@@ -169,6 +169,13 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *source, struct u8
     v->input.options.key_chain_timeout_ms = digit;
   } else if (u8_match(option, "focus_follows_mouse")) {
     v->input.options.focus_follows_mouse = boolean;
+  } else if (u8_match(option, "layer")) {
+    struct velvet_window *window = velvet_scene_get_focus(&v->scene);
+    if (u8_match(value, "floating")) {
+      window->layer = VELVET_LAYER_FLOATING;
+    } else if (u8_match(value, "tiled")) {
+      window->layer = VELVET_LAYER_TILED;
+    }
   } else if (u8_match(option, "display_damage")) {
     velvet_scene_set_display_damage(&v->scene, boolean);
   } else if (u8_match(option, "no_repeat_wide_chars")) {
@@ -291,19 +298,30 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   struct velvet_cmd_arg_iterator it = {.src = cmd};
   struct u8_slice command;
 
+  struct velvet_scene *s = &v->scene;
+
   if (velvet_cmd_arg_iterator_next(&it)) {
+    struct velvet_window dummy = {0};
+    struct velvet_window *focused = velvet_scene_get_focus(s);
+    /* avoid null checks when nothing is focused */
+    if (!focused) focused = &dummy;
     command = it.current;
     if (u8_match(command, "detach")) {
-      struct velvet_session *focused = velvet_get_focused_session(v);
-      if (focused) velvet_detach_session(v, focused);
+      velvet_detach_session(v, velvet_get_focused_session(v));
     } else if (u8_match(command, "put")) {
       velvet_cmd_put(v, &it);
+    } else if (u8_match(command, "decfactor")) {
+      s->layout.mfact = MAX(s->layout.mfact - 0.05, 0.05);
+    } else if (u8_match(command, "incfactor")) {
+      s->layout.mfact = MIN(s->layout.mfact + 0.05, 0.95);
+    } else if (u8_match(command, "decnmaster")) {
+      s->layout.nmaster = MAX(s->layout.nmaster - 1, 0);
+    } else if (u8_match(command, "incnmaster")) {
+      s->layout.nmaster = MIN(s->layout.nmaster + 1, 5);
     } else if (u8_match(command, "incborder")) {
-      struct velvet_window *focused = velvet_scene_get_focus(&v->scene);
       int max_border = MIN(focused->rect.window.h, focused->rect.window.w) / 2;
       focused->border_width = MIN(focused->border_width + 1, max_border);
     } else if (u8_match(command, "decborder")) {
-      struct velvet_window *focused = velvet_scene_get_focus(&v->scene);
       focused->border_width = MAX(focused->border_width - 1, 0);
     } else if (u8_match(command, "map")) {
       velvet_cmd_map(v, &it);

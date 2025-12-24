@@ -282,11 +282,16 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
 static void velvet_default_config(struct velvet *v) {
   char *config = "map <C-x>c 'spawn zsh'\n"
                  "map <C-x>d detach\n"
-                 "map <C-x>b spawn bash\n"
+                 "map <C-x>t set layer tiled\n"
+                 "map <C-x>f set layer floating\n"
                  "map -r <C-x>b spawn bash\n"
                  "map -r <C-x>x incborder\n"
-                 "map <C-x><C-x> put <C-x>\n"
                  "map -r <C-x>a decborder\n"
+                 "map -r <C-x>[ decfactor\n"
+                 "map -r <C-x>] incfactor\n"
+                 "map -r <C-x>i incnmaster\n"
+                 "map -r <C-x>o decnmaster\n"
+                 "map <C-x><C-x> put <C-x>\n"
                  "map <C-x>,,, set display_damage true\n"
                  "map <C-x>... set display_damage false\n"
                  "map -r <C-x>j focus-next\n"
@@ -324,6 +329,7 @@ void velvet_loop(struct velvet *velvet) {
   velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("bash"));
   velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("nvim"));
   velvet_scene_arrange(&velvet->scene);
+  velvet->scene.arrange(&velvet->scene);
 
   velvet_default_config(velvet);
 
@@ -333,12 +339,12 @@ void velvet_loop(struct velvet *velvet) {
     if (focus) {
       if (focus->ws.w && focus->ws.h && (focus->ws.w != velvet->scene.ws.w || focus->ws.h != velvet->scene.ws.h)) {
         velvet_scene_resize(&velvet->scene, focus->ws);
-        velvet_scene_arrange(&velvet->scene);
+        velvet->scene.arrange(&velvet->scene);
         /* after resizing, we want to give clients a bit of time to respond before rendering.
          * They may not respond at all, so we schedule a wakeup a brief amount of time in the future */
         io_schedule(loop, 30, wakeup, nullptr);
       } else {
-        velvet_scene_arrange(&velvet->scene);
+        velvet->scene.arrange(&velvet->scene);
         /* Render the current velvet state.
          * Note that we render *before* resizing in order to transmit the current state,
          * and then give clients an opportunity to adjust to the resize. */

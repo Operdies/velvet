@@ -9,6 +9,7 @@
 
 enum velvet_scene_layer {
   VELVET_LAYER_BACKGROUND,
+  VELVET_LAYER_STATUS,
   VELVET_LAYER_TILED,
   VELVET_LAYER_FLOATING,
   VELVET_LAYER_POPUP,
@@ -102,13 +103,35 @@ struct velvet_scene_style {
   } active;
 };
 
+struct velvet_scene_layout {
+  int nmaster;
+  float mfact;
+};
+
 struct velvet_scene {
   struct vec /*velvet_window*/ windows;
   struct rect ws;
   size_t focus;
   struct velvet_render renderer;
   struct velvet_scene_style style;
+  struct velvet_scene_layout layout;
+  void (*arrange)(struct velvet_scene* scene);
 };
+
+void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
+void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
+void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
+void velvet_scene_resize(struct velvet_scene *m, struct rect w);
+void velvet_scene_arrange(struct velvet_scene *m);
+void velvet_scene_destroy(struct velvet_scene *m);
+void velvet_scene_set_focus(struct velvet_scene *m, size_t focus);
+void velvet_scene_set_display_damage(struct velvet_scene *m, bool track_damage);
+void velvet_scene_draw_tile_hint(struct velvet_scene *m, struct velvet_window *before);
+
+typedef void(render_func_t)(struct u8_slice str, void *context);
+void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context);
+void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context);
+struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 
 #define HEX_TO_NUM(x) (((x) >= '0' && (x) <= '9') ? (x) - '0' : (x) - 'a' + 10)
 #define RGB(rgb)                                                                                                       \
@@ -131,23 +154,15 @@ static const struct velvet_scene velvet_scene_default = {
                   }},
     .renderer =
         {
-            .options = {.no_repeat_wide_chars = false, .display_eol = false,},
+            .options =
+                {
+                    .no_repeat_wide_chars = false,
+                    .display_eol = false,
+                },
             .cursor = {.column = -1, .line = -1},
         },
+    .arrange = velvet_scene_arrange,
+    .layout = {.nmaster = 1, .mfact = 0.5f},
 };
-
-void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
-void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
-void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
-void velvet_scene_resize(struct velvet_scene *m, struct rect w);
-void velvet_scene_arrange(struct velvet_scene *m);
-void velvet_scene_destroy(struct velvet_scene *m);
-void velvet_scene_set_focus(struct velvet_scene *m, size_t focus);
-void velvet_scene_set_display_damage(struct velvet_scene *m, bool track_damage);
-
-typedef void(render_func_t)(struct u8_slice str, void *context);
-void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context);
-void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context);
-struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 
 #endif // VELVET_SCENE_H
