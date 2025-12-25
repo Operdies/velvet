@@ -66,6 +66,18 @@ def color_summary(valobj, x, y):
         return f"#{r:02x}{g:02x}{b:02x}"
     return f"{table}"
 
+def scrollback_header_summary(valobj, x, y):
+    valSize = valobj.GetType().GetPointeeType().GetByteSize()
+    valAddr = valobj.GetValueAsUnsigned(0)
+    n_cells = valobj.GetChildMemberWithName('n_cells').GetValueAsUnsigned(0)
+    has_newline = valobj.GetChildMemberWithName('has_newline').GetValueAsUnsigned(0)
+    cells = valobj.GetChildMemberWithName('cells').GetValueAsUnsigned(0)
+    if n_cells > 10000:
+        return "<too big>"
+
+    expr = f'(struct screen_line) {{ {has_newline}, {n_cells}, (struct screen_cell*)((char*){valAddr} + {valSize}) }}'
+    return valobj.CreateValueFromExpression("text", expr).GetSummary()
+
 def screen_line_summary(valobj, x, y):
     eol = valobj.GetChildMemberWithName('eol').GetValueAsUnsigned(0)
     cells = valobj.GetChildMemberWithName('cells')
@@ -315,6 +327,7 @@ def configure(debugger):
     debugger.HandleCommand( 'type summary add -F display.screen_cell_style_summary -e -x "^screen_cell_style$"')
     debugger.HandleCommand( 'type summary add -F display.screen_cell_summary -e -x "^screen_cell$"')
     debugger.HandleCommand( 'type summary add -F display.screen_line_summary -e -x "^screen_line$"')
+    debugger.HandleCommand( 'type summary add -F display.scrollback_header_summary -e -x "^scrollback_header$"')
 def __lldb_init_module(debugger, dict):
     configure(debugger)
 

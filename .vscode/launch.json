@@ -34,6 +34,7 @@
       "program": "${workspaceFolder}/bin/test",
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
+      "console": "integratedTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/lldb-config"
       ]

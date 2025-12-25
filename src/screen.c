@@ -8,63 +8,6 @@
 #define screen_column(g) (g->cursor.column)
 #define screen_row(g) (&g->lines[g->cursor.line])
 
-bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l) {
-  assert(s->enabled);
-  struct scrollback_line *last = vec_pop(&s->lines);
-  if (last) {
-    struct screen_cell *start = vec_nth_unchecked(&s->cells, last->cell_offset);
-    l->cells = start;
-    l->has_newline = last->has_newline;
-    l->eol = last->length;
-    vec_truncate(&s->cells, s->cells.length - last->length);
-    return true;
-  }
-  return false;
-}
-
-void screen_scrollback_drop_excess(struct screen_scrollback *s) {
-  if (s->max_lines && s->lines.length > s->max_lines) {
-    size_t drop = s->lines.length - s->max_lines;
-    size_t line_drop_count = 0;
-    size_t cell_drop_count = 0;
-    struct scrollback_line *l;
-    vec_foreach(l, s->lines) {
-      line_drop_count++;
-      if (l->has_newline) drop--;
-      cell_drop_count += l->length;
-      if (!drop) break;
-    }
-    vec_shift_left(&s->lines, line_drop_count);
-    vec_shift_left(&s->cells, cell_drop_count);
-    vec_foreach(l, s->lines) {
-      l->cell_offset -= cell_drop_count;
-    }
-  }
-}
-
-void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l) {
-  assert(s->enabled);
-  if (l->has_newline) {
-    /* trim trailing spaces. */
-    while (l->eol && l->cells[l->eol-1].cp.value == ' ') l->eol--;
-  }
-  vec_push_range(&s->cells, l->cells, l->eol);
-  if (s->lines.length) {
-    /* if the previous line was not terminated, append this line to the previous one */
-    struct scrollback_line *prev = vec_nth(&s->lines, s->lines.length - 1);
-    if (!prev->has_newline) {
-      prev->length += l->eol;
-      prev->has_newline = l->has_newline;
-      return;
-    }
-  }
-
-  struct scrollback_line *new = vec_new_element(&s->lines);
-  new->has_newline = l->has_newline;
-  new->cell_offset = s->cells.length - l->eol;
-  new->length = l->eol;
-}
-
 void screen_clear_line(struct screen *g, int n) {
   struct screen_cell clear = { .cp = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = &g->lines[n];
@@ -108,13 +51,33 @@ int screen_calc_line_height(struct screen *s, int width) {
   return (width + s->w - 1) / s->w;
 }
 
-int scrollback_count_lines(struct screen *s) {
+int screen_get_scroll_offset(struct screen *s) {
+  if (s->scrollback._scroll_offset) {
+    /* get_scroll_height implicitly updates the scroll offset if needed */
+    screen_get_scroll_height(s);
+  }
+  return s->scrollback._scroll_offset;
+}
+
+void screen_set_scroll_offset(struct screen *s, int value) {
+  s->scrollback._scroll_offset = CLAMP(value, 0, screen_get_scroll_height(s));
+}
+
+int screen_get_scroll_height(struct screen *s) {
+  struct scrollback *sb = &s->scrollback;
+  if (sb->invalidate == false) return sb->num_lines_cache;
+  int prev_lines = sb->num_lines_cache;
   int lines = 0;
-  for (size_t i = 0; i < s->scrollback.lines.length; i++) {
-    struct scrollback_line *l = vec_nth(&s->scrollback.lines, i);
-    int height = screen_calc_line_height(s, l->length);
+  for (struct scrollback_header *h = s->scrollback.buffer.head; h; h = h->next) {
+    int height = screen_calc_line_height(s, h->n_cells);
     assert(height >= 1);
     lines += height;
+  }
+  s->scrollback.invalidate = false;
+  s->scrollback.num_lines_cache = lines;
+  if (s->scrollback._scroll_offset) {
+    int added = lines - prev_lines;
+    sb->_scroll_offset = CLAMP(sb->_scroll_offset + added, 0, lines);
   }
   return lines;
 }
@@ -167,7 +130,7 @@ void screen_move_or_scroll_down(struct screen *g) {
   if (c->line == g->scroll_bottom) {
     if (g->scrollback.enabled) {
       struct screen_line *evicted = &g->lines[0];
-      screen_scrollback_push(&g->scrollback, evicted);
+      scrollback_push(&g->scrollback, evicted);
     }
     screen_shuffle_rows_up(g, 1, g->scroll_top, g->scroll_bottom);
   } else {
@@ -423,8 +386,8 @@ void screen_carriage_return(struct screen *g) {
   screen_set_cursor_column(g, 0);
 }
 void screen_destroy(struct screen *screen) {
-  vec_destroy(&screen->scrollback.cells);
-  vec_destroy(&screen->scrollback.lines);
+  /* TOOD: destroy scrollback2 */
+  scrollback_destroy(&screen->scrollback);
   free(screen->_cells);
   free(screen->lines);
   screen->_cells = NULL;

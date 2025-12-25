@@ -1107,6 +1107,185 @@ void test_velvet_cmd() {
   assert(!velvet_cmd_iterator_next(&it));
 }
 
+static void assert_screen_line_equals_cstr(struct screen_line *l, char *expected) {
+  struct u8_slice ex = u8_slice_from_cstr(expected);
+  char buf[l->eol + 1];
+  for (int i = 0; i < l->eol; i++) buf[i] = (char)l->cells[i].cp.value;
+  buf[l->eol] = 0;
+  struct u8_slice actual = u8_slice_from_cstr(buf);
+  assert(u8_slice_equals(ex, actual));
+}
+
+static int cstr_to_cell_buffer(struct screen_cell *buffer, int bufsize, char *cstr) {
+  struct u8_slice slice = u8_slice_from_cstr(cstr);
+  struct u8_slice_codepoint_iterator it = {.src = slice};
+
+  int i = 0;
+  for (; i < bufsize && u8_slice_codepoint_iterator_next(&it); i++) {
+    buffer[i].cp = it.current;
+  }
+  return i;
+}
+
+static void scrollback_push_cstr(struct scrollback *s, char *cstr, bool newline) {
+  struct screen_cell buffer[strlen(cstr)];
+  int i = cstr_to_cell_buffer(buffer, strlen(cstr), cstr);
+  struct screen_line l = {.has_newline = newline, .cells = buffer, .eol = i};
+  scrollback_push(s, &l);
+}
+
+/* due to implementation details, the internal scrollback size must be a multiple of the system's
+   * page size. Internally, the implementation ensures this is the case, but for testing
+   * purposes, we try to set a value which should be valid on most machines. */
+#define SCROLLBACK_SIZE 16384
+
+static void test_scrollback_basic() {
+  struct screen_line popped = {0};
+  struct scrollback s = {.enabled = true, .scrollback_size = SCROLLBACK_SIZE};
+
+  { /* 1. Push a single line and pop it back */
+    assert(!scrollback_pop(&s, nullptr));
+    scrollback_push_cstr(&s, "Hello!", false);
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, "Hello!");
+    assert(!scrollback_pop(&s, nullptr));
+  }
+
+  { /* 2. Push two lines and pop them back */
+
+    /* concatenated */
+    scrollback_push_cstr(&s, "Hello ", false);
+    scrollback_push_cstr(&s, "World", false);
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, "Hello World");
+    assert(!scrollback_pop(&s, nullptr));
+
+    /* concatenated */
+    scrollback_push_cstr(&s, "Hello ", false);
+    scrollback_push_cstr(&s, "World", true);
+
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, "Hello World");
+    assert(!scrollback_pop(&s, nullptr));
+
+    scrollback_push_cstr(&s, "Hello ", true);
+    scrollback_push_cstr(&s, "World", false);
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, "World");
+    scrollback_push_cstr(&s, "Hello 2", true);
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, "Hello 2");
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, "Hello");
+    assert(!scrollback_pop(&s, nullptr));
+  }
+
+  { /* Push some more stuff */
+    char *lines[] = {
+        "I have all these lines",
+        "Nowhere to put them",
+        "When they scroll off the screen",
+        "They are gone forever.",
+        "Someone please save me..",
+        "I don't want to disappear",
+    };
+    for (int i = 0; i < LENGTH(lines); i++) {
+      scrollback_push_cstr(&s, lines[i], true);
+    }
+
+    /* first two entries were scrolled out */
+    char *expected[] = {
+        "I don't want to disappear",
+        "Someone please save me..",
+        "They are gone forever.",
+        "When they scroll off the screen",
+        "Nowhere to put them",
+        "I have all these lines",
+    };
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(scrollback_pop(&s, &popped));
+      assert_screen_line_equals_cstr(&popped, expected[i]);
+    }
+    assert(!scrollback_pop(&s, nullptr));
+  }
+
+  scrollback_destroy(&s);
+}
+
+static void test_scrollback_cycling() {
+  struct screen_line popped = {0};
+  struct scrollback s = {.enabled = true, .scrollback_size = SCROLLBACK_SIZE};
+  int pushed = 0;
+  for (int i = 0; i < 100000; i++) {
+    char buf[100];
+    pushed = i;
+    snprintf(buf, 99, "Line number %d", i);
+    scrollback_push_cstr(&s, buf, true);
+  }
+
+  while (scrollback_pop(&s, &popped)) {
+    char buf[100];
+    snprintf(buf, 99, "Line number %d", pushed);
+    pushed--;
+    assert_screen_line_equals_cstr(&popped, buf);
+  }
+  scrollback_destroy(&s);
+}
+
+static void test_scrollback_truncating() {
+  char *what = "what";
+  struct screen_line popped = {0};
+  struct scrollback s = {.enabled = true, .scrollback_size = SCROLLBACK_SIZE};
+  for (int i = 0; i < 100000; i++) {
+    scrollback_push_cstr(&s, what, false);
+  }
+
+  char *last = "this is the end";
+  scrollback_push_cstr(&s, last, false);
+  assert(scrollback_pop(&s, &popped));
+  assert(!scrollback_pop(&s, nullptr));
+  struct u8_slice ulast = u8_slice_from_cstr("whatwhatwhatwhatwhatthis is the end");
+  for (size_t i = 0; i < ulast.len; i++) {
+    struct screen_cell c = popped.cells[popped.eol - i - 1];
+    assert(c.cp.value == ulast.content[ulast.len - i - 1]);
+  }
+
+
+  /* Fill the buffer with a long string */
+  for (int i = 0; i < 100000; i++) {
+    scrollback_push_cstr(&s, what, false);
+  }
+
+  scrollback_push_cstr(&s, "", true); /* terminate the long string */
+  /* push a couple of short, termianted strings */
+  char *additional[] = {
+      "Could be anything?",
+      "A shell prompt?!",
+      "sh-3.2$",
+      "bash-5.3#",
+  };
+
+  for (int i = 0; i < LENGTH(additional); i++) {
+    scrollback_push_cstr(&s, additional[i], true);
+  }
+
+  for (int i = 0; i < LENGTH(additional); i++) {
+    assert(scrollback_pop(&s, &popped));
+    assert_screen_line_equals_cstr(&popped, additional[LENGTH(additional) - i - 1]);
+  }
+  assert(scrollback_pop(&s, &popped));
+  int offset = 0;
+  char expected[] = { 'w', 'h', 'a', 't' };
+  int offsets[] = { ['w'] = 0, ['h'] = 1, ['a'] = 2, ['t'] = 3 };
+  offset = offsets[popped.cells[0].cp.value];
+  for (int i = 0; i < popped.eol; i++) {
+    assert((char)popped.cells[i].cp.value == expected[(offset + i) % 4]);
+  }
+  assert(!scrollback_pop(&s, nullptr));
+
+  scrollback_destroy(&s);
+}
+
 int main(void) {
   test_input_output();
   test_reflow();
@@ -1118,5 +1297,8 @@ int main(void) {
   test_string();
   test_vec();
   test_velvet_cmd();
+  test_scrollback_basic();
+  test_scrollback_cycling();
+  test_scrollback_truncating();
   return n_failures;
 }

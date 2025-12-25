@@ -1,3 +1,4 @@
+#include "utils.h"
 #ifndef IO_H
 
 #include "collections.h"
@@ -35,9 +36,6 @@ struct io_schedule {
   uint64_t when;
   uint64_t sequence;
 };
-
-#define mB(x) ((x) << 20)
-#define kB(x) ((x) << 10)
 
 struct io {
   struct vec /* io_source */ sources;

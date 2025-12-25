@@ -16,6 +16,9 @@ void terminal_setup(void);
 void terminal_reset(void);
 void set_nonblocking(int fd);
 
+#define mB(x) ((x) << 20)
+#define kB(x) ((x) << 10)
+
 #ifdef RELEASE_BUILD
 
 #define FAIL_ASSERT(cond) __builtin_trap();

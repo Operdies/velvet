@@ -430,31 +430,29 @@ static void velvet_render_render_damage_to_buffer(struct velvet_render *r) {
     velvet_render_render_buffer(r, get_current_buffer(r), false, clear);
   }
 }
+
 static void velvet_render_copy_cells_from_scrollback(struct velvet_render *r, struct velvet_window *h) {
   struct screen *active = vte_get_current_screen(&h->emulator);
-  struct screen_scrollback *sb = &active->scrollback;
-  int offset = sb->scroll_offset;
+  struct scrollback *sb = &active->scrollback;
+  int offset = screen_get_scroll_offset(active);
   int allowance = offset;
-  int new_offset = offset;
   assert(offset > 0);
 
   /* offset=1 => first visible line is sb->lines[-1] */
   /* Lines in the scrollback buffer may require wrapping. First count how many lines we actually need. */
-  for (new_offset = sb->lines.length - 1; new_offset >= 0; new_offset--) {
-    struct scrollback_line *sbl = vec_nth(&sb->lines, new_offset);
-    int line_height = screen_calc_line_height(active, sbl->length);
+  struct scrollback_header *hdr = sb->buffer.tail;
+  for (; hdr; hdr = hdr->prev) {
+    int line_height = screen_calc_line_height(active, hdr->n_cells);
     assert(line_height > 0);
     allowance -= line_height;
-    if (allowance <= 0) {
-      break;
-    }
+    if (allowance <= 0) break;
+    if (!hdr->prev) break;
   }
 
   int line = 0;
-  for (size_t idx = new_offset; idx < sb->lines.length; idx++) {
-    struct scrollback_line *sbl = vec_nth(&sb->lines, idx);
-    int count = sbl->length;
-    struct screen_cell *cells = vec_nth_unchecked(&sb->cells, sbl->cell_offset);
+  for (; hdr; hdr = hdr->next) {
+    struct screen_cell *cells = hdr->cells;
+    int count = hdr->n_cells;
     if (allowance < 0) {
       int discard = active->w * -allowance;
       cells += discard;
@@ -492,7 +490,7 @@ static void velvet_render_copy_cells_from_window(struct velvet_render *r, struct
   assert(active->w == h->rect.client.w);
   assert(active->h == h->rect.client.h);
 
-  int offset = active->scrollback.scroll_offset;
+  int offset = screen_get_scroll_offset(active);
   if (offset) {
     velvet_render_copy_cells_from_scrollback(r, h);
   }
@@ -588,12 +586,12 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
 
     /* draw scroll offset */
     struct screen *active = vte_get_current_screen(&host->emulator);
-    if (active->scrollback.scroll_offset) {
-      int scroll_height = scrollback_count_lines(active);
+    if (screen_get_scroll_offset(active)) {
+      int scroll_height = screen_get_scroll_height(active);
       char buf[40] = {0};
       struct string tmp = { .content = (uint8_t*)buf, .len = 0, .cap = sizeof(buf) };
       string_push_char(&tmp, '[');
-      string_push_int(&tmp, active->scrollback.scroll_offset);
+      string_push_int(&tmp, screen_get_scroll_offset(active));
       string_push_char(&tmp, '/');
       string_push_int(&tmp, scroll_height);
       string_push_char(&tmp, ']');
@@ -678,6 +676,13 @@ void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func
   velvet_scene_render_damage(m, render_func, context);
 }
 
+void velvet_scene_draw_tile_hint(struct velvet_scene *m, struct velvet_window *before) {
+  struct velvet_window hint = { .kind = VELVET_WINDOW_HINT, .border_width = 0 };
+  if (before) {
+    vec_insert(&m->windows, vec_index(&m->windows, before), &hint);
+  }
+}
+
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
   if (m->windows.length == 0) return;
   struct velvet_window *focused = velvet_scene_get_focus(m);
@@ -732,7 +737,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
     if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) 
       is_obscured = true;
-    if (screen->scrollback.scroll_offset + cursor->line > screen->h) 
+    if (screen_get_scroll_offset(screen) + cursor->line > screen->h) 
       is_obscured = true;
 
     if (is_obscured) {
@@ -950,15 +955,8 @@ void velvet_window_update_title(struct velvet_window *p) {
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
   // Pass current size information to vte so it can determine if screens should be resized
   vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
-  struct screen_scrollback *sb = &velvet_window->emulator.primary.scrollback;
-  size_t lines = sb->lines.length;;
   vte_process(&velvet_window->emulator, str);
-  size_t new_lines = sb->lines.length;
-  screen_scrollback_drop_excess(&velvet_window->emulator.primary.scrollback);
-  if (sb->scroll_offset && new_lines > lines) {
-    size_t added = new_lines - lines;
-    sb->scroll_offset = CLAMP(sb->scroll_offset + added, 0, sb->lines.length);
-  }
+  velvet_window->emulator.primary.scrollback.invalidate = true;
 }
 
 static bool rect_same_size(struct rect b1, struct rect b2) {
@@ -994,6 +992,7 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer
   velvet_window->rect.client = inner;
 
   vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
+  velvet_window->emulator.primary.scrollback.invalidate = true;
 }
 
 static uint64_t get_id() {

@@ -103,7 +103,7 @@ static void mouse_debug_logging(struct mouse_sgr sgr) {
   }
 }
 
-struct velvet_window *coord_to_client(struct velvet *v, struct mouse_sgr sgr) {
+static struct velvet_window *coord_to_client(struct velvet *v, struct mouse_sgr sgr) {
   /* convert to 0-index */
   sgr.column--;
   sgr.row--;
@@ -125,7 +125,7 @@ static bool between(int value, int lo, int hi) {
   return value >= lo && value <= hi;
 }
 
-struct velvet_window *coord_to_title(struct velvet *v, struct mouse_sgr sgr) {
+static struct velvet_window *coord_to_title(struct velvet *v, struct mouse_sgr sgr) {
   /* convert to 0-index */
   sgr.column--;
   sgr.row--;
@@ -144,7 +144,7 @@ struct velvet_window *coord_to_title(struct velvet *v, struct mouse_sgr sgr) {
   return nullptr;
 }
 
-struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr sgr) {
+static struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr sgr) {
   /* convert to 0-index */
   sgr.column--;
   sgr.row--;
@@ -161,7 +161,7 @@ struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr sgr) {
   return nullptr;
 }
 
-struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
+static struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
   int btn = c->params[0].primary;
   int col = c->params[1].primary;
   int row = c->params[2].primary;
@@ -287,18 +287,19 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
     struct screen *screen = vte_get_current_screen(&target->emulator);
     /* in the primary screen, scrolling affects the current view */
+    int current_offset = screen_get_scroll_offset(screen);
     if (sgr.scroll_direction == scroll_up) {
-      int num_lines = scrollback_count_lines(screen);
-      screen->scrollback.scroll_offset = MIN(num_lines, screen->scrollback.scroll_offset + 1);
+      int num_lines = screen_get_scroll_height(screen);
+      screen_set_scroll_offset(screen, MIN(num_lines, current_offset + 1));
     } else if (sgr.scroll_direction == scroll_down) {
-      screen->scrollback.scroll_offset = MAX(0, screen->scrollback.scroll_offset - 1);
+      screen_set_scroll_offset(screen, MAX(0, current_offset - 1));
     }
   }
 }
 
 static void scroll_to_bottom(struct velvet *v) {
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  if (focus) focus->emulator.primary.scrollback.scroll_offset = 0;
+  if (focus) screen_set_scroll_offset(&focus->emulator.primary, 0);
 }
 
 static void send_bracketed_paste(struct velvet *v) {

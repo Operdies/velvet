@@ -408,7 +408,8 @@ static bool ED(struct vte *vte, struct csi *csi) {
     end.line = screen_bottom(g);
     break;
   case 3: // erase scrollback
-    return csi_dispatch_todo(vte, csi);
+    scrollback_clear(&g->scrollback);
+    break;
   case 0:
   default: // erase from cursor to end of screen
     end.column = screen_right(g);

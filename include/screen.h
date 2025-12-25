@@ -104,14 +104,32 @@ struct scrollback_line {
   bool has_newline;
 };
 
-struct screen_scrollback {
+struct scrollback_header {
+  struct scrollback_header *next;
+  struct scrollback_header *prev;
+  int n_cells;
+  bool has_newline;
+  struct screen_cell cells[];
+};
+
+struct scrollback_buffer {
+  /* maintain a head and a tail of the scrollback buffer, pointing into the *data array
+   * When a line is pushed, it becomes the new tail. If there is no space to store it, the head is moved to accomodate
+   * it */
+  struct scrollback_header *head, *tail;
+  char *ring;
+  int ring_size;
+};
+
+struct scrollback {
   bool enabled;
+  bool invalidate;
+  int num_lines_cache;
   /* evict old lines if lines are pushed at max */
-  size_t max_lines;
+  int scrollback_size;
   /* scroll offset[x] => line `x` of the scroll buffer is visible and shown on line 1 */
-  int scroll_offset;
-  struct vec /* screen_cell */ cells;
-  struct vec /* scrollback_line */ lines;
+  int _scroll_offset;
+  struct scrollback_buffer buffer;
 };
 
 struct screen {
@@ -121,21 +139,21 @@ struct screen {
   int scroll_top, scroll_bottom;
   struct screen_cell *_cells; // cells[w*h]
   struct screen_line *lines;   // lines[h]
-  struct screen_scrollback scrollback;
+  struct scrollback scrollback;
   struct cursor cursor;
   struct cursor saved_cursor;
 };
 
-static const struct screen_scrollback screen_scrollback_enabled = {
-    .cells = vec(struct screen_cell),
-    .lines = vec(struct scrollback_line),
+static const struct scrollback scrollback_default_enabled = {
     .enabled = true,
-    .max_lines = 10000,
+    /* allocate space for ~10000 lines */
+    .scrollback_size = sizeof(struct screen_cell) * 100 * 10000,
 };
 
-static const struct screen_scrollback screen_scrollback_disabled = {
+static const struct scrollback scrollback_default_disabled = {
     .enabled = false,
 };
+
 
 void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap);
 void screen_move_or_scroll_down(struct screen *g);
@@ -170,10 +188,18 @@ void screen_scroll_content_down(struct screen *g, int count);
 void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom);
 void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
 bool cell_wide(struct screen_cell c);
-void screen_scrollback_push(struct screen_scrollback *s, struct screen_line *l);
-bool screen_scrollback_pop(struct screen_scrollback *s, struct screen_line *l);
-void screen_scrollback_drop_excess(struct screen_scrollback *s);
 int screen_calc_line_height(struct screen *s, int width);
-int scrollback_count_lines(struct screen *s);
+
+int screen_get_scroll_height(struct screen *s);
+int screen_get_scroll_offset(struct screen *s);
+void screen_set_scroll_offset(struct screen *s, int value);
+
+void scrollback_truncate(struct scrollback *s, int new_length);
+bool scrollback_peek(struct scrollback *s, struct screen_line *l);
+bool scrollback_pop(struct scrollback *s, struct screen_line *l);
+void scrollback_push(struct scrollback *s, struct screen_line *l);
+void scrollback_destroy(struct scrollback *s);
+int scrollback_get_current_offset(struct scrollback *sb);
+void scrollback_clear(struct scrollback *s);
 
 #endif /*  SCREEN_H */
