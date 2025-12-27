@@ -290,6 +290,12 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
       (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none) ||
       (m.tracking && sgr.event_type == mouse_scroll);
 
+  if (!(trans.row > 0 && trans.column > 0 && trans.column <= target->rect.client.w &&
+        trans.row <= target->rect.client.h)) {
+    /* verify the event is actually within the client area */
+    do_send = false;
+  }
+
   // TODO: scroll wheel support
   if (do_send) {
     send_mouse_sgr(target, trans);
