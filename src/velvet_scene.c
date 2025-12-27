@@ -91,6 +91,17 @@ void velvet_scene_arrange(struct velvet_scene *m) {
     stack_height_left -= height;
   }
 
+  vec_where(p, m->windows, p->layer == VELVET_LAYER_FLOATING) {
+    /* update changes to border size */
+    struct rect b = p->rect.window;
+    /* ensure floating windows are not lost off screen e.g. after a resize */
+    if (b.x >= ws.ws_col) b.x = ws.ws_col - 5;
+    if (b.y >= ws.ws_row) b.y = ws.ws_row - 5;
+    b.x = CLAMP(b.x, -b.w + 3, ws.ws_col - 3);
+    b.y = CLAMP(b.y, -b.h + 2, ws.ws_row - 2);
+    velvet_window_resize(p, b);
+  }
+
   { 
     int notification_width = 40;
     int notification_height = 5;
