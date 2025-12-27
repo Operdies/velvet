@@ -191,13 +191,26 @@ static struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
 static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans) {
   int btn = trans.button_state | trans.modifiers | trans.event_type;
   int start = target->emulator.pending_input.len;
-  string_push_csi(&target->emulator.pending_input,
-                  '<',
-                  INT_SLICE(btn, trans.column, trans.row),
-                  trans.trigger == mouse_down ? "M" : "m");
-  int end = target->emulator.pending_input.len;
-  struct u8_slice s = string_range(&target->emulator.pending_input, start, end);
-  velvet_log("send sgr: %.*s", (int)s.len, s.content);
+  if (target->emulator.options.mouse.mode == MOUSE_MODE_SGR) {
+    string_push_csi(&target->emulator.pending_input,
+                    '<',
+                    INT_SLICE(btn, trans.column, trans.row),
+                    trans.trigger == mouse_down ? "M" : "m");
+    int end = target->emulator.pending_input.len;
+    struct u8_slice s = string_range(&target->emulator.pending_input, start, end);
+    velvet_log("send sgr: %.*s", (int)s.len, s.content);
+  } else if (target->emulator.options.mouse.mode == MOUSE_MODE_DEFAULT) {
+    /* CSI M Cb Cx Cy */
+    uint8_t Cb = btn | trans.modifiers;
+    uint8_t Cx = MIN(32 + trans.column, 255);
+    uint8_t Cy = MIN(32 + trans.row, 255);
+    string_push_cstr(&target->emulator.pending_input, "\x1b[M");
+    string_push_char(&target->emulator.pending_input, Cb);
+    string_push_char(&target->emulator.pending_input, Cx);
+    string_push_char(&target->emulator.pending_input, Cy);
+  } else {
+    TODO("Mouse mode %d not implemented.", target->emulator.options.mouse.mode);
+  }
 }
 
 static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m);
@@ -215,10 +228,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
     }
   }
 
-  if (!target) target = coord_to_window(v, sgr, 0);
-  if (!target) return;
-
-  if (in->dragging.id || (target == coord_to_title(v, sgr) && (sgr.event_type == mouse_click))) {
+  if (in->dragging.id || ((target = coord_to_title(v, sgr)) && (sgr.event_type == mouse_click))) {
     if (sgr.event_type == mouse_click && sgr.trigger == mouse_down) {
       in->dragging = (struct velvet_input_drag_event){
           .id = target->pty,
@@ -273,7 +283,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   if (!target) target = coord_to_client(v, sgr);
   if (!target) return;
 
-  if (v->input.options.focus_follows_mouse && target) {
+  if ((v->input.options.focus_follows_mouse || sgr.event_type == mouse_click) && target) {
     velvet_scene_set_focus(&v->scene, vec_index(&v->scene.windows, target));
   }
 
@@ -296,7 +306,6 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
     do_send = false;
   }
 
-  // TODO: scroll wheel support
   if (do_send) {
     send_mouse_sgr(target, trans);
   } else if (sgr.event_type == mouse_scroll && target->emulator.options.alternate_screen) {
