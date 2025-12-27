@@ -6,7 +6,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "attach" ],
+      "args": [ "attach", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "console": "externalTerminal",
@@ -19,10 +19,11 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "--foreground" ],
+      "args": [ "--foreground", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
-      "console": "integratedTerminal",
+      // "console": "integratedTerminal",
+      "console": "externalTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/lldb-config"
       ]

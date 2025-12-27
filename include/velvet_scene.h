@@ -13,7 +13,6 @@ enum velvet_scene_layer {
   VELVET_LAYER_TILED,
   VELVET_LAYER_FLOATING,
   VELVET_LAYER_POPUP,
-  VELVET_LAYER_DRAGGING,
   VELVET_LAYER_NOTIFICATION,
   VELVET_LAYER_LAST,
 };
@@ -50,6 +49,7 @@ struct velvet_window {
   struct velvet_window_close_behavior close;
   enum velvet_window_kind kind;
   enum velvet_scene_layer layer;
+  bool dragging;
 };
 
 void velvet_window_destroy(struct velvet_window *velvet_window);
@@ -103,6 +103,7 @@ struct velvet_scene_style {
   struct {
     struct screen_cell_style title, outline;
   } active;
+  struct color background;
 };
 
 struct velvet_scene_layout {
@@ -144,16 +145,20 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
-    .style = {.active =
-                  {
-                      .outline = {.attr = 0, .fg = RGB("#f38ba8"), .bg = RGB("#181825")},
-                      .title = {.attr = ATTR_BOLD, .fg = RGB("#f38ba8"), .bg = RGB("#181825")},
-                  },
-              .inactive =
-                  {
-                      .outline = {.attr = 0, .fg = RGB("#b4befe"), .bg = RGB("#181825")},
-                      .title = {.attr = 0, .fg = RGB("#b4befe"), .bg = RGB("#181825")},
-                  }},
+    .style =
+        {
+            .active =
+                {
+                    .outline = {.attr = 0, .fg = RGB("#f38ba8"), .bg = RGB("#181825")},
+                    .title = {.attr = ATTR_BOLD, .fg = RGB("#f38ba8"), .bg = RGB("#181825")},
+                },
+            .inactive =
+                {
+                    .outline = {.attr = 0, .fg = RGB("#b4befe"), .bg = RGB("#181825")},
+                    .title = {.attr = 0, .fg = RGB("#b4befe"), .bg = RGB("#181825")},
+                },
+            .background = RGB("#181825"),
+        },
     .renderer =
         {
             .options =

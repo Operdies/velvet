@@ -571,6 +571,7 @@ int string_replace_inplace_slow(struct string *str, const char *const _old, cons
 }
 
 void vec_swap(struct vec *v, size_t i, size_t j) {
+  if (i == j) return;
   assert(i < v->length);
   assert(j < v->length);
   void *tmp = vec_new_element(v);

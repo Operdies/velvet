@@ -294,10 +294,10 @@ static void velvet_default_config(struct velvet *v) {
                  "map <C-x><C-x> put <C-x>\n"
                  "map <C-x>,,, set display_damage true\n"
                  "map <C-x>... set display_damage false\n"
-                 "map -r <C-x>j focus-next\n"
-                 "map -r <C-x>k focus-previous\n"
-                 "map -r <C-x>j swap-next\n"
-                 "map -r <C-x>k swap-previous\n";
+                 "map -r '<C-x><C-j>' focus-next\n"
+                 "map -r '<C-x><C-k>' focus-previous\n"
+                 "map -r '<C-x>j' swap-next\n"
+                 "map -r '<C-x>k' swap-previous\n";
 
   struct u8_slice cfg = u8_slice_from_cstr(config);
   struct velvet_cmd_iterator it = {.src = cfg};
@@ -326,9 +326,6 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_scene_resize(&velvet->scene, ws);
   velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("zsh"));
-  velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("bash"));
-  velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("nvim"));
-  velvet_scene_arrange(&velvet->scene);
   velvet->scene.arrange(&velvet->scene);
 
   velvet_default_config(velvet);

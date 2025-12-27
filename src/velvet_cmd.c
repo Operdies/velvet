@@ -373,6 +373,18 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       }
     } else if (u8_match(command, "notify")) {
       velvet_cmd_spawn_notification(v, &it);
+    } else if (u8_match(command, "focus-next")) {
+      velvet_scene_set_focus(&v->scene, (v->scene.focus + 1) % v->scene.windows.length);
+    } else if (u8_match(command, "focus-previous")) {
+      velvet_scene_set_focus(&v->scene, (v->scene.focus + v->scene.windows.length - 1) % v->scene.windows.length);
+    } else if (u8_match(command, "swap-next")) {
+      vec_swap(&v->scene.windows, v->scene.focus, (v->scene.focus + 1) % v->scene.windows.length);
+      velvet_scene_set_focus(&v->scene, (v->scene.focus + 1) % v->scene.windows.length);
+    } else if (u8_match(command, "swap-previous")) {
+      vec_swap(&v->scene.windows, v->scene.focus, (v->scene.focus + v->scene.windows.length - 1) % v->scene.windows.length);
+      velvet_scene_set_focus(&v->scene, (v->scene.focus + v->scene.windows.length - 1) % v->scene.windows.length);
+    } else if (u8_match(command, "quit")) {
+      v->quit = true;
     } else if (u8_match(command, "set")) {
       velvet_cmd_set(v, sender, &it);
     } else {

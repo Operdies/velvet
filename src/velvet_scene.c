@@ -642,8 +642,8 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->cursor.line = -1;
 }
 
-static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer) {
-  struct screen_cell space = {.cp = codepoint_space};
+static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer, struct color clear) {
+  struct screen_cell space = {.cp = codepoint_space, .style.bg = clear };
   for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = space;
 }
 
@@ -694,7 +694,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_render_init_buffers(m);
     string_push_cstr(&r->draw_buffer, "\x1b[m\x1b[2J");
   } else {
-    velvet_render_clear_buffer(r, get_current_buffer(r));
+    velvet_render_clear_buffer(r, get_current_buffer(r), m->style.background);
   }
 
   struct velvet_window *h;
@@ -704,10 +704,15 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
     vec_rwhere(h, m->windows, h->layer == layer) {
+      if (h->dragging) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_render_calculate_borders(r, m, h);
       velvet_render_copy_cells_from_window(r, h);
     }
+  }
+  vec_rwhere(h, m->windows, h->dragging) {
+    velvet_render_calculate_borders(r, m, h);
+    velvet_render_copy_cells_from_window(r, h);
   }
 
   int damage = velvet_render_calculate_damage(r);

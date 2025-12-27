@@ -111,6 +111,7 @@ static struct velvet_window *coord_to_client(struct velvet *v, struct mouse_sgr 
 
   for (enum velvet_scene_layer layer = VELVET_LAYER_LAST - 1; layer >= VELVET_LAYER_TILED; layer--) {
     vec_where(h, v->scene.windows, h->layer == layer) {
+      if (h->dragging) continue;
       struct rect b = h->rect.client;
       if (b.x <= sgr.column && (b.x + b.w) > sgr.column && b.y <= sgr.row && (b.y + b.h) > sgr.row) {
         return h;
@@ -132,7 +133,7 @@ static struct velvet_window *coord_to_title(struct velvet *v, struct mouse_sgr s
   struct velvet_window *h;
   /* first try to match the title bar */
   vec_foreach(h, v->scene.windows) {
-    if (h->layer == VELVET_LAYER_DRAGGING) continue;
+    if (h->dragging) continue;
     struct rect b = h->rect.window;
     int bw = h->border_width;
     if (!bw) continue;
@@ -144,7 +145,12 @@ static struct velvet_window *coord_to_title(struct velvet *v, struct mouse_sgr s
   return nullptr;
 }
 
-static struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr sgr) {
+// TODO: this
+static bool mouse_overlaps_window(struct velvet_window *w, struct mouse_sgr sgr) { return false; }
+static bool mouse_overlaps_client(struct velvet_window *w, struct mouse_sgr sgr) { return false; }
+static bool mouse_overlaps_title(struct velvet_window *w, struct mouse_sgr sgr) { return false; }
+
+static struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr sgr, enum velvet_scene_layer layer) {
   /* convert to 0-index */
   sgr.column--;
   sgr.row--;
@@ -152,7 +158,8 @@ static struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr 
 
   /* then fall back to full window */
   vec_rforeach(h, v->scene.windows) {
-    if (h->layer == VELVET_LAYER_DRAGGING) continue;
+    if (h->dragging) continue;
+    if (layer && h->layer != layer) continue;
     struct rect b = h->rect.window;
     if (b.x <= sgr.column && (b.x + b.w) > sgr.column && b.y <= sgr.row && (b.y + b.h) > sgr.row) {
       return h;
@@ -208,7 +215,7 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
     }
   }
 
-  if (!target) target = coord_to_window(v, sgr);
+  if (!target) target = coord_to_window(v, sgr, 0);
   if (!target) return;
 
   if (in->dragging.id || (target == coord_to_title(v, sgr) && (sgr.event_type == mouse_click))) {
@@ -220,19 +227,32 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
           .drag_start.client_x = target->rect.window.x,
           .drag_start.client_y = target->rect.window.y,
       };
-      target->layer = VELVET_LAYER_DRAGGING;
+      target->dragging = true;
+      target->layer = VELVET_LAYER_FLOATING;
       velvet_scene_set_focus(&v->scene, vec_index(&v->scene.windows, target));
     } else if (sgr.event_type == mouse_click && sgr.trigger == mouse_up) {
       /* drop */
-      struct velvet_window *drop_target = coord_to_window(v, sgr);
-      target->layer = VELVET_LAYER_TILED;
-      if (drop_target && drop_target != target) {
-        int a = vec_index(&v->scene.windows, target);
-        int b = vec_index(&v->scene.windows, drop_target);
-        vec_swap(&v->scene.windows, a, b);
-        velvet_scene_set_focus(&v->scene, b);
-      }
+      target->dragging = false;
       in->dragging = (struct velvet_input_drag_event) {0};
+      if (sgr.modifiers & modifier_alt) {
+        struct velvet_window *drop_target = coord_to_window(v, sgr, VELVET_LAYER_TILED);
+        if (drop_target && drop_target != target) {
+          target->layer = VELVET_LAYER_TILED;
+          bool above /* otherwise below */ = (sgr.row - drop_target->rect.window.y) < (drop_target->rect.window.h / 2);
+          int target_index = vec_index(&v->scene.windows, target);
+          int drop_index = vec_index(&v->scene.windows, drop_target);
+
+          /* account for the fact that we temporarily remove the window */
+          if (target_index < drop_index) drop_index--;
+          if (!above) drop_index++;
+          struct velvet_window t = *target;
+          vec_remove(&v->scene.windows, target);
+          vec_insert(&v->scene.windows, drop_index, &t);
+          velvet_scene_set_focus(&v->scene, drop_index);
+        } else {
+          target->layer = VELVET_LAYER_TILED;
+        }
+      }
     } else if (in->dragging.id && (sgr.event_type & mouse_move)) {
       int delta_x = sgr.column - in->dragging.drag_start.x;
       int delta_y =  sgr.row - in->dragging.drag_start.y;
