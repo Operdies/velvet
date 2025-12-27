@@ -186,8 +186,7 @@ static const struct emulator_options emulator_options_default = {
 
 static const struct vte vte_default = {
     .options = emulator_options_default,
-    .primary = { .scrollback = scrollback_default_enabled },
-    .alternate = { .scrollback = scrollback_default_disabled },
+    .primary = { .scroll.max = 10000, },
 };
 
 enum vte_dsr {

@@ -398,22 +398,23 @@ static bool ED(struct vte *vte, struct csi *csi) {
 
   switch (mode) {
   case 1: // Erase from start of screen to cursor
-    start.column = screen_left(g);
-    start.line = screen_top(g);
+    start.column = 0;
+    start.line = 0;
     break;
   case 2: // Erase entire screen
-    start.column = screen_left(g);
-    start.line = screen_top(g);
-    end.column = screen_right(g);
-    end.line = screen_bottom(g);
+    start.column = 0;
+    start.line = 0;
+    end.column = g->w - 1;
+    end.line = g->h - 1;
     break;
   case 3: // erase scrollback
-    scrollback_clear(&g->scrollback);
+    g->scroll.height = 0;
+    g->scroll.view_offset = 0;
     break;
   case 0:
   default: // erase from cursor to end of screen
-    end.column = screen_right(g);
-    end.line = screen_bottom(g);
+    end.column = g->w - 1;
+    end.line = g->h - 1;
     break;
   }
 
@@ -467,14 +468,14 @@ static bool DCH(struct vte *vte, struct csi *csi) {
 bool SU(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   struct screen *g = vte_get_current_screen(vte);
-  screen_shuffle_rows_up(g, count, g->scroll_top, g->scroll_bottom);
+  screen_shuffle_rows_up(g, count, g->margins.top, g->margins.bottom);
   return true;
 }
 
 bool SD(struct vte *vte, struct csi *csi) { 
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   struct screen *g = vte_get_current_screen(vte);
-  screen_shuffle_rows_down(g, count, g->scroll_top, g->scroll_bottom);
+  screen_shuffle_rows_down(g, count, g->margins.top, g->margins.bottom);
   return true;
 }
 

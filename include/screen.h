@@ -4,11 +4,6 @@
 #include "text.h"
 #include "collections.h"
 
-#define screen_left(g) (0)
-#define screen_right(g) (g->w - 1)
-#define screen_top(g) (0)
-#define screen_bottom(g) (g->h - 1)
-
 #define PACK __attribute__((packed))
 
 enum PACK cell_attributes {
@@ -98,62 +93,31 @@ struct cursor {
   bool origin;
 };
 
-struct scrollback_line {
-  int cell_offset;
-  int length;
-  bool has_newline;
-};
-
-struct scrollback_header {
-  struct scrollback_header *next;
-  struct scrollback_header *prev;
-  int n_cells;
-  bool has_newline;
-  struct screen_cell cells[];
-};
-
-struct scrollback_buffer {
-  /* maintain a head and a tail of the scrollback buffer, pointing into the *data array
-   * When a line is pushed, it becomes the new tail. If there is no space to store it, the head is moved to accomodate
-   * it */
-  struct scrollback_header *head, *tail;
-  char *ring;
-  int ring_size;
-};
-
-struct scrollback {
-  bool enabled;
-  bool invalidate;
-  int num_lines_cache;
-  /* evict old lines if lines are pushed at max */
-  int scrollback_size;
-  /* scroll offset[x] => line `x` of the scroll buffer is visible and shown on line 1 */
-  int _scroll_offset;
-  struct scrollback_buffer buffer;
-};
 
 struct screen {
-  int w, h, _cells_size, _lines_size;
-  /* scroll region is local to the screen and is not persisted when the window /
-   * velvet_window is resized or alternate screen is entered */
-  int scroll_top, scroll_bottom;
-  struct screen_cell *_cells; // cells[w*h]
-  struct screen_line *lines;   // lines[h]
-  struct scrollback scrollback;
+  /* physical dimensions of the screen */
+  int w, h;
+  /* scroll region (DECSTBM) */
+  struct {
+    int top, bottom;
+  } margins;
+  struct {
+    /* the maximum scrollback size (size of *data) */
+    int max;
+    /* the number of lines in the scroll buffer */
+    int height; /* 0 <= height < buffer.lines */
+    /* current line is buffer.lines[(scroll.offset + cursor.line) % buffer.lines] */
+    int offset; /* 0 <= offset < buffer.lines */
+    /* view_offset specifies the first visible line in the final render;
+     * The first visible line is buffer.lines[(buffer.lines + scroll.offset + cursor.line - view_offset) % buffer.lines]
+     */
+    int view_offset; /* 0 <= view_offset <= height */
+  } scroll;
+  struct screen_cell *cells;
+  struct screen_line *lines;
   struct cursor cursor;
   struct cursor saved_cursor;
 };
-
-static const struct scrollback scrollback_default_enabled = {
-    .enabled = true,
-    /* allocate space for ~10000 lines */
-    .scrollback_size = sizeof(struct screen_cell) * 100 * 10000,
-};
-
-static const struct scrollback scrollback_default_disabled = {
-    .enabled = false,
-};
-
 
 void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap);
 void screen_move_or_scroll_down(struct screen *g);
@@ -189,17 +153,16 @@ void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom);
 void screen_shuffle_rows_down(struct screen *g, int count, int top, int bottom);
 bool cell_wide(struct screen_cell c);
 int screen_calc_line_height(struct screen *s, int width);
+int screen_left(const struct screen *g);
+int screen_right(const struct screen *g);
+int screen_top(const struct screen *g);
+int screen_bottom(const struct screen *g);
+struct screen_line *screen_get_line(const struct screen *g, int n);
+struct screen_line *screen_get_view_line(const struct screen *g, int n);
+void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src);
 
 int screen_get_scroll_height(struct screen *s);
 int screen_get_scroll_offset(struct screen *s);
 void screen_set_scroll_offset(struct screen *s, int value);
-
-void scrollback_truncate(struct scrollback *s, int new_length);
-bool scrollback_peek(struct scrollback *s, struct screen_line *l);
-bool scrollback_pop(struct scrollback *s, struct screen_line *l);
-void scrollback_push(struct scrollback *s, struct screen_line *l);
-void scrollback_destroy(struct scrollback *s);
-int scrollback_get_current_offset(struct scrollback *sb);
-void scrollback_clear(struct scrollback *s);
 
 #endif /*  SCREEN_H */

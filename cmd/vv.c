@@ -113,6 +113,7 @@ static int create_socket(char *path) {
       break;
     }
   } else {
+    if (strcmp(path, "/tmp/velvet-debug") == 0) unlink(path);
     memcpy(addr.sun_path, path, strlen(path));
     success = true;
   }

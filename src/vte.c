@@ -63,7 +63,7 @@ void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
       y = s->cursor.line;
       // respect origin mode
       if (active->cursor.origin)
-        y -= s->scroll_top;
+        y -= s->margins.top;
       if (y < 0) y = 0;
       string_push_csi(&vte->pending_input, 0, INT_SLICE(y + 1, x + 1), "R");
   } break;
@@ -131,7 +131,7 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
     struct screen_cell E = {.cp.value = 'E'};
     struct screen *g = vte_get_current_screen(vte);
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
-      struct screen_line *row = &g->lines[rowidx];
+      struct screen_line *row = screen_get_line(g, rowidx);
       for (int col = 0; col < g->w; col++) {
         row->cells[col] = E;
       }
@@ -479,78 +479,15 @@ static struct cursor clamp_cursor(struct cursor c, int l_max, int c_max) {
 }
 
 static void vte_init_primary_screen(struct vte *vte) {
-  struct screen *g = &vte->primary;
-
-  /* 1. Initialize new screen */
-  struct screen new = { .w = vte->columns, .h = vte->rows };
-  screen_initialize(&new, vte->columns, vte->rows);
-
-  if (!g->h) {
-    new.scrollback = g->scrollback;
-    *g = new;
-    return;
-  }
-
-  /* 2. push existing lines to scrollback */
-
-  struct scrollback *s = &g->scrollback;
-  for (int i = 0; i < g->h; i++) {
-    struct screen_line *pushed = &g->lines[i];
-    scrollback_push(s, pushed);
-  }
-
-  struct cursor new_cursor = g->cursor;
-  free(g->_cells);
-  free(g->lines);
-
-
-  int height_delta = new.h - g->h;
-  int lines_added = 0;
-
-  int target_line = new.h;
-
-  struct screen_line popped = {0};
-  for (; lines_added < target_line && scrollback_peek(s, &popped);) {
-    int line_height = screen_calc_line_height(&new, popped.eol);
-
-    int remaining = new.h - lines_added;
-    if (line_height > remaining) {
-      /* partial line -- put it back in the scrollback */
-      int can_fit = remaining * new.w;
-      int discard = popped.eol - can_fit;
-      scrollback_truncate(s, discard);
-      popped.cells += discard;
-      popped.eol -= discard;
-      line_height = remaining;
-    } else {
-      struct screen_line tmp;
-      scrollback_pop(s, &tmp);
+  if (vte->primary.w != vte->columns || vte->primary.h != vte->rows) {
+    struct screen new = { .w = vte->columns, .h = vte->rows, .scroll.max = vte->primary.scroll.max };
+    screen_initialize(&new, vte->columns, vte->rows);
+    if (vte->primary.cells) {
+      screen_copy_primary(&new, &vte->primary);
+      screen_destroy(&vte->primary);
     }
-    lines_added += line_height;
-    screen_insert_lines(&new, line_height);
-
-    struct screen_line *l = nullptr;
-    for (int i = 0; i < line_height; i++) {
-      l = &new.lines[i];
-      int col = 0;
-      /* if the previous line ended with a wide character, skip a space */
-      for (; col < new.w && col < popped.eol; col++) {
-        struct screen_cell c = popped.cells[col];
-        l->cells[col] = c;
-      }
-      l->eol = col;
-      popped.eol -= col;
-      popped.cells += col;
-    }
-    if (popped.has_newline) l->has_newline = true;
+    vte->primary = new;
   }
-
-  if (height_delta > 0 && lines_added >= new.h) new_cursor.line += height_delta;
-
-  new.saved_cursor = clamp_cursor(g->saved_cursor, vte->rows - 1, vte->columns - 1);
-  new.cursor = clamp_cursor(new_cursor, vte->rows - 1, vte->columns - 1);
-  new.scrollback = *s;
-  *g = new;
 }
 
 void vte_enter_primary_screen(struct vte *vte) {
@@ -563,8 +500,7 @@ void vte_set_size(struct vte *vte, int w, int h) {
   struct screen *g = vte_get_current_screen(vte);
   vte->rows = h;
   vte->columns = w;
-  if (g->_cells == nullptr || g->w != w || g->h != h) {
-    screen_set_scroll_offset(&vte->primary, 0);
+  if (g->cells == nullptr || g->w != w || g->h != h) {
     if (vte->options.alternate_screen) {
       vte_init_alternate_screen(vte);
     } else {

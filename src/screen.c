@@ -5,17 +5,45 @@
 #include "screen.h"
 #include <wchar.h>
 
-#define screen_column(g) (g->cursor.column)
-#define screen_row(g) (&g->lines[g->cursor.line])
+static int num_lines(const struct screen *g) { return g->h + g->scroll.max; }
+
+struct screen_line *screen_get_line(const struct screen *g, int n) {
+  int line = (num_lines(g) + g->scroll.offset + n) % num_lines(g);
+  return &g->lines[line];
+}
+
+struct screen_line *screen_get_view_line(const struct screen *g, int n) {
+  int line = (num_lines(g) + g->scroll.offset - g->scroll.view_offset + n) % num_lines(g);
+  return &g->lines[line];
+}
+
+static struct screen_line *get_current_line(const struct screen *g) {
+  return screen_get_line(g, g->cursor.line);
+}
+
+int screen_left(const struct screen *g) {
+  (void)g;
+  return 0;
+}
+int screen_right(const struct screen *g) {
+  return g->w - 1;
+}
+int screen_top(const struct screen *g) {
+  (void)g;
+  return 0;
+}
+int screen_bottom(const struct screen *g) {
+  return g->h - 1;
+}
 
 void screen_clear_line(struct screen *g, int n) {
   struct screen_cell clear = { .cp = codepoint_space, .style = g->cursor.brush };
-  struct screen_line *row = &g->lines[n];
+  struct screen_line *row = screen_get_line(g, n);
+  row->has_newline = false;
+  row->eol = 0;
   for (int i = 0; i < g->w; i++) {
     row->cells[i] = clear;
   }
-  row->has_newline = false;
-  row->eol = 0;
 }
 
 void screen_set_cursor_row(struct screen *g, int y) {
@@ -40,9 +68,11 @@ void screen_move_cursor_relative(struct screen *g, int x, int y) {
 
 static void screen_swap_rows(struct screen *g, int r1, int r2) {
   if (r1 != r2) {
-    struct screen_line tmp = g->lines[r1];
-    g->lines[r1] = g->lines[r2];
-    g->lines[r2] = tmp;
+    struct screen_line *l1 = screen_get_line(g, r1);
+    struct screen_line *l2 = screen_get_line(g, r2);
+    struct screen_line tmp = *l1;
+    *l1 = *l2;
+    *l2 = tmp;
   }
 }
 
@@ -52,87 +82,64 @@ int screen_calc_line_height(struct screen *s, int width) {
 }
 
 int screen_get_scroll_offset(struct screen *s) {
-  if (s->scrollback._scroll_offset) {
-    /* get_scroll_height implicitly updates the scroll offset if needed */
-    screen_get_scroll_height(s);
-  }
-  return s->scrollback._scroll_offset;
+  return s->scroll.view_offset;
 }
 
 void screen_set_scroll_offset(struct screen *s, int value) {
-  s->scrollback._scroll_offset = CLAMP(value, 0, screen_get_scroll_height(s));
+  s->scroll.view_offset = CLAMP(value, 0, s->scroll.height);
 }
 
 int screen_get_scroll_height(struct screen *s) {
-  struct scrollback *sb = &s->scrollback;
-  if (sb->invalidate == false) return sb->num_lines_cache;
-  int prev_lines = sb->num_lines_cache;
-  int lines = 0;
-  for (struct scrollback_header *h = s->scrollback.buffer.head; h; h = h->next) {
-    int height = screen_calc_line_height(s, h->n_cells);
-    assert(height >= 1);
-    lines += height;
-  }
-  s->scrollback.invalidate = false;
-  s->scrollback.num_lines_cache = lines;
-  if (s->scrollback._scroll_offset) {
-    int added = lines - prev_lines;
-    sb->_scroll_offset = CLAMP(sb->_scroll_offset + added, 0, lines);
-  }
-  return lines;
+  return s->scroll.height;
 }
 
 // If the cursor is outside the scroll region, this should do nothing.
 // Lines outside the scroll region must not be affected by this.
 void screen_insert_lines(struct screen *g, int n) {
   assert(n > 0);
-  assert(g->scroll_top >= 0);
-  assert(g->scroll_bottom < g->h);
-  if (g->cursor.line < g->scroll_top || g->cursor.line > g->scroll_bottom) return;
-  screen_shuffle_rows_down(g, n, g->cursor.line, g->scroll_bottom);
+  assert(g->margins.top >= 0);
+  assert(g->margins.bottom < g->h);
+  if (g->cursor.line < g->margins.top || g->cursor.line > g->margins.bottom) return;
+  screen_shuffle_rows_down(g, n, g->cursor.line, g->margins.bottom);
 }
 
 // If the cursor is outside the scroll region, this should do nothing.
 // Lines outside the scroll region must not be affected by this.
 void screen_delete_lines(struct screen *g, int n) {
   assert(n > 0);
-  assert(g->scroll_top >= 0);
-  assert(g->scroll_bottom < g->h);
-  if (g->cursor.line < g->scroll_top || g->cursor.line > g->scroll_bottom) return;
-  screen_shuffle_rows_up(g, n, g->cursor.line, g->scroll_bottom);
+  assert(g->margins.top >= 0);
+  assert(g->margins.bottom < g->h);
+  if (g->cursor.line < g->margins.top || g->cursor.line > g->margins.bottom) return;
+  screen_shuffle_rows_up(g, n, g->cursor.line, g->margins.bottom);
 }
 
 void screen_newline(struct screen *g, bool carriage) {
   if (carriage) screen_carriage_return(g);
-  struct screen_line *row = screen_row(g);
+  struct screen_line *row = get_current_line(g);
   row->has_newline = true;
   screen_move_or_scroll_down(g);
 }
 
 void screen_scroll_content_down(struct screen *g, int count) {
-  screen_shuffle_rows_up(g, count, g->scroll_top, g->scroll_bottom);
+  screen_shuffle_rows_up(g, count, g->margins.top, g->margins.bottom);
 }
 
 void screen_move_or_scroll_up(struct screen *g) {
-  if (g->cursor.line == g->scroll_top) {
-    screen_shuffle_rows_down(g, 1, g->scroll_top, g->scroll_bottom);
+  if (g->cursor.line == g->margins.top) {
+    screen_shuffle_rows_down(g, 1, g->margins.top, g->margins.bottom);
   } else {
     screen_move_cursor_relative(g, 0, -1);
   }
 }
 
 void screen_scroll_content_up(struct screen *g, int count) {
-  screen_shuffle_rows_down(g, count, g->scroll_top, g->scroll_bottom);
+  screen_shuffle_rows_down(g, count, g->margins.top, g->margins.bottom);
 }
 
 void screen_move_or_scroll_down(struct screen *g) {
   struct cursor *c = &g->cursor;
-  if (c->line == g->scroll_bottom) {
-    if (g->scrollback.enabled) {
-      struct screen_line *evicted = &g->lines[0];
-      scrollback_push(&g->scrollback, evicted);
-    }
-    screen_shuffle_rows_up(g, 1, g->scroll_top, g->scroll_bottom);
+  if (c->line == g->margins.bottom) {
+    screen_shuffle_rows_up(g, 1, g->margins.top, g->margins.bottom);
   } else {
     c->line = c->line + 1;
   }
@@ -169,7 +176,7 @@ static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_c
   struct cursor *cur = &g->cursor;
   struct screen_cell c = {.style = brush};
 
-  struct screen_line *row = screen_row(g);
+  struct screen_line *row = get_current_line(g);
   for (size_t i = 0; i < run.len; i++) {
     if (cur->column == screen_right(g)) {
       c.cp.value = run.content[run.len - 1];
@@ -198,7 +205,7 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
     column = 0;
   }
 
-  struct screen_line *row = screen_row(g);
+  struct screen_line *row = get_current_line(g);
   if (column) {
     struct screen_cell *prev = &row->cells[column - 1];
     if (prev->cp.is_wide) prev->cp = codepoint_space;
@@ -215,7 +222,7 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
     row->eol = MAX(row->eol, column);
     screen_move_or_scroll_down(g);
     column = 0;
-    row = screen_row(g);
+    row = get_current_line(g);
   }
 
   row->eol = MAX(row->eol, column);
@@ -225,7 +232,7 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
 
 void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
   struct cursor *cur = &g->cursor;
-  struct screen_line *row = screen_row(g);
+  struct screen_line *row = get_current_line(g);
 
   if (g->cursor.wrap_pending) {
     g->cursor.wrap_pending = false;
@@ -233,7 +240,7 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     if (wrap) {
       cur->column = 0;
       screen_move_or_scroll_down(g);
-      row = screen_row(g);
+      row = get_current_line(g);
     } else {
       // Overwrite last character
       cur->column = screen_right(g);
@@ -253,7 +260,7 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
       if (wrap) {
         cur->column = 0;
         screen_move_or_scroll_down(g);
-        row = screen_row(g);
+        row = get_current_line(g);
       } else {
         /* noop -- we cannot insert the character, and we cannot scroll */
         return;
@@ -280,21 +287,20 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
 }
 
 void screen_initialize(struct screen *g, int w, int h) {
-  assert(!g->lines);
-  assert(!g->_cells);
-  g->lines = velvet_calloc(h, sizeof(*g->lines));
-  g->_cells = velvet_calloc(w * h, sizeof(*g->_cells));
+  assert(!g->cells);
   g->h = h;
   g->w = w;
-  g->_cells_size = w * h;
-  g->_lines_size = h;
+  g->cells = velvet_calloc(sizeof(*g->cells), num_lines(g) * g->w);
+  g->lines = velvet_calloc(sizeof(*g->lines), num_lines(g));
   screen_reset_scroll_region(g);
 
   struct screen_cell empty_cell = { .style = style_default, .cp = codepoint_space };
-  for (int i = 0; i < h; i++) {
-    g->lines[i] = (struct screen_line){.cells = &g->_cells[i * w]};
+  for (int i = 0; i < num_lines(g); i++) {
+    struct screen_line *l = screen_get_line(g, i);
+    *l = (struct screen_line) { .has_newline = false, .eol = 0 };
+    l->cells = &g->cells[i * g->w];
     for (int j = 0; j < w; j++) {
-      g->_cells[i * w + j] = empty_cell;
+      l->cells[j] = empty_cell;
     }
   }
 }
@@ -302,7 +308,7 @@ void screen_initialize(struct screen *g, int w, int h) {
 /* Ensure the screen is able contain the specified number of cells, potentially realloacting it and copying the previous
  * content */
 void screen_resize_if_needed(struct screen *g, int w, int h, bool wrap) {
-  if (!g->_cells) {
+  if (!g->cells) {
     screen_initialize(g, w, h);
   } else if (g->h != h || g->w != w) {
     struct screen new = {.w = w, .h = h};
@@ -325,8 +331,8 @@ void screen_set_scroll_region(struct screen *g, int top, int bottom) {
   // Since top and bottom are inclusive bounds, that means bottom must be greater than top.
   // If this is not the case, continue without updating the margins.
   if (bottom >= top) {
-    g->scroll_top = top;
-    g->scroll_bottom = bottom;
+    g->margins.top = top;
+    g->margins.bottom = bottom;
   }
 }
 
@@ -335,7 +341,7 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
   struct screen_cell template = { .cp = codepoint_space, .style = g->cursor.brush };
 
   for (int r = from.line; r <= to.line; r++) {
-    struct screen_line *row = &g->lines[r];
+    struct screen_line *row = screen_get_line(g, r);
     int col_start = r == from.line ? from.column : 0;
     int col_end = r == to.line ? to.column : screen_right(g);
     // We subtract 1 from eol because it refers to the number of significant characters.
@@ -361,8 +367,8 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
 
 void screen_insert_blanks_at_cursor(struct screen *g, int n) {
   struct screen_cell template = {.cp = codepoint_space, .style = g->cursor.brush};
-  struct screen_line *row = screen_row(g);
-  int lcol = screen_column(g);
+  struct screen_line *row = get_current_line(g);
+  int lcol = g->cursor.column;
   for (int col = screen_right(g); col >= lcol; col--) {
     int rcol = col - n;
     struct screen_cell replacement = rcol < lcol ? template : row->cells[rcol];
@@ -374,8 +380,8 @@ void screen_insert_blanks_at_cursor(struct screen *g, int n) {
 void screen_shift_from_cursor(struct screen *g, int n) {
   if (n == 0) return;
   struct screen_cell template = { .cp = codepoint_space, .style = g->cursor.brush };
-  struct screen_line *row = screen_row(g);
-  for (int col = screen_column(g); col < screen_right(g); col++) {
+  struct screen_line *row = get_current_line(g);
+  for (int col = g->cursor.column; col < screen_right(g); col++) {
     int rcol = col + n;
     struct screen_cell replacement = rcol > screen_right(g) ? template : row->cells[rcol];
     row_set_cell(row, col, replacement);
@@ -386,12 +392,43 @@ void screen_carriage_return(struct screen *g) {
   screen_set_cursor_column(g, 0);
 }
 void screen_destroy(struct screen *screen) {
-  /* TOOD: destroy scrollback2 */
-  scrollback_destroy(&screen->scrollback);
-  free(screen->_cells);
+  free(screen->cells);
   free(screen->lines);
-  screen->_cells = NULL;
-  screen->lines = NULL;
+  screen->cells = nullptr;
+  screen->lines = nullptr;
+}
+
+void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src) {
+  struct screen_line *current_src_line = get_current_line(src);
+  int n_src_lines = src->h + src->scroll.height;
+  int dst_column = 0;
+  int dst_row = 0;
+
+  for (int row = 0; row < n_src_lines; row++) {
+    int real_row = row - src->scroll.height;
+    struct screen_line *s = screen_get_line(src, real_row);
+    int eol = s->eol;
+    if (s->has_newline || row == (n_src_lines - 1)) {
+      for (; eol && s->cells[eol - 1].cp.value == ' '; eol--);
+    }
+    int col = 0;
+    for (; col < eol; col += s->cells[col].cp.is_wide ? 2 : 1) {
+      screen_insert(dst, s->cells[col], true);
+    }
+
+    if (s == current_src_line) {
+      dst_row = dst->cursor.line;
+      dst_column = src->cursor.column % dst->w;
+    }
+
+    if (s->has_newline) {
+      screen_newline(dst, true);
+    }
+  }
+
+  int col = CLAMP(dst_column, 0, dst->w - 1);
+  int row = CLAMP(dst_row, 0, dst->h - 1);
+  dst->cursor = (struct cursor){.column = col, .line = row};
 }
 
 /* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
@@ -405,7 +442,7 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
   struct cursor source_cursor = src->cursor;
   struct cursor dst_cursor = {.line = -1, .column = -1};
   for (int row = 0; row < src->h && (wrap || row < dst->h); row++) {
-    struct screen_line *screen_row = &src->lines[row];
+    const struct screen_line *screen_row = screen_get_line(src, row);
 
     int col = 0;
     for (; col < src->w && col < screen_row->eol; col++) {
@@ -447,7 +484,9 @@ void screen_backspace(struct screen *g) {
 }
 
 void screen_full_reset(struct screen *g) {
-  assert(g); assert(g->lines);
+  assert(g); 
+  assert(g->lines);
+  assert(g->cells);
   struct cursor clear = {0};
   g->cursor = clear;
   g->saved_cursor = clear;
@@ -481,11 +520,17 @@ void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom) {
   assert(bottom < g->h);
   assert(top <= bottom);
 
+
   int n_affected_rows = (bottom + 1) - top;
   count = MIN(count, n_affected_rows);
 
-  for (int row = top; row <= bottom - count; row++) {
-    screen_swap_rows(g, row, row + count);
+  if (top == 0 && bottom == g->h - 1) {
+    g->scroll.offset += count;
+    g->scroll.height = CLAMP(g->scroll.height + count, 0, g->scroll.max);
+  } else {
+    for (int row = top; row <= bottom - count; row++) {
+      screen_swap_rows(g, row, row + count);
+    }
   }
 
   // clear the final `count` rows
