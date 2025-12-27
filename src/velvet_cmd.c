@@ -89,6 +89,7 @@ bool velvet_cmd_arg_iterator_unget(struct velvet_cmd_arg_iterator *it) {
   if (it->current.content) {
     char *base = (char*)it->src.content;
     size_t new_cursor = (char*)it->current.content - base;
+    if (new_cursor > 0) new_cursor--;
     it->cursor = new_cursor;
     it->current = (struct u8_slice){0};
     return true;
@@ -286,7 +287,7 @@ static void velvet_cmd_create_window(struct velvet *v, struct velvet_cmd_arg_ite
   velvet_cmd_arg_iterator_rest(it);
   cmdline = it->current;
 
-  struct velvet_window notification = {
+  struct velvet_window win = {
       .border_width = o.border_width,
       .emulator = vte_default,
       .layer = o.layer,
@@ -294,11 +295,16 @@ static void velvet_cmd_create_window(struct velvet *v, struct velvet_cmd_arg_ite
       .kind = o.kind,
   };
 
-  string_push_slice(&notification.cmdline, cmdline);
-  if (title.len) {
-    string_push_slice(&notification.emulator.osc.title, title);
+  if (cmdline.len > 2 && cmdline.content[0] == cmdline.content[cmdline.len - 1]) {
+    uint8_t fst = cmdline.content[0];
+    if (fst == '\'' || fst == '"') cmdline = u8_slice_range(cmdline, 1, -2);
   }
-  velvet_scene_spawn_process_from_template(&v->scene, notification);
+
+  string_push_slice(&win.cmdline, cmdline);
+  if (title.len) {
+    string_push_slice(&win.emulator.osc.title, title);
+  }
+  velvet_scene_spawn_process_from_template(&v->scene, win);
 }
 
 static void velvet_cmd_spawn_notification(struct velvet *v, struct velvet_cmd_arg_iterator *it) {

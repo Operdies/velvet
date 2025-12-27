@@ -8,6 +8,7 @@ struct io_source;
 typedef void (*io_on_read)(struct io_source *src);
 typedef void (*io_on_readable)(struct io_source *src, struct u8_slice str);
 typedef void (*io_on_ritable)(struct io_source *src);
+typedef uint64_t io_schedule_id;
 
 enum IO_SOURCE_EVENT {
   IO_SOURCE_POLLIN = POLLIN,
@@ -35,6 +36,7 @@ struct io_schedule {
   void *data;
   uint64_t when;
   uint64_t sequence;
+  uint64_t id;
 };
 
 struct io {
@@ -63,7 +65,8 @@ void io_clear_sources(struct io *io);
 void io_destroy(struct io *io);
 ssize_t io_write(int fd, struct u8_slice content);
 ssize_t io_write_format_slow(int fd, char *fmt, ...) __attribute__((format(printf, 2, 3)));
-void io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data);
+io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data);
+bool io_schedule_cancel(struct io *io, io_schedule_id id);
 
 #define io_write_literal(fd, str)                                                                                        \
   io_write(fd, (struct u8_slice){.len = sizeof(str) - 1, .content = (uint8_t*)str})

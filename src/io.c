@@ -134,9 +134,26 @@ ssize_t io_write_format_slow(int fd, char *fmt, ...) {
   return written;
 }
 
-void io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
+static int get_schedule_id() {
+  static uint64_t token = 123;
+  return token++;
+}
+
+bool io_schedule_cancel(struct io *io, io_schedule_id id) {
+  struct io_schedule *existing;
+  vec_find(existing, io->scheduled_actions, existing->id == id);
+  if (existing) {
+    vec_remove(&io->scheduled_actions, existing);
+    return true;
+  }
+  return false;
+}
+
+io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
   struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms, .sequence = io->sequence };
+  schedule.id = get_schedule_id();
   vec_push(&io->scheduled_actions, &schedule);
+  return schedule.id;
 }
 
 void io_destroy(struct io *io) {

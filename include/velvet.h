@@ -87,6 +87,7 @@ struct velvet_input {
   uint64_t last_repeat;
   struct velvet_input_drag_event dragging;
   int input_socket;
+  io_schedule_id unwind_callback_token;
 };
 
 struct velvet_session_features {

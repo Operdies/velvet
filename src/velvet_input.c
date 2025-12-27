@@ -436,6 +436,7 @@ void velvet_input_unwind(struct velvet *v) {
 void input_unwind_callback(void *data) {
   struct velvet *v = data;
   velvet_input_unwind(v);
+  v->input.unwind_callback_token = 0;
 }
 
 static bool keymap_has_mapping(struct velvet_keymap *k) {
@@ -456,7 +457,6 @@ static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event
 
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
-
   assert(v);
   assert(v->input.keymap);
   struct velvet_keymap *k, *root, *current;
@@ -476,8 +476,13 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
         v->input.keymap = k;
         // If this sequence has both a mapping and a continuation,
         // defer the mapping until the intended sequence can be determined.
-        if (keymap_has_mapping(k))
-          io_schedule(&v->event_loop, v->input.options.key_chain_timeout_ms, input_unwind_callback, v);
+        if (keymap_has_mapping(k)) {
+          if (v->input.unwind_callback_token) {
+            io_schedule_cancel(&v->event_loop, v->input.unwind_callback_token);
+          }
+          v->input.unwind_callback_token =
+              io_schedule(&v->event_loop, v->input.options.key_chain_timeout_ms, input_unwind_callback, v);
+        }
       } else {
         // this choord is terminal so on_key must be set
         assert(k->on_key);
