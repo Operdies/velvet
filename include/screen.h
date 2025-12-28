@@ -102,8 +102,10 @@ struct screen {
     int top, bottom;
   } margins;
   struct {
-    /* the maximum scrollback size (size of *data) */
+    /* the maximum scrollback size (#lines) */
     int max;
+    /* the currently allocated size (#lines) */
+    int capacity;
     /* the number of lines in the scroll buffer */
     int height; /* 0 <= height < buffer.lines */
     /* current line is buffer.lines[(scroll.offset + cursor.line) % buffer.lines] */

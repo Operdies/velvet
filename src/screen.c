@@ -286,23 +286,40 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
   }
 }
 
+static void scrollback_init(struct screen *g, int min_cap) {
+  assert(g->scroll.capacity < num_lines(g));
+  int initial_size = g->scroll.capacity;
+  int new_size = CLAMP(g->scroll.capacity * 2, min_cap, num_lines(g));
+  assert(new_size > initial_size);
+  g->cells = velvet_erealloc(g->cells, new_size * g->w, sizeof(*g->cells));
+  g->lines = velvet_erealloc(g->lines, new_size, sizeof(*g->lines));
+  g->scroll.capacity = new_size;
+
+  for (int i = 0; i < initial_size; i++)
+    g->lines[i].cells = &g->cells[i * g->w];
+
+  struct screen_cell clear_cell = { .style = g->cursor.brush, .cp = codepoint_space };
+  for (int i = initial_size; i < new_size; i++) {
+    struct screen_line *l = &g->lines[i];
+    *l = (struct screen_line){
+        .has_newline = false,
+        .eol = 0,
+        .cells = &g->cells[i * g->w],
+    };
+    for (int j = 0; j < g->w; j++) {
+      l->cells[j] = clear_cell;
+    }
+  }
+
+}
+
 void screen_initialize(struct screen *g, int w, int h) {
   assert(!g->cells);
   g->h = h;
   g->w = w;
-  g->cells = velvet_calloc(sizeof(*g->cells), num_lines(g) * g->w);
-  g->lines = velvet_calloc(sizeof(*g->lines), num_lines(g));
+  /* if scrollback is enabled, pre-allocate a couple of lines */
+  scrollback_init(g, g->scroll.max ? h * 2 : h);
   screen_reset_scroll_region(g);
-
-  struct screen_cell empty_cell = { .style = style_default, .cp = codepoint_space };
-  for (int i = 0; i < num_lines(g); i++) {
-    struct screen_line *l = screen_get_line(g, i);
-    *l = (struct screen_line) { .has_newline = false, .eol = 0 };
-    l->cells = &g->cells[i * g->w];
-    for (int j = 0; j < w; j++) {
-      l->cells[j] = empty_cell;
-    }
-  }
 }
 
 void screen_reset_scroll_region(struct screen *g) {
@@ -543,7 +560,9 @@ void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom) {
 
   if (top == 0 && bottom == g->h - 1) {
     g->scroll.offset += count;
-    g->scroll.height = CLAMP(g->scroll.height + count, 0, g->scroll.max);
+    int new_height = CLAMP(g->scroll.height + count + g->h, 0, g->scroll.max + g->h);
+    if (new_height > g->scroll.capacity) scrollback_init(g, new_height);
+    g->scroll.height = new_height - g->h;
   } else {
     for (int row = top; row <= bottom - count; row++) {
       screen_swap_rows(g, row, row + count);
