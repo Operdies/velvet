@@ -568,6 +568,7 @@ static void vv_attach(struct velvet_args args) {
 
     io_dispatch(&io);
   }
+  io_destroy(&io);
 
   close(sockfd);
   close(output_pipe[0]);
