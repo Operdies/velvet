@@ -94,6 +94,10 @@ struct velvet_theme {
   struct color background;
   struct color foreground;
   struct {
+    struct color foreground;
+    struct color background;
+  } cursor;
+  struct {
     bool enabled;
     float alpha;
   } pseudotransparency;
@@ -104,7 +108,10 @@ struct velvet_render {
   int w, h;
   /* multiple buffers used for damage tracking over time */
   struct velvet_render_buffer buffers[4];
-  struct velvet_render_buffer temp_buffer;
+  /* the staging buffer is a temporary buffer which must be explicitly comitted to the
+   * current render buffer. This is useful for rendering a layer and then comitting it with effects applied such as
+   * alpha blending etc. */
+  struct velvet_render_buffer staging_buffer;
   int current_buffer;
   struct string draw_buffer;
   struct screen_cell_style current_style;
@@ -175,6 +182,11 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 static const struct velvet_theme velvet_theme_default = {
     .background = RGB("#1e1e2e"),
     .foreground = RGB("#cdd6f4"),
+    .cursor =
+        {
+            .background = RGB("#f5e0dc"),
+            .foreground = RGB("#1e1e2e"),
+        },
     .active =
         {
             .outline = {.attr = 0, .fg = RGB("#f38ba8")},

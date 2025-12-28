@@ -76,6 +76,8 @@ static void enable_raw_mode(void) {
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw_term) == -1) {
     velvet_die("tcsetattr:");
   }
+  /* we emulate the cursor when possible */
+  io_write(STDOUT_FILENO, vt_cursor_visible_off);
 }
 
 static void disable_focus_reporting(void) {

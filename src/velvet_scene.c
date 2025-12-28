@@ -326,11 +326,20 @@ static struct screen_cell normalize_cell(struct velvet_render *r, struct screen_
   return c;
 }
 
+static struct screen_cell *velvet_render_get_staged_cell(struct velvet_render *r, int line, int column) {
+  if (!(line >= 0 && line < r->h)) return nullptr;
+  if (!(column >= 0 && column < r->w)) return nullptr;
+
+  struct velvet_render_buffer *b = &r->staging_buffer;
+  struct velvet_render_buffer_line *l = &b->lines[line];
+  return &l->cells[column];
+}
+
 static void velvet_render_set_cell(struct velvet_render *r, int line, int column, struct screen_cell value) {
   /* out of bounds writes here is not a bug. It is expected for controls which are partially off-screen. */
   if (!(line >= 0 && line < r->h)) return;
   if (!(column >= 0 && column < r->w)) return;
-  struct velvet_render_buffer *b = &r->temp_buffer;
+  struct velvet_render_buffer *b = &r->staging_buffer;
   struct velvet_render_buffer_line *l = &b->lines[line];
   struct screen_cell *c = l->cells;
   
@@ -520,7 +529,12 @@ static void velvet_render_render_damage_to_buffer(struct velvet_render *r) {
   }
 }
 
-static void velvet_render_copy_cells_from_window(struct velvet_render *r, struct velvet_window *h) {
+static bool should_emulate_cursor(struct cursor_options cur) {
+  return cur.visible && (cur.style == CURSOR_STYLE_DEFAULT || cur.style == CURSOR_STYLE_STEADY_BLOCK);
+}
+
+static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct velvet_window *h) {
+  struct velvet_render *r = &m->renderer;
   struct screen *active = vte_get_current_screen(&h->emulator);
   assert(active);
   assert(active->w == h->rect.client.w);
@@ -549,6 +563,19 @@ static void velvet_render_copy_cells_from_window(struct velvet_render *r, struct
       if (cell.cp.is_wide) column++;
     }
   }
+
+  bool is_focused = h == velvet_scene_get_focus(m);
+  if (is_focused && should_emulate_cursor(h->emulator.options.cursor) && h->emulator.options.cursor.visible) {
+    int x = h->rect.client.x + active->cursor.column;
+    int y = h->rect.client.y + active->cursor.line;
+    struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
+    if (current) {
+      struct screen_cell cursor = *current;
+      cursor.style.fg = r->theme.cursor.foreground;
+      cursor.style.bg = r->theme.cursor.background;
+      velvet_render_set_cell(r, y, x, cursor);
+    }
+  }
 }
 
 /* lol very unsafe :) */
@@ -571,7 +598,6 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
   };
 
   struct velvet_render *r = &m->renderer;
-
 
   struct codepoint topleft = codepoint_from_cstr(borders[style][0]);
   struct codepoint bottomright = codepoint_from_cstr(borders[style][1]);
@@ -680,7 +706,7 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->h = m->ws.h;
   r->w = m->ws.w;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
-  velvet_render_init_buffer(&r->temp_buffer, r->w, r->h);
+  velvet_render_init_buffer(&r->staging_buffer, r->w, r->h);
   r->current_style = (struct screen_cell_style) { 0 };
   r->cursor.column = -1;
   r->cursor.line = -1;
@@ -753,7 +779,7 @@ static void velvet_scene_rasterize_temp(struct velvet_scene *m, struct composite
   struct screen_cell empty = {0};
   struct velvet_render *r = &m->renderer;
   struct velvet_render_buffer *b = get_current_buffer(r);
-  struct velvet_render_buffer *c = &r->temp_buffer;
+  struct velvet_render_buffer *c = &r->staging_buffer;
   for (int i = 0; i < r->w * r->h; i++) {
     if (!cell_equals(c->cells[i], empty)) {
       struct screen_cell top = normalize_cell(r, c->cells[i]);
@@ -809,7 +835,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       if (h->dragging) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_render_calculate_borders(m, h);
-      velvet_render_copy_cells_from_window(r, h);
+      velvet_render_copy_cells_from_window(m, h);
       velvet_scene_rasterize_temp(m, opt);
     }
   }
@@ -818,7 +844,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     opt.alpha_blend = 0;
     if (r->theme.pseudotransparency.enabled) opt.alpha_blend = r->theme.pseudotransparency.alpha;
     velvet_render_calculate_borders(m, h);
-    velvet_render_copy_cells_from_window(r, h);
+    velvet_render_copy_cells_from_window(m, h);
     velvet_scene_rasterize_temp(m, opt);
   }
 
@@ -829,14 +855,16 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
   }
 
-  {
+  if (should_emulate_cursor(focused->emulator.options.cursor)) {
+    struct cursor_options hidden = {.visible = false};
+    velvet_render_set_cursor_style(r, hidden);
+  } else {
     struct screen *screen = vte_get_current_screen(&focused->emulator);
     struct cursor *cursor = &screen->cursor;
     int line = cursor->line + focused->rect.client.y + screen->scroll.view_offset;
     int col = cursor->column + focused->rect.client.x;
 
     bool cursor_obscured = false;
-
     /* if a window is above the current window and obscures the cursor, we should not show it */
     if (!r->theme.pseudotransparency.enabled) {
       struct velvet_window *window;
@@ -849,10 +877,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       }
     }
 
-    if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) 
-      cursor_obscured = true;
-    if (screen_get_scroll_offset(screen) + cursor->line >= screen->h) 
-      cursor_obscured = true;
+    if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) cursor_obscured = true;
+    if (screen_get_scroll_offset(screen) + cursor->line >= screen->h) cursor_obscured = true;
 
     if (cursor_obscured) {
       /* hide the cursor */
