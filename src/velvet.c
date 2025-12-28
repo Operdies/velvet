@@ -7,6 +7,8 @@
 #include <string.h>
 #include "velvet_cmd.h"
 #include <signal.h>
+#include <sys/wait.h>
+#include <pwd.h>
 
 static void velvet_session_render(struct u8_slice str, void *context) {
   struct velvet_session *s = context;
@@ -306,8 +308,22 @@ static void velvet_default_config(struct velvet *v) {
   }
 }
 
-static void wakeup(void *) {
+
+static void start_default_shell(struct velvet *v) {
+  char *shell = nullptr;
+  uid_t uid = getuid();
+  struct passwd *pw = getpwuid(uid);
+
+  if (pw == NULL) {
+    velvet_log("Error getting default shell:");
+    shell = "sh";
+  } else {
+    shell = pw->pw_shell;
+  }
+  velvet_scene_spawn_process(&v->scene, u8_slice_from_cstr(shell));
 }
+
+static void wakeup(void *) {}
 
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
@@ -325,7 +341,7 @@ void velvet_loop(struct velvet *velvet) {
   }
 
   velvet_scene_resize(&velvet->scene, ws);
-  velvet_scene_spawn_process(&velvet->scene, u8_slice_from_cstr("zsh"));
+  start_default_shell(velvet);
   velvet->scene.arrange(&velvet->scene);
 
   velvet_default_config(velvet);
