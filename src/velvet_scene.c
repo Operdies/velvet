@@ -567,13 +567,15 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
   bool is_focused = h == velvet_scene_get_focus(m);
   if (is_focused && should_emulate_cursor(h->emulator.options.cursor) && h->emulator.options.cursor.visible) {
     int x = h->rect.client.x + active->cursor.column;
-    int y = h->rect.client.y + active->cursor.line;
-    struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
-    if (current) {
-      struct screen_cell cursor = *current;
-      cursor.style.fg = r->theme.cursor.foreground;
-      cursor.style.bg = r->theme.cursor.background;
-      velvet_render_set_cell(r, y, x, cursor);
+    int y = h->rect.client.y + active->cursor.line + screen_get_scroll_offset(active);
+    if (y < h->rect.client.y + h->rect.client.h) {
+      struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
+      if (current) {
+        struct screen_cell cursor = *current;
+        cursor.style.fg = r->theme.cursor.foreground;
+        cursor.style.bg = r->theme.cursor.background;
+        velvet_render_set_cell(r, y, x, cursor);
+      }
     }
   }
 }
