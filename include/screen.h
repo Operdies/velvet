@@ -127,6 +127,7 @@ void screen_carriage_return(struct screen *g);
 void screen_copy(struct screen *restrict dst, const struct screen *const restrict src,
                bool wrap);
 void screen_destroy(struct screen *screen);
+void screen_erase_rectangle(struct screen *g, int top, int left, int bottom, int right);
 void screen_erase_between_cursors(struct screen *g, struct cursor from,
                                 struct cursor to);
 void screen_full_reset(struct screen *g);

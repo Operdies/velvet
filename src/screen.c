@@ -336,6 +336,20 @@ void screen_set_scroll_region(struct screen *g, int top, int bottom) {
   }
 }
 
+/* inclusive erase rectangle */
+void screen_erase_rectangle(struct screen *g, int top, int left, int bottom, int right) {
+  top = CLAMP(top, 0, g->h - 1);
+  bottom = CLAMP(bottom, 0, g->h - 1);
+  left = CLAMP(left, 0, g->w - 1);
+  right = CLAMP(right, 0, g->w - 1);
+  if (bottom < top || right < left) return;
+  for (int r = top; r <= bottom; r++) {
+    struct cursor from = { .line = r, .column = left };
+    struct cursor to = { .line = r, .column = right };
+    screen_erase_between_cursors(g, from, to);
+  }
+}
+
 /* inclusive erase between two cursor positions */
 void screen_erase_between_cursors(struct screen *g, struct cursor from, struct cursor to) {
   struct screen_cell template = { .cp = codepoint_space, .style = g->cursor.brush };

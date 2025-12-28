@@ -853,7 +853,15 @@ bool DECRQCRA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DE
 
 bool DECELR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECELR"); return false; }
 
-bool DECERA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECERA"); return false; }
+bool DECERA(struct vte *vte, struct csi *csi) {
+  int top = csi->params[0].primary;
+  int left = csi->params[1].primary;
+  int bottom = csi->params[2].primary;
+  int right = csi->params[3].primary;
+  struct screen *g = vte_get_current_screen(vte);
+  screen_erase_rectangle(g, top, left, bottom, right);
+  return true;
+}
 
 bool DECSLE(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECSLE"); return false; }
 
