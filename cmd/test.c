@@ -798,9 +798,7 @@ void test_csi_parsing(void) {
   } while (0)
 
 static void test_hashmap() {
-  constexpr int n_strings = 10;
-  constexpr int stress = 1 << 15;
-
+  const int stress = 1 << 15;
   struct hashmap h = {0};
   assert(hashmap_add(&h, 0, nullptr));
   assert(hashmap_get(&h, 0) == nullptr);
@@ -810,7 +808,8 @@ static void test_hashmap() {
   char *str;
   assert((str = hashmap_get(&h, 1)) && strcmp(str, "Hello") == 0);
 
-  char *strings[n_strings] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  char *strings[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  int n_strings = LENGTH(strings);
   assert(hashmap_remove(&h, 0, nullptr));
   assert(!hashmap_remove(&h, 0, nullptr));
   assert(hashmap_remove(&h, 1, nullptr));
@@ -826,7 +825,7 @@ static void test_hashmap() {
     assert((str = hashmap_get(&h, i)));
     assert(strcmp(str, strings[i]) == 0);
   }
-  assert(h.count == n_strings);
+  assert((int)h.count == n_strings);
   for (int i = 0; i < n_strings; i++) {
     assert(hashmap_remove(&h, i, nullptr));
   }
@@ -874,8 +873,7 @@ static void test_hashmap() {
 }
 
 void test_hashmap_collisions() {
-  constexpr int n_strings = 10;
-  char *strings[n_strings] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  char *strings[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
   char *str;
   struct hashmap h = {0};
   for (int i = 0; i < 8; i++) {

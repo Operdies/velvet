@@ -389,7 +389,7 @@ static void velvet_render_position_cursor(struct velvet_render *r, int line, int
 static void render_buffer_add_damage(struct velvet_render_buffer_line *f, int start, int end, bool consolidate) {
   /* merge with previous damage if they are reasonably close. The reason being that in most cases, it is cheaper to emit
    * a few characters than a cursor move. Consolidation is disabled when `display_damage` is set. */
-  constexpr int consolidate_max = 10;
+  static const int consolidate_max = 10;
   int n_damage = f->n_damage;
 
   if (consolidate && n_damage && start - f->damage[n_damage - 1].end < consolidate_max) {
@@ -589,8 +589,8 @@ static struct codepoint codepoint_from_cstr(char *src) {
 }
 
 static void velvet_render_calculate_borders(struct velvet_scene *m, struct velvet_window *host) {
-  constexpr int hard = 0;
-  constexpr int rounded = 1;
+  static const int hard = 0;
+  static const int rounded = 1;
   int style = host->layer == VELVET_LAYER_TILED ? hard : rounded;
   char *borders[2][4] = {
       {"┌", "┘", "┐", "└"},

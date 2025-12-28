@@ -12,13 +12,13 @@ struct codepoint {
   bool is_wide;
 };
 
-constexpr struct codepoint codepoint_fffd = { .value = 0xFFFD };
-constexpr struct codepoint codepoint_space = { .value = ' ' };
-constexpr struct codepoint codepoint_zero = { .value = 0 };
+static const struct codepoint codepoint_fffd = { .value = 0xFFFD };
+static const struct codepoint codepoint_space = { .value = ' ' };
+static const struct codepoint codepoint_zero = { .value = 0 };
 
-constexpr struct utf8 utf8_fffd = {.utf8 = {0xEF, 0xBF, 0xBD}};
-constexpr struct utf8 utf8_blank = {.utf8 = {' '}};
-constexpr struct utf8 utf8_zero = {0};
+static const struct utf8 utf8_fffd = {.utf8 = {0xEF, 0xBF, 0xBD}};
+static const struct utf8 utf8_blank = {.utf8 = {' '}};
+static const struct utf8 utf8_zero = {0};
 
 
 int utf8_strlen(char *str);
