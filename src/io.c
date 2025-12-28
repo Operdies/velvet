@@ -26,12 +26,25 @@ static bool io_dispatch_scheduled(struct io *io) {
   return did_execute;
 }
 
-void io_dispatch(struct io *io) {
+static void io_dispatch_idle_schedules(struct io *io) {
+  struct io_schedule *schedule;
+  for (;;) {
+    vec_find(schedule, io->idle_schedule, schedule->sequence <= io->sequence);
+    if (!schedule) break;
+    // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
+    // This is needed because we may otherwise corrupt the vec structure.
+    struct io_schedule copy = *schedule;
+    vec_remove(&io->idle_schedule, schedule);
+    copy.callback(copy.data);
+  }
+}
+
+int io_dispatch(struct io *io) {
   // First execute any pending scheduled actions;
   // If a schedule was executed, return. This is needed because a scheduled
   // action can affect everything, including closing file descriptors,
   // and generally affecting all kinds of behavior.
-  if (io_dispatch_scheduled(io)) return;
+  if (io_dispatch_scheduled(io)) return 0;
   io->sequence++;
 
   vec_clear(&io->pollfds);
@@ -45,13 +58,22 @@ void io_dispatch(struct io *io) {
   struct io_schedule *next_schedule = nullptr;
   struct io_schedule *schedule;
   vec_foreach(schedule, io->scheduled_actions) {
-    if (!next_schedule) next_schedule = schedule;
-    else next_schedule = next_schedule->when < schedule->when ? next_schedule : schedule;
+    if (!next_schedule)
+      next_schedule = schedule;
+    else
+      next_schedule = next_schedule->when < schedule->when ? next_schedule : schedule;
   }
 
   uint64_t now = get_ms_since_startup();
   int timeout = next_schedule ? next_schedule->when - now : -1;
   if (next_schedule && timeout < 0) timeout = 0;
+  bool maybe_idle = false;
+  if (io->idle_schedule.length) {
+    if (timeout == -1 || timeout >= io->idle_timeout_ms) {
+      timeout = io->idle_timeout_ms;
+      maybe_idle = true;
+    }
+  }
 
   int polled = poll(io->pollfds.content, io->pollfds.length, timeout);
   if (polled == -1) {
@@ -60,10 +82,15 @@ void io_dispatch(struct io *io) {
     if (errno != EAGAIN && errno != EINTR) {
       ERROR("poll:");
     }
-    return;
+    return 0;
   }
 
-  if (!polled) return;
+  if (polled == 0 && maybe_idle) {
+    io_dispatch_idle_schedules(io);
+    return 0;
+  }
+
+  if (!polled) return 0;
 
   for (size_t i = 0; i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(&io->pollfds, i);
@@ -105,6 +132,7 @@ void io_dispatch(struct io *io) {
       if (poll_ret < 1) break;
     }
   }
+  return 1;
 }
 
 void io_add_source(struct io *io, struct io_source src) {
@@ -139,11 +167,25 @@ static int get_schedule_id() {
   return token++;
 }
 
+bool io_schedule_exists(struct io *io, io_schedule_id id) {
+  struct io_schedule *existing;
+  vec_find(existing, io->scheduled_actions, existing->id == id);
+  if (!existing) {
+    vec_find(existing, io->idle_schedule, existing->id == id);
+  }
+  return existing;
+}
+
 bool io_schedule_cancel(struct io *io, io_schedule_id id) {
   struct io_schedule *existing;
   vec_find(existing, io->scheduled_actions, existing->id == id);
   if (existing) {
     vec_remove(&io->scheduled_actions, existing);
+    return true;
+  }
+  vec_find(existing, io->idle_schedule, existing->id == id);
+  if (existing) {
+    vec_remove(&io->idle_schedule, existing);
     return true;
   }
   return false;
@@ -156,8 +198,16 @@ io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), 
   return schedule.id;
 }
 
+io_schedule_id io_schedule_idle(struct io *io, void (*callback)(void*), void *data) {
+  struct io_schedule schedule = { .callback = callback, .data = data, .sequence = io->sequence };
+  schedule.id = get_schedule_id();
+  vec_push(&io->idle_schedule, &schedule);
+  return schedule.id;
+}
+
 void io_destroy(struct io *io) {
   vec_destroy(&io->pollfds);
   vec_destroy(&io->sources);
   vec_destroy(&io->scheduled_actions);
+  vec_destroy(&io->idle_schedule);
 }

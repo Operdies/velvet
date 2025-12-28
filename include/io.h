@@ -43,20 +43,26 @@ struct io {
   struct vec /* io_source */ sources;
   struct vec /* pollfd */ pollfds;
   struct vec /* scheduled callbacks */ scheduled_actions;
+  /* callbacks invoked when there is no io activity */
+  struct vec /* idle callbacks */ idle_schedule;
   uint64_t sequence; /* sequence number used to identify when a schedule was added */
   uint8_t buffer[kB(2)];
   int max_iterations;
+  /* how many ms without activity is considered idle */
+  int idle_timeout_ms;
 };
 
 static const struct io io_default = {
     .sources = vec(struct io_source),
     .pollfds = vec(struct pollfd),
     .scheduled_actions = vec(struct io_schedule),
+    .idle_schedule = vec(struct io_schedule),
     .max_iterations = mB(1) / sizeof(io_default.buffer),
+    .idle_timeout_ms = 2,
 };
 
 /* Dispatch all pending io. */
-void io_dispatch(struct io *io);
+int io_dispatch(struct io *io);
 /* Add an io source to the io object. This source will be polled and dispatched during io_dispatch. */
 void io_add_source(struct io *io, struct io_source src);
 /* Remove all previously added io sources. */
@@ -66,7 +72,9 @@ void io_destroy(struct io *io);
 ssize_t io_write(int fd, struct u8_slice content);
 ssize_t io_write_format_slow(int fd, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data);
+io_schedule_id io_schedule_idle(struct io *io, void (*callback)(void*), void *data);
 bool io_schedule_cancel(struct io *io, io_schedule_id id);
+bool io_schedule_exists(struct io *io, io_schedule_id id);
 
 #define io_write_literal(fd, str)                                                                                        \
   io_write(fd, (struct u8_slice){.len = sizeof(str) - 1, .content = (uint8_t*)str})
