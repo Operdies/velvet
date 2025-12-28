@@ -17,7 +17,7 @@ static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from
   size_t start = 0;
   if (from) start = vec_index(&v, from) + 1;
   for (; start < v.length; start++) {
-    from = vec_nth(&v, start);
+    from = vec_nth(v, start);
     if (from->layer == VELVET_LAYER_TILED) return from;
   }
   return nullptr;
@@ -143,15 +143,15 @@ static void host_notify_focus(struct velvet_window *host, bool focus) {
 struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
   if (m->windows.length > 0) {
     if (m->focus >= m->windows.length) m->focus = m->windows.length - 1;
-    return vec_nth(&m->windows, m->focus);
+    return vec_nth(m->windows, m->focus);
   }
   return nullptr;
 }
 
 void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
   if (m->focus != focus) {
-    struct velvet_window *current_focus = vec_nth(&m->windows, m->focus);
-    struct velvet_window *new_focus = vec_nth(&m->windows, focus);
+    struct velvet_window *current_focus = vec_nth(m->windows, m->focus);
+    struct velvet_window *new_focus = vec_nth(m->windows, focus);
     m->focus = focus;
     host_notify_focus(current_focus, false);
     host_notify_focus(new_focus, true);
@@ -251,7 +251,7 @@ void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w)
     // If the removed host was the last host, set the focus to the new last host.
     if (next_focus >= m->windows.length) next_focus = m->windows.length - 1;
     m->focus = next_focus;
-    struct velvet_window *new_focus = vec_nth(&m->windows, next_focus);
+    struct velvet_window *new_focus = vec_nth(m->windows, next_focus);
     host_notify_focus(new_focus, true);
   }
 }

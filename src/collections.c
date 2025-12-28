@@ -12,9 +12,9 @@ static size_t next_size(size_t min) {
   return next;
 }
 
-void *vec_nth_unchecked(const struct vec *const v, size_t i) {
-  const char *const base = v->content;
-  size_t offset = i * v->element_size;
+void *vec_nth_unchecked(struct vec v, size_t i) {
+  const char *const base = v.content;
+  size_t offset = i * v.element_size;
   return (void *)base + offset;
 }
 
@@ -183,7 +183,7 @@ void vec_swap_remove(struct vec *v, void *e) {
   assert(v->length > 0);
   v->length = v->length - 1;
   if (v->length) {
-    void *last = vec_nth(v, v->length);
+    void *last = vec_nth(*v, v->length);
     memcpy(e, last, v->element_size);
   }
 }
@@ -191,7 +191,7 @@ void vec_swap_remove(struct vec *v, void *e) {
 void *vec_pop(struct vec *v) {
   if (v->length == 0) return nullptr;
   v->length--;
-  return vec_nth_unchecked(v, v->length);
+  return vec_nth_unchecked(*v, v->length);
 }
 
 void vec_remove(struct vec *v, void *e) {
@@ -215,9 +215,9 @@ void vec_insert(struct vec *v, size_t i, const void *elem) {
   vec_ensure_capacity(v, v->length + 1);
 
   v->length++;
-  void *this = vec_nth_unchecked(v, i);
-  void *next = vec_nth_unchecked(v, i + 1);
-  void *end = vec_nth_unchecked(v, v->length);
+  void *this = vec_nth_unchecked(*v, i);
+  void *next = vec_nth_unchecked(*v, i + 1);
+  void *end = vec_nth_unchecked(*v, v->length);
   memmove(next, this, end - next);
   memcpy(this, elem, v->element_size);
 }
@@ -225,8 +225,8 @@ void vec_insert(struct vec *v, size_t i, const void *elem) {
 void vec_truncate(struct vec *v, size_t len) {
   vec_ensure_capacity(v, len);
   if (len > v->length) {
-    void *start = vec_nth_unchecked(v, v->length);
-    void *end = vec_nth_unchecked(v, len);
+    void *start = vec_nth_unchecked(*v, v->length);
+    void *end = vec_nth_unchecked(*v, len);
     memset(start, 0, end - start);
   }
   v->length = len;
@@ -234,7 +234,7 @@ void vec_truncate(struct vec *v, size_t len) {
 
 void vec_set(struct vec *v, size_t i, const void *elem) {
   if (i >= v->length) vec_truncate(v, i + 1);
-  void *item = vec_nth(v, i);
+  void *item = vec_nth(*v, i);
   if (elem)
     memcpy(item, elem, v->element_size);
   else
@@ -244,7 +244,7 @@ void vec_set(struct vec *v, size_t i, const void *elem) {
 void vec_push_range(struct vec *v, const void *elems, size_t count) {
   assert(v->element_size && "Element size cannot be 0");
   vec_ensure_capacity(v, v->length + count);
-  void *last = vec_nth_unchecked(v, v->length);
+  void *last = vec_nth_unchecked(*v, v->length);
   v->length += count;
   memmove(last, elems, count * v->element_size);
 }
@@ -253,7 +253,7 @@ void vec_push(struct vec *v, const void *elem) {
   assert(v->element_size && "Element size cannot be 0");
   v->length++;
   vec_ensure_capacity(v, v->length);
-  void *last = vec_nth(v, v->length - 1);
+  void *last = vec_nth(*v, v->length - 1);
   if (elem)
     memcpy(last, elem, v->element_size);
   else
@@ -272,7 +272,7 @@ void vec_destroy(struct vec *v) {
 
 void *vec_new_element(struct vec *v) {
   vec_push(v, nullptr);
-  return vec_nth(v, v->length - 1);
+  return vec_nth(*v, v->length - 1);
 }
 
 #define HASHMAP_MAX_LOAD (0.7)
@@ -576,15 +576,15 @@ void vec_swap(struct vec *v, size_t i, size_t j) {
   assert(j < v->length);
   void *tmp = vec_new_element(v);
   v->length--;
-  void *x = vec_nth(v, i);
-  void *y = vec_nth(v, j); 
+  void *x = vec_nth(*v, i);
+  void *y = vec_nth(*v, j); 
   memcpy(tmp, x, v->element_size);
   memcpy(x, y, v->element_size);
   memcpy(y, tmp, v->element_size);
 }
 
-void *vec_nth(const struct vec *const v, size_t i) {
-  assert(i < v->length);
+void *vec_nth(struct vec v, size_t i) {
+  assert(i < v.length);
   return vec_nth_unchecked(v, i);
 }
 
