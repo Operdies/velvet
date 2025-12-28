@@ -104,6 +104,17 @@ struct velvet_theme {
   struct color palette[16];
 };
 
+struct velvet_render_state_cache {
+  /* remember previous state changes to avoid re-transmitting them */
+  struct {
+    struct cursor position;
+    struct cursor_options style;
+  } cursor;
+  struct {
+    struct screen_cell_style style;
+  } cell;
+};
+
 struct velvet_render {
   int w, h;
   /* multiple buffers used for damage tracking over time */
@@ -114,11 +125,9 @@ struct velvet_render {
   struct velvet_render_buffer staging_buffer;
   int current_buffer;
   struct string draw_buffer;
-  struct screen_cell_style current_style;
-  struct cursor_options current_cursor;
-  struct cursor cursor;
   struct velvet_render_option options;
   struct velvet_theme theme;
+  struct velvet_render_state_cache state;
 };
 
 struct velvet_scene_layout {
@@ -226,6 +235,12 @@ static const struct velvet_theme velvet_theme_default = {
         },
 };
 
+static const struct velvet_render_state_cache render_state_cache_invalidated = {
+    .cursor.position = {.column = -1, .line = -1},
+    .cell.style = {.attr = -1, .bg = {.cmd = -1}, .fg = {.cmd = -1}},
+    .cursor.style = {.style = -1, .visible = false},
+};
+
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
     .renderer =
@@ -235,7 +250,7 @@ static const struct velvet_scene velvet_scene_default = {
                     .no_repeat_wide_chars = false,
                     .display_eol = false,
                 },
-            .cursor = {.column = -1, .line = -1},
+            .state = render_state_cache_invalidated,
             .theme = velvet_theme_default,
 
         },

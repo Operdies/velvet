@@ -360,13 +360,13 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
 }
 
 static void velvet_render_set_cursor_style(struct velvet_render *r, struct cursor_options cursor) {
-  if (r->current_cursor.style != cursor.style) {
+  if (r->state.cursor.style.style != cursor.style) {
     string_push_csi(&r->draw_buffer, 0, INT_SLICE(cursor.style), " q");
   }
-  if (r->current_cursor.visible != cursor.visible) {
+  if (r->state.cursor.style.visible != cursor.visible) {
     string_push_slice(&r->draw_buffer, cursor.visible ? vt_cursor_visible_on : vt_cursor_visible_off);
   }
-  r->current_cursor = cursor;
+  r->state.cursor.style = cursor;
 }
 
 static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style);
@@ -374,16 +374,16 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
 static void velvet_render_position_cursor(struct velvet_render *r, int line, int col) {
   line = CLAMP(line, 0, r->h - 1);
   col = CLAMP(col, 0, r->w - 1);
-  if (r->cursor.line != line && r->cursor.column != col) {
+  if (r->state.cursor.position.line != line && r->state.cursor.position.column != col) {
     string_push_csi(&r->draw_buffer, 0, INT_SLICE(line + 1, col + 1), "H");
-  } else if (r->cursor.line != line) {
+  } else if (r->state.cursor.position.line != line) {
     string_push_csi(&r->draw_buffer, 0, INT_SLICE(line + 1), "d");
-  } else if (r->cursor.column != col) {
+  } else if (r->state.cursor.position.column != col) {
     string_push_csi(&r->draw_buffer, 0, INT_SLICE(col + 1), "G");
   }
 
-  r->cursor.column = col;
-  r->cursor.line = line;
+  r->state.cursor.position.column = col;
+  r->state.cursor.position.line = line;
 }
 
 static void render_buffer_add_damage(struct velvet_render_buffer_line *f, int start, int end, bool consolidate) {
@@ -497,7 +497,7 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         col += repeats * stride;
         if (wide) 
           col++;
-        r->cursor.column = MIN(col + 1, r->w - 1);
+        r->state.cursor.position.column = MIN(col + 1, r->w - 1);
       }
     }
   }
@@ -709,9 +709,7 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->w = m->ws.w;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
   velvet_render_init_buffer(&r->staging_buffer, r->w, r->h);
-  r->current_style = (struct screen_cell_style) { 0 };
-  r->cursor.column = -1;
-  r->cursor.line = -1;
+  r->state = render_state_cache_invalidated;
 }
 
 static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *b) {
@@ -747,6 +745,7 @@ void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func
   for (int i = 0; i < LENGTH(m->renderer.buffers); i++) {
     memset(m->renderer.buffers[i].cells, 0, sizeof(struct screen_cell) * m->renderer.w * m->renderer.h);
   }
+  m->renderer.state = render_state_cache_invalidated;
   velvet_scene_render_damage(m, render_func, context);
 }
 
@@ -949,9 +948,9 @@ static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
 }
 
 static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style) {
-  struct color fg = r->current_style.fg;
-  struct color bg = r->current_style.bg;
-  uint32_t attr = r->current_style.attr;
+  struct color fg = r->state.cell.style.fg;
+  struct color bg = r->state.cell.style.bg;
+  uint32_t attr = r->state.cell.style.attr;
   struct sgr_buffer sgr = {.n = 0};
 
   // 1. Handle attributes
@@ -999,7 +998,7 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
     sgr_color_apply(&sgr, style.bg, false);
   }
 
-  r->current_style = style;
+  r->state.cell.style = style;
 
   if (sgr.n) {
     struct string *w = &r->draw_buffer;
