@@ -103,6 +103,7 @@ struct velvet_render {
   int w, h;
   /* multiple buffers used for damage tracking over time */
   struct velvet_render_buffer buffers[4];
+  struct velvet_render_buffer temp_buffer;
   int current_buffer;
   struct string draw_buffer;
   struct screen_cell_style current_style;
@@ -164,7 +165,7 @@ static const struct velvet_theme velvet_theme_default = {
     .pseudotransparency =
         {
             .enabled = true,
-            .alpha = 0.15f,
+            .alpha = 0.10f,
         },
 };
 

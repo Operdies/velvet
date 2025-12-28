@@ -132,14 +132,16 @@ static struct velvet_window *coord_to_title(struct velvet *v, struct mouse_sgr s
   sgr.row--;
   struct velvet_window *h;
   /* first try to match the title bar */
-  vec_foreach(h, v->scene.windows) {
-    if (h->dragging) continue;
-    struct rect b = h->rect.window;
-    int bw = h->border_width;
-    if (!bw) continue;
-    if (between(sgr.column, b.x + bw, b.x + b.w - bw - 1) /* columns match ? */
-        && sgr.row == b.y + bw - 1 /* line matches ? */) {
-      return h;
+  for (enum velvet_scene_layer layer = VELVET_LAYER_LAST; layer > 0; layer--) {
+    vec_where(h, v->scene.windows, h->layer == layer) {
+      if (h->dragging) continue;
+      struct rect b = h->rect.window;
+      int bw = h->border_width;
+      if (!bw) continue;
+      if (between(sgr.column, b.x + bw, b.x + b.w - bw - 1) /* columns match ? */
+          && sgr.row == b.y + bw - 1 /* line matches ? */) {
+        return h;
+      }
     }
   }
   return nullptr;

@@ -271,20 +271,6 @@ static struct screen_cell normalize_cell(struct velvet_render *r, struct screen_
   return c;
 }
 
-static struct screen_cell blend_cells(struct velvet_render *r, struct screen_cell bottom, struct screen_cell top) {
-  top = normalize_cell(r, top);
-  bottom = normalize_cell(r, bottom);
-  struct screen_cell blended = top;
-
-  float alpha = r->theme.pseudotransparency.alpha;
-  if (top.cp.value == ' ') {
-    blended.cp = bottom.cp;
-    blended.style.fg = velvet_composite_color_blend(top.style.bg, bottom.style.fg, 1.0f - alpha);
-  }
-  blended.style.bg = velvet_composite_color_blend(top.style.bg, bottom.style.bg, 1.0f - alpha);
-  return blended;
-}
-
 static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
 static bool color_equals(struct color a, struct color b);
@@ -293,10 +279,9 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
   /* out of bounds writes here is not a bug. It is expected for controls which are partially off-screen. */
   if (!(line >= 0 && line < r->h)) return;
   if (!(column >= 0 && column < r->w)) return;
-  struct velvet_render_buffer *b = &r->buffers[r->current_buffer];
+  struct velvet_render_buffer *b = &r->temp_buffer;
   struct velvet_render_buffer_line *l = &b->lines[line];
   struct screen_cell *c = l->cells;
-  struct screen_cell empty = { 0 };
   
   /* a wide char cannot start on the last column */
   if (value.cp.is_wide && column >= (r->w - 1)) 
@@ -305,11 +290,6 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
   /* if the previous cell held a wide char, reset it. */
   if (column && c[column-1].cp.is_wide) 
     c[column-1].cp = codepoint_space;
-
-  value = normalize_cell(r, value);
-
-  if (r->theme.pseudotransparency.enabled && !cell_equals(c[column], empty)) 
-    value = blend_cells(r, c[column], value);
 
   c[column] = value;
   if (value.cp.is_wide && column < (r->w - 1)) {
@@ -530,7 +510,7 @@ static struct codepoint codepoint_from_cstr(char *src) {
   return utf8_to_codepoint(result.utf8, &len);
 }
 
-static void velvet_render_calculate_borders(struct velvet_render *r, struct velvet_scene *m, struct velvet_window *host) {
+static void velvet_render_calculate_borders(struct velvet_scene *m, struct velvet_window *host) {
   constexpr int hard = 0;
   constexpr int rounded = 1;
   int style = host->layer == VELVET_LAYER_TILED ? hard : rounded;
@@ -538,6 +518,9 @@ static void velvet_render_calculate_borders(struct velvet_render *r, struct velv
       {"┌", "┘", "┐", "└"},
       {"╭", "╯", "╮", "╰"},
   };
+
+  struct velvet_render *r = &m->renderer;
+
 
   struct codepoint topleft = codepoint_from_cstr(borders[style][0]);
   struct codepoint bottomright = codepoint_from_cstr(borders[style][1]);
@@ -646,14 +629,17 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->h = m->ws.h;
   r->w = m->ws.w;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
+  velvet_render_init_buffer(&r->temp_buffer, r->w, r->h);
   r->current_style = (struct screen_cell_style) { 0 };
   r->cursor.column = -1;
   r->cursor.line = -1;
 }
 
-static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *buffer) {
-  struct screen_cell empty = { 0 };
-  for (int i = 0; i < r->h * r->w; i++) buffer->cells[i] = empty;
+static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *b) {
+  struct screen_cell space = {.cp = codepoint_space, .style.bg = r->theme.background};
+  for (int i = 0; i < r->h * r->w; i++) {
+    b->cells[i] = space;
+  }
 }
 
 static void velvet_render_cycle_buffer(struct velvet_render *r) {
@@ -692,6 +678,44 @@ void velvet_scene_draw_tile_hint(struct velvet_scene *m, struct velvet_window *b
   }
 }
 
+static struct screen_cell blend_cells(struct screen_cell top, struct screen_cell bottom, float alpha) {
+  /* This blend implementation looks a bit off when space is used as a drawing character; */
+  struct screen_cell out = top;
+
+  if (top.cp.value == ' ') {
+    out.cp = bottom.cp;
+    /* if the top cell is blank, draw the glyph from the cell below, but tint it
+     * with the background color of the top cell. This creates the illusion of transparency. */
+    out.style.fg = velvet_composite_color_blend(top.style.bg, bottom.style.fg, alpha);
+  }
+
+  /* always mix background colors */
+  out.style.bg = velvet_composite_color_blend(top.style.bg, bottom.style.bg, alpha);
+  return out;
+}
+
+struct composite_options {
+  float alpha_blend;
+};
+
+static void velvet_scene_rasterize_temp(struct velvet_scene *m, struct composite_options o) {
+  struct screen_cell empty = {0};
+  struct velvet_render *r = &m->renderer;
+  struct velvet_render_buffer *b = get_current_buffer(r);
+  struct velvet_render_buffer *c = &r->temp_buffer;
+  for (int i = 0; i < r->w * r->h; i++) {
+    if (!cell_equals(c->cells[i], empty)) {
+      struct screen_cell top = normalize_cell(r, c->cells[i]);
+      if (o.alpha_blend > 0) {
+        struct screen_cell bottom = normalize_cell(r, b->cells[i]);
+        top = blend_cells(top, bottom, 1.0f - o.alpha_blend);
+      }
+      b->cells[i] = top;
+      c->cells[i] = empty;
+    }
+  }
+}
+
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
   if (m->windows.length == 0) return;
   struct velvet_window *focused = velvet_scene_get_focus(m);
@@ -701,7 +725,21 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   string_clear(&r->draw_buffer);
   if (r->h != m->ws.h || r->w != m->ws.w) {
     velvet_render_init_buffers(m);
-    string_push_cstr(&r->draw_buffer, "\x1b[m\x1b[2J");
+    /* full clear (CSI 2J) causes flickering in some terminals
+     * -- selectively erase everything outside of the draw region instead.
+     * Note that DECERA (erase rectangle) exists, but it is not widely supported. */
+    struct screen_cell_style clear = {.bg = r->theme.background};
+    velvet_render_set_style(r, clear);
+    struct u8_slice EL = u8_slice_from_cstr("\x1b[K");
+    struct u8_slice ED = u8_slice_from_cstr("\x1b[J");
+    /* 1. clear everything to the right of the draw area */
+    for (int i = 0; i < r->h; i++) {
+      velvet_render_position_cursor(r, i, r->w);
+      string_push_slice(&r->draw_buffer, EL);
+    }
+    /* 2. Clear everything below the draw area */
+    velvet_render_position_cursor(r, r->h, 0);
+    string_push_slice(&r->draw_buffer, ED);
   } else {
     velvet_render_clear_buffer(r, get_current_buffer(r));
   }
@@ -711,28 +749,27 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_window_update_title(h);
   }
 
+  struct composite_options opt = {0};
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
+    opt.alpha_blend = 0;
+    if (layer > VELVET_LAYER_TILED)
+      if (r->theme.pseudotransparency.enabled) opt.alpha_blend = r->theme.pseudotransparency.alpha;
     vec_rwhere(h, m->windows, h->layer == layer) {
       if (h->dragging) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
-      velvet_render_calculate_borders(r, m, h);
+      velvet_render_calculate_borders(m, h);
       velvet_render_copy_cells_from_window(r, h);
+      velvet_scene_rasterize_temp(m, opt);
     }
   }
+
   vec_rwhere(h, m->windows, h->dragging) {
-    velvet_render_calculate_borders(r, m, h);
+    opt.alpha_blend = 0;
+    if (r->theme.pseudotransparency.enabled) opt.alpha_blend = r->theme.pseudotransparency.alpha;
+    velvet_render_calculate_borders(m, h);
     velvet_render_copy_cells_from_window(r, h);
+    velvet_scene_rasterize_temp(m, opt);
   }
-
-  {
-    struct velvet_render_buffer *b = get_current_buffer(r);
-    struct screen_cell empty = { 0 };
-    struct screen_cell space = {.cp = codepoint_space, .style.bg = r->theme.background };
-    for (int i = 0; i < r->h * r->w; i++) {
-      if (cell_equals(b->cells[i], empty)) b->cells[i] = space;
-    }
-  }
-
 
   int damage = velvet_render_calculate_damage(r);
   if (damage) {
@@ -747,7 +784,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     int line = cursor->line + focused->rect.client.y + screen->scroll.view_offset;
     int col = cursor->column + focused->rect.client.x;
 
-    bool is_obscured = false;
+    bool cursor_obscured = false;
 
     /* if a window is above the current window and obscures the cursor, we should not show it */
     if (!r->theme.pseudotransparency.enabled) {
@@ -755,18 +792,18 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       vec_where(window, m->windows, window->layer > focused->layer) {
         struct rect w = window->rect.window;
         if (w.y <= line && w.y + w.h > line && w.x <= col && w.x + w.w > col) {
-          is_obscured = true;
+          cursor_obscured = true;
           break;
         }
       }
     }
 
     if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) 
-      is_obscured = true;
+      cursor_obscured = true;
     if (screen_get_scroll_offset(screen) + cursor->line >= screen->h) 
-      is_obscured = true;
+      cursor_obscured = true;
 
-    if (is_obscured) {
+    if (cursor_obscured) {
       /* hide the cursor */
       struct cursor_options hidden = {.visible = false};
       velvet_render_set_cursor_style(r, hidden);
@@ -968,7 +1005,10 @@ void velvet_window_update_title(struct velvet_window *p) {
       string_push_string(&p->title, p->cwd);
 
       char *home = getenv("HOME");
-      if (home) string_replace_inplace_slow(&p->title, home, "~");
+      if (home) { 
+        string_replace_inplace_slow(&p->title, home, "~/");
+        string_replace_inplace_slow(&p->title, "~//", "~/");
+      }
     }
   } else if (!p->title.len && p->cmdline.len) {
     // fallback to using the process as title
