@@ -25,6 +25,7 @@ BUILD ?= debug
 
 RELEASE_TARGET ?= release
 PROFILE_TARGET ?= profile
+RELEASE_LTO_TARGET ?= release_lto
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences
 OUT_DIR ?= bin
 COMMANDS = vv test statusbar keyboard
@@ -45,8 +46,11 @@ LDFLAGS =
 DEBUG_CFLAGS = -O0 -g -fsanitize=address
 DEBUG_LDFLAGS = -fsanitize=address
 
-RELEASE_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD
-RELEASE_LDFLAGS = -flto
+RELEASE_CFLAGS = -Os -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD
+RELEASE_LDFLAGS = 
+
+RELEASE_LTO_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD
+RELEASE_LTO_LDFLAGS = -flto
 
 PROFILE_CFLAGS = -fprofile-instr-generate -fcoverage-mapping
 PROFILE_LDFLAGS = 
@@ -54,7 +58,7 @@ PROFILE_LDFLAGS =
 ifeq ($(BUILD),debug)
 	CFLAGS += $(DEBUG_CFLAGS)
 	LDFLAGS += $(DEBUG_LDFLAGS)
-	# @true: noop which does not get printed
+	# @true: silenced noop
 	STRIP = @true
 	OUT_DIR = bin
 endif
@@ -64,6 +68,13 @@ ifeq ($(BUILD),release)
 	STRIP = strip
 	OUT_DIR = release
 	RELEASE_TARGET = hack
+endif
+ifeq ($(BUILD),release_lto)
+	CFLAGS += $(RELEASE_LTO_CFLAGS)
+	LDFLAGS += $(RELEASE_LTO_LDFLAGS)
+	STRIP = strip
+	OUT_DIR = release_lto
+	RELEASE_LTO_TARGET = hack
 endif
 ifeq ($(BUILD),profile)
 	CFLAGS += $(RELEASE_CFLAGS) $(PROFILE_CFLAGS)
@@ -78,12 +89,15 @@ endif
 all: $(CMD_OUT) $(OUT_DIR)
 
 $(OUT_DIR)/%.c.o: $(OBJECT_DIR)/%.c | $(OUT_DIR)
+	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c | $(OUT_DIR)
+	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(OUT_DIR)/%$(BINARY_EXTENSION): $(OUT_DIR)/%.c.o $(OBJECT_OUT) | $(OUT_DIR)
+	@echo $(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) > $@.txt
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 	$(STRIP) $@
 
@@ -103,6 +117,9 @@ scan-debug:
 	scan-build make all
 scan: scan-debug scan-release
 
+.PHONY: $(RELEASE_LTO_TARGET)
+$(RELEASE_LTO_TARGET):
+	@$(MAKE) BUILD=release_lto all
 
 .PHONY: $(PROFILE_TARGET)
 $(PROFILE_TARGET):
