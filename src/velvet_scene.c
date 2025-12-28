@@ -9,8 +9,9 @@
 #include <termios.h>
 #include <signal.h>
 
-struct color velvet_composite_normalize_colors(struct color c);
-struct color velvet_composite_color_blend(struct color l, struct color r, float opacity);
+static bool cell_equals(struct screen_cell a, struct screen_cell b);
+static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
+static bool color_equals(struct color a, struct color b);
 
 static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from) {
   size_t start = 0;
@@ -262,18 +263,68 @@ void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
   }
 }
 
-static struct screen_cell normalize_cell(struct velvet_render *r, struct screen_cell c) {
-  if (c.style.bg.cmd == COLOR_RESET) c.style.bg = r->theme.background;
-  if (c.style.fg.cmd == COLOR_RESET) c.style.fg = r->theme.foreground;
-  c.style.bg = velvet_composite_normalize_colors(c.style.bg);
-  c.style.fg = velvet_composite_normalize_colors(c.style.fg);
-  if (!c.cp.value) c.cp.value = ' ';
+static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
+  /* ANSI 16 colors */
+  if (n < 16) return t.palette[n];
+
+  /* Color cube */
+  if (n >= 16 && n <= 231) {
+    n -= 16;
+    int r = n / 36;
+    int g = (n / 6) % 6;
+    int b = n % 6;
+
+    static const uint8_t levels[6] = {0, 95, 135, 175, 215, 255};
+
+    return (struct color){.cmd = COLOR_RGB, .r = levels[r], .g = levels[g], .b = levels[b]};
+  }
+
+  /* Grayscale ramp */
+  if (n >= 232) {
+    uint8_t v = 8 + (n - 232) * 10;
+    return (struct color){.cmd = COLOR_RGB, .r = v, .g = v, .b = v};
+  }
+
+  return RGB("#000000");
+}
+
+static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg) {
+  if (c.cmd == COLOR_RESET) return fg ? t.foreground : t.background;
+  if (c.cmd == COLOR_TABLE) return xterm256_to_rgb(t, c.table);
   return c;
 }
 
-static bool cell_equals(struct screen_cell a, struct screen_cell b);
-static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
-static bool color_equals(struct color a, struct color b);
+static struct color color_mult(struct color a, float m) {
+  assert(a.cmd == COLOR_RGB);
+  a.r = CLAMP((float)a.r * m, 0, 255);
+  a.g = CLAMP((float)a.g * m, 0, 255);
+  a.b = CLAMP((float)a.b * m, 0, 255);
+  return a;
+}
+
+static struct color color_add(struct color a, struct color b) {
+  assert(a.cmd == COLOR_RGB);
+  assert(b.cmd == COLOR_RGB);
+  a.r = CLAMP(a.r + b.r, 0, 255);
+  a.g = CLAMP(a.g + b.g, 0, 255);
+  a.b = CLAMP(a.b + b.b, 0, 255);
+  return a;
+}
+
+/* blend colors such that out == a * frac + b * (1.0f-frac) */
+static struct color color_alpha_blend(struct color a, struct color b, float frac) {
+  assert(a.cmd == COLOR_RGB);
+  assert(b.cmd == COLOR_RGB);
+  return color_add(color_mult(a, frac), color_mult(b, 1.0f - frac));
+}
+
+/* convert cell colors to RGB colors based on the current theme, and convert null characters to spaces */
+static struct screen_cell normalize_cell(struct velvet_render *r, struct screen_cell c) {
+  c.style.bg = color_to_rgb(r->theme, c.style.bg, false);
+  c.style.fg = color_to_rgb(r->theme, c.style.fg, true);
+  if (!c.cp.value) c.cp.value = ' ';
+  return c;
+}
 
 static void velvet_render_set_cell(struct velvet_render *r, int line, int column, struct screen_cell value) {
   /* out of bounds writes here is not a bug. It is expected for controls which are partially off-screen. */
@@ -686,11 +737,11 @@ static struct screen_cell blend_cells(struct screen_cell top, struct screen_cell
     out.cp = bottom.cp;
     /* if the top cell is blank, draw the glyph from the cell below, but tint it
      * with the background color of the top cell. This creates the illusion of transparency. */
-    out.style.fg = velvet_composite_color_blend(top.style.bg, bottom.style.fg, alpha);
+    out.style.fg = color_alpha_blend(bottom.style.fg, top.style.bg, alpha);
   }
 
   /* always mix background colors */
-  out.style.bg = velvet_composite_color_blend(top.style.bg, bottom.style.bg, alpha);
+  out.style.bg = color_alpha_blend(bottom.style.bg, top.style.bg, alpha);
   return out;
 }
 
@@ -708,7 +759,7 @@ static void velvet_scene_rasterize_temp(struct velvet_scene *m, struct composite
       struct screen_cell top = normalize_cell(r, c->cells[i]);
       if (o.alpha_blend > 0) {
         struct screen_cell bottom = normalize_cell(r, b->cells[i]);
-        top = blend_cells(top, bottom, 1.0f - o.alpha_blend);
+        top = blend_cells(top, bottom, o.alpha_blend);
       }
       b->cells[i] = top;
       c->cells[i] = empty;

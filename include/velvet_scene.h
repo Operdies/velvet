@@ -97,6 +97,7 @@ struct velvet_theme {
     bool enabled;
     float alpha;
   } pseudotransparency;
+  struct color palette[16];
 };
 
 struct velvet_render {
@@ -149,6 +150,28 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
     .g = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])), .b = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))       \
   }
 
+/* XTERM palette */
+// static const struct color ansi16[16] = {
+//     /* 30–37 */
+//     RGB("#000000"), // black
+//     RGB("#cd0000"), // red
+//     RGB("#00cd00"), // green
+//     RGB("#cdcd00"), // yellow
+//     RGB("#0000ee"), // blue
+//     RGB("#cd00cd"), // magenta
+//     RGB("#00cdcd"), // cyan
+//     RGB("#e5e5e5"), // white (light gray)
+//     /* 90–97 */
+//     RGB("#7f7f7f"), // bright black (dark gray)
+//     RGB("#ff0000"), // bright red
+//     RGB("#00ff00"), // bright green
+//     RGB("#ffff00"), // bright yellow
+//     RGB("#5c5cff"), // bright blue
+//     RGB("#ff00ff"), // bright magenta
+//     RGB("#00ffff"), // bright cyan
+//     RGB("#ffffff"), // bright white
+// };
+
 static const struct velvet_theme velvet_theme_default = {
     .background = RGB("#1e1e2e"),
     .foreground = RGB("#cdd6f4"),
@@ -166,6 +189,28 @@ static const struct velvet_theme velvet_theme_default = {
         {
             .enabled = true,
             .alpha = 0.10f,
+        },
+    .palette =
+        {
+            /* catppuccin-mocha inspired palette */
+            /* 30-37 / 40-47 */
+            RGB("#45475a"), /* black */
+            RGB("#f38ba8"), /* red */
+            RGB("#a6e3a1"), /* green */
+            RGB("#f9e2af"), /* yellow */
+            RGB("#89b4fa"), /* blue */
+            RGB("#f5c2e7"), /* magenta */
+            RGB("#94e2d5"), /* cyan */
+            RGB("#bac2de"), /* white */
+            /* 90-97 / 100-107 */
+            RGB("#585b70"), /* bright black (gray) */
+            RGB("#f38ba8"), /* bright red */
+            RGB("#a6e3a1"), /* bright green */
+            RGB("#f9e2af"), /* bright yellow */
+            RGB("#89b4fa"), /* bright blue */
+            RGB("#f5c2e7"), /* bright magenta */
+            RGB("#94e2d5"), /* bright cyan */
+            RGB("#a6adc8"), /* bright white */
         },
 };
 
