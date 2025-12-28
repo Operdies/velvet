@@ -447,8 +447,15 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 }
 
 static void vte_init_alternate_screen(struct vte *vte) {
-  struct screen *g = &vte->alternate;
-  screen_resize_if_needed(g, vte->columns, vte->rows, false);
+  if (vte->alternate.w != vte->columns || vte->alternate.h != vte->rows) {
+    struct screen new = {.w = vte->columns, .h = vte->rows};
+    screen_initialize(&new, vte->columns, vte->rows);
+    if (vte->primary.cells) {
+      screen_copy_alternate(&new, &vte->alternate);
+      screen_destroy(&vte->alternate);
+    }
+    vte->alternate = new;
+  }
 }
 
 void vte_enter_alternate_screen(struct vte *vte) {
@@ -464,18 +471,6 @@ void vte_enter_alternate_screen(struct vte *vte) {
   struct cursor end = {.column = screen_right(g), .line = screen_bottom(g)};
   screen_erase_between_cursors(g, start, end);
   vte->alternate.cursor = vte->primary.cursor;
-}
-
-static struct cursor clamp_cursor(struct cursor c, int l_max, int c_max) {
-  struct cursor c2 = c;
-  c2.line = CLAMP(0, c.line, l_max);
-  if (c.wrap_pending) {
-    c2.wrap_pending = true;
-    c2.column = c_max + 1;
-  } else {
-    c2.column = CLAMP(0, c.column, c_max);
-  }
-  return c2;
 }
 
 static void vte_init_primary_screen(struct vte *vte) {

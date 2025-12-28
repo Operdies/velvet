@@ -1098,8 +1098,8 @@ void velvet_window_update_title(struct velvet_window *p) {
 
 
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
-  // Pass current size information to vte so it can determine if screens should be resized
-  vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
+  assert(velvet_window->emulator.rows == velvet_window->rect.client.h);
+  assert(velvet_window->emulator.columns == velvet_window->rect.client.w);
   vte_process(&velvet_window->emulator, str);
 }
 

@@ -124,8 +124,6 @@ void screen_move_or_scroll_down(struct screen *g);
 void screen_move_or_scroll_up(struct screen *g);
 void screen_backspace(struct screen *g);
 void screen_carriage_return(struct screen *g);
-void screen_copy(struct screen *restrict dst, const struct screen *const restrict src,
-               bool wrap);
 void screen_destroy(struct screen *screen);
 void screen_erase_rectangle(struct screen *g, int top, int left, int bottom, int right);
 void screen_erase_between_cursors(struct screen *g, struct cursor from,
@@ -137,7 +135,6 @@ void screen_insert_blanks_at_cursor(struct screen *g, int n);
 void screen_move_cursor_relative(struct screen *g, int x, int y);
 void screen_set_cursor_position(struct screen *g, int x, int y);
 void screen_newline(struct screen *g, bool carriage);
-void screen_resize_if_needed(struct screen *g, int w, int h, bool reflow);
 void screen_set_cursor_row(struct screen *g, int y);
 void screen_set_cursor_column(struct screen *g, int x);
 void screen_reset_scroll_region(struct screen *g);
@@ -161,6 +158,7 @@ int screen_bottom(const struct screen *g);
 struct screen_line *screen_get_line(const struct screen *g, int n);
 struct screen_line *screen_get_view_line(const struct screen *g, int n);
 void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src);
+void screen_copy_alternate(struct screen *restrict dst, const struct screen *const restrict src);
 
 int screen_get_scroll_height(struct screen *s);
 int screen_get_scroll_offset(struct screen *s);

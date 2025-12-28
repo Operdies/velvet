@@ -305,20 +305,6 @@ void screen_initialize(struct screen *g, int w, int h) {
   }
 }
 
-/* Ensure the screen is able contain the specified number of cells, potentially realloacting it and copying the previous
- * content */
-void screen_resize_if_needed(struct screen *g, int w, int h, bool wrap) {
-  if (!g->cells) {
-    screen_initialize(g, w, h);
-  } else if (g->h != h || g->w != w) {
-    struct screen new = {.w = w, .h = h};
-    screen_initialize(&new, w, h);
-    screen_copy(&new, g, wrap);
-    screen_destroy(g);
-    *g = new;
-  }
-}
-
 void screen_reset_scroll_region(struct screen *g) {
   screen_set_scroll_region(g, 0, g->h - 1);
 }
@@ -445,9 +431,7 @@ void screen_copy_primary(struct screen *restrict dst, const struct screen *restr
   dst->cursor = (struct cursor){.column = col, .line = row};
 }
 
-/* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
- * and counts on the final screen to be accurate */
-void screen_copy(struct screen *restrict dst, const struct screen *const restrict src, bool wrap) {
+static void screen_copy(struct screen *restrict dst, const struct screen *const restrict src, bool wrap) {
   bool fullscreen = !wrap;
 
   // Preserve the cursor position after the copying operation.
@@ -491,6 +475,25 @@ void screen_copy(struct screen *restrict dst, const struct screen *const restric
   if (dst_cursor.column != -1 && dst_cursor.line != -1) {
     dst->cursor = dst_cursor;
   }
+}
+
+/* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
+ * and counts on the final screen to be accurate */
+void screen_copy_alternate(struct screen *restrict dst, const struct screen *const restrict src) {
+  int h = MIN(src->h, dst->h);
+  int w = MIN(src->w, dst->w);
+  for (int row = 0; row < h ; row++) {
+    const struct screen_line *s = screen_get_line(src, row);
+    struct screen_line *d = screen_get_line(dst, row);
+    for (int col = 0; col < MIN(w, s->eol); col++) {
+      d->cells[col] = s->cells[col];
+    }
+    d->has_newline = s->has_newline;
+    d->eol = MIN(w, s->eol);
+  }
+  dst->cursor = src->cursor;
+  dst->cursor.column = MIN(dst->cursor.column, w - 1);
+  dst->cursor.line = MIN(dst->cursor.line, h - 1);
 }
 
 void screen_backspace(struct screen *g) {
