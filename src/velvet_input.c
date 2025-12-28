@@ -610,6 +610,7 @@ static void velvet_input_send_special(struct velvet *v, struct special_key s, en
 }
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
+  if (e.removed) return;
   // TODO: check keyboard settings of recipient and modify event accordingly
   struct velvet *v = k->data;
   scroll_to_bottom(v);
@@ -670,11 +671,7 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, const struct csi *const c) {
   send_csi_mouse(v, c);
 }
 
-void velvet_input_destroy(struct velvet_input *in) {
-  string_destroy(&in->command_buffer);
-}
-
-static void velvet_keymap_remove_internal(struct velvet_keymap *k) {
+static void velvet_keymap_remove_internal(struct velvet_keymap *const k) {
   if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
 
   // If the kd mapping has continuations, we need to keep the node in the tree.
@@ -697,6 +694,26 @@ static void velvet_keymap_remove_internal(struct velvet_keymap *k) {
   if (!p->on_key && !p->first_child) {
     velvet_keymap_remove_internal(p);
   }
+  free(k);
+}
+
+static void velvet_keymap_destroy(struct velvet_keymap *k) {
+  struct velvet_keymap *chld = k->first_child;
+  for (; chld; ) {
+    chld->parent = nullptr;
+    chld->root = nullptr;
+    struct velvet_keymap *next = chld->next_sibling;
+    velvet_keymap_destroy(chld);
+    chld = next;
+  }
+  /* the remove event is needed to free resources associated with the event */
+  if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
+  free(k);
+}
+
+void velvet_input_destroy(struct velvet_input *in) {
+  string_destroy(&in->command_buffer);
+  velvet_keymap_destroy(in->keymap->root);
 }
 
 static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
@@ -805,10 +822,11 @@ static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
 
 void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence) {
   struct velvet_key_iterator it = { .src = key_sequence };
+  struct velvet_keymap *to_remove = root;
   for (; velvet_key_iterator_next(&it); ) {
-    for (root = root->first_child; root && !key_event_equals(root->key, it.current); root = root->next_sibling);
+    for (to_remove = to_remove->first_child; to_remove && !key_event_equals(to_remove->key, it.current); to_remove = to_remove->next_sibling);
   }
-  if (root) velvet_keymap_remove_internal(root);
+  if (to_remove) velvet_keymap_remove_internal(to_remove);
 }
 
 struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_slice key_sequence) {
