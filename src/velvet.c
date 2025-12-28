@@ -323,7 +323,28 @@ static void start_default_shell(struct velvet *v) {
   velvet_scene_spawn_process(&v->scene, u8_slice_from_cstr(shell));
 }
 
-static void wakeup(void *) {}
+static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {
+  bool resized = false;
+  if (focus->ws.w && focus->ws.h && (focus->ws.w != v->scene.ws.w || focus->ws.h != v->scene.ws.h)) {
+    velvet_scene_resize(&v->scene, focus->ws);
+    resized = true;
+  }
+  v->scene.arrange(&v->scene);
+  return resized;
+}
+
+static void velvet_dispatch_frame(void *data) {
+  struct velvet *v = data;
+  struct velvet_session *focus = velvet_get_focused_session(v);
+  if (focus) {
+    /* skip this frame if a resize occurred */
+    velvet_align_and_arrange(v, focus);
+    v->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
+    velvet_scene_render_damage(&v->scene, velvet_render, v);
+    io_schedule_cancel(&v->event_loop, v->active_render_token);
+    io_schedule_cancel(&v->event_loop, v->idle_render_token);
+  }
+}
 
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
@@ -346,34 +367,17 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_default_config(velvet);
 
+  velvet->idle_render_token = io_schedule_idle(loop, velvet_dispatch_frame, velvet);
+  velvet->min_ms_per_frame = 10;
   for (;;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
-    if (focus) {
-      if (focus->ws.w && focus->ws.h && (focus->ws.w != velvet->scene.ws.w || focus->ws.h != velvet->scene.ws.h)) {
-        velvet_scene_resize(&velvet->scene, focus->ws);
-        velvet->scene.arrange(&velvet->scene);
-        /* after resizing, we want to give clients a bit of time to respond before rendering.
-         * They may not respond at all, so we schedule a wakeup a brief amount of time in the future */
-        io_schedule(loop, 30, wakeup, nullptr);
-      } else {
-        velvet->scene.arrange(&velvet->scene);
-        /* Render the current velvet state.
-         * Note that we render *before* resizing in order to transmit the current state,
-         * and then give clients an opportunity to adjust to the resize. */
-        velvet->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
-        velvet_scene_render_damage(&velvet->scene, velvet_render, velvet);
-      }
-    }
+    if (focus) velvet_align_and_arrange(velvet, focus);
 
     // Set up IO
     vec_clear(&loop->sources);
 
     struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = on_signal, .data = velvet};
-    /* NOTE: the 'h' pointer is only guaranteed to be valid until signals and stdin are processed.
-     * This is because the signal handler will remove closed clients, and the stdin handler
-     * processes hotkeys which can rearrange the order of the pointers.
-     * */
     struct velvet_window *h;
     vec_foreach(h, velvet->scene.windows) {
       struct io_source read_src = {
@@ -408,7 +412,16 @@ void velvet_loop(struct velvet *velvet) {
     }
 
     // Dispatch all pending io
-    io_dispatch(loop);
+    if (io_dispatch(loop)) {
+      if (!io_schedule_exists(loop, velvet->idle_render_token)) {
+        /* schedule a render as soon as io is idle */
+        velvet->idle_render_token = io_schedule_idle(loop, velvet_dispatch_frame, velvet);
+      }
+      if (!io_schedule_exists(loop, velvet->active_render_token)) {
+        /* or schedule a render within a reasonable time */
+        velvet->active_render_token = io_schedule(loop, velvet->min_ms_per_frame, velvet_dispatch_frame, velvet);
+      }
+    }
 
     // quit ?
     struct velvet_window *real_client;
