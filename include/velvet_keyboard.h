@@ -8,6 +8,7 @@ struct special_key {
   char *escape;
 };
 
+/* TODO: Initialize some of these keys from terminfo */
 #define SPECIAL_KEYS                                                                                                   \
   X(F1, "\x1bOP")                                                                                                      \
   X(F2, "\x1bOQ")                                                                                                      \
