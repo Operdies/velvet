@@ -1,8 +1,8 @@
 #ifndef VELVET_KEYBOARD_H
 #define VELVET_KEYBOARD_H
 
-#include "text.h"
 #include <string.h>
+
 struct special_key {
   char *name;
   char *escape;
@@ -30,16 +30,16 @@ struct special_key {
   X(SS3_LEFT, "\x1bOD")                                                                                                \
   X(LEFT, "\x1b[D")                                                                                                    \
   X(ESC, "\x1b")                                                                                                       \
+  X(DEL, "\x1b[3~")                                                                                                    \
+  X(BS, "\x08")                                                                                                        \
   X(BS, "\x7f")                                                                                                        \
   X(SPACE, " ")
 
 static const struct special_key keys[] = {
 #define X(x, y) {.name = #x, .escape = y},
-    SPECIAL_KEYS};
+    SPECIAL_KEYS
 #undef X
-#define X(x, y) static const struct special_key VELVET_KEY_##x = { .name = #x, .escape = y };
-SPECIAL_KEYS
-#undef X
+};
 
 struct velvet_key {
   bool literal;

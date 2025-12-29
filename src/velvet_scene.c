@@ -1152,16 +1152,38 @@ static uint64_t get_id() {
   return id++;
 }
 
+struct termios get_default_terminfo(void) {
+  struct termios tio;
+  int fd = open("/dev/tty", O_RDWR | O_NOCTTY);
+
+  if (fd >= 0) {
+    tcgetattr(fd, &tio);
+    close(fd);
+  } else {
+    /* Fallback: initialize sane defaults manually */
+    memset(&tio, 0, sizeof(tio));
+    tio.c_iflag = ICRNL | IXON | IXANY;
+    tio.c_oflag = OPOST | ONLCR;
+    tio.c_lflag = ICANON | ECHO | ISIG | IEXTEN;
+    tio.c_cflag = CREAD | CS8 | HUPCL;
+
+    tio.c_cc[VINTR] = 3;    /* ^C */
+    tio.c_cc[VQUIT] = 28;   /* ^\ */
+    tio.c_cc[VERASE] = 127; /* DEL */
+    tio.c_cc[VKILL] = 21;   /* ^U */
+    tio.c_cc[VEOF] = 4;     /* ^D */
+    tio.c_cc[VSUSP] = 26;   /* ^Z */
+  }
+  return tio;
+}
+
 bool velvet_window_start(struct velvet_window *velvet_window) {
-  struct winsize velvet_windowsize = {
-      .ws_col = velvet_window->rect.client.w,
-      .ws_row = velvet_window->rect.client.h,
-      .ws_xpixel = velvet_window->rect.client.x_pixel,
-      .ws_ypixel = velvet_window->rect.client.y_pixel,
-  };
+  struct termios tio = get_default_terminfo();
+  struct rect c = velvet_window->rect.client;
+  struct winsize velvet_windowsize = {.ws_col = c.w, .ws_row = c.h, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
   velvet_window->id = get_id();
-  pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
+  pid_t pid = forkpty(&velvet_window->pty, nullptr, &tio, &velvet_windowsize);
   if (pid < 0) {
     ERROR("Unable to spawn process:");
     return false;
@@ -1174,7 +1196,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
         ERROR("chdir:");
       }
     }
-      
+
     string_ensure_null_terminated(&velvet_window->cmdline);
     char id[20];
     snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);

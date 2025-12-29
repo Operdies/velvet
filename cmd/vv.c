@@ -221,6 +221,7 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
 
 int main(int argc, char **argv) {
   setlocale(LC_CTYPE, "");
+  setenv("TERM", "xterm-256color", true);
   struct velvet_args args = velvet_parse_args(argc, argv);
 
   if (args.attach) {
