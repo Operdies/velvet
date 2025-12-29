@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")"
+
 echo =========== Build Debug ==============
 make -j
 echo =========== Build Release ============

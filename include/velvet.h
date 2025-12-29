@@ -100,6 +100,7 @@ struct velvet_session {
   int input;                    // stdin
   int output;                   // stdout
   struct rect ws;
+  struct string cwd;
   struct {
     struct string buffer; // partial commands
     int lines;

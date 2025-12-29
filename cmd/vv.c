@@ -446,8 +446,19 @@ static void vv_source(struct velvet_args args, int sock) {
   }
 }
 
+static void vv_set(int sockfd, char *setting, char *value) {
+  io_write_format_slow(sockfd, "set '%s' '%s'\n", setting, value);
+}
+
 static void vv_configure(struct velvet_args args) {
   int sockfd = vv_connect(args.socket);
+
+  char *wd = getcwd(nullptr, 0);
+  if (wd) {
+    vv_set(sockfd, "cwd", wd);
+    free(wd);
+  }
+
 
   if (args.source) {
     vv_source(args, sockfd);

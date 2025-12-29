@@ -1168,6 +1168,13 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   }
 
   if (pid == 0) {
+    if (velvet_window->cwd.len) {
+      string_ensure_null_terminated(&velvet_window->cwd);
+      if (chdir((char*)velvet_window->cwd.content) == -1) {
+        ERROR("chdir:");
+      }
+    }
+      
     string_ensure_null_terminated(&velvet_window->cmdline);
     char id[20];
     snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);

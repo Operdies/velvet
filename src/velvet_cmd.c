@@ -160,21 +160,30 @@ int u8_slice_digit(struct u8_slice s) {
 }
 
 static void
-velvet_cmd_set_option(struct velvet *v, struct velvet_session *source, struct u8_slice option, struct u8_slice value) {
-  if (!source || source->input == 0) {
-    // the sender is not a client, so we should apply this change to the focused session if possible
-    source = velvet_get_focused_session(v);
-  }
+velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8_slice option, struct u8_slice value) {
+  /* TODO: This sucks. The implementation mixes:
+   * 1. Changing settings on the *active session*
+   * 2. Changing settings on the *sender* (ephemeral CLI, active session, socat, ....)
+   * 3. Changing settings on various server-side subsystems
+   * A common interface to change settings is fine, but mixing all three in a huge if-else is not great */
+
+  struct velvet_session *focus = velvet_get_focused_session(v);
+
   int digit = u8_slice_digit(value);
   bool boolean = digit || (value.len && value.content[0] == 't');
   if (u8_match(option, "lines")) {
-    if (source) source->ws.h = digit;
+    if (focus) focus->ws.h = digit;
   } else if (u8_match(option, "columns")) {
-    if (source) source->ws.w = digit;
+    if (focus) focus->ws.w = digit;
   } else if (u8_match(option, "lines_pixels")) {
-    if (source) source->ws.y_pixel = digit;
+    if (focus) focus->ws.y_pixel = digit;
   } else if (u8_match(option, "columns_pixels")) {
-    if (source) source->ws.x_pixel = digit;
+    if (focus) focus->ws.x_pixel = digit;
+  } else if (u8_match(option, "cwd")) {
+    if (sender) {
+      string_clear(&sender->cwd);
+      string_push_slice(&sender->cwd, value);
+    }
   } else if (u8_match(option, "key_repeat_timeout_ms")) {
     v->input.options.key_repeat_timeout_ms = digit;
   } else if (u8_match(option, "key_chain_timeout_ms")) {
@@ -191,7 +200,7 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *source, struct u8
   } else if (u8_match(option, "display_damage")) {
     velvet_scene_set_display_damage(&v->scene, boolean);
   } else if (u8_match(option, "no_repeat_wide_chars")) {
-    source->features.no_repeat_wide_chars = boolean;
+    focus->features.no_repeat_wide_chars = boolean;
   }
 }
 
@@ -269,23 +278,41 @@ struct window_create_options {
   enum velvet_scene_layer layer;
 };
 
-
-static void velvet_cmd_create_window(struct velvet *v, struct velvet_cmd_arg_iterator *it, struct window_create_options o) {
+static void velvet_cmd_create_window(struct velvet *v,
+                                     struct velvet_cmd_arg_iterator *it,
+                                     struct velvet_session *source,
+                                     struct window_create_options o) {
   struct u8_slice title = {0};
+  struct u8_slice working_directory = {0};
   struct u8_slice cmdline = {0};
 
-  if (!velvet_cmd_arg_iterator_next(it)) return;
-  if (u8_match(it->current, "--title")) {
-    if (!velvet_cmd_arg_iterator_next(it))
-      return;
-    title = it->current;
-    if (!velvet_cmd_arg_iterator_next(it))
-      return;
+  while (velvet_cmd_arg_iterator_next(it)) {
+    if (u8_match(it->current, "--title")) {
+      if (!velvet_cmd_arg_iterator_next(it)) return;
+      title = it->current;
+    } else if (u8_match(it->current, "--working-directory")) {
+      if (!velvet_cmd_arg_iterator_next(it)) return;
+      working_directory = it->current;
+    } else {
+      velvet_cmd_arg_iterator_unget(it);
+      velvet_cmd_arg_iterator_rest(it);
+      cmdline = it->current;
+      break;
+    }
   }
 
-  velvet_cmd_arg_iterator_unget(it);
-  velvet_cmd_arg_iterator_rest(it);
-  cmdline = it->current;
+  if (!working_directory.len) {
+    if (source && source->cwd.len) {
+      working_directory = string_as_u8_slice(source->cwd);
+    }
+  }
+
+  if (!working_directory.len) {
+    struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+    if (focus && focus->cwd.len) {
+      working_directory = string_as_u8_slice(focus->cwd);
+    }
+  }
 
   struct velvet_window win = {
       .border_width = o.border_width,
@@ -294,6 +321,7 @@ static void velvet_cmd_create_window(struct velvet *v, struct velvet_cmd_arg_ite
       .close = o.close,
       .kind = o.kind,
   };
+  if (working_directory.len) string_push_slice(&win.cwd, working_directory);
 
   if (cmdline.len > 2 && cmdline.content[0] == cmdline.content[cmdline.len - 1]) {
     uint8_t fst = cmdline.content[0];
@@ -307,16 +335,16 @@ static void velvet_cmd_create_window(struct velvet *v, struct velvet_cmd_arg_ite
   velvet_scene_spawn_process_from_template(&v->scene, win);
 }
 
-static void velvet_cmd_spawn_notification(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+static void velvet_cmd_spawn_notification(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
   struct window_create_options o = {.border_width = 1,
                                     .close = {.when = VELVET_WINDOW_CLOSE_AFTER_DELAY, .delay_ms = 1500},
                                     .layer = VELVET_LAYER_NOTIFICATION};
-  velvet_cmd_create_window(v, it, o);
+  velvet_cmd_create_window(v, it, source, o);
 }
 
-static void velvet_cmd_spawn_tiled(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+static void velvet_cmd_spawn_tiled(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
   struct window_create_options o = {.border_width = 1, .layer = VELVET_LAYER_TILED};
-  velvet_cmd_create_window(v, it, o);
+  velvet_cmd_create_window(v, it, source, o);
 }
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
@@ -367,7 +395,7 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     } else if (u8_match(command, "map")) {
       velvet_cmd_map(v, &it);
     } else if (u8_match(command, "spawn")) {
-      velvet_cmd_spawn_tiled(v, &it);
+      velvet_cmd_spawn_tiled(v, sender, &it);
     } else if (u8_match(command, "unmap")) {
       struct u8_slice keys;
       if (velvet_cmd_arg_iterator_next(&it)) {
@@ -378,7 +406,7 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
         velvet_log("`unmap' command missing `keys' parameter.");
       }
     } else if (u8_match(command, "notify")) {
-      velvet_cmd_spawn_notification(v, &it);
+      velvet_cmd_spawn_notification(v, sender, &it);
     } else if (u8_match(command, "focus-next")) {
       velvet_scene_set_focus(&v->scene, (v->scene.focus + 1) % v->scene.windows.length);
     } else if (u8_match(command, "focus-previous")) {
