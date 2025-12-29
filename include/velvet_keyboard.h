@@ -21,15 +21,16 @@ struct special_key {
   X(F10, "\x1b[21~")                                                                                                   \
   X(F11, "\x1b[23~")                                                                                                   \
   X(F12, "\x1b[24~")                                                                                                   \
-  X(SS3_UP, "\x1bOA")                                                                                                      \
+  X(SS3_UP, "\x1bOA")                                                                                                  \
   X(UP, "\x1b[A")                                                                                                      \
-  X(SS3_DOWN, "\x1bOB")                                                                                                    \
+  X(SS3_DOWN, "\x1bOB")                                                                                                \
   X(DOWN, "\x1b[B")                                                                                                    \
-  X(SS3_RIGHT, "\x1bOC")                                                                                                   \
+  X(SS3_RIGHT, "\x1bOC")                                                                                               \
   X(RIGHT, "\x1b[C")                                                                                                   \
-  X(SS3_LEFT, "\x1bOD")                                                                                                    \
+  X(SS3_LEFT, "\x1bOD")                                                                                                \
   X(LEFT, "\x1b[D")                                                                                                    \
   X(ESC, "\x1b")                                                                                                       \
+  X(BS, "\x7f")                                                                                                        \
   X(SPACE, " ")
 
 static const struct special_key keys[] = {

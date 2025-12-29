@@ -23,86 +23,92 @@ static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from
   return nullptr;
 }
 
+
+struct rect rect_carve(struct rect source, int x, int y, int width, int height) {
+  assert(source.w >= x + width);
+  assert(source.h >= y + height);
+  int pixels_per_column = (int)((float)source.y_pixel / (float)source.w);
+  int pixels_per_row = (int)((float)source.x_pixel / (float)source.h);
+
+  struct rect out = { .x = x, .y = y, .w = width, .h = height };
+  out.x_pixel = out.w * pixels_per_column;
+  out.y_pixel = out.h * pixels_per_row;
+  return out;
+}
+
 void velvet_scene_arrange(struct velvet_scene *m) {
   int nmaster = m->layout.nmaster;
   float factor = m->layout.mfact;
   struct velvet_window *h;
-  struct {
-    int ws_col, ws_row;
-  } ws = {.ws_col = m->ws.w, .ws_row = m->ws.h};
-  int i, n;
-  int mw, my, sy, sw, nm, ns;
+  int lines = m->ws.h;
+  int columns = m->ws.w;
+  int idx, n_tiled;
+  int master_width, master_y, stack_y, stack_width, n_master_items, n_stack_items;
   int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.w);
   int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.h);
 
-  n = m->windows.length;
-  n = 0;
-  vec_where(h, m->windows, h->layer == VELVET_LAYER_TILED) n++;
+  n_tiled = 0;
+  vec_where(h, m->windows, h->layer == VELVET_LAYER_TILED) n_tiled++;
 
-  i = my = sy = 0;
-  nm = n > nmaster ? nmaster : n;
-  ns = n > nmaster ? n - nmaster : 0;
+  idx = master_y = stack_y = 0;
+  n_master_items = n_tiled > nmaster ? nmaster : n_tiled;
+  n_stack_items = n_tiled > nmaster ? n_tiled - nmaster : 0;
 
   int status_height = 0;
   vec_where(h, m->windows, h->layer == VELVET_LAYER_STATUS) {
-    ws.ws_row -= h->rect.window.h;
     h->border_width = 0;
-    struct rect b = { .x = 0, .y = status_height, .h = 1, .w = ws.ws_col };
+    struct rect b = { .x = 0, .y = status_height, .h = 1, .w = columns };
     velvet_window_resize(h, b);
     status_height += b.h;
   }
 
   if (nmaster <= 0) {
-    mw = 0;
-    sw = ws.ws_col;
-  } else if (n > nmaster) {
-    mw = (int)((float)ws.ws_col * factor);
-    sw = ws.ws_col - mw;
+    master_width = 0;
+    stack_width = columns;
+  } else if (n_tiled > nmaster) {
+    master_width = (int)((float)columns * factor);
+    stack_width = columns - master_width;
   } else {
-    mw = ws.ws_col;
-    sw = 0;
+    master_width = columns;
+    stack_width = 0;
   }
 
   struct velvet_window *p = nullptr;
-  int master_height_left = ws.ws_row - status_height;
-  int master_items_left = nm;
+  int master_height_left = lines - status_height;
+  int master_items_left = n_master_items;
 
-  for (; i < nmaster && i < n; i++) {
+  for (; idx < nmaster && idx < n_tiled; idx++) {
     p = next_tiled(m->windows, p);
     int height = (float)master_height_left / master_items_left;
-    struct rect b = {.x = 0, .y = my, .w = mw, .h = height};
-    b.x_pixel = b.w * pixels_per_column;
-    b.y_pixel = b.h * pixels_per_row;
-    velvet_window_resize(p, b);
-    my += height;
+    struct rect region = rect_carve(m->ws, 0, master_y, master_width, height);
+    velvet_window_resize(p, region);
+    master_y += height;
     master_items_left--;
     master_height_left -= height;
   }
 
-  int stack_height_left = ws.ws_row - status_height;
-  int stack_items_left = ns;
+  int stack_height_left = lines - status_height;
+  int stack_items_left = n_stack_items;
 
-  for (; i < n; i++) {
+  for (; idx < n_tiled; idx++) {
     p = next_tiled(m->windows, p);
     int height = (float)stack_height_left / stack_items_left;
-    struct rect b = {.x = mw, .y = sy, .w = sw, .h = height};
-    b.x_pixel = b.w * pixels_per_column;
-    b.y_pixel = b.h * pixels_per_row;
-    velvet_window_resize(p, b);
-    sy += height;
+    struct rect region = rect_carve(m->ws, master_width, stack_y, stack_width, height);
+    velvet_window_resize(p, region);
+    stack_y += height;
     stack_items_left--;
     stack_height_left -= height;
   }
 
   vec_where(p, m->windows, p->layer == VELVET_LAYER_FLOATING) {
     /* update changes to border size */
-    struct rect b = p->rect.window;
+    struct rect region = p->rect.window;
     /* ensure floating windows are not lost off screen e.g. after a resize */
-    if (b.x >= ws.ws_col) b.x = ws.ws_col - 5;
-    if (b.y >= ws.ws_row) b.y = ws.ws_row - 5;
-    b.x = CLAMP(b.x, -b.w + 3, ws.ws_col - 3);
-    b.y = CLAMP(b.y, -b.h + 2, ws.ws_row - 2);
-    velvet_window_resize(p, b);
+    if (region.x >= columns) region.x = columns - 5;
+    if (region.y >= lines) region.y = lines - 5;
+    region.x = CLAMP(region.x, -region.w + 3, columns - 3);
+    region.y = CLAMP(region.y, -region.h + 2, lines - 2);
+    velvet_window_resize(p, region);
   }
 
   { 
@@ -117,9 +123,9 @@ void velvet_scene_arrange(struct velvet_scene *m) {
     int y = top_pad;
 
     vec_rwhere(p, m->windows, p->layer == VELVET_LAYER_NOTIFICATION) {
-      struct rect r = { .w = notification_width, .h = notification_height, .x = x, .y = y };
-      y += r.h;
-      velvet_window_resize(p, r);
+      struct rect region = rect_carve(m->ws, x, y, notification_width, notification_height);
+      y += region.h;
+      velvet_window_resize(p, region);
     }
   }
 }

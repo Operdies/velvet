@@ -58,6 +58,17 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
     ch = ch + 96;
   }
 
+  for (int i = 0; i < LENGTH(keys); i++) {
+    struct special_key k = keys[i];
+    struct velvet_key_event special = {0};
+    struct u8_slice single = { .content = &ch, .len = 1 };
+    if (u8_slice_equals(single, u8_slice_from_cstr(k.escape))) {
+      special.key.literal = false;
+      special.key.special = k;
+      return special;
+    }
+  }
+
   bool isshift = ch >= 'A' && ch <= 'Z';
   if (!isshift) {
   // TODO: locale aware shift table
@@ -649,7 +660,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
   if (in->state == VELVET_INPUT_STATE_ESC) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    struct velvet_key_event k = {.key.symbol = ESC, .key.literal = true };
+    struct velvet_key_event k = {.key.special = VELVET_KEY_ESC };
     dispatch_key_event(v, k);
   }
 }
