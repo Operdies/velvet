@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
-for ((i=0;i<1000000;i++)); do
-  echo Hello!
+MAX="$1"
+for ((i=0;i<=$MAX;i++)); do
+  printf "Line %d of %d\n" $i $MAX
 done
