@@ -264,12 +264,12 @@ static void on_session_writable(struct io_source *src) {
 
 static void on_window_writable(struct io_source *src) {
   struct velvet *v = src->data;
-  struct velvet_window *vte;
-  vec_find(vte, v->scene.windows, vte->pty == src->fd);
-  assert(vte);
-  if (vte->emulator.pending_input.len) {
-    ssize_t written = io_write(src->fd, string_as_u8_slice(vte->emulator.pending_input));
-    if (written > 0) string_shift_left(&vte->emulator.pending_input, (size_t)written);
+  struct velvet_window *win;
+  vec_find(win, v->scene.windows, win->pty == src->fd);
+  assert(win);
+  if (win->emulator.pending_input.len) {
+    ssize_t written = io_write(src->fd, string_as_u8_slice(win->emulator.pending_input));
+    if (written > 0) string_shift_left(&win->emulator.pending_input, (size_t)written);
   }
 }
 

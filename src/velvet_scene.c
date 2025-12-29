@@ -1060,8 +1060,12 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
   if (velvet_window->pid > 0) {
     int status;
     kill(velvet_window->pid, SIGTERM);
+    /* If a process explicitly handles SIGTERM, tell it in no uncertain terms that
+     * nobody is listening. This fixes an issue when shutting down velvet while a window is being debugged
+     * by lldb-dap which intercepts SIGTERM and prevents the server socket from closing */
+    kill(velvet_window->pid, SIGHUP);
     pid_t result = waitpid(velvet_window->pid, &status, WNOHANG);
-    if (result == -1) velvet_die("waitpid:");
+    if (result == -1) ERROR("waitpid:");
   }
   vte_destroy(&velvet_window->emulator);
   string_destroy(&velvet_window->cmdline);
