@@ -89,9 +89,10 @@ static void send_csi_todo(struct velvet *v) {
   string_clear(&v->input.command_buffer);
 }
 
-static void DISPATCH_FOCUS_OUT(struct velvet *v, const struct csi *const c);
-static void DISPATCH_FOCUS_IN(struct velvet *v, const struct csi *const c);
-static void DISPATCH_SGR_MOUSE(struct velvet *v, const struct csi *const c);
+static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c);
+static void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c);
+static void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c);
+static void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c);
 
 static void mouse_debug_logging(struct mouse_sgr sgr) {
   char *mousebuttons[] = {"left", "middle", "right", "none"};
@@ -181,10 +182,10 @@ static struct velvet_window *coord_to_window(struct velvet *v, struct mouse_sgr 
   return nullptr;
 }
 
-static struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
-  int btn = c->params[0].primary;
-  int col = c->params[1].primary;
-  int row = c->params[2].primary;
+static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
+  int btn = c.params[0].primary;
+  int col = c.params[1].primary;
+  int row = c.params[2].primary;
 
   enum mouse_state mouse_button = btn & 0x03;
   enum mouse_modifiers modifiers = btn & (0x04 | 0x08 | 0x10);
@@ -196,7 +197,7 @@ static struct mouse_sgr mouse_sgr_from_csi(const struct csi *const c) {
       .event_type = event_type,
       .row = row,
       .column = col,
-      .trigger = c->final == 'M' ? mouse_down : mouse_up,
+      .trigger = c.final == 'M' ? mouse_down : mouse_up,
   };
   return sgr;
 }
@@ -228,7 +229,18 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
 
 static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m);
 
-static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
+static bool get_special_key_by_name(char *name, struct special_key *key) {
+  for (int i = 0; i < LENGTH(keys); i++) {
+    struct special_key k = keys[i];
+    if (strcmp(name, k.name) == 0) {
+      *key = k;
+      return true;
+    }
+  }
+  return true;
+}
+
+static void send_csi_mouse(struct velvet *v, struct csi c) {
   struct velvet_input *in = &v->input;
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
 
@@ -322,15 +334,18 @@ static void send_csi_mouse(struct velvet *v, const struct csi *const c) {
   if (do_send) {
     send_mouse_sgr(target, trans);
   } else if (sgr.event_type == mouse_scroll && target->emulator.options.alternate_screen) {
+    struct special_key k = {0};
     /* In the absence of mouse tracking,
      * scroll up/down is treated as arrow keys in the alternate screen
      * Deliberately don't process this key in any keymaps.
      * Mappings related to scrolling should be handled by sequences such as '<S-M-ScrollWheelUp>'
      */
     if (sgr.scroll_direction == scroll_up) {
-      velvet_input_send_special(v, VELVET_KEY_SS3_UP, 0);
+      get_special_key_by_name("SS3_UP", &k);
+      velvet_input_send_special(v, k, 0);
     } else if (sgr.scroll_direction == scroll_down) {
-      velvet_input_send_special(v, VELVET_KEY_SS3_DOWN, 0);
+      get_special_key_by_name("SS3_DOWN", &k);
+      velvet_input_send_special(v, k, 0);
     }
   } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
     struct screen *screen = vte_get_current_screen(&target->emulator);
@@ -419,7 +434,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
 
       switch (KEY(c.leading, c.intermediate, c.final)) {
 #define CSI(l, i, f, fn, _)                                                                                            \
-  case KEY(l, i, f): DISPATCH_##fn(v, &c); break;
+  case KEY(l, i, f): DISPATCH_##fn(v, c); break;
 #include "input_csi.def"
       default: send_csi_todo(v); break;
       }
@@ -580,6 +595,9 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   }
 }
 
+static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
+}
+
 static void dispatch_app(struct velvet *v, uint8_t ch) {
   bool found = false;
   string_push_char(&v->input.command_buffer, ch);
@@ -634,8 +652,9 @@ static void velvet_input_send_literal(struct velvet *v, char s, enum velvey_key_
 
 static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m) {
   /* TODO: Modifiers + respect client keyboard settings */
-  for (char *ch = s.escape; *ch; ch++)
+  for (char *ch = s.escape; *ch; ch++) {
     send_byte(v, *ch);
+  }
 }
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
@@ -678,25 +697,26 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
   if (in->state == VELVET_INPUT_STATE_ESC) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    struct velvet_key_event k = {.key.special = VELVET_KEY_ESC };
+    struct velvet_key_event k = { 0 };
+    get_special_key_by_name("ESC", &k.key.special);
     dispatch_key_event(v, k);
   }
 }
 
-static void dispatch_focus(struct velvet *v, const struct csi *const c) {
+static void dispatch_focus(struct velvet *v, struct csi c) {
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  if (focus->emulator.options.focus_reporting) send(v, c->final == 'O' ? vt_focus_out : vt_focus_in);
-  if (c->final == 'I' && v->input.input_socket)
+  if (focus->emulator.options.focus_reporting) send(v, c.final == 'O' ? vt_focus_out : vt_focus_in);
+  if (c.final == 'I' && v->input.input_socket)
     v->focused_socket = v->input.input_socket;
 }
 
-void DISPATCH_FOCUS_OUT(struct velvet *v, const struct csi *const c) {
+void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c) {
   dispatch_focus(v, c);
 }
-void DISPATCH_FOCUS_IN(struct velvet *v, const struct csi *const c) {
+void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c) {
   dispatch_focus(v, c);
 }
-void DISPATCH_SGR_MOUSE(struct velvet *v, const struct csi *const c) {
+void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   send_csi_mouse(v, c);
 }
 
