@@ -475,8 +475,26 @@ static bool keymap_has_mapping(struct velvet_keymap *k) {
   return false;
 }
 
+static struct velvet_key_event key_normalize(struct velvet_key_event key) {
+  /* just treat alt the same as meta for all practical purposes */
+  if ((key.modifiers & MODIFIER_ALT) || (key.modifiers & MODIFIER_META)) {
+    key.modifiers &= ~MODIFIER_ALT;
+    key.modifiers |= MODIFIER_META;
+  }
+  if (key.modifiers & MODIFIER_SHIFT) {
+    if (key.key.literal) {
+      char ch = key.key.symbol;
+      if (ch >= 'A' && ch <= 'Z') ch += 32;
+      key.key.symbol = ch;
+    }
+  }
+  return key;
+}
+
 /* TODO: How should meta/alt behave */ 
 static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
+  k1 = key_normalize(k1);
+  k2 = key_normalize(k2);
   if (k1.modifiers != k2.modifiers) return false;
   if (k1.key.literal != k2.key.literal) return false;
   if (k1.key.literal) return k1.key.symbol == k2.key.symbol;
@@ -784,7 +802,7 @@ static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
 
   if (key_end == 0 || (key_end - cursor) < 3) {
     /* basic ascii key */
-    it->current = (struct velvet_key_event){.key = {.literal = true, .symbol = ch}};
+    it->current = key_event_from_byte(ch);
     it->cursor = cursor + 1;
     it->current_range = u8_slice_range(t, cursor, cursor + 1);
     return true;
