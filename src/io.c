@@ -99,7 +99,7 @@ int io_dispatch(struct io *io) {
     for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < io->max_iterations; repeats++) {
       const int poll_ms = 0;
       // Read output
-      if (pfd->revents & POLLIN && src->on_readable) {
+      if ((pfd->revents & POLLIN) && src->on_readable) {
         src->on_readable(src);
       } else if (pfd->revents & POLLIN) {
         int n = read(pfd->fd, io->buffer, sizeof(io->buffer));
@@ -113,8 +113,8 @@ int io_dispatch(struct io *io) {
           if (errno == EIO) {
             ERROR("EIO:");
             // assume this error is non-recoverable and close.
-            struct u8_slice s = {0};
-            src->on_read(src, s);
+            struct u8_slice zero = {0};
+            src->on_read(src, zero);
             break;
           }
           ERROR("read:");
@@ -126,6 +126,13 @@ int io_dispatch(struct io *io) {
       // write input
       if (pfd->revents & POLLOUT) {
         src->on_writable(src);
+      }
+      if (pfd->revents & POLLHUP) {
+        struct u8_slice zero = {0};
+        if (src->on_read) src->on_read(src, zero);
+        else if (src->on_readable) src->on_readable(src);
+        else if (src->on_writable) src->on_writable(src);
+        break;
       }
       pfd->revents = 0;
       int poll_ret = poll(pfd, 1, poll_ms);
