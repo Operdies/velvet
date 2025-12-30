@@ -233,6 +233,7 @@ void vec_truncate(struct vec *v, size_t len) {
 }
 
 void vec_set(struct vec *v, size_t i, const void *elem) {
+  assert(i < 1e20);
   if (i >= v->length) vec_truncate(v, i + 1);
   void *item = vec_nth(*v, i);
   if (elem)

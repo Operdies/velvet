@@ -23,16 +23,19 @@ struct rect rect_carve(struct rect source, int x, int y, int width, int height) 
   return out;
 }
 
+static bool managed(struct velvet_window *w) {
+  return w->layer == VELVET_LAYER_FLOATING || w->layer == VELVET_LAYER_TILED;
+}
+
 static bool visible(struct velvet_scene *m, struct velvet_window *w) {
+  if (!managed(w)) return true;
   return m->view & w->tags;
 }
 
 static void ensure_focus(struct velvet_scene *scene) {
   struct velvet_window *focus = velvet_scene_get_focus(scene);
   if (!focus || !visible(scene, focus)) {
-    vec_find(focus,
-             scene->windows,
-             visible(scene, focus) && focus->layer == (VELVET_LAYER_TILED || focus->layer == VELVET_LAYER_FLOATING));
+    vec_find(focus, scene->windows, managed(focus) && visible(scene, focus));
     if (focus) velvet_scene_set_focus(scene, vec_index(&scene->windows, focus));
   }
 }
@@ -130,7 +133,7 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
   int stack_height_left = lines - status_height;
   int stack_items_left = n_stack_items;
 
-  vec_where(win, scene->windows, idx < n_tiled && win->layer == VELVET_LAYER_TILED && visible(scene, win)) {
+  vec_where(win, scene->windows, visible(scene, win) && win->layer == VELVET_LAYER_TILED) {
     if (idx < nmaster) {
       int height = (float)master_height_left / master_items_left;
       struct rect region = rect_carve(scene->ws, 0, master_y, master_width, height);
@@ -203,6 +206,48 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
   return nullptr;
 }
 
+struct velvet_window *velvet_scene_focus_previous(struct velvet_scene *m) {
+  int n = (int)m->windows.length;
+  int f = (int)m->focus;
+
+  for (int i = f - 1; i >= 0; i--) {
+    struct velvet_window *w = vec_nth(m->windows, i);
+    if (managed(w) && visible(m, w)) {
+      velvet_scene_set_focus(m, i);
+      return w;
+    }
+  }
+  for (int i = n - 1; i >= f; i--) {
+    struct velvet_window *w = vec_nth(m->windows, i);
+    if (managed(w) && visible(m, w)) {
+      velvet_scene_set_focus(m, i);
+      return w;
+    }
+  }
+  return nullptr;
+}
+
+struct velvet_window *velvet_scene_focus_next(struct velvet_scene *m) {
+  int n = (int)m->windows.length;
+  int f = (int)m->focus;
+
+  for (int i = f + 1; i < n; i++) {
+    struct velvet_window *w = vec_nth(m->windows, i);
+    if (managed(w) && visible(m, w)) {
+      velvet_scene_set_focus(m, i);
+      return w;
+    }
+  }
+  for (int i = 0; i <= f; i++) {
+    struct velvet_window *w = vec_nth(m->windows, i);
+    if (managed(w) && visible(m, w)) {
+      velvet_scene_set_focus(m, i);
+      return w;
+    }
+  }
+  return nullptr;
+}
+
 void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
   if (m->focus != focus) {
     struct velvet_window *current_focus = vec_nth(m->windows, m->focus);
@@ -211,28 +256,6 @@ void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
     host_notify_focus(current_focus, false);
     host_notify_focus(new_focus, true);
   }
-}
-
-static void velvet_scene_swap_previous(struct velvet_scene *m) {
-  if (m->focus > 0 && m->windows.length > 1) {
-    velvet_scene_swap_clients(m, m->focus, m->focus - 1);
-    velvet_scene_set_focus(m, m->focus - 1);
-  }
-}
-
-static void velvet_scene_swap_next(struct velvet_scene *m) {
-  if (m->focus < m->windows.length - 1 && m->windows.length > 1) {
-    velvet_scene_swap_clients(m, m->focus, m->focus + 1);
-    velvet_scene_set_focus(m, m->focus + 1);
-  }
-}
-
-static void velvet_scene_focus_next(struct velvet_scene *m) {
-  velvet_scene_set_focus(m, (m->focus + 1) % m->windows.length);
-}
-
-static void velvet_scene_focus_previous(struct velvet_scene *m) {
-  velvet_scene_set_focus(m, (m->focus + m->windows.length - 1) % m->windows.length);
 }
 
 static void velvet_scene_zoom(struct velvet_scene *m) {

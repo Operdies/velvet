@@ -459,15 +459,25 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     } else if (u8_match(command, "notify")) {
       velvet_cmd_spawn_notification(v, sender, &it);
     } else if (u8_match(command, "focus-next")) {
-      velvet_scene_set_focus(&v->scene, (v->scene.focus + 1) % v->scene.windows.length);
+      velvet_scene_focus_next(&v->scene);
     } else if (u8_match(command, "focus-previous")) {
-      velvet_scene_set_focus(&v->scene, (v->scene.focus + v->scene.windows.length - 1) % v->scene.windows.length);
+      velvet_scene_focus_previous(&v->scene);
     } else if (u8_match(command, "swap-next")) {
-      vec_swap(&v->scene.windows, v->scene.focus, (v->scene.focus + 1) % v->scene.windows.length);
-      velvet_scene_set_focus(&v->scene, (v->scene.focus + 1) % v->scene.windows.length);
+      struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+      struct velvet_window *next = velvet_scene_focus_next(&v->scene);
+      if (focus != next) {
+        int i1 = vec_index(&v->scene.windows, focus);
+        int i2 = vec_index(&v->scene.windows, next);
+        vec_swap(&v->scene.windows, i1, i2);
+      }
     } else if (u8_match(command, "swap-previous")) {
-      vec_swap(&v->scene.windows, v->scene.focus, (v->scene.focus + v->scene.windows.length - 1) % v->scene.windows.length);
-      velvet_scene_set_focus(&v->scene, (v->scene.focus + v->scene.windows.length - 1) % v->scene.windows.length);
+      struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+      struct velvet_window *prev = velvet_scene_focus_previous(&v->scene);
+      if (focus != prev) {
+        int i1 = vec_index(&v->scene.windows, focus);
+        int i2 = vec_index(&v->scene.windows, prev);
+        vec_swap(&v->scene.windows, i1, i2);
+      }
     } else if (u8_match(command, "quit")) {
       v->quit = true;
     } else if (u8_match(command, "set")) {

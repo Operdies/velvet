@@ -135,6 +135,7 @@ static void socket_accept(struct io_source *src) {
   int client_fd = accept(src->fd, nullptr, nullptr);
   if (client_fd == -1) {
     ERROR("accept:");
+    return;
   }
 
   struct velvet_session c = { .socket = client_fd };

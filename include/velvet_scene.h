@@ -163,6 +163,8 @@ void velvet_scene_resize(struct velvet_scene *m, struct rect w);
 void velvet_scene_arrange(struct velvet_scene *m);
 void velvet_scene_destroy(struct velvet_scene *m);
 void velvet_scene_set_focus(struct velvet_scene *m, size_t focus);
+struct velvet_window *velvet_scene_focus_previous(struct velvet_scene *m);
+struct velvet_window *velvet_scene_focus_next(struct velvet_scene *m);
 void velvet_scene_set_display_damage(struct velvet_scene *m, bool track_damage);
 void velvet_scene_draw_tile_hint(struct velvet_scene *m, struct velvet_window *before);
 
