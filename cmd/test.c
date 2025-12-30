@@ -1017,7 +1017,8 @@ void test_velvet_cmd() {
   struct velvet_cmd_iterator it;
   struct velvet_cmd_arg_iterator argit;
   struct u8_slice config = u8_slice_from_cstr("map   <C-w> 123\n"
-                                              "map '<C-x>c' 'spawn zsh'"
+                                              "map '<C-x>c' 'spawn zsh'\n"
+                                              "'spawn' 'bash'\n"
                                               ";detach\n"
                                               ";'detach'\n"
                                               ";"
@@ -1041,6 +1042,17 @@ void test_velvet_cmd() {
     argit = (struct velvet_cmd_arg_iterator){.src = it.current};
     assert_u8_is(it.current, "map '<C-x>c' 'spawn zsh'");
     char *expected[] = {"map", "<C-x>c", "spawn zsh"};
+    for (int i = 0; i < LENGTH(expected); i++) {
+      assert(velvet_cmd_arg_iterator_next(&argit));
+      assert_u8_is(argit.current, expected[i]);
+    }
+    assert(!velvet_cmd_arg_iterator_next(&argit));
+  }
+  {
+    assert(velvet_cmd_iterator_next(&it));
+    argit = (struct velvet_cmd_arg_iterator){.src = it.current};
+    assert_u8_is(it.current, "'spawn' 'bash'");
+    char *expected[] = {"spawn", "bash"};
     for (int i = 0; i < LENGTH(expected); i++) {
       assert(velvet_cmd_arg_iterator_next(&argit));
       assert_u8_is(argit.current, expected[i]);
@@ -1104,26 +1116,6 @@ void test_velvet_cmd() {
   }
   assert(!velvet_cmd_iterator_next(&it));
 }
-
-// static void assert_screen_line_equals_cstr(struct screen_line *l, char *expected) {
-//   struct u8_slice ex = u8_slice_from_cstr(expected);
-//   char buf[l->eol + 1];
-//   for (int i = 0; i < l->eol; i++) buf[i] = (char)l->cells[i].cp.value;
-//   buf[l->eol] = 0;
-//   struct u8_slice actual = u8_slice_from_cstr(buf);
-//   assert(u8_slice_equals(ex, actual));
-// }
-//
-// static int cstr_to_cell_buffer(struct screen_cell *buffer, int bufsize, char *cstr) {
-//   struct u8_slice slice = u8_slice_from_cstr(cstr);
-//   struct u8_slice_codepoint_iterator it = {.src = slice};
-//
-//   int i = 0;
-//   for (; i < bufsize && u8_slice_codepoint_iterator_next(&it); i++) {
-//     buffer[i].cp = it.current;
-//   }
-//   return i;
-// }
 
 int main(void) {
   test_input_output();
