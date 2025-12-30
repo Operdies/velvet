@@ -52,12 +52,6 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
   if (ch == 0)
     return (struct velvet_key_event){.key.literal = true, .key.symbol = ' ', .modifiers = MODIFIER_CTRL};
 
-  struct velvet_key_event k = {0};
-  bool iscntrl = CTRL(ch) == ch;
-  if (iscntrl) {
-    ch = ch + 96;
-  }
-
   for (int i = 0; i < LENGTH(keys); i++) {
     struct special_key k = keys[i];
     struct velvet_key_event special = {0};
@@ -69,12 +63,23 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
     }
   }
 
+  struct velvet_key_event k = {0};
+  bool iscntrl = CTRL(ch) == ch;
+  if (iscntrl) {
+    ch = ch + 96;
+  }
+
   bool isshift = ch >= 'A' && ch <= 'Z';
   if (!isshift) {
   // TODO: locale aware shift table
-    bool shift_table[] = {
-        ['!'] = '1', ['@'] = 2, ['#'] = 3, ['$'] = 4, ['%'] = 5, ['^'] = 6, ['&'] = 7, ['*'] = 8, ['('] = 9, [')'] = 0};
-    isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
+  bool shift_table[] = {
+      ['!'] = '1', ['@'] = '2', ['#'] = '3', ['$'] = '4',
+      ['%'] = '5', ['^'] = '6', ['&'] = '7', ['*'] = '8',
+      ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.',
+      [':'] = ';', ['"'] = '\'', ['|'] = '\\', ['~'] = '`',
+      ['?'] = '/', ['{'] = '[', ['}'] = ']',
+  };
+  isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
   }
 
   k.key.symbol = ch;
@@ -770,8 +775,7 @@ static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
   assert(s.len > 0);
 
   if (s.len == 1) {
-    k.literal = true;
-    k.symbol = s.content[0];
+    k = key_event_from_byte(s.content[0]).key;
     *result = k;
     return true;
   }
