@@ -283,30 +283,44 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
 }
 
 static void velvet_default_config(struct velvet *v) {
-  char *config = "map <C-x>c 'spawn zsh'\n"
-                 "map <C-x>d detach\n"
-                 "map <C-x>t set layer tiled\n"
-                 "map <C-x>f set layer floating\n"
-                 "map -r <C-x>b spawn bash\n"
-                 "map -r <C-x>x incborder\n"
-                 "map -r <C-x>a decborder\n"
-                 "map -r <C-x>[ decfactor\n"
-                 "map -r <C-x>] incfactor\n"
-                 "map -r <C-x>i incnmaster\n"
-                 "map -r <C-x>o decnmaster\n"
-                 "map <C-x><C-x> put <C-x>\n"
-                 "map <C-x>,,, set display_damage true\n"
-                 "map <C-x>... set display_damage false\n"
-                 "map -r '<C-x><C-j>' focus-next\n"
-                 "map -r '<C-x><C-k>' focus-previous\n"
-                 "map -r '<C-x>j' swap-next\n"
-                 "map -r '<C-x>k' swap-previous\n";
+  struct string config = {0};
+  string_push_cstr(&config,
+                   "map <C-x>c     'spawn       zsh'\n"
+                   "map <C-x>d     detach\n"
+                   "map <C-x><C-x> put          <C-x>\n"
+                   "map <C-x>t     set          layer          tiled\n"
+                   "map <C-x>f     set          layer          floating\n"
+                   "map <C-x>,,,   set          display_damage true\n"
+                   "map <C-x>...   set          display_damage false\n"
+                   "map -r         <C-x>b       spawn          bash\n"
+                   "map -r         <C-x>x       incborder\n"
+                   "map -r         <C-x>a       decborder\n"
+                   "map -r         <C-x>[       decfactor\n"
+                   "map -r         <C-x>]       incfactor\n"
+                   "map -r         <C-x>i       incnmaster\n"
+                   "map -r         <C-x>o       decnmaster\n"
+                   "map -r         '<C-x><C-j>' focus-next\n"
+                   "map -r         '<C-x><C-k>' focus-previous\n"
+                   "map -r         '<C-x>j'     swap-next\n"
+                   "map -r         '<C-x>k'     swap-previous\n"
+                   );
 
-  struct u8_slice cfg = u8_slice_from_cstr(config);
+  for (int i = 1; i <= 9; i++) {
+    string_push_format_slow(&config, "map <M-%d>      view       %d\n", i, 1 << (i - 1));
+    string_push_format_slow(&config, "map <S-M-%d>    tag        %d\n", i, 1 << (i - 1));
+    string_push_format_slow(&config, "map <C-x>%d     toggletag  %d\n", i, 1 << (i - 1));
+    string_push_format_slow(&config, "map <C-x><M-%d> toggleview %d\n", i, 1 << (i - 1));
+  }
+  string_push_format_slow(&config, "map <M-0>      view %d\n", (1 << 10) - 1); /* view all */
+  string_push_format_slow(&config, "map <M-TAB>    view %d\n", 0);             /* 0 -> previous mask */
+  string_push_format_slow(&config, "map <S-M-0>    tag %d\n", (1 << 10) - 1);  /* tag all */
+
+  struct u8_slice cfg = string_as_u8_slice(config);
   struct velvet_cmd_iterator it = {.src = cfg};
   while (velvet_cmd_iterator_next(&it)) {
     velvet_cmd(v, 0, it.current);
   }
+  string_destroy(&config);
 }
 
 
@@ -334,12 +348,66 @@ static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *fo
   return resized;
 }
 
+static void string_push_color(struct string *str, struct color rgb, bool fg) {
+  assert(rgb.cmd == COLOR_RGB);
+  int cmd = fg ? 38 : 48;
+  string_push_format_slow(str, "\x1b[%d;2;%d;%d;%dm", cmd, rgb.r, rgb.g, rgb.b);
+}
+static void string_push_bg(struct string *str, struct color rgb) {
+  string_push_color(str, rgb, false);
+}
+static void string_push_fg(struct string *str, struct color rgb) {
+  string_push_color(str, rgb, true);
+}
+
+static int status_winid = 1;
+
+static bool occupied(struct velvet_scene *s, uint32_t tag) {
+  struct velvet_window *w;
+  vec_where(w,
+            s->windows,
+            (w->layer == VELVET_LAYER_FLOATING || w->layer == VELVET_LAYER_TILED) && w->tags & tag) return true;
+  return false;
+}
+
+static void draw_status(struct velvet *v) {
+  static struct string buf = {0};
+  string_clear(&buf);
+  struct velvet_window *status;
+  int numtags = 9;
+  vec_find(status, v->scene.windows, status->id == status_winid);
+  assert(status);
+
+  struct velvet_theme t = v->scene.renderer.theme;
+  string_push_bg(&buf, t.mantle);
+  string_push_fg(&buf, t.mantle);
+  string_push_format_slow(&buf, "\r\x1b[K");
+
+  for (int i = 0; i < numtags; i++) {
+    int tagmask = 1 << i;
+    bool tag_visible = v->scene.view & tagmask;
+    if (tag_visible) {
+      string_push_bg(&buf, t.status.visible);
+    } else if (occupied(&v->scene, tagmask)) {
+      string_push_bg(&buf, t.status.not_visible);
+    } else {
+      /* hide empty tags */
+      continue;
+    }
+
+    string_push_format_slow(&buf, " %d ", i + 1);
+  }
+  string_push_bg(&buf, t.mantle);
+  vte_process(&status->emulator, string_as_u8_slice(buf));
+}
+
 static void velvet_dispatch_frame(void *data) {
   struct velvet *v = data;
+
   struct velvet_session *focus = velvet_get_focused_session(v);
   if (focus) {
-    /* skip this frame if a resize occurred */
     velvet_align_and_arrange(v, focus);
+    draw_status(v);
     v->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
     velvet_scene_render_damage(&v->scene, velvet_render, v);
     io_schedule_cancel(&v->event_loop, v->active_render_token);
@@ -364,6 +432,20 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_scene_resize(&velvet->scene, ws);
   start_default_shell(velvet);
+
+  struct velvet_window status_win = {
+      .id = status_winid,
+      .border_width = 0,
+      .layer = VELVET_LAYER_STATUS,
+      .emulator.options =
+          {
+              .auto_wrap_mode = false,
+              .alternate_screen = true,
+          },
+  };
+
+  vec_push(&velvet->scene.windows, &status_win);
+
   velvet->scene.arrange(&velvet->scene);
 
   velvet_default_config(velvet);
@@ -380,7 +462,7 @@ void velvet_loop(struct velvet *velvet) {
 
     struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = on_signal, .data = velvet};
     struct velvet_window *h;
-    vec_foreach(h, velvet->scene.windows) {
+    vec_where(h, velvet->scene.windows, h->pty && h->pid) {
       struct io_source read_src = {
         .data = velvet,
         .fd = h->pty,
@@ -428,8 +510,8 @@ void velvet_loop(struct velvet *velvet) {
     struct velvet_window *real_client;
     vec_find(real_client,
              velvet->scene.windows,
-             real_client->kind == VELVET_WINDOW_PTY_HOST && real_client->layer != VELVET_LAYER_NOTIFICATION &&
-                 real_client->layer != VELVET_LAYER_BACKGROUND);
+             real_client->kind == VELVET_WINDOW_PTY_HOST &&
+                 (real_client->layer == VELVET_LAYER_TILED || real_client->layer == VELVET_LAYER_FLOATING));
 
     if (!real_client || velvet->quit) break;
   }

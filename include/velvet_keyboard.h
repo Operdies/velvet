@@ -8,6 +8,12 @@ struct special_key {
   char *escape;
 };
 
+static char VELVET_SHIFT_TABLE[] = {
+    ['!'] = '1',  ['@'] = '2', ['#'] = '3', ['$'] = '4', ['%'] = '5', ['^'] = '6', ['&'] = '7',
+    ['*'] = '8',  ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.', [':'] = ';', ['"'] = '\'',
+    ['|'] = '\\', ['~'] = '`', ['?'] = '/', ['{'] = '[', ['}'] = ']',
+};
+
 /* TODO: Initialize some of these keys from terminfo */
 #define SPECIAL_KEYS                                                                                                   \
   X(F1, "\x1bOP")                                                                                                      \

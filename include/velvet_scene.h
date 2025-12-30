@@ -50,6 +50,7 @@ struct velvet_window {
   enum velvet_window_kind kind;
   enum velvet_scene_layer layer;
   bool dragging;
+  uint32_t tags;
 };
 
 void velvet_window_destroy(struct velvet_window *velvet_window);
@@ -86,11 +87,9 @@ struct velvet_render_buffer {
 
 struct velvet_theme {
   struct {
-    struct screen_cell_style title, outline;
-  } inactive;
-  struct {
-    struct screen_cell_style title, outline;
-  } active;
+    struct color active;
+    struct color inactive;
+  } title;
   struct color background;
   struct color foreground;
   struct {
@@ -102,6 +101,11 @@ struct velvet_theme {
     float alpha;
   } pseudotransparency;
   struct color palette[16];
+  struct {
+    struct color visible;
+    struct color not_visible;
+  } status;
+  struct color mantle;
 };
 
 struct velvet_render_state_cache {
@@ -133,6 +137,8 @@ struct velvet_render {
 struct velvet_scene_layout {
   int nmaster;
   float mfact;
+  int notification_width;
+  int notification_height;
 };
 
 struct velvet_scene {
@@ -142,8 +148,14 @@ struct velvet_scene {
   struct velvet_render renderer;
   struct velvet_scene_layout layout;
   void (*arrange)(struct velvet_scene* scene);
+  uint32_t view;
+  uint32_t prev_view;
 };
 
+void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask);
+void velvet_scene_toggle_view(struct velvet_scene *scene, uint32_t view_mask);
+void velvet_scene_set_tags(struct velvet_scene *scene, uint32_t tag_mask);
+void velvet_scene_toggle_tags(struct velvet_scene *scene, uint32_t tag_mask);
 void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
@@ -196,20 +208,21 @@ static const struct velvet_theme velvet_theme_default = {
             .background = RGB("#f5e0dc"),
             .foreground = RGB("#1e1e2e"),
         },
-    .active =
+    .title =
         {
-            .outline = {.attr = 0, .fg = RGB("#f38ba8")},
-            .title = {.attr = ATTR_BOLD, .fg = RGB("#f38ba8")},
-        },
-    .inactive =
-        {
-            .outline = {.attr = 0, .fg = RGB("#b4befe")},
-            .title = {.attr = 0, .fg = RGB("#b4befe")},
+            .active = RGB("#f38ba8"),
+            .inactive = RGB("#b4befe"),
         },
     .pseudotransparency =
         {
             .enabled = true,
             .alpha = 0.10f,
+        },
+    .mantle = RGB("#181825"),
+    .status =
+        {
+            .visible = RGB("#f38ba8"),
+            .not_visible = RGB("#b4befe"),
         },
     .palette =
         {
@@ -255,7 +268,15 @@ static const struct velvet_scene velvet_scene_default = {
 
         },
     .arrange = velvet_scene_arrange,
-    .layout = {.nmaster = 1, .mfact = 0.5f},
+    .layout =
+        {
+            .nmaster = 1,
+            .mfact = 0.5f,
+            .notification_height = 5,
+            .notification_width = 40,
+        },
+    .view = 1,
+    .prev_view = 1,
 };
 
 #endif // VELVET_SCENE_H

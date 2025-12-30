@@ -144,19 +144,20 @@ struct velvet_action_data {
   struct string cmd;
 };
 
-int u8_slice_digit(struct u8_slice s) {
-  if (s.len == 0) return 0;
+static bool u8_slice_digit(struct u8_slice s, int *digit) {
+  if (s.len == 0) return false;
   size_t i, v, sign;
   i = v = 0;
   sign = 1;
   if (s.content[i] == '-') sign = -1, i++;
   for (; i < s.len; i++) {
     uint8_t ch = s.content[i];
-    if (!(ch >= '0' && ch <= '9')) return 0;
+    if (!(ch >= '0' && ch <= '9')) return false;
     v *= 10;
     v += ch - '0';
   }
-  return v * sign;
+  *digit = v * sign;
+  return true;
 }
 
 static void
@@ -168,17 +169,27 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
    * A common interface to change settings is fine, but mixing all three in a huge if-else is not great */
 
   struct velvet_session *focus = velvet_get_focused_session(v);
+  struct velvet_window *win = velvet_scene_get_focus(&v->scene);
 
-  int digit = u8_slice_digit(value);
+  int digit = 0;
+  bool is_digit = u8_slice_digit(value, &digit);
   bool boolean = digit || (value.len && value.content[0] == 't');
   if (u8_match(option, "lines")) {
-    if (focus) focus->ws.h = digit;
+    if (focus && is_digit) focus->ws.h = digit;
+  } else if (u8_match(option, "notification_height")) {
+    if (is_digit) {
+      v->scene.layout.notification_height = CLAMP(digit, 3, 12);
+    }
+  } else if (u8_match(option, "notification_width")) {
+    if (is_digit) {
+      v->scene.layout.notification_width = CLAMP(digit, 10, 80);
+    }
   } else if (u8_match(option, "columns")) {
-    if (focus) focus->ws.w = digit;
+    if (focus && is_digit) focus->ws.w = digit;
   } else if (u8_match(option, "lines_pixels")) {
-    if (focus) focus->ws.y_pixel = digit;
+    if (focus && is_digit) focus->ws.y_pixel = digit;
   } else if (u8_match(option, "columns_pixels")) {
-    if (focus) focus->ws.x_pixel = digit;
+    if (focus && is_digit) focus->ws.x_pixel = digit;
   } else if (u8_match(option, "cwd")) {
     if (sender) {
       string_clear(&sender->cwd);
@@ -211,6 +222,36 @@ static void velvet_action_callback(struct velvet_keymap *k, struct velvet_key_ev
     free(d);
   } else {
     velvet_cmd(d->v, 0, string_as_u8_slice(d->cmd));
+  }
+}
+
+enum tagcmd {
+  VIEW_SET,
+  VIEW_TOGGLE,
+  TAG_SET,
+  TAG_TOGGLE,
+};
+
+static void velvet_cmd_tag(struct velvet *v, struct velvet_cmd_arg_iterator *it, enum tagcmd cmd) {
+  if (!velvet_cmd_arg_iterator_next(it)) {
+    velvet_log("tag action missing argument.");
+    return;
+  }
+
+  struct u8_slice value = it->current;
+  int digit = 0;
+  bool is_digit = u8_slice_digit(value, &digit);
+  if (!is_digit) {
+    velvet_log("tag action expected numeric argument.");
+    return;
+  }
+  uint32_t mask = (uint32_t)digit;
+
+  switch (cmd) {
+  case VIEW_SET: velvet_scene_set_view(&v->scene, mask); break;
+  case VIEW_TOGGLE: velvet_scene_toggle_view(&v->scene, mask); break;
+  case TAG_SET: velvet_scene_set_tags(&v->scene, mask); break;
+  case TAG_TOGGLE: velvet_scene_toggle_tags(&v->scene, mask); break;
   }
 }
 
@@ -379,6 +420,16 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       velvet_detach_session(v, velvet_get_focused_session(v));
     } else if (u8_match(command, "put")) {
       velvet_cmd_put(v, &it);
+    } else if (u8_match(command, "tag")) {
+      velvet_cmd_tag(v, &it, TAG_SET);
+    } else if (u8_match(command, "view-previous")) {
+      velvet_scene_set_view(&v->scene, 0);
+    } else if (u8_match(command, "view")) {
+      velvet_cmd_tag(v, &it, VIEW_SET);
+    } else if (u8_match(command, "toggletag")) {
+      velvet_cmd_tag(v, &it, TAG_TOGGLE);
+    } else if (u8_match(command, "toggleview")) {
+      velvet_cmd_tag(v, &it, VIEW_TOGGLE);
     } else if (u8_match(command, "decfactor")) {
       s->layout.mfact = MAX(s->layout.mfact - 0.05, 0.05);
     } else if (u8_match(command, "incfactor")) {

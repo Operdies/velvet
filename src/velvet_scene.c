@@ -13,20 +13,7 @@ static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
 static bool color_equals(struct color a, struct color b);
 
-static struct velvet_window *next_tiled(struct vec v, struct velvet_window *from) {
-  size_t start = 0;
-  if (from) start = vec_index(&v, from) + 1;
-  for (; start < v.length; start++) {
-    from = vec_nth(v, start);
-    if (from->layer == VELVET_LAYER_TILED) return from;
-  }
-  return nullptr;
-}
-
-
 struct rect rect_carve(struct rect source, int x, int y, int width, int height) {
-  assert(source.w >= x + width);
-  assert(source.h >= y + height);
   int pixels_per_column = (int)((float)source.y_pixel / (float)source.w);
   int pixels_per_row = (int)((float)source.x_pixel / (float)source.h);
 
@@ -36,30 +23,94 @@ struct rect rect_carve(struct rect source, int x, int y, int width, int height) 
   return out;
 }
 
-void velvet_scene_arrange(struct velvet_scene *m) {
-  int nmaster = m->layout.nmaster;
-  float factor = m->layout.mfact;
-  struct velvet_window *h;
-  int lines = m->ws.h;
-  int columns = m->ws.w;
+static bool visible(struct velvet_scene *m, struct velvet_window *w) {
+  return m->view & w->tags;
+}
+
+static void ensure_focus(struct velvet_scene *scene) {
+  struct velvet_window *focus = velvet_scene_get_focus(scene);
+  if (!focus || !visible(scene, focus)) {
+    vec_find(focus,
+             scene->windows,
+             visible(scene, focus) && focus->layer == (VELVET_LAYER_TILED || focus->layer == VELVET_LAYER_FLOATING));
+    if (focus) velvet_scene_set_focus(scene, vec_index(&scene->windows, focus));
+  }
+}
+
+void velvet_scene_toggle_view(struct velvet_scene *scene, uint32_t view_mask) {
+  uint32_t current_view = scene->view;
+  current_view ^= view_mask;
+  velvet_scene_set_view(scene, current_view);
+}
+
+void velvet_scene_toggle_tags(struct velvet_scene *scene, uint32_t tag_mask) {
+  struct velvet_window *focus = velvet_scene_get_focus(scene);
+  if (focus) {
+    uint32_t current_tags = focus->tags;
+    current_tags ^= tag_mask;
+    velvet_scene_set_tags(scene, current_tags);
+  }
+}
+
+void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask) {
+  static uint32_t view_all = (1 << 10) - 1;
+  if (view_mask == 0) {
+    uint32_t new_view = scene->prev_view;
+    scene->prev_view = scene->view;
+    scene->view = new_view;
+  } else {
+    view_mask &= view_all;
+    /* only overwrite the previous view if the view changed */
+    if (view_mask != scene->view) {
+      scene->prev_view = scene->view;
+      scene->view = view_mask;
+    }
+  }
+  // assert(scene->view & view_all);
+  ensure_focus(scene);
+}
+
+void velvet_scene_set_tags(struct velvet_scene *scene, uint32_t tag_mask) {
+  static uint32_t tag_all = (1 << 10) - 1;
+  tag_mask &= tag_all;
+  /* a window must be visible somewhere. */
+  if (!tag_mask) return;
+  struct velvet_window *focus = velvet_scene_get_focus(scene);
+  if (focus) {
+    focus->tags = tag_mask;
+  }
+  ensure_focus(scene);
+}
+
+void velvet_scene_arrange(struct velvet_scene *scene) {
+  int nmaster = scene->layout.nmaster;
+  float factor = scene->layout.mfact;
+  struct velvet_window *win;
+  int lines = scene->ws.h;
+  int columns = scene->ws.w;
   int idx, n_tiled;
   int master_width, master_y, stack_y, stack_width, n_master_items, n_stack_items;
-  int pixels_per_column = (int)((float)m->ws.y_pixel / (float)m->ws.w);
-  int pixels_per_row = (int)((float)m->ws.x_pixel / (float)m->ws.h);
+
+  vec_foreach(win, scene->windows) {
+    /* must be visible somewhere */
+    if (!win->tags)
+      win->tags = scene->view;
+  }
+
+  ensure_focus(scene);
 
   n_tiled = 0;
-  vec_where(h, m->windows, h->layer == VELVET_LAYER_TILED) n_tiled++;
+  vec_where(win, scene->windows, win->layer == VELVET_LAYER_TILED && visible(scene, win)) n_tiled++;
 
   idx = master_y = stack_y = 0;
   n_master_items = n_tiled > nmaster ? nmaster : n_tiled;
   n_stack_items = n_tiled > nmaster ? n_tiled - nmaster : 0;
 
   int status_height = 0;
-  vec_where(h, m->windows, h->layer == VELVET_LAYER_STATUS) {
-    h->border_width = 0;
-    struct rect b = { .x = 0, .y = status_height, .h = 1, .w = columns };
-    velvet_window_resize(h, b);
-    status_height += b.h;
+  vec_where(win, scene->windows, win->layer == VELVET_LAYER_STATUS) {
+    status_height += 1;
+    struct rect b = { .x = 0, .y = lines - status_height, .h = 1, .w = columns };
+    velvet_window_resize(win, b);
   }
 
   if (nmaster <= 0) {
@@ -73,59 +124,57 @@ void velvet_scene_arrange(struct velvet_scene *m) {
     stack_width = 0;
   }
 
-  struct velvet_window *p = nullptr;
   int master_height_left = lines - status_height;
   int master_items_left = n_master_items;
-
-  for (; idx < nmaster && idx < n_tiled; idx++) {
-    p = next_tiled(m->windows, p);
-    int height = (float)master_height_left / master_items_left;
-    struct rect region = rect_carve(m->ws, 0, master_y, master_width, height);
-    velvet_window_resize(p, region);
-    master_y += height;
-    master_items_left--;
-    master_height_left -= height;
-  }
 
   int stack_height_left = lines - status_height;
   int stack_items_left = n_stack_items;
 
-  for (; idx < n_tiled; idx++) {
-    p = next_tiled(m->windows, p);
-    int height = (float)stack_height_left / stack_items_left;
-    struct rect region = rect_carve(m->ws, master_width, stack_y, stack_width, height);
-    velvet_window_resize(p, region);
-    stack_y += height;
-    stack_items_left--;
-    stack_height_left -= height;
+  vec_where(win, scene->windows, idx < n_tiled && win->layer == VELVET_LAYER_TILED && visible(scene, win)) {
+    if (idx < nmaster) {
+      int height = (float)master_height_left / master_items_left;
+      struct rect region = rect_carve(scene->ws, 0, master_y, master_width, height);
+      velvet_window_resize(win, region);
+      master_y += height;
+      master_items_left--;
+      master_height_left -= height;
+    } else {
+      int height = (float)stack_height_left / stack_items_left;
+      struct rect region = rect_carve(scene->ws, master_width, stack_y, stack_width, height);
+      velvet_window_resize(win, region);
+      stack_y += height;
+      stack_items_left--;
+      stack_height_left -= height;
+    }
+    idx++;
   }
 
-  vec_where(p, m->windows, p->layer == VELVET_LAYER_FLOATING) {
+  vec_where(win, scene->windows, visible(scene, win) && win->layer == VELVET_LAYER_FLOATING) {
     /* update changes to border size */
-    struct rect region = p->rect.window;
+    struct rect region = win->rect.window;
     /* ensure floating windows are not lost off screen e.g. after a resize */
     if (region.x >= columns) region.x = columns - 5;
     if (region.y >= lines) region.y = lines - 5;
     region.x = CLAMP(region.x, -region.w + 3, columns - 3);
     region.y = CLAMP(region.y, -region.h + 2, lines - 2);
-    velvet_window_resize(p, region);
+    velvet_window_resize(win, region);
   }
 
   { 
-    int notification_width = 40;
-    int notification_height = 5;
+    int notification_width = scene->layout.notification_width;
+    int notification_height = scene->layout.notification_height;
     int top_pad = 1;
     int right_pad = 1;
-    if (notification_width + right_pad > m->ws.w) {
-      notification_width = m->ws.w - 2;
+    if (notification_width + right_pad > scene->ws.w) {
+      notification_width = scene->ws.w - 2;
     }
-    int x = m->ws.w - notification_width - right_pad;
+    int x = scene->ws.w - notification_width - right_pad;
     int y = top_pad;
 
-    vec_rwhere(p, m->windows, p->layer == VELVET_LAYER_NOTIFICATION) {
-      struct rect region = rect_carve(m->ws, x, y, notification_width, notification_height);
+    vec_rwhere(win, scene->windows, win->layer == VELVET_LAYER_NOTIFICATION) {
+      struct rect region = rect_carve(scene->ws, x, y, notification_width, notification_height);
       y += region.h;
-      velvet_window_resize(p, region);
+      velvet_window_resize(win, region);
     }
   }
 }
@@ -627,10 +676,11 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
   if (!bw) return;
 
   struct velvet_theme theme = m->renderer.theme;
+  struct color chrome_color = is_focused ? theme.title.active : theme.title.inactive;
+  struct screen_cell_style chrome = { .fg = chrome_color, .bg = host->layer == VELVET_LAYER_TILED ? theme.mantle : theme.background };
   {
-    struct screen_cell_style chrome_style = is_focused ? theme.active.outline : theme.inactive.outline;
-    struct screen_cell vert = {.cp = dash, .style = chrome_style};
-    struct screen_cell horz = {.cp = pipe, .style = chrome_style};
+    struct screen_cell vert = {.cp = dash, .style = chrome};
+    struct screen_cell horz = {.cp = pipe, .style = chrome};
 
     /* title chrome */
     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y - 1, column, vert);
@@ -644,7 +694,7 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
     /* right chrome */
     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x + c.w, horz);
 
-    struct screen_cell corner = {.style = chrome_style};
+    struct screen_cell corner = {.style = chrome };
     corner.cp = topleft;
     velvet_render_set_cell(r, c.y - 1, c.x - 1, corner);
     corner.cp = topright;
@@ -656,8 +706,7 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
   }
 
   {
-    struct screen_cell_style title_style = is_focused ? theme.active.title : theme.inactive.title;
-    struct screen_cell truncation_symbol = {.cp = elipsis, .style = title_style};
+    struct screen_cell truncation_symbol = {.cp = elipsis, .style = chrome};
 
     int title_end = c.x + c.w;
 
@@ -676,7 +725,7 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
       int start = c.x + c.w - tmp.len;
       if (start > c.x) {
         while (u8_slice_codepoint_iterator_next(&it)) {
-          struct screen_cell chr = {.style = title_style, .cp = it.current};
+          struct screen_cell chr = {.style = chrome, .cp = it.current};
           velvet_render_set_cell(r, c.y - 1, start++, chr);
         }
       }
@@ -687,7 +736,7 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
     /* draw the title */
     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
     for (; i < title_end - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
-      struct screen_cell chr = {.style = title_style, .cp = it.current};
+      struct screen_cell chr = {.style = chrome, .cp = it.current};
       velvet_render_set_cell(r, c.y - 1, i, chr);
     }
 
@@ -840,6 +889,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       if (r->theme.pseudotransparency.enabled) opt.alpha_blend = r->theme.pseudotransparency.alpha;
     vec_rwhere(h, m->windows, h->layer == layer) {
       if (h->dragging) continue;
+      if ((h->layer == VELVET_LAYER_TILED || h->layer == VELVET_LAYER_FLOATING) && !visible(m, h)) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_render_calculate_borders(m, h);
       velvet_render_copy_cells_from_window(m, h);
@@ -1148,7 +1198,7 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer
 }
 
 static uint64_t get_id() {
-  static uint64_t id = 1;
+  static uint64_t id = 1000;
   return id++;
 }
 

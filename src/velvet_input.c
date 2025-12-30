@@ -72,14 +72,7 @@ static struct velvet_key_event key_event_from_byte(uint8_t ch) {
   bool isshift = ch >= 'A' && ch <= 'Z';
   if (!isshift) {
   // TODO: locale aware shift table
-  bool shift_table[] = {
-      ['!'] = '1', ['@'] = '2', ['#'] = '3', ['$'] = '4',
-      ['%'] = '5', ['^'] = '6', ['&'] = '7', ['*'] = '8',
-      ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.',
-      [':'] = ';', ['"'] = '\'', ['|'] = '\\', ['~'] = '`',
-      ['?'] = '/', ['{'] = '[', ['}'] = ']',
-  };
-  isshift = (ch < LENGTH(shift_table)) && shift_table[ch];
+  isshift = (ch < LENGTH(VELVET_SHIFT_TABLE)) && VELVET_SHIFT_TABLE[ch];
   }
 
   k.key.symbol = ch;
@@ -500,6 +493,13 @@ static struct velvet_key_event key_normalize(struct velvet_key_event key) {
   if ((key.modifiers & MODIFIER_ALT) || (key.modifiers & MODIFIER_META)) {
     key.modifiers &= ~MODIFIER_ALT;
     key.modifiers |= MODIFIER_META;
+  }
+  if (key.key.literal) {
+    int ch = key.key.symbol;
+    if (ch < LENGTH(VELVET_SHIFT_TABLE) && VELVET_SHIFT_TABLE[ch]) {
+      key.key.symbol = VELVET_SHIFT_TABLE[ch];
+      key.modifiers |= MODIFIER_SHIFT;
+    }
   }
   if (key.modifiers & MODIFIER_SHIFT) {
     if (key.key.literal) {
