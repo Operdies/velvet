@@ -34,6 +34,7 @@ struct special_key {
   X(DEL, "\x1b[3~")                                                                                                    \
   X(BS, "\x08")                                                                                                        \
   X(BS, "\x7f")                                                                                                        \
+  X(TAB, "\t")                                                                                                         \
   X(SPACE, " ")
 
 static const struct special_key keys[] = {
