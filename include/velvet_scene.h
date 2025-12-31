@@ -38,11 +38,13 @@ struct velvet_window {
   struct string title;
   struct string icon;
   struct string cwd;
-  int pty, pid, id;
+  int pty, pid;
+  uint64_t id;
   int border_width;
   struct {
     struct rect window;
     struct rect client;
+    struct rect title;
   } rect;
   uint64_t exited_at;
   struct vte emulator;
@@ -58,7 +60,6 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect windo
 bool velvet_window_start(struct velvet_window *velvet_window);
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
 void velvet_window_update_title(struct velvet_window *p);
-void velvet_window_notify_focus(struct velvet_window *p, bool focused);
 
 struct velvet_render_option {
   /* unfortunately some emulators don't support repeating multi-byte characters.
@@ -130,7 +131,6 @@ struct velvet_render {
   int current_buffer;
   struct string draw_buffer;
   struct velvet_render_option options;
-  struct velvet_theme theme;
   struct velvet_render_state_cache state;
 };
 
@@ -143,26 +143,50 @@ struct velvet_scene_layout {
 
 struct velvet_scene {
   struct vec /*velvet_window*/ windows;
+  /* id of window in `windows`. Window can be retrieved with id2win */
+  struct vec /* int */ focus_order; 
   struct rect ws;
-  size_t focus;
   struct velvet_render renderer;
+  struct velvet_theme theme;
   struct velvet_scene_layout layout;
   void (*arrange)(struct velvet_scene* scene);
   uint32_t view;
   uint32_t prev_view;
 };
 
+enum velvet_window_hit_location {
+  VELVET_HIT_TITLE               = 1,
+  VELVET_HIT_CLIENT              = 2,
+  VELVET_HIT_BORDER              = 4,
+  VELVET_HIT_BORDER_TOP          = 8                        | VELVET_HIT_BORDER,
+  VELVET_HIT_BORDER_BOTTOM       = 16                       | VELVET_HIT_BORDER,
+  VELVET_HIT_BORDER_LEFT         = 32                       | VELVET_HIT_BORDER,
+  VELVET_HIT_BORDER_RIGHT        = 64                       | VELVET_HIT_BORDER,
+  VELVET_HIT_BORDER_TOPLEFT      = VELVET_HIT_BORDER_TOP    | VELVET_HIT_BORDER_LEFT,
+  VELVET_HIT_BORDER_TOPRIGHT     = VELVET_HIT_BORDER_TOP    | VELVET_HIT_BORDER_RIGHT,
+  VELVET_HIT_BORDER_BOTTOM_LEFT  = VELVET_HIT_BORDER_BOTTOM | VELVET_HIT_BORDER_LEFT,
+  VELVET_HIT_BORDER_BOTTOM_RIGHT = VELVET_HIT_BORDER_BOTTOM | VELVET_HIT_BORDER_RIGHT,
+};
+
+struct velvet_window_hit {
+  struct velvet_window *win;
+  enum velvet_window_hit_location where;
+};
+
+struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, uint64_t id);
+bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data);
 void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask);
 void velvet_scene_toggle_view(struct velvet_scene *scene, uint32_t view_mask);
 void velvet_scene_set_tags(struct velvet_scene *scene, uint32_t tag_mask);
 void velvet_scene_toggle_tags(struct velvet_scene *scene, uint32_t tag_mask);
+struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet_window template);
 void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
 void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
 void velvet_scene_resize(struct velvet_scene *m, struct rect w);
 void velvet_scene_arrange(struct velvet_scene *m);
 void velvet_scene_destroy(struct velvet_scene *m);
-void velvet_scene_set_focus(struct velvet_scene *m, size_t focus);
+void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_focus);
 struct velvet_window *velvet_scene_focus_previous(struct velvet_scene *m);
 struct velvet_window *velvet_scene_focus_next(struct velvet_scene *m);
 void velvet_scene_set_display_damage(struct velvet_scene *m, bool track_damage);
@@ -218,7 +242,7 @@ static const struct velvet_theme velvet_theme_default = {
     .pseudotransparency =
         {
             .enabled = true,
-            .alpha = 0.10f,
+            .alpha = 0.30f,
         },
     .mantle = RGB("#181825"),
     .status =
@@ -258,6 +282,8 @@ static const struct velvet_render_state_cache render_state_cache_invalidated = {
 
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
+    .focus_order = vec(uint64_t),
+    .theme = velvet_theme_default,
     .renderer =
         {
             .options =
@@ -266,7 +292,6 @@ static const struct velvet_scene velvet_scene_default = {
                     .display_eol = false,
                 },
             .state = render_state_cache_invalidated,
-            .theme = velvet_theme_default,
 
         },
     .arrange = velvet_scene_arrange,

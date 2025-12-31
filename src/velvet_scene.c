@@ -32,11 +32,20 @@ static bool visible(struct velvet_scene *m, struct velvet_window *w) {
   return m->view & w->tags;
 }
 
-static void ensure_focus(struct velvet_scene *scene) {
-  struct velvet_window *focus = velvet_scene_get_focus(scene);
-  if (!focus || !visible(scene, focus)) {
-    vec_find(focus, scene->windows, managed(focus) && visible(scene, focus));
-    if (focus) velvet_scene_set_focus(scene, vec_index(&scene->windows, focus));
+static void assert_invariants(struct velvet_scene *m) {
+  uint64_t *focus;
+  struct velvet_window *w;
+  vec_foreach(focus, m->focus_order) {
+    vec_find(w, m->windows, w->id == *focus);
+    assert(w);
+    assert(managed(w));
+  }
+
+  vec_foreach(w, m->windows) {
+    if (managed(w)) {
+      vec_find(focus, m->focus_order, w->id == *focus);
+      assert(focus);
+    }
   }
 }
 
@@ -55,6 +64,31 @@ void velvet_scene_toggle_tags(struct velvet_scene *scene, uint32_t tag_mask) {
   }
 }
 
+static void velvet_window_notify_focus(struct velvet_window *host, bool focus) {
+  if (host->pty && host->emulator.options.focus_reporting) {
+    string_push_slice(&host->emulator.pending_input, focus ? vt_focus_in : vt_focus_out);
+  }
+}
+
+/* If the current focus is not visible, push the first visible focus to the top of
+ * the focus stack */
+static void ensure_focus_visible(struct velvet_scene *m) {
+  struct velvet_window *current = velvet_scene_get_focus(m);
+  if (!current) return;
+  if (!visible(m, current)) {
+    uint64_t *f;
+    struct velvet_window *focus;
+    vec_foreach(f, m->focus_order) {
+      vec_find(focus, m->windows, focus->id == *f);
+      assert(focus && managed(focus));
+      if (visible(m, focus)) {
+        velvet_scene_set_focus(m, focus);
+        return;
+      }
+    }
+  }
+}
+
 void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask) {
   static uint32_t view_all = (1 << 10) - 1;
   if (view_mask == 0) {
@@ -69,23 +103,23 @@ void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask) {
       scene->view = view_mask;
     }
   }
-  // assert(scene->view & view_all);
-  ensure_focus(scene);
+  assert_invariants(scene);
 }
 
 void velvet_scene_set_tags(struct velvet_scene *scene, uint32_t tag_mask) {
+  struct velvet_window *focus = velvet_scene_get_focus(scene);
   static uint32_t tag_all = (1 << 10) - 1;
   tag_mask &= tag_all;
   /* a window must be visible somewhere. */
   if (!tag_mask) return;
-  struct velvet_window *focus = velvet_scene_get_focus(scene);
   if (focus) {
     focus->tags = tag_mask;
   }
-  ensure_focus(scene);
+  assert_invariants(scene);
 }
 
 void velvet_scene_arrange(struct velvet_scene *scene) {
+  ensure_focus_visible(scene);
   int nmaster = scene->layout.nmaster;
   float factor = scene->layout.mfact;
   struct velvet_window *win;
@@ -99,8 +133,6 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
     if (!win->tags)
       win->tags = scene->view;
   }
-
-  ensure_focus(scene);
 
   n_tiled = 0;
   vec_where(win, scene->windows, win->layer == VELVET_LAYER_TILED && visible(scene, win)) n_tiled++;
@@ -180,105 +212,113 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
       velvet_window_resize(win, region);
     }
   }
+  assert_invariants(scene);
 }
 
-#ifndef CTRL
-#define CTRL(x) ((x) & 037)
-#endif
-
-static void velvet_scene_swap_clients(struct velvet_scene *m, size_t c1, size_t c2) {
-  if (c1 != c2) {
-    vec_swap(&m->windows, c1, c2);
-  }
-}
-
-static void host_notify_focus(struct velvet_window *host, bool focus) {
-  if (host->pty && host->emulator.options.focus_reporting) {
-    string_push_slice(&host->emulator.pending_input, focus ? vt_focus_in : vt_focus_out);
-  }
+struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, uint64_t id) {
+  struct velvet_window *w;
+  vec_find(w, m->windows, w->id == id);
+  return w;
 }
 
 struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
-  if (m->windows.length > 0) {
-    if (m->focus >= m->windows.length) m->focus = m->windows.length - 1;
-    return vec_nth(m->windows, m->focus);
+  if (m->focus_order.length) {
+    uint64_t *f = vec_nth(m->focus_order, 0);
+    return velvet_scene_get_window_from_id(m, *f);
   }
   return nullptr;
+}
+
+struct velvet_window *velvet_scene_get_next(struct velvet_scene *m, struct velvet_window *w) {
+  struct velvet_window *p;
+  /* find the last visible window before w */
+  int start = (int)vec_index(&m->windows, w);
+  int index = start + 1;
+  for (; index < (int)m->windows.length; index++) {
+    p = vec_nth(m->windows, index);
+    if (managed(p) && visible(m, p)) return p;
+  }
+  for (index = 0; index < start; index++) {
+    p = vec_nth(m->windows, index);
+    if (managed(p) && visible(m, p)) return p;
+  }
+  return w;
+}
+
+struct velvet_window *velvet_scene_get_previous(struct velvet_scene *m, struct velvet_window *w) {
+  struct velvet_window *p;
+  /* find the last visible window before w */
+  int start = (int)vec_index(&m->windows, w);
+  int index = start - 1;
+  for (; index >= 0; index--) {
+    p = vec_nth(m->windows, index);
+    if (managed(p) && visible(m, p)) return p;
+  }
+  for (index = m->windows.length - 1; index > start; index--) {
+    p = vec_nth(m->windows, index);
+    if (managed(p) && visible(m, p)) return p;
+  }
+  return w;
 }
 
 struct velvet_window *velvet_scene_focus_previous(struct velvet_scene *m) {
-  int n = (int)m->windows.length;
-  int f = (int)m->focus;
-
-  for (int i = f - 1; i >= 0; i--) {
-    struct velvet_window *w = vec_nth(m->windows, i);
-    if (managed(w) && visible(m, w)) {
-      velvet_scene_set_focus(m, i);
-      return w;
-    }
-  }
-  for (int i = n - 1; i >= f; i--) {
-    struct velvet_window *w = vec_nth(m->windows, i);
-    if (managed(w) && visible(m, w)) {
-      velvet_scene_set_focus(m, i);
-      return w;
-    }
-  }
-  return nullptr;
+  struct velvet_window *f = velvet_scene_get_focus(m);
+  if (!f) return nullptr;
+  f = velvet_scene_get_previous(m, f);
+  velvet_scene_set_focus(m, f);
+  return f;
 }
 
 struct velvet_window *velvet_scene_focus_next(struct velvet_scene *m) {
-  int n = (int)m->windows.length;
-  int f = (int)m->focus;
-
-  for (int i = f + 1; i < n; i++) {
-    struct velvet_window *w = vec_nth(m->windows, i);
-    if (managed(w) && visible(m, w)) {
-      velvet_scene_set_focus(m, i);
-      return w;
-    }
-  }
-  for (int i = 0; i <= f; i++) {
-    struct velvet_window *w = vec_nth(m->windows, i);
-    if (managed(w) && visible(m, w)) {
-      velvet_scene_set_focus(m, i);
-      return w;
-    }
-  }
-  return nullptr;
+  struct velvet_window *f = velvet_scene_get_focus(m);
+  if (!f) return nullptr;
+  f = velvet_scene_get_next(m, f);
+  velvet_scene_set_focus(m, f);
+  return f;
 }
 
-void velvet_scene_set_focus(struct velvet_scene *m, size_t focus) {
-  if (m->focus != focus) {
-    struct velvet_window *current_focus = vec_nth(m->windows, m->focus);
-    struct velvet_window *new_focus = vec_nth(m->windows, focus);
-    m->focus = focus;
-    host_notify_focus(current_focus, false);
-    host_notify_focus(new_focus, true);
-  }
+static void win_remove(struct velvet_scene *m, struct velvet_window *f) {
+  vec_remove(&m->windows, f);
 }
 
-static void velvet_scene_zoom(struct velvet_scene *m) {
-  if (m->windows.length < 2) return;
-  if (m->focus == 0) {
-    velvet_scene_swap_clients(m, 0, 1);
-    velvet_scene_set_focus(m, 0);
-  } else {
-    velvet_scene_swap_clients(m, 0, m->focus);
-    velvet_scene_set_focus(m, 0);
-  }
+static void focus_remove(struct velvet_scene *m, struct velvet_window *f) {
+  uint64_t *foc;
+  vec_find(foc, m->focus_order, *foc == f->id);
+  if (foc) vec_remove(&m->focus_order, foc);
 }
 
-static void velvet_scene_spawn_and_focus(struct velvet_scene *m, char *cmdline) {
-  velvet_scene_spawn_process(m, u8_slice_from_cstr(cmdline));
-  velvet_scene_set_focus(m, m->windows.length - 1);
+void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_focus) {
+  if (!managed(new_focus)) return;
+  struct velvet_window *current_focus = velvet_scene_get_focus(m);
+  if (new_focus != current_focus) {
+    focus_remove(m, new_focus);
+    vec_insert(&m->focus_order, 0, &new_focus->id);
+    /* TODO: Current focus not set when leaving workspace */
+    if (current_focus) velvet_window_notify_focus(current_focus, false);
+    velvet_window_notify_focus(new_focus, true);
+  }
+  assert_invariants(m);
+}
+
+static uint64_t get_id() {
+  static uint64_t id = 1000;
+  return id++;
+}
+
+struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet_window template) {
+  assert(m->windows.element_size == sizeof(struct velvet_window));
+  struct velvet_window *host = vec_new_element(&m->windows);
+  *host = template;
+  if (!host->id) host->id = get_id();
+
+  if (managed(host)) vec_push(&m->focus_order, &host->id);
+  m->arrange(m);
+  return host;
 }
 
 void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
-  struct velvet_window *host = vec_new_element(&m->windows);
-  *host = template;
-  m->arrange(m);
+  struct velvet_window *host = velvet_scene_manage(m, template);
   bool started = velvet_window_start(host);
   if (!started) {
     velvet_scene_remove_window(m, host);
@@ -313,25 +353,14 @@ void velvet_scene_destroy(struct velvet_scene *m) {
 }
 
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
+  uint64_t initial_focus = velvet_scene_get_focus(m)->id;
   size_t index = vec_index(&m->windows, w);
   assert(index >= 0);
-  vec_remove(&m->windows, w);
+  focus_remove(m, w);
+  win_remove(m, w);
 
-  if (m->windows.length == 0) return;
-
-  // Update focus
-  if (m->focus > index) {
-    // if the focus was after the removed index, decrement it.
-    m->focus -= 1;
-  } else if (m->focus == index) {
-    // if the removed host was focused, keep the same focus index if possible.
-    size_t next_focus = index;
-    // If the removed host was the last host, set the focus to the new last host.
-    if (next_focus >= m->windows.length) next_focus = m->windows.length - 1;
-    m->focus = next_focus;
-    struct velvet_window *new_focus = vec_nth(m->windows, next_focus);
-    host_notify_focus(new_focus, true);
-  }
+  struct velvet_window *new_focus = velvet_scene_get_focus(m);
+  if (new_focus && new_focus->id != initial_focus) velvet_window_notify_focus(new_focus, true);
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
@@ -397,9 +426,9 @@ static struct color color_alpha_blend(struct color a, struct color b, float frac
 }
 
 /* convert cell colors to RGB colors based on the current theme, and convert null characters to spaces */
-static struct screen_cell normalize_cell(struct velvet_render *r, struct screen_cell c) {
-  c.style.bg = color_to_rgb(r->theme, c.style.bg, false);
-  c.style.fg = color_to_rgb(r->theme, c.style.fg, true);
+static struct screen_cell normalize_cell(struct velvet_theme t, struct screen_cell c) {
+  c.style.bg = color_to_rgb(t, c.style.bg, false);
+  c.style.fg = color_to_rgb(t, c.style.fg, true);
   if (!c.cp.value) c.cp.value = ' ';
   return c;
 }
@@ -650,8 +679,8 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
       struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
       if (current) {
         struct screen_cell cursor = *current;
-        cursor.style.fg = r->theme.cursor.foreground;
-        cursor.style.bg = r->theme.cursor.background;
+        cursor.style.fg = m->theme.cursor.foreground;
+        cursor.style.bg = m->theme.cursor.background;
         velvet_render_set_cell(r, y, x, cursor);
       }
     }
@@ -698,7 +727,7 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
 
   if (!bw) return;
 
-  struct velvet_theme theme = m->renderer.theme;
+  struct velvet_theme theme = m->theme;
   struct color chrome_color = is_focused ? theme.title.active : theme.title.inactive;
   struct screen_cell_style chrome = { .fg = chrome_color, .bg = host->layer == VELVET_LAYER_TILED ? theme.mantle : theme.background };
   {
@@ -757,6 +786,7 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
 
     int i = c.x + 1;
     /* draw the title */
+    struct rect title_box = { .x = i, .h = 1, .y = c.y - 1 };
     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
     for (; i < title_end - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
       struct screen_cell chr = {.style = chrome, .cp = it.current};
@@ -767,7 +797,10 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
     if (i < title_end - 1 && u8_slice_codepoint_iterator_next(&it)) {
       /* title was truncated */
       velvet_render_set_cell(r, c.y - 1, i, truncation_symbol);
+      i++;
     }
+    title_box.w = i - title_box.x;
+    host->rect.title = title_box;
   }
 }
 
@@ -790,8 +823,7 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->state = render_state_cache_invalidated;
 }
 
-static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *b) {
-  struct screen_cell space = {.cp = codepoint_space, .style.bg = r->theme.background};
+static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *b, struct screen_cell space) {
   for (int i = 0; i < r->h * r->w; i++) {
     b->cells[i] = space;
   }
@@ -854,16 +886,16 @@ struct composite_options {
   float alpha_blend;
 };
 
-static void velvet_scene_rasterize_temp(struct velvet_scene *m, struct composite_options o) {
+static void velvet_scene_commit_staged(struct velvet_scene *m, struct composite_options o) {
   struct screen_cell empty = {0};
   struct velvet_render *r = &m->renderer;
   struct velvet_render_buffer *b = get_current_buffer(r);
   struct velvet_render_buffer *c = &r->staging_buffer;
   for (int i = 0; i < r->w * r->h; i++) {
     if (!cell_equals(c->cells[i], empty)) {
-      struct screen_cell top = normalize_cell(r, c->cells[i]);
+      struct screen_cell top = normalize_cell(m->theme, c->cells[i]);
       if (o.alpha_blend > 0) {
-        struct screen_cell bottom = normalize_cell(r, b->cells[i]);
+        struct screen_cell bottom = normalize_cell(m->theme, b->cells[i]);
         top = blend_cells(top, bottom, o.alpha_blend);
       }
       b->cells[i] = top;
@@ -872,9 +904,53 @@ static void velvet_scene_rasterize_temp(struct velvet_scene *m, struct composite
   }
 }
 
+static bool rect_contains(struct rect r, int x, int y) {
+  return r.x <= x && x < r.x + r.w && r.y <= y && y < r.y + r.h;
+}
+
+static bool skip_dragging(struct velvet_window *w, void *) {
+  return w->dragging;
+}
+
+bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data) {
+  struct velvet_window *h;
+  for (enum velvet_scene_layer layer = VELVET_LAYER_LAST - 1; layer >= VELVET_LAYER_STATUS; layer--) {
+    uint64_t *winid;
+    vec_rforeach(winid, scene->focus_order) {
+      h = velvet_scene_get_window_from_id(scene, *winid);
+      if (h->layer != layer) continue;
+      if (!visible(scene, h)) continue;
+      if (skip && skip(h, data)) continue;
+
+      if (rect_contains(h->rect.client, x, y)) {
+        struct velvet_window_hit client_hit = {.win = h, .where = VELVET_HIT_CLIENT};
+        *hit = client_hit;
+        return true;
+      } else if (rect_contains(h->rect.window, x, y)) {
+        struct rect w = h->rect.window;
+        struct velvet_window_hit border_hit = {.win = h, .where = VELVET_HIT_BORDER};
+        if (x == w.x) 
+          border_hit.where |= VELVET_HIT_BORDER_LEFT;
+        if (x == w.x + w.w - 1) 
+          border_hit.where |= VELVET_HIT_BORDER_RIGHT;
+        if (y == w.y) 
+          border_hit.where |= VELVET_HIT_BORDER_TOP;
+        if (y == w.y + w.h - 1) 
+          border_hit.where |= VELVET_HIT_BORDER_BOTTOM;
+        if (rect_contains(h->rect.title, x, y)) 
+          border_hit.where |= VELVET_HIT_TITLE;
+
+        *hit = border_hit;
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
   if (m->windows.length == 0) return;
-  struct velvet_window *focused = velvet_scene_get_focus(m);
 
   struct velvet_render *r = &m->renderer;
 
@@ -884,7 +960,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     /* full clear (CSI 2J) causes flickering in some terminals
      * -- selectively erase everything outside of the draw region instead.
      * Note that DECERA (erase rectangle) exists, but it is not widely supported. */
-    struct screen_cell_style clear = {.bg = r->theme.background};
+    struct screen_cell_style clear = {.bg = m->theme.background};
     velvet_render_set_style(r, clear);
     struct u8_slice EL = u8_slice_from_cstr("\x1b[K");
     struct u8_slice ED = u8_slice_from_cstr("\x1b[J");
@@ -897,7 +973,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_render_position_cursor(r, r->h, 0);
     string_push_slice(&r->draw_buffer, ED);
   } else {
-    velvet_render_clear_buffer(r, get_current_buffer(r));
+    struct screen_cell space = {.cp = codepoint_space, .style.bg = m->theme.background};
+    velvet_render_clear_buffer(r, get_current_buffer(r), space);
   }
 
   struct velvet_window *h;
@@ -906,26 +983,40 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   }
 
   struct composite_options opt = {0};
+  struct velvet_theme t = m->theme;
+
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
     opt.alpha_blend = 0;
-    if (layer > VELVET_LAYER_TILED)
-      if (r->theme.pseudotransparency.enabled) opt.alpha_blend = r->theme.pseudotransparency.alpha;
-    vec_rwhere(h, m->windows, h->layer == layer) {
+    if (layer > VELVET_LAYER_TILED && t.pseudotransparency.enabled) 
+      opt.alpha_blend = t.pseudotransparency.alpha;
+    uint64_t *winid;
+
+    /* draw windows in reverse focus order;  this is relevant
+     * for floating windows which should be stacked in order of most recently focused */
+    vec_rforeach(winid, m->focus_order) {
+      h = velvet_scene_get_window_from_id(m, *winid);
+      if (h->layer != layer) continue;
       if (h->dragging) continue;
-      if ((h->layer == VELVET_LAYER_TILED || h->layer == VELVET_LAYER_FLOATING) && !visible(m, h)) continue;
+      if (!managed(h)) continue;
+      if (!visible(m, h)) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_render_calculate_borders(m, h);
       velvet_render_copy_cells_from_window(m, h);
-      velvet_scene_rasterize_temp(m, opt);
+      velvet_scene_commit_staged(m, opt);
+    }
+    vec_where(h, m->windows, !managed(h) && h->layer == layer) {
+      velvet_render_calculate_borders(m, h);
+      velvet_render_copy_cells_from_window(m, h);
+      velvet_scene_commit_staged(m, opt);
     }
   }
 
   vec_rwhere(h, m->windows, h->dragging) {
     opt.alpha_blend = 0;
-    if (r->theme.pseudotransparency.enabled) opt.alpha_blend = r->theme.pseudotransparency.alpha;
+    if (m->theme.pseudotransparency.enabled) opt.alpha_blend = m->theme.pseudotransparency.alpha;
     velvet_render_calculate_borders(m, h);
     velvet_render_copy_cells_from_window(m, h);
-    velvet_scene_rasterize_temp(m, opt);
+    velvet_scene_commit_staged(m, opt);
   }
 
   int damage = velvet_render_calculate_damage(r);
@@ -935,40 +1026,41 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
   }
 
-  if (should_emulate_cursor(focused->emulator.options.cursor)) {
-    struct cursor_options hidden = {.visible = false};
-    velvet_render_set_cursor_style(r, hidden);
-  } else {
-    struct screen *screen = vte_get_current_screen(&focused->emulator);
-    struct cursor *cursor = &screen->cursor;
-    int line = cursor->line + focused->rect.client.y + screen->scroll.view_offset;
-    int col = cursor->column + focused->rect.client.x;
-
-    bool cursor_obscured = false;
-    /* if a window is above the current window and obscures the cursor, we should not show it */
-    if (!r->theme.pseudotransparency.enabled) {
-      struct velvet_window *window;
-      vec_where(window, m->windows, window->layer > focused->layer) {
-        struct rect w = window->rect.window;
-        if (w.y <= line && w.y + w.h > line && w.x <= col && w.x + w.w > col) {
-          cursor_obscured = true;
-          break;
-        }
-      }
-    }
-
-    if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) cursor_obscured = true;
-    if (screen_get_scroll_offset(screen) + cursor->line >= screen->h) cursor_obscured = true;
-
-    if (cursor_obscured) {
-      /* hide the cursor */
+  struct velvet_window *focused = velvet_scene_get_focus(m);
+  if (focused) {
+    if (should_emulate_cursor(focused->emulator.options.cursor)) {
       struct cursor_options hidden = {.visible = false};
       velvet_render_set_cursor_style(r, hidden);
     } else {
-      /* move cursor to focused host and update cursor */
-      velvet_render_position_cursor(r, line, col);
-      velvet_render_set_cursor_style(r, focused->emulator.options.cursor);
+      struct screen *screen = vte_get_current_screen(&focused->emulator);
+      struct cursor *cursor = &screen->cursor;
+      int line = cursor->line + focused->rect.client.y + screen->scroll.view_offset;
+      int col = cursor->column + focused->rect.client.x;
+
+      bool cursor_obscured = false;
+      /* if a window is above the current window and obscures the cursor, we should not show it */
+      if (!m->theme.pseudotransparency.enabled) {
+        struct velvet_window_hit hit;
+        if (velvet_scene_hit(m, col, line, &hit, skip_dragging, nullptr) && hit.win != focused) cursor_obscured = true;
+      }
+
+      if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) cursor_obscured = true;
+      if (screen_get_scroll_offset(screen) + cursor->line >= screen->h) cursor_obscured = true;
+
+      if (cursor_obscured) {
+        /* hide the cursor */
+        struct cursor_options hidden = {.visible = false};
+        velvet_render_set_cursor_style(r, hidden);
+      } else {
+        /* move cursor to focused host and update cursor */
+        velvet_render_position_cursor(r, line, col);
+        velvet_render_set_cursor_style(r, focused->emulator.options.cursor);
+      }
     }
+  } else {
+    /* hide the cursor if nothing is focused. */
+    struct cursor_options hidden = {.visible = false};
+    velvet_render_set_cursor_style(r, hidden);
   }
 
   struct u8_slice render = string_as_u8_slice(r->draw_buffer);
@@ -1220,16 +1312,10 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer
   vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
 }
 
-static uint64_t get_id() {
-  static uint64_t id = 1000;
-  return id++;
-}
-
 bool velvet_window_start(struct velvet_window *velvet_window) {
   struct rect c = velvet_window->rect.client;
   struct winsize velvet_windowsize = {.ws_col = c.w, .ws_row = c.h, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
-  velvet_window->id = get_id();
   /* TODO: Configure termios
    * Configuring termios based on the startup pty breaks stuff.
    * I initially tried to set it because I observed weird <DEL> behavior under zsh
@@ -1250,7 +1336,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
 
     string_ensure_null_terminated(&velvet_window->cmdline);
     char id[20];
-    snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
+    snprintf(id, sizeof(id) - 1, "%llu", velvet_window->id);
     setenv("VELVET_WINID", id, true);
     char *argv[] = {"sh", "-c", (char*)velvet_window->cmdline.content, NULL};
     execvp("sh", argv);

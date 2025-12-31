@@ -361,7 +361,7 @@ static void string_push_fg(struct string *str, struct color rgb) {
   string_push_color(str, rgb, true);
 }
 
-static int status_winid = 1;
+static uint64_t status_winid = 1;
 
 static bool occupied(struct velvet_scene *s, uint32_t tag) {
   struct velvet_window *w;
@@ -374,12 +374,12 @@ static bool occupied(struct velvet_scene *s, uint32_t tag) {
 static void draw_status(struct velvet *v) {
   static struct string buf = {0};
   string_clear(&buf);
-  struct velvet_window *status;
-  int numtags = 9;
-  vec_find(status, v->scene.windows, status->id == status_winid);
+  struct velvet_window *status = velvet_scene_get_window_from_id(&v->scene, status_winid);
   assert(status);
+  assert(!status->emulator.pending_input.len);
+  int numtags = 9;
 
-  struct velvet_theme t = v->scene.renderer.theme;
+  struct velvet_theme t = v->scene.theme;
   string_push_bg(&buf, t.mantle);
   string_push_fg(&buf, t.mantle);
   string_push_format_slow(&buf, "\r\x1b[K");

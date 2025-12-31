@@ -76,7 +76,7 @@ struct velvet_input_drag_event {
     int client_x, client_y;
   } drag_start;
   /* the id of the client being dragged */
-  int id;
+  uint64_t id;
 };
 
 struct velvet_input {
