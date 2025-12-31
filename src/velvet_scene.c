@@ -925,7 +925,7 @@ bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_wi
   struct velvet_window *h;
   for (enum velvet_scene_layer layer = VELVET_LAYER_LAST - 1; layer >= VELVET_LAYER_STATUS; layer--) {
     uint64_t *winid;
-    vec_rforeach(winid, scene->focus_order) {
+    vec_foreach(winid, scene->focus_order) {
       h = velvet_scene_get_window_from_id(scene, *winid);
       if (h->layer != layer) continue;
       if (!visible(scene, h)) continue;
