@@ -99,6 +99,10 @@ struct velvet_theme {
   } cursor;
   struct {
     bool enabled;
+    float magnitude;
+  } dim_inactive;
+  struct {
+    bool enabled;
     float alpha;
   } pseudotransparency;
   struct color palette[16];
@@ -242,7 +246,12 @@ static const struct velvet_theme velvet_theme_default = {
     .pseudotransparency =
         {
             .enabled = true,
-            .alpha = 0.30f,
+            .alpha = 0.20f,
+        },
+    .dim_inactive =
+        {
+            .enabled = true,
+            .magnitude = 0.9f,
         },
     .mantle = RGB("#181825"),
     .status =

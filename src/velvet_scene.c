@@ -147,6 +147,10 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
     struct rect b = { .x = 0, .y = lines - status_height, .h = 1, .w = columns };
     velvet_window_resize(win, b);
   }
+  vec_where(win, scene->windows, win->layer == VELVET_LAYER_BACKGROUND) {
+    struct rect bg = { .x = 0, .y = 0, .w = columns, .h = lines };
+    velvet_window_resize(win, bg);
+  }
 
   if (nmaster <= 0) {
     master_width = 0;
@@ -884,6 +888,7 @@ static struct screen_cell blend_cells(struct screen_cell top, struct screen_cell
 
 struct composite_options {
   float alpha_blend;
+  float dim;
 };
 
 static void velvet_scene_commit_staged(struct velvet_scene *m, struct composite_options o) {
@@ -894,6 +899,10 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct composite_
   for (int i = 0; i < r->w * r->h; i++) {
     if (!cell_equals(c->cells[i], empty)) {
       struct screen_cell top = normalize_cell(m->theme, c->cells[i]);
+      if (o.dim > 0) {
+        top.style.bg = color_mult(top.style.bg, o.dim);
+        top.style.fg = color_mult(top.style.fg, o.dim);
+      }
       if (o.alpha_blend > 0) {
         struct screen_cell bottom = normalize_cell(m->theme, b->cells[i]);
         top = blend_cells(top, bottom, o.alpha_blend);
@@ -982,12 +991,14 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_window_update_title(h);
   }
 
+  struct velvet_window *focused = velvet_scene_get_focus(m);
   struct composite_options opt = {0};
   struct velvet_theme t = m->theme;
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
     opt.alpha_blend = 0;
-    if (layer > VELVET_LAYER_TILED && t.pseudotransparency.enabled) 
+    opt.dim = 0;
+    if (t.pseudotransparency.enabled) 
       opt.alpha_blend = t.pseudotransparency.alpha;
     uint64_t *winid;
 
@@ -999,15 +1010,20 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       if (h->dragging) continue;
       if (!managed(h)) continue;
       if (!visible(m, h)) continue;
+      bool is_focus = focused && focused->id == *winid;
+      opt.dim = 0;
+      if (t.dim_inactive.enabled && !is_focus)
+        opt.dim = t.dim_inactive.magnitude;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_render_calculate_borders(m, h);
       velvet_render_copy_cells_from_window(m, h);
       velvet_scene_commit_staged(m, opt);
     }
+
     vec_where(h, m->windows, !managed(h) && h->layer == layer) {
       velvet_render_calculate_borders(m, h);
       velvet_render_copy_cells_from_window(m, h);
-      velvet_scene_commit_staged(m, opt);
+      velvet_scene_commit_staged(m, (struct composite_options){0});
     }
   }
 
@@ -1026,7 +1042,6 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
   }
 
-  struct velvet_window *focused = velvet_scene_get_focus(m);
   if (focused) {
     if (should_emulate_cursor(focused->emulator.options.cursor)) {
       struct cursor_options hidden = {.visible = false};
