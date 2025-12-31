@@ -170,14 +170,14 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
       int height = (float)master_height_left / master_items_left;
       struct rect region = rect_carve(scene->ws, 0, master_y, master_width, height);
       velvet_window_resize(win, region);
-      master_y += height;
+      master_y += win->rect.window.h;
       master_items_left--;
       master_height_left -= height;
     } else {
       int height = (float)stack_height_left / stack_items_left;
       struct rect region = rect_carve(scene->ws, master_width, stack_y, stack_width, height);
       velvet_window_resize(win, region);
-      stack_y += height;
+      stack_y += win->rect.window.h;
       stack_items_left--;
       stack_height_left -= height;
     }
