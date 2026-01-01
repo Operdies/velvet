@@ -432,9 +432,9 @@ static void velvet_dispatch_frame(void *data) {
     draw_background(v);
     v->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
     velvet_scene_render_damage(&v->scene, velvet_render, v);
-    io_schedule_cancel(&v->event_loop, v->active_render_token);
-    io_schedule_cancel(&v->event_loop, v->idle_render_token);
   }
+  io_schedule_cancel(&v->event_loop, v->active_render_token);
+  io_schedule_cancel(&v->event_loop, v->idle_render_token);
 }
 
 void velvet_loop(struct velvet *velvet) {
