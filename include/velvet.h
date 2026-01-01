@@ -141,6 +141,7 @@ struct velvet_keymap * velvet_keymap_map(struct velvet_keymap *root, struct u8_s
 void velvet_input_unwind(struct velvet *v);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
+void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 
 static struct velvet_input velvet_input_default = {
     .options =

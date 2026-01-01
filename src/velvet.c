@@ -15,6 +15,17 @@ static void velvet_session_render(struct u8_slice str, void *context) {
   string_push_slice(&s->pending_output, str);
 }
 
+void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
+  if (s->input) close(s->input);
+  if (s->output) close(s->output);
+  string_destroy(&s->pending_output);
+  string_destroy(&s->commands.buffer);
+  string_destroy(&s->cwd);
+  *s = (struct velvet_session){0};
+  size_t idx = vec_index(&velvet->sessions, s);
+  vec_remove_at(&velvet->sessions, idx);
+}
+
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
   if (!s) return;
   int sock = s->socket;
@@ -23,16 +34,7 @@ void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
     write(s->socket, &detach, 1);
     close(s->socket);
   }
-  if (s->input)
-    close(s->input);
-  if (s->output)
-    close(s->output);
-  string_destroy(&s->pending_output);
-  string_destroy(&s->commands.buffer);
-  string_destroy(&s->cwd);
-  *s = (struct velvet_session){0};
-  size_t idx = vec_index(&velvet->sessions, s);
-  vec_remove_at(&velvet->sessions, idx);
+  velvet_session_destroy(velvet, s);
   if (sock && velvet->focused_socket == sock) {
     struct velvet_session *fst = nullptr;
     vec_find(fst, velvet->sessions, fst->socket && fst->input);
@@ -528,6 +530,8 @@ void velvet_destroy(struct velvet *velvet) {
   io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input);
+  struct velvet_session *s;
+  vec_foreach(s, velvet->sessions) velvet_session_destroy(velvet, s);
   vec_destroy(&velvet->sessions);
 }
 
