@@ -155,6 +155,8 @@ struct emulator_options {
    * receives / loses keyboard focus */
   bool focus_reporting;
 
+  /* invert fg/bg */
+  bool reverse_video;
   struct modifier_options modifiers;
   struct charset_options charset;
   struct cursor_options cursor;

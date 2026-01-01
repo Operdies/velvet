@@ -607,6 +607,7 @@ static enum DECRQM_QUERY_RESPONSE query_private_mode(struct vte *vte, int mode) 
   struct screen *active = vte_get_current_screen(vte);
   switch (mode) {
   case 1: return resp(o.application_mode);
+  case 5: return resp(o.reverse_video);
   case 6: return resp(active->cursor.origin);
   case 7: return resp(o.auto_wrap_mode);
   case 12: return resp(o.cursor.style & 1);
@@ -634,6 +635,7 @@ static void decset_set(struct vte *vte, int mode, bool on) {
   struct screen *screen = vte_get_current_screen(vte);
   switch (mode) {
   case 1: vte->options.application_mode = on; break;
+  case 5: vte->options.reverse_video = on; break;
   case 6: screen->cursor.origin = on; break;
   case 7: vte->options.auto_wrap_mode = on; break;
   case 12: set_cursor_blinking(vte, on); break;

@@ -435,10 +435,17 @@ static struct color color_alpha_blend(struct color a, struct color b, float frac
   return rgb_add(rgb_mult(a, frac), rgb_mult(b, 1.0f - frac));
 }
 
+
 /* convert cell colors to RGB colors based on the current theme, and convert null characters to spaces */
 static struct screen_cell normalize_cell(struct velvet_theme t, struct screen_cell c) {
   c.style.bg = color_to_rgb(t, c.style.bg, false);
   c.style.fg = color_to_rgb(t, c.style.fg, true);
+  if (c.style.attr & ATTR_REVERSE) {
+    c.style.attr &= ~ATTR_REVERSE;
+    struct color fg = c.style.fg;
+    c.style.fg = c.style.bg;
+    c.style.bg = fg;
+  }
   if (!c.cp.value) c.cp.value = ' ';
   return c;
 }
@@ -676,6 +683,7 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
           cell.style.bg = RGB("#00ffff");
         }
       }
+
       velvet_render_set_cell(r, render_line, render_column, cell);
       if (cell.cp.is_wide) column++;
     }
@@ -897,8 +905,12 @@ struct composite_options {
   float dim;
 };
 
-static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win) {
-  struct velvet_theme t = m->theme;
+static bool is_cell_bg_clear(struct screen_cell c) {
+  if (c.style.attr & ATTR_REVERSE) return c.style.fg.cmd == COLOR_RESET;
+  else return c.style.bg.cmd == COLOR_RESET;
+}
+
+static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win, struct velvet_theme t) {
   bool is_focused = velvet_scene_get_focus(m) == win;
   struct composite_options o = {
       .transparency = t.pseudotransparency[win->layer],
@@ -915,13 +927,11 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
       struct screen_cell above = staging->cells[i];
       struct screen_cell below = composite->cells[i];
 
-      if (o.transparency.mode != PSEUDOTRANSPARENCY_OFF) {
-        if (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || above.style.bg.cmd == COLOR_RESET) {
-          above = normalize_cell(t, above);
-          below = normalize_cell(t, below);
-          above = blend_cells(above, below, o.transparency.alpha);
-        }
-      }
+      bool blend = o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
+                   (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || is_cell_bg_clear(above));
+
+      above = normalize_cell(t, above);
+      if (blend) above = blend_cells(above, normalize_cell(t, below), o.transparency.alpha);
 
       if (o.dim > 0) {
         above.style.bg = rgb_mult(above.style.bg, o.dim);
@@ -974,6 +984,21 @@ bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_wi
   return false;
 }
 
+static void velvet_scene_stage_and_commit_window(struct velvet_scene *m, struct velvet_window *w) {
+  struct velvet_theme t = m->theme;
+  velvet_render_calculate_borders(m, w);
+  if (w->emulator.options.reverse_video) {
+    /* reverse video should not apply to borders, so we
+     * need to commit twice if reverse video is used */
+    velvet_scene_commit_staged(m, w, t);
+    struct color fg = t.foreground;
+    t.foreground = t.background;
+    t.background = fg;
+  }
+  velvet_render_copy_cells_from_window(m, w);
+  velvet_scene_commit_staged(m, w, t);
+}
+
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
   if (m->windows.length == 0) return;
 
@@ -1022,22 +1047,16 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       if (!managed(win)) continue;
       if (!visible(m, win)) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
-      velvet_render_calculate_borders(m, win);
-      velvet_render_copy_cells_from_window(m, win);
-      velvet_scene_commit_staged(m, win);
+      velvet_scene_stage_and_commit_window(m, win);
     }
 
     vec_where(win, m->windows, !managed(win) && win->layer == layer) {
-      velvet_render_calculate_borders(m, win);
-      velvet_render_copy_cells_from_window(m, win);
-      velvet_scene_commit_staged(m, win);
+      velvet_scene_stage_and_commit_window(m, win);
     }
   }
 
   vec_rwhere(win, m->windows, win->dragging) {
-    velvet_render_calculate_borders(m, win);
-    velvet_render_copy_cells_from_window(m, win);
-    velvet_scene_commit_staged(m, win);
+    velvet_scene_stage_and_commit_window(m, win);
   }
 
   int damage = velvet_render_calculate_damage(r);
