@@ -770,7 +770,7 @@ static bool DECSTBM(struct vte *vte, struct csi *csi) {
   top = csi->params[0].primary;
   bottom = csi->params[1].primary;
 
-  if (bottom == 0) bottom = vte->rows;
+  if (bottom == 0) bottom = vte->ws.h;
   if (top > 0) top--;
   if (bottom > 0) bottom--;
 
@@ -793,8 +793,14 @@ static bool XTMODKEYS(struct vte *vte, struct csi *csi) {
 
 static bool XTWINOPS(struct vte *vte, struct csi *csi) {
   switch (csi->params[0].primary) {
-  case 14: TODO("Report Text Area Size in Pixels"); return false;
-  case 16: TODO("Report Cell Size in Pixels"); return false;
+  case 14: {
+    string_push_csi(&vte->pending_input, 0, INT_SLICE(4, vte->ws.y_pixel, vte->ws.x_pixel), "t");
+    return true;
+  }
+  case 16: {
+    string_push_csi(&vte->pending_input, 0, INT_SLICE(6, vte->ws.y_pixel / vte->ws.h, vte->ws.x_pixel / vte->ws.w), "t");
+    return true;
+  }
   case 18: TODO("Report Text Area Size in Characters"); return false;
   default:
     /* The rest of the commands in this group manipulate the window or otherwise interface with the windowing system.

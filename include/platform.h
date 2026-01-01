@@ -2,9 +2,7 @@
 #define PLATFORM_H
 
 #include <stdint.h>
-struct rect {
-  int x, y, h, w, x_pixel, y_pixel;
-};
+#include "screen.h"
 
 void platform_get_winsize(struct rect *w);
 uint64_t get_ms_since_startup(void);

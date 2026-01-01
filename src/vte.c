@@ -254,7 +254,9 @@ static void DISPATCH_CSI(struct vte *vte)   { vte->state = vte_csi; }
 static void DISPATCH_ST(struct vte *vte)    { (void)vte; TODO("ST"); }
 static void DISPATCH_OSC(struct vte *vte)   { vte->state = vte_osc; }
 static void DISPATCH_PM(struct vte *vte)    { (void)vte; OMITTED("PM"); }
-static void DISPATCH_APC(struct vte *vte)   { (void)vte; OMITTED("APC"); }
+static void DISPATCH_APC(struct vte *vte)   { 
+  vte->state = vte_apc;
+}
 
 
 static void vte_dispatch_ground(struct vte *vte, uint8_t ch) {
@@ -380,7 +382,7 @@ void vte_dispatch_dcs(struct vte *vte, uint8_t ch) {
   string_push_char(&vte->command_buffer, ch);
   if (ch == '\\' && prev == ESC) {
     vte->state = vte_ground;
-    TODO("DCS sequence: '%.*s'", vte->command_buffer.len - 2, vte->command_buffer.content + 1);
+    TODO("DCS sequence: '%.*s'", (int)vte->command_buffer.len - 2, vte->command_buffer.content + 1);
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     vte->state = vte_ground;
     velvet_log("Abort DCS: max length exceeded");
@@ -429,6 +431,40 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
     vte->state = vte_ground;
   }
 }
+
+static bool dispatch_graphics(struct vte *vte, struct u8_slice cmd) {
+  return true;
+}
+
+static bool apc_dispatch(struct vte *vte, struct u8_slice cmd) {
+  if (cmd.len) {
+    switch (cmd.content[0]) {
+    case 'G': return dispatch_graphics(vte, cmd);
+    default: TODO("APC %c", cmd.content[0]);
+    }
+  }
+  return true;
+}
+
+static void vte_dispatch_apc(struct vte *vte, uint8_t ch) {
+  static const uint8_t *BEL = u8"\a";
+  static const uint8_t *ST = u8"\x1b\\";
+
+  char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
+  string_push_char(&vte->command_buffer, ch);
+  if (ch == BELL || (ch == '\\' && prev == ESC)) {
+    const uint8_t *st = ch == BELL ? BEL : ST;
+    uint8_t *buffer = vte->command_buffer.content + 2;
+    int len = vte->command_buffer.len - strlen((char*)st) - 2;
+    struct u8_slice content = { .content = buffer, .len = len };
+    apc_dispatch(vte, content);
+    vte->state = vte_ground;
+  } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
+    velvet_log("Abort OSC: max length exceeded");
+    vte->state = vte_ground;
+  }
+}
+
 static void vte_dispatch_pct(struct vte *vte, uint8_t ch) {
   (void)ch;
   vte->state = vte_ground;
@@ -447,9 +483,9 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 }
 
 static void vte_init_alternate_screen(struct vte *vte) {
-  if (vte->alternate.w != vte->columns || vte->alternate.h != vte->rows) {
-    struct screen new = {.w = vte->columns, .h = vte->rows};
-    screen_initialize(&new, vte->columns, vte->rows);
+  if (vte->alternate.w != vte->ws.w || vte->alternate.h != vte->ws.h) {
+    struct screen new = {.w = vte->ws.w, .h =  vte->ws.h};
+    screen_initialize(&new, vte->ws.w,  vte->ws.h);
     if (vte->primary.cells) {
       screen_copy_alternate(&new, &vte->alternate);
       screen_destroy(&vte->alternate);
@@ -474,9 +510,9 @@ void vte_enter_alternate_screen(struct vte *vte) {
 }
 
 static void vte_init_primary_screen(struct vte *vte) {
-  if (vte->primary.w != vte->columns || vte->primary.h != vte->rows) {
-    struct screen new = { .w = vte->columns, .h = vte->rows, .scroll.max = vte->primary.scroll.max };
-    screen_initialize(&new, vte->columns, vte->rows);
+  if (vte->primary.w != vte->ws.w || vte->primary.h !=  vte->ws.h) {
+    struct screen new = { .w = vte->ws.w, .h =  vte->ws.h, .scroll.max = vte->primary.scroll.max };
+    screen_initialize(&new, vte->ws.w,  vte->ws.h);
     if (vte->primary.cells) {
       screen_copy_primary(&new, &vte->primary);
       screen_destroy(&vte->primary);
@@ -491,11 +527,10 @@ void vte_enter_primary_screen(struct vte *vte) {
   vte_init_primary_screen(vte);
 }
 
-void vte_set_size(struct vte *vte, int w, int h) {
+void vte_set_size(struct vte *vte, struct rect sz) {
   struct screen *g = vte_get_current_screen(vte);
-  vte->rows = h;
-  vte->columns = w;
-  if (g->cells == nullptr || g->w != w || g->h != h) {
+  vte->ws = sz;
+  if (g->cells == nullptr || g->w != sz.w || g->h != sz.h) {
     if (vte->options.alternate_screen) {
       vte_init_alternate_screen(vte);
     } else {
@@ -509,8 +544,8 @@ static bool is_ascii(uint8_t ch) {
 }
 
 void vte_process(struct vte *vte, struct u8_slice str) {
-  assert(vte->rows);
-  assert(vte->columns);
+  assert(vte->ws.h);
+  assert(vte->ws.w);
   for (size_t i = 0; i < str.len; i++) {
     if (vte->state == vte_ground) {
       size_t j = i;
@@ -533,6 +568,7 @@ void vte_process(struct vte *vte, struct u8_slice str) {
     case vte_escape: vte_dispatch_escape(vte, ch); break;
     case vte_dcs: vte_dispatch_dcs(vte, ch); break;
     case vte_osc: vte_dispatch_osc(vte, ch); break;
+    case vte_apc: vte_dispatch_apc(vte, ch); break;
     case vte_csi: vte_dispatch_csi(vte, ch); break;
     case vte_pnd: vte_dispatch_pnd(vte, ch); break;
     case vte_spc: vte_dispatch_spc(vte, ch); break;

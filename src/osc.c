@@ -28,8 +28,8 @@ static bool osc_dispatch_background_color(struct vte *vte, struct osc *osc) {
   return osc_dispatch_todo(vte, osc);
 }
 
-// used by lazygit
-// would be great to support well
+/* this was initially stubbed because lazygit used it, but it appears that lazygit now
+ * manually handles links with SGR mouse */
 static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
   (void)vte;
   TODO("OSC hyperlink %d %.*s", osc->ps, osc->pt.len, osc->pt.text);

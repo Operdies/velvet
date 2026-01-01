@@ -37,6 +37,10 @@ enum PACK cell_attributes {
   ATTR_BLINK_ANY = ATTR_BLINK_SLOW | ATTR_BLINK_RAPID,
 };
 
+struct rect {
+  int x, y, h, w, x_pixel, y_pixel;
+};
+
 enum PACK color_command {
   COLOR_RESET,
   COLOR_RGB,

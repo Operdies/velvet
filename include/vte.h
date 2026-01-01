@@ -16,6 +16,7 @@ enum vte_state {
   vte_pnd,
   vte_spc,
   vte_pct,
+  vte_apc,
   vte_charset,
 };
 
@@ -163,7 +164,7 @@ struct emulator_options {
 
 /* finite state machine for parsing ansi escape codes */
 struct vte {
-  int rows, columns;
+  struct rect ws;
   /* the current state of the machine */
   enum vte_state state;
   struct emulator_options options;
@@ -201,7 +202,7 @@ void vte_send_device_attributes(struct vte *vte);
 struct screen *vte_get_current_screen(struct vte *vte);
 void vte_enter_primary_screen(struct vte *vte);
 void vte_enter_alternate_screen(struct vte *vte);
-void vte_set_size(struct vte *vte, int columns, int rows);
+void vte_set_size(struct vte *vte, struct rect sz);
 void vte_send_status_report(struct vte *vte, enum vte_dsr n);
 
 #endif /*  VTE_H */

@@ -14,8 +14,8 @@ static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_sty
 static bool color_equals(struct color a, struct color b);
 
 struct rect rect_carve(struct rect source, int x, int y, int width, int height) {
-  int pixels_per_column = (int)((float)source.y_pixel / (float)source.w);
-  int pixels_per_row = (int)((float)source.x_pixel / (float)source.h);
+  int pixels_per_column = (int)((float)source.x_pixel / (float)source.w);
+  int pixels_per_row = (int)((float)source.y_pixel / (float)source.h);
 
   struct rect out = { .x = x, .y = y, .w = width, .h = height };
   out.x_pixel = out.w * pixels_per_column;
@@ -143,12 +143,13 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
 
   int status_height = 0;
   vec_where(win, scene->windows, win->layer == VELVET_LAYER_STATUS) {
-    struct rect b = { .x = 0, .y = lines - status_height - 1, .h = 1, .w = columns };
-    velvet_window_resize(win, b);
+    int height = 1; int width = columns;
+    struct rect dock = rect_carve(scene->ws, 0, lines - status_height - height, width, height);
+    velvet_window_resize(win, dock);
     status_height += win->rect.window.h;
   }
   vec_where(win, scene->windows, win->layer == VELVET_LAYER_BACKGROUND) {
-    struct rect bg = { .x = 0, .y = 0, .w = columns, .h = lines };
+    struct rect bg = rect_carve(scene->ws, 0, 0, columns, lines);
     velvet_window_resize(win, bg);
   }
 
@@ -1292,8 +1293,8 @@ void velvet_window_update_title(struct velvet_window *p) {
 
 
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
-  assert(velvet_window->emulator.rows == velvet_window->rect.client.h);
-  assert(velvet_window->emulator.columns == velvet_window->rect.client.w);
+  assert(velvet_window->emulator.ws.h == velvet_window->rect.client.h);
+  assert(velvet_window->emulator.ws.w == velvet_window->rect.client.w);
   vte_process(&velvet_window->emulator, str);
 }
 
@@ -1329,7 +1330,7 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer
   velvet_window->rect.window = outer;
   velvet_window->rect.client = inner;
 
-  vte_set_size(&velvet_window->emulator, velvet_window->rect.client.w, velvet_window->rect.client.h);
+  vte_set_size(&velvet_window->emulator, inner);
 }
 
 bool velvet_window_start(struct velvet_window *velvet_window) {
