@@ -204,7 +204,6 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
     assert_screen_equals(expected, vte_get_current_screen(&p->emulator), testname2);
   }
   free(expected);
-  velvet_window_destroy(p);
   velvet_scene_destroy(&v);
 }
 

@@ -345,15 +345,20 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
     free(renderer->buffers[i].cells);
     free(renderer->buffers[i].lines);
   }
+  free(renderer->staging_buffer.cells);
+  free(renderer->staging_buffer.lines);
 }
 
 void velvet_scene_destroy(struct velvet_scene *m) {
+  assert_invariants(m);
   struct velvet_window *h;
   vec_foreach(h, m->windows) {
     velvet_window_destroy(h);
   }
   vec_destroy(&m->windows);
+  vec_destroy(&m->focus_order);
   velvet_render_destroy(&m->renderer);
+  assert_invariants(m);
 }
 
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
