@@ -42,6 +42,7 @@ static enum charset charset_lookup[] = {
 // It can also contain a picture in sixel format, which can also be quite large.
 #define MAX_ESC_SEQ_LEN (1 << 16)
 
+static bool dispatch_graphics(struct vte *vte, struct u8_slice cmd);
 void vte_send_device_attributes(struct vte *vte) {
   // Advertise VT102 support (same as alacritty)
   // TODO: Figure out how to advertise exact supported features here.
@@ -432,10 +433,6 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
   }
 }
 
-static bool dispatch_graphics(struct vte *vte, struct u8_slice cmd) {
-  return true;
-}
-
 static bool apc_dispatch(struct vte *vte, struct u8_slice cmd) {
   if (cmd.len) {
     switch (cmd.content[0]) {
@@ -591,3 +588,103 @@ void vte_destroy(struct vte *vte) {
 struct screen *vte_get_current_screen(struct vte *vte) {
   return vte->options.alternate_screen ? &vte->alternate : &vte->primary;
 }
+
+
+static bool u8_match(struct u8_slice s, char *opt) {
+  return u8_slice_equals(s, u8_slice_from_cstr(opt));
+}
+
+struct kvp {
+  struct u8_slice key, value;
+};
+
+/* https://sw.kovidgoyal.net/kitty/graphics-protocol/ */
+static bool dispatch_graphics(struct vte *vte, struct u8_slice cmd) {
+  // int a = 't'; /* action -- [acdfpqtT] */
+  // int q = 0;   /* quiet -- [0, 1, 2] */
+  //
+  // /* image transmission parameters */
+  // int f = 32;  /* format -- [24, 32, 100] */
+  // int t = 'd'; /* transmission mode -- [dfts]  */
+  // int s = 0;   /* width */
+  // int v = 0;   /* height */
+  // int S = 0;   /* data size to read from file */
+  // int O = 0;   /* data offset in file */
+  // int i = 0;   /* image id */
+  // int I = 0;   /* image number */
+  // int p = 0;   /* placement id */
+  // int o = 0;   /* data compression [z] */
+  // int m = 0;   /* chunk indicator [0,1] */
+  //
+  // /* image display parameters */
+  // int x = 0; /* left edge of image area (e.g. x=10 will not display the first 10 pixels) */
+  // int y = 0; /* top edge of image area */
+  // int w = 0; /* width of image area */
+  // int h = 0; /* height of image area */
+  // int X = 0; /* x-offset within cell to display the image */
+  // int Y = 0; /* y=offset within cell to display the image */
+  // int c = 0; /* number of columns to display the image */
+  // int r = 0; /* number of rows to display the image */
+  // int C = 0; /* cursor movement policy. [0,1] 0=move cursor to end of image, 1=don't move cursor */
+  // int U = 0; /*1 = create virtual placement for a unicode placeholder (??) */
+  // int z = 0; /* z-index vertical stacking order */
+  // int P = 0; /* id of parent image for relative placement */
+  // int Q = 0; /* id of placement in the parent image for relative placement */
+  // int H = 0; /* horizontal offset */
+  // int V = 0; /* vertical offset */
+
+  /* animation keys omitted (they alias with image display parameters) */
+  /* delete [aAcCnNiIpPqQrRxXyYzZ]
+   * aA -- Delete all placements visible on screen
+   * iI -- Delete all images with i=<id> and p=<pid>
+   * nN -- Delete the newest image with the specified number I=<number> p=<pid>
+   * cC -- Delete all placements that intersect with the cursor
+   * fF -- Delete animation frames
+   * pP -- Delete all placements that insersect with the specified cell (x, y)
+   * qQ -- Delete all placements that intersect a specific cell having a specific z-index. The cell and z-index is
+   * specified using the x, y and z keys.
+   * rR -- Delete all images whose id is greater than or equal to the value of the x key and less than or equal to the
+   * value of the y
+   * xX -- Delete all placements that intersect with column `x`
+   * yY -- delete all placements that intersect with row `y`
+   * zZ -- Delete all placements that intersect with `z`
+   * */
+  // int d = 0; 
+
+  int params[255] = {0};
+
+  int key_start = 1;
+  int value_start;
+  int payload_start = 0;
+  for (int i = 1; i < (int)cmd.len; i++) {
+    uint8_t ch = cmd.content[i];
+    if (ch == '=') {
+      struct u8_slice key = u8_slice_range(cmd, key_start, i);
+      value_start = i + 1;
+      int j = value_start;
+      for (; j < (int)cmd.len; j++) {
+        uint8_t ch2 = cmd.content[j];
+        if (ch2 == ';') {
+          payload_start = j + 1;
+          break;
+        }
+        if (ch2 == ',') break;
+      }
+      struct u8_slice value = u8_slice_range(cmd, value_start, j);
+      if (key.len == 1 && value.len >= 1) {
+        int digit;
+        bool is_digit = u8_slice_digit(value, &digit);
+        params[key.content[0]] = is_digit ? digit : value.content[0];
+      }
+
+      i = j;
+      key_start = j + 1;
+      if (payload_start) break;
+    }
+  }
+
+  struct u8_slice payload = u8_slice_range(cmd, payload_start, -1);
+  return true;
+}
+
+
