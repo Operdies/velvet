@@ -241,7 +241,7 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
   }
 
-  velvet_window_destroy(p);
+  velvet_scene_destroy(&v);
   free(small), free(large), string_destroy(&output);
 }
 
@@ -266,7 +266,7 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
   }
-  velvet_window_destroy(p);
+  velvet_scene_destroy(&v);
   free(small), free(large);
 }
 
