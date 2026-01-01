@@ -41,6 +41,7 @@ static char VELVET_SHIFT_TABLE[] = {
   X(BS, "\x08")                                                                                                        \
   X(BS, "\x7f")                                                                                                        \
   X(TAB, "\t")                                                                                                         \
+  X(CR, "\n")                                                                                                          \
   X(SPACE, " ")
 
 static const struct special_key keys[] = {

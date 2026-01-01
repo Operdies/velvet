@@ -322,15 +322,17 @@ static void scroll_to_bottom(struct velvet *v) {
 static void send_bracketed_paste(struct velvet *v) {
   struct velvet_input *in = &v->input;
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  bool enclose = focus->emulator.options.bracketed_paste;
-  uint8_t *start = in->command_buffer.content;
-  size_t len = in->command_buffer.len;
-  if (!enclose) {
-    start += bracketed_paste_start.len;
-    len -= bracketed_paste_start.len + bracketed_paste_end.len;
+  if (focus) {
+    bool enclose = focus->emulator.options.bracketed_paste;
+    uint8_t *start = in->command_buffer.content;
+    size_t len = in->command_buffer.len;
+    if (!enclose) {
+      start += bracketed_paste_start.len;
+      len -= bracketed_paste_start.len + bracketed_paste_end.len;
+    }
+    struct u8_slice s = {.content = start, .len = len};
+    string_push_slice(&focus->emulator.pending_input, s);
   }
-  struct u8_slice s = {.content = start, .len = len};
-  string_push_slice(&focus->emulator.pending_input, s);
   string_clear(&v->input.command_buffer);
   in->state = VELVET_INPUT_STATE_NORMAL;
   scroll_to_bottom(v);
@@ -363,20 +365,18 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
 
   // TODO: Is this accurate?
   if (ch >= 0x40 && ch <= 0x7E) {
-    if (!v->scene.windows.length) return;
-    {
-      struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
-      for (int i = 0; i < LENGTH(keys); i++) {
-        struct special_key k = keys[i];
-        if (u8_slice_equals(raw, u8_slice_from_cstr(k.escape))) {
-          string_clear(&v->input.command_buffer);
-          in->state = VELVET_INPUT_STATE_NORMAL;
-          struct velvet_key_event evt = {.key.special = k};
-          dispatch_key_event(v, evt);
-          return;
-        }
+    struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
+    for (int i = 0; i < LENGTH(keys); i++) {
+      struct special_key k = keys[i];
+      if (u8_slice_equals(raw, u8_slice_from_cstr(k.escape))) {
+        string_clear(&v->input.command_buffer);
+        in->state = VELVET_INPUT_STATE_NORMAL;
+        struct velvet_key_event evt = {.key.special = k};
+        dispatch_key_event(v, evt);
+        return;
       }
     }
+
     struct csi c = {0};
     struct u8_slice s = string_range(&v->input.command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
@@ -666,9 +666,10 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
 
 static void dispatch_focus(struct velvet *v, struct csi c) {
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  if (focus->emulator.options.focus_reporting) send(v, c.final == 'O' ? vt_focus_out : vt_focus_in);
-  if (c.final == 'I' && v->input.input_socket)
-    v->focused_socket = v->input.input_socket;
+  if (focus && focus->emulator.options.focus_reporting) {
+    send(v, c.final == 'O' ? vt_focus_out : vt_focus_in);
+  }
+  if (c.final == 'I' && v->input.input_socket) v->focused_socket = v->input.input_socket;
 }
 
 void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c) {
