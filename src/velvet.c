@@ -173,8 +173,13 @@ void velvet_scene_remove_exited(struct velvet *v) {
     vec_find(h, m->windows, h->pid == pid);
     if (h) {
       h->exited_at = get_ms_since_startup();
-      if (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY && h->close.delay_ms > 0) {
-        io_schedule(&v->event_loop, h->close.delay_ms, velvet_scene_remove_schedule, v);
+      if ((h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->close.delay_ms > 0) {
+        if (h->pty > 0) {
+          /* close the pty, but defer cleanup */
+          close(h->pty);
+          h->pty = 0;
+        }
+        io_schedule(&v->event_loop, h->close.delay_ms + 1, velvet_scene_remove_schedule, v);
       } else {
         velvet_remove_window(v, h);
       }
@@ -364,6 +369,7 @@ static void string_push_fg(struct string *str, struct color rgb) {
 }
 
 static uint64_t status_winid = 1;
+static uint64_t bg_winid = 2;
 
 static bool occupied(struct velvet_scene *s, uint32_t tag) {
   struct velvet_window *w;
@@ -371,6 +377,17 @@ static bool occupied(struct velvet_scene *s, uint32_t tag) {
             s->windows,
             (w->layer == VELVET_LAYER_FLOATING || w->layer == VELVET_LAYER_TILED) && w->tags & tag) return true;
   return false;
+}
+
+static void draw_background(struct velvet *v) {
+  static struct string buf = {0};
+  struct velvet_window *bg = velvet_scene_get_window_from_id(&v->scene, bg_winid);
+  if (!bg) return;
+  struct color rgb = v->scene.theme.background;
+  string_clear(&buf);
+  string_push_bg(&buf, rgb);
+  string_push_cstr(&buf, "\x1b[2J");
+  vte_process(&bg->emulator, string_as_u8_slice(buf));
 }
 
 static void draw_status(struct velvet *v) {
@@ -411,6 +428,7 @@ static void velvet_dispatch_frame(void *data) {
   if (focus) {
     velvet_align_and_arrange(v, focus);
     draw_status(v);
+    draw_background(v);
     v->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
     velvet_scene_render_damage(&v->scene, velvet_render, v);
     io_schedule_cancel(&v->event_loop, v->active_render_token);
@@ -436,18 +454,17 @@ void velvet_loop(struct velvet *velvet) {
   velvet_scene_resize(&velvet->scene, ws);
   start_default_shell(velvet);
 
-  struct velvet_window status_win = {
-      .id = status_winid,
-      .border_width = 0,
-      .layer = VELVET_LAYER_STATUS,
-      .emulator.options =
-          {
-              .auto_wrap_mode = false,
-              .alternate_screen = true,
-          },
-  };
+  {
+    /* create status and background windows */
+    struct velvet_window status = {.id = status_winid, .layer = VELVET_LAYER_STATUS};
+    status.emulator.options.alternate_screen = true;
 
-  vec_push(&velvet->scene.windows, &status_win);
+    struct velvet_window bg = {.id = bg_winid, .layer = VELVET_LAYER_BACKGROUND};
+    bg.emulator.options.alternate_screen = true;
+
+    velvet_scene_manage(&velvet->scene, status);
+    velvet_scene_manage(&velvet->scene, bg);
+  }
 
   velvet->scene.arrange(&velvet->scene);
 

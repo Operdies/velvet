@@ -186,6 +186,7 @@ static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_c
     c.cp.value = run.content[i];
     row->cells[cur->column++] = c;
   }
+  row->eol = MAX(row->eol, cur->column);
   cur->column = MIN(cur->column, screen_right(g));
 }
 

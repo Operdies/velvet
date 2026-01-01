@@ -86,6 +86,20 @@ struct velvet_render_buffer {
   struct velvet_render_buffer_line *lines;
 };
 
+enum pseudotransparency_blend_mode {
+  /* no pseudotransparency */
+  PSEUDOTRANSPARENCY_OFF,
+  /* apply transparency to clear cells */
+  PSEUDOTRANSPARENCY_CLEAR,
+  /* apply transparency to all cells */
+  PSEUDOTRANSPARENCY_ALL,
+};
+
+struct pseudotransparency_options {
+  enum pseudotransparency_blend_mode mode;
+  float alpha;
+};
+
 struct velvet_theme {
   struct {
     struct color active;
@@ -101,10 +115,7 @@ struct velvet_theme {
     bool enabled;
     float magnitude;
   } dim_inactive;
-  struct {
-    bool enabled;
-    float alpha;
-  } pseudotransparency;
+  struct pseudotransparency_options pseudotransparency[VELVET_LAYER_LAST];
   struct color palette[16];
   struct {
     struct color visible;
@@ -245,12 +256,13 @@ static const struct velvet_theme velvet_theme_default = {
         },
     .pseudotransparency =
         {
-            .enabled = true,
-            .alpha = 0.20f,
+            [VELVET_LAYER_TILED]        = {.mode = PSEUDOTRANSPARENCY_CLEAR, .alpha   = 0.15f},
+            [VELVET_LAYER_FLOATING]     = {.mode = PSEUDOTRANSPARENCY_ALL,   .alpha   = 0.15f},
+            [VELVET_LAYER_NOTIFICATION] = {.mode = PSEUDOTRANSPARENCY_ALL,   .alpha   = 0.50f},
         },
     .dim_inactive =
         {
-            .enabled = true,
+            .enabled = false,
             .magnitude = 0.9f,
         },
     .mantle = RGB("#181825"),

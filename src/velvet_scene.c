@@ -143,9 +143,9 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
 
   int status_height = 0;
   vec_where(win, scene->windows, win->layer == VELVET_LAYER_STATUS) {
-    status_height += 1;
-    struct rect b = { .x = 0, .y = lines - status_height, .h = 1, .w = columns };
+    struct rect b = { .x = 0, .y = lines - status_height - 1, .h = 1, .w = columns };
     velvet_window_resize(win, b);
+    status_height += win->rect.window.h;
   }
   vec_where(win, scene->windows, win->layer == VELVET_LAYER_BACKGROUND) {
     struct rect bg = { .x = 0, .y = 0, .w = columns, .h = lines };
@@ -410,7 +410,7 @@ static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg)
   return c;
 }
 
-static struct color color_mult(struct color a, float m) {
+static struct color rgb_mult(struct color a, float m) {
   assert(a.cmd == COLOR_RGB);
   a.r = CLAMP((float)a.r * m, 0, 255);
   a.g = CLAMP((float)a.g * m, 0, 255);
@@ -418,7 +418,7 @@ static struct color color_mult(struct color a, float m) {
   return a;
 }
 
-static struct color color_add(struct color a, struct color b) {
+static struct color rgb_add(struct color a, struct color b) {
   assert(a.cmd == COLOR_RGB);
   assert(b.cmd == COLOR_RGB);
   a.r = CLAMP(a.r + b.r, 0, 255);
@@ -431,7 +431,7 @@ static struct color color_add(struct color a, struct color b) {
 static struct color color_alpha_blend(struct color a, struct color b, float frac) {
   assert(a.cmd == COLOR_RGB);
   assert(b.cmd == COLOR_RGB);
-  return color_add(color_mult(a, frac), color_mult(b, 1.0f - frac));
+  return rgb_add(rgb_mult(a, frac), rgb_mult(b, 1.0f - frac));
 }
 
 /* convert cell colors to RGB colors based on the current theme, and convert null characters to spaces */
@@ -892,38 +892,41 @@ static struct screen_cell blend_cells(struct screen_cell top, struct screen_cell
 }
 
 struct composite_options {
-  float alpha_blend;
+  struct pseudotransparency_options transparency;
   float dim;
 };
 
 static void velvet_scene_commit_staged(struct velvet_scene *m, struct composite_options o) {
   struct screen_cell empty = {0};
   struct velvet_render *r = &m->renderer;
-  struct velvet_render_buffer *b = get_current_buffer(r);
-  struct velvet_render_buffer *c = &r->staging_buffer;
+  struct velvet_render_buffer *composite = get_current_buffer(r);
+  struct velvet_render_buffer *staging = &r->staging_buffer;
+  struct velvet_theme t = m->theme;
   for (int i = 0; i < r->w * r->h; i++) {
-    if (!cell_equals(c->cells[i], empty)) {
-      struct screen_cell top = normalize_cell(m->theme, c->cells[i]);
+    if (!cell_equals(staging->cells[i], empty)) {
+      struct screen_cell above = staging->cells[i];
+      struct screen_cell below = composite->cells[i];
+
+      if (o.transparency.mode != PSEUDOTRANSPARENCY_OFF) {
+        if (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || above.style.bg.cmd == COLOR_RESET) {
+          above = normalize_cell(t, above);
+          below = normalize_cell(t, below);
+          above = blend_cells(above, below, o.transparency.alpha);
+        }
+      }
+
       if (o.dim > 0) {
-        top.style.bg = color_mult(top.style.bg, o.dim);
-        top.style.fg = color_mult(top.style.fg, o.dim);
+        above.style.bg = rgb_mult(above.style.bg, o.dim);
+        above.style.fg = rgb_mult(above.style.fg, o.dim);
       }
-      if (o.alpha_blend > 0) {
-        struct screen_cell bottom = normalize_cell(m->theme, b->cells[i]);
-        top = blend_cells(top, bottom, o.alpha_blend);
-      }
-      b->cells[i] = top;
-      c->cells[i] = empty;
+      composite->cells[i] = above;
+      staging->cells[i] = empty;
     }
   }
 }
 
 static bool rect_contains(struct rect r, int x, int y) {
   return r.x <= x && x < r.x + r.w && r.y <= y && y < r.y + r.h;
-}
-
-static bool skip_dragging(struct velvet_window *w, void *) {
-  return w->dragging;
 }
 
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data) {
@@ -1001,10 +1004,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   struct velvet_theme t = m->theme;
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
-    opt.alpha_blend = 0;
-    opt.dim = 0;
-    if (t.pseudotransparency.enabled) 
-      opt.alpha_blend = t.pseudotransparency.alpha;
+    opt.transparency = t.pseudotransparency[layer];
     uint64_t *winid;
 
     /* draw windows in reverse focus order;  this is relevant
@@ -1025,16 +1025,17 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       velvet_scene_commit_staged(m, opt);
     }
 
+    opt.transparency = t.pseudotransparency[layer];
+    opt.dim = 0;
     vec_where(h, m->windows, !managed(h) && h->layer == layer) {
       velvet_render_calculate_borders(m, h);
       velvet_render_copy_cells_from_window(m, h);
-      velvet_scene_commit_staged(m, (struct composite_options){0});
+      velvet_scene_commit_staged(m, opt);
     }
   }
 
   vec_rwhere(h, m->windows, h->dragging) {
-    opt.alpha_blend = 0;
-    if (m->theme.pseudotransparency.enabled) opt.alpha_blend = m->theme.pseudotransparency.alpha;
+    opt.transparency = t.pseudotransparency[VELVET_LAYER_FLOATING];
     velvet_render_calculate_borders(m, h);
     velvet_render_copy_cells_from_window(m, h);
     velvet_scene_commit_staged(m, opt);
@@ -1059,9 +1060,10 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
       bool cursor_obscured = false;
       /* if a window is above the current window and obscures the cursor, we should not show it */
-      if (!m->theme.pseudotransparency.enabled) {
-        struct velvet_window_hit hit;
-        if (velvet_scene_hit(m, col, line, &hit, skip_dragging, nullptr) && hit.win != focused) cursor_obscured = true;
+      struct velvet_window_hit hit;
+      if (velvet_scene_hit(m, col, line, &hit, nullptr, nullptr) && hit.win != focused) {
+        if (t.pseudotransparency[hit.win->layer].mode == PSEUDOTRANSPARENCY_OFF)
+          cursor_obscured = true;
       }
 
       if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) cursor_obscured = true;

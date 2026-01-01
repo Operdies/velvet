@@ -44,7 +44,7 @@ int io_dispatch(struct io *io) {
   // If a schedule was executed, return. This is needed because a scheduled
   // action can affect everything, including closing file descriptors,
   // and generally affecting all kinds of behavior.
-  if (io_dispatch_scheduled(io)) return 0;
+  if (io_dispatch_scheduled(io)) return 1;
   io->sequence++;
 
   vec_clear(&io->pollfds);
