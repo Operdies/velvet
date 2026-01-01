@@ -657,7 +657,7 @@ static bool should_emulate_cursor(struct cursor_options cur) {
   return cur.visible && (cur.style == CURSOR_STYLE_DEFAULT || cur.style == CURSOR_STYLE_STEADY_BLOCK);
 }
 
-static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct velvet_window *h) {
+static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct velvet_window *h, struct velvet_theme t) {
   struct velvet_render *r = &m->renderer;
   struct screen *active = vte_get_current_screen(&h->emulator);
   assert(active);
@@ -697,8 +697,8 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
       struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
       if (current) {
         struct screen_cell cursor = *current;
-        cursor.style.fg = m->theme.cursor.foreground;
-        cursor.style.bg = m->theme.cursor.background;
+        cursor.style.fg = t.cursor.foreground;
+        cursor.style.bg = t.cursor.background;
         velvet_render_set_cell(r, y, x, cursor);
       }
     }
@@ -994,8 +994,12 @@ static void velvet_scene_stage_and_commit_window(struct velvet_scene *m, struct 
     struct color fg = t.foreground;
     t.foreground = t.background;
     t.background = fg;
+
+    fg = t.cursor.foreground;
+    t.cursor.foreground = t.cursor.background;
+    t.cursor.background = fg;
   }
-  velvet_render_copy_cells_from_window(m, w);
+  velvet_render_copy_cells_from_window(m, w, t);
   velvet_scene_commit_staged(m, w, t);
 }
 
