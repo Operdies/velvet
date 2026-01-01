@@ -302,6 +302,7 @@ static void velvet_default_config(struct velvet *v) {
                    "map <C-x>...   set          display_damage false\n"
                    "map -r         <C-x>b       spawn          bash\n"
                    "map -r         <C-x>x       incborder\n"
+                   "map -r         <C-x><C-c>   cycle-transparency\n"
                    "map -r         <C-x>a       decborder\n"
                    "map -r         <C-x>[       decfactor\n"
                    "map -r         <C-x>]       incfactor\n"

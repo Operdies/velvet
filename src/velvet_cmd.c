@@ -426,6 +426,16 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       velvet_scene_set_view(&v->scene, 0);
     } else if (u8_match(command, "view")) {
       velvet_cmd_tag(v, &it, VIEW_SET);
+    } else if (u8_match(command, "cycle-transparency")) {
+      if (focused) {
+        if (!focused->transparency.override) {
+          focused->transparency.options = s->theme.pseudotransparency[focused->layer];
+          focused->transparency.override = true;
+        }
+        enum pseudotransparency_blend_mode next_mode = (focused->transparency.options.mode + 1) % (PSEUDOTRANSPARENCY_ALL + 1);
+        focused->transparency.options = s->theme.pseudotransparency[focused->layer];
+        focused->transparency.options.mode = next_mode;
+      }
     } else if (u8_match(command, "toggletag")) {
       velvet_cmd_tag(v, &it, TAG_TOGGLE);
     } else if (u8_match(command, "toggleview")) {

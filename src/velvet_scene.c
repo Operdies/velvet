@@ -896,12 +896,19 @@ struct composite_options {
   float dim;
 };
 
-static void velvet_scene_commit_staged(struct velvet_scene *m, struct composite_options o) {
+static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win) {
+  struct velvet_theme t = m->theme;
+  bool is_focused = velvet_scene_get_focus(m) == win;
+  struct composite_options o = {
+      .transparency = t.pseudotransparency[win->layer],
+      .dim = !is_focused && t.dim_inactive.enabled ? t.dim_inactive.magnitude : 0,
+  };
+  if (win->transparency.override) o.transparency = win->transparency.options;
+
   struct screen_cell empty = {0};
   struct velvet_render *r = &m->renderer;
   struct velvet_render_buffer *composite = get_current_buffer(r);
   struct velvet_render_buffer *staging = &r->staging_buffer;
-  struct velvet_theme t = m->theme;
   for (int i = 0; i < r->w * r->h; i++) {
     if (!cell_equals(staging->cells[i], empty)) {
       struct screen_cell above = staging->cells[i];
@@ -994,51 +1001,42 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_render_clear_buffer(r, get_current_buffer(r), space);
   }
 
-  struct velvet_window *h;
-  vec_foreach(h, m->windows) {
-    velvet_window_update_title(h);
+  struct velvet_window *win;
+  vec_foreach(win, m->windows) {
+    velvet_window_update_title(win);
   }
 
   struct velvet_window *focused = velvet_scene_get_focus(m);
-  struct composite_options opt = {0};
   struct velvet_theme t = m->theme;
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
-    opt.transparency = t.pseudotransparency[layer];
     uint64_t *winid;
 
     /* draw windows in reverse focus order;  this is relevant
      * for floating windows which should be stacked in order of most recently focused */
     vec_rforeach(winid, m->focus_order) {
-      h = velvet_scene_get_window_from_id(m, *winid);
-      if (h->layer != layer) continue;
-      if (h->dragging) continue;
-      if (!managed(h)) continue;
-      if (!visible(m, h)) continue;
-      bool is_focus = focused && focused->id == *winid;
-      opt.dim = 0;
-      if (t.dim_inactive.enabled && !is_focus)
-        opt.dim = t.dim_inactive.magnitude;
+      win = velvet_scene_get_window_from_id(m, *winid);
+      if (win->layer != layer) continue;
+      if (win->dragging) continue;
+      if (!managed(win)) continue;
+      if (!visible(m, win)) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
-      velvet_render_calculate_borders(m, h);
-      velvet_render_copy_cells_from_window(m, h);
-      velvet_scene_commit_staged(m, opt);
+      velvet_render_calculate_borders(m, win);
+      velvet_render_copy_cells_from_window(m, win);
+      velvet_scene_commit_staged(m, win);
     }
 
-    opt.transparency = t.pseudotransparency[layer];
-    opt.dim = 0;
-    vec_where(h, m->windows, !managed(h) && h->layer == layer) {
-      velvet_render_calculate_borders(m, h);
-      velvet_render_copy_cells_from_window(m, h);
-      velvet_scene_commit_staged(m, opt);
+    vec_where(win, m->windows, !managed(win) && win->layer == layer) {
+      velvet_render_calculate_borders(m, win);
+      velvet_render_copy_cells_from_window(m, win);
+      velvet_scene_commit_staged(m, win);
     }
   }
 
-  vec_rwhere(h, m->windows, h->dragging) {
-    opt.transparency = t.pseudotransparency[VELVET_LAYER_FLOATING];
-    velvet_render_calculate_borders(m, h);
-    velvet_render_copy_cells_from_window(m, h);
-    velvet_scene_commit_staged(m, opt);
+  vec_rwhere(win, m->windows, win->dragging) {
+    velvet_render_calculate_borders(m, win);
+    velvet_render_copy_cells_from_window(m, win);
+    velvet_scene_commit_staged(m, win);
   }
 
   int damage = velvet_render_calculate_damage(r);

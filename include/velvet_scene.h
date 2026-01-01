@@ -33,6 +33,21 @@ struct velvet_window_close_behavior {
   uint64_t delay_ms;
 };
 
+
+enum pseudotransparency_blend_mode {
+  /* no pseudotransparency */
+  PSEUDOTRANSPARENCY_OFF,
+  /* apply transparency to clear cells */
+  PSEUDOTRANSPARENCY_CLEAR,
+  /* apply transparency to all cells */
+  PSEUDOTRANSPARENCY_ALL,
+};
+
+struct pseudotransparency_options {
+  enum pseudotransparency_blend_mode mode;
+  float alpha;
+};
+
 struct velvet_window {
   struct string cmdline;
   struct string title;
@@ -53,6 +68,10 @@ struct velvet_window {
   enum velvet_scene_layer layer;
   bool dragging;
   uint32_t tags;
+  struct {
+    bool override;
+    struct pseudotransparency_options options;
+  } transparency;
 };
 
 void velvet_window_destroy(struct velvet_window *velvet_window);
@@ -84,20 +103,6 @@ struct velvet_render_buffer_line {
 struct velvet_render_buffer {
   struct screen_cell *cells;
   struct velvet_render_buffer_line *lines;
-};
-
-enum pseudotransparency_blend_mode {
-  /* no pseudotransparency */
-  PSEUDOTRANSPARENCY_OFF,
-  /* apply transparency to clear cells */
-  PSEUDOTRANSPARENCY_CLEAR,
-  /* apply transparency to all cells */
-  PSEUDOTRANSPARENCY_ALL,
-};
-
-struct pseudotransparency_options {
-  enum pseudotransparency_blend_mode mode;
-  float alpha;
 };
 
 struct velvet_theme {
