@@ -149,7 +149,7 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
     status_height += win->rect.window.h;
   }
   vec_where(win, scene->windows, win->layer == VELVET_LAYER_BACKGROUND) {
-    struct rect bg = rect_carve(scene->ws, 0, 0, columns, lines);
+    struct rect bg = rect_carve(scene->ws, 0, 0, columns, lines - status_height);
     velvet_window_resize(win, bg);
   }
 
