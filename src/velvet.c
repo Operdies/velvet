@@ -380,17 +380,6 @@ static bool occupied(struct velvet_scene *s, uint32_t tag) {
   return false;
 }
 
-static void draw_background(struct velvet *v) {
-  static struct string buf = {0};
-  struct velvet_window *bg = velvet_scene_get_window_from_id(&v->scene, bg_winid);
-  if (!bg) return;
-  struct color rgb = v->scene.theme.background;
-  string_clear(&buf);
-  string_push_bg(&buf, rgb);
-  string_push_cstr(&buf, "\x1b[2J");
-  vte_process(&bg->emulator, string_as_u8_slice(buf));
-}
-
 static void draw_status(struct velvet *v) {
   static struct string buf = {0};
   string_clear(&buf);
@@ -429,7 +418,6 @@ static void velvet_dispatch_frame(void *data) {
   if (focus) {
     velvet_align_and_arrange(v, focus);
     draw_status(v);
-    draw_background(v);
     v->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
     velvet_scene_render_damage(&v->scene, velvet_render, v);
   }
@@ -459,12 +447,7 @@ void velvet_loop(struct velvet *velvet) {
     /* create status and background windows */
     struct velvet_window status = {.id = status_winid, .layer = VELVET_LAYER_STATUS};
     status.emulator.options.alternate_screen = true;
-
-    struct velvet_window bg = {.id = bg_winid, .layer = VELVET_LAYER_BACKGROUND};
-    bg.emulator.options.alternate_screen = true;
-
     velvet_scene_manage(&velvet->scene, status);
-    velvet_scene_manage(&velvet->scene, bg);
   }
 
   velvet->scene.arrange(&velvet->scene);

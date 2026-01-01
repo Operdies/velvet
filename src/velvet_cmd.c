@@ -144,22 +144,6 @@ struct velvet_action_data {
   struct string cmd;
 };
 
-static bool u8_slice_digit(struct u8_slice s, int *digit) {
-  if (s.len == 0) return false;
-  size_t i, v, sign;
-  i = v = 0;
-  sign = 1;
-  if (s.content[i] == '-') sign = -1, i++;
-  for (; i < s.len; i++) {
-    uint8_t ch = s.content[i];
-    if (!(ch >= '0' && ch <= '9')) return false;
-    v *= 10;
-    v += ch - '0';
-  }
-  *digit = v * sign;
-  return true;
-}
-
 static void
 velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8_slice option, struct u8_slice value) {
   /* TODO: This sucks. The implementation mixes:
@@ -376,6 +360,12 @@ static void velvet_cmd_create_window(struct velvet *v,
   velvet_scene_spawn_process_from_template(&v->scene, win);
 }
 
+static void velvet_cmd_spawn_background(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
+  struct window_create_options o = {.border_width = 0,
+                                    .layer = VELVET_LAYER_BACKGROUND};
+  velvet_cmd_create_window(v, it, source, o);
+}
+
 static void velvet_cmd_spawn_notification(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
   struct window_create_options o = {.border_width = 1,
                                     .close = {.when = VELVET_WINDOW_CLOSE_AFTER_DELAY, .delay_ms = 1500},
@@ -466,6 +456,8 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       } else {
         velvet_log("`unmap' command missing `keys' parameter.");
       }
+    } else if (u8_match(command, "background")) {
+      velvet_cmd_spawn_background(v, sender, &it);
     } else if (u8_match(command, "notify")) {
       velvet_cmd_spawn_notification(v, sender, &it);
     } else if (u8_match(command, "focus-next")) {

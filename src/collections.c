@@ -638,3 +638,18 @@ int u8_slice_codepoint_iterator_length(struct u8_slice_codepoint_iterator s) {
   return i;
 }
 
+bool u8_slice_digit(struct u8_slice s, int *digit) {
+  if (s.len == 0) return false;
+  size_t i, v, sign;
+  i = v = 0;
+  sign = 1;
+  if (s.content[i] == '-') sign = -1, i++;
+  for (; i < s.len; i++) {
+    uint8_t ch = s.content[i];
+    if (!(ch >= '0' && ch <= '9')) return false;
+    v *= 10;
+    v += ch - '0';
+  }
+  *digit = v * sign;
+  return true;
+}
