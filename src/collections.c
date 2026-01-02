@@ -653,3 +653,7 @@ bool u8_slice_digit(struct u8_slice s, int *digit) {
   *digit = v * sign;
   return true;
 }
+
+bool u8_match(struct u8_slice s, char *opt) {
+  return u8_slice_equals(s, u8_slice_from_cstr(opt));
+}

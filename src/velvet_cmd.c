@@ -135,10 +135,6 @@ bool velvet_cmd_arg_iterator_next(struct velvet_cmd_arg_iterator *it) {
   return true;
 }
 
-static bool u8_match(struct u8_slice s, char *opt) {
-  return u8_slice_equals(s, u8_slice_from_cstr(opt));
-}
-
 struct velvet_action_data {
   struct velvet *v;
   struct string cmd;
