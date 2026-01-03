@@ -785,7 +785,8 @@ static void velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key
   bool do_encode = (o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES) || is_mod /* modiifers must always be encoded */
                    || (e.type == KEY_RELEASE) /* release events must be encoded. In my mind, repeat events should also
                                                  be encoded, but this is not how other emulators do it. */
-                   || (e.modifiers & MODIFIER_CTRL); /* encode ctrl modified keys regardless of the disambiguate flag */
+                   || (e.modifiers & MODIFIER_CTRL) /* encode ctrl modified keys regardless of the disambiguate flag */
+                   || (e.key.codepoint == ESC);     /* ESC is also encoded */
 
   if (!do_encode) {
     if (!is_mod) velvet_input_send_vk_basic(v, e.key, e.modifiers);
