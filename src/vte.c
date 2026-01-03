@@ -586,7 +586,8 @@ void vte_destroy(struct vte *vte) {
   string_destroy(&vte->command_buffer);
   string_destroy(&vte->osc.title);
   string_destroy(&vte->osc.icon);
-  vec_destroy(&vte->options.kitty.stack);
+  vec_destroy(&vte->options.kitty[0].stack);
+  vec_destroy(&vte->options.kitty[1].stack);
 }
 
 struct screen *vte_get_current_screen(struct vte *vte) {

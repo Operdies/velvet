@@ -165,7 +165,7 @@ struct emulator_options {
   struct {
     enum kitty_keyboard_options options;
     struct vec /* kitty_keyboard_options */ stack;
-  } kitty;
+  } kitty[2];
 };
 
 /* finite state machine for parsing ansi escape codes */
@@ -189,7 +189,7 @@ struct vte {
 static const struct emulator_options emulator_options_default = {
     .auto_wrap_mode = true,
     .cursor.visible = true,
-    .kitty = {.stack = vec(enum kitty_keyboard_options)},
+    .kitty = {{.stack = vec(enum kitty_keyboard_options)}, {.stack = vec(enum kitty_keyboard_options)}},
 };
 
 static const struct vte vte_default = {

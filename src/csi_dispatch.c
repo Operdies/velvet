@@ -819,47 +819,58 @@ bool SCORC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SCORC
 
 bool DECRQUPSS(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECRQUPSS"); return false; }
 
-bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) { 
+bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) {
   (void)csi;
-  string_push_csi(&vte->pending_input, '?', INT_SLICE(vte->options.kitty.options), "u");
+  string_push_csi(&vte->pending_input, '?', INT_SLICE(vte->options.kitty[vte->options.alternate_screen].options), "u");
   return true;
 }
 
 static bool KITTY_KEYBOARD_PUSH(struct vte *vte, struct csi *csi) {
+  struct emulator_options *o = &vte->options;
   enum kitty_keyboard_options flags = csi->params[0].primary;
-  vec_push(&vte->options.kitty.stack, &vte->options.kitty.options);
-  vte->options.kitty.options = flags;
+  struct vec *v = &o->kitty[o->alternate_screen].stack;
+  vec_push(v, &o->kitty[o->alternate_screen].options);
+  o->kitty[o->alternate_screen].options = flags;
+  /* limit stack size to 100 entries */
+  if (v->length > 100) vec_shift_left(v, 1);
   return true;
 }
-static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi) { 
+static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi) {
+  struct emulator_options *o = &vte->options;
   enum kitty_keyboard_options new_flags = 0;
   int pop_count = csi->params[0].primary;
   if (pop_count < 0) return true;
   if (!pop_count) pop_count = 1;
   void *popped = nullptr;
 
-  while (pop_count && (popped = vec_pop(&vte->options.kitty.stack))) {
+  while (pop_count && (popped = vec_pop(&o->kitty[o->alternate_screen].stack))) {
     new_flags = *(enum kitty_keyboard_options *)popped;
     pop_count--;
   }
-  vte->options.kitty.options = new_flags;
+  /* attempting to pop the stack while the stack is empty
+   * results in flags being 0'd */
+  if (pop_count) {
+    new_flags = 0;
+  }
+  o->kitty[o->alternate_screen].options = new_flags;
   return true;
 }
 
 static bool KITTY_KEYBOARD_MODIFY(struct vte *vte, struct csi *csi) {
+  struct emulator_options *o = &vte->options;
   int flags = csi->params[0].primary;
   int mode = csi->params[1].primary;
   if (!mode) mode = 1;
 
   if (mode == 1) {
     /* reassign the current flags */
-    vte->options.kitty.options = flags;
+    o->kitty[o->alternate_screen].options = flags;
   } else if (mode == 2) {
     /* set the specified flags and leave others unchanged */
-    vte->options.kitty.options |= flags;
+    o->kitty[o->alternate_screen].options |= flags;
   } else if (mode == 3) {
     /* unset the specified flags and leave others unchanged */
-    vte->options.kitty.options &= ~flags;
+    o->kitty[o->alternate_screen].options &= ~flags;
   }
 
   return true;
