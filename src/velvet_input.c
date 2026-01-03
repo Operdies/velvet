@@ -433,7 +433,12 @@ void velvet_input_unwind(struct velvet *v) {
 
     // Ensure at least one key is consumed before reinsertion.
     if (k->parent == root) {
-      root->on_key(root, k->key);
+      /* simulate key press and release since a client using kitty keys may expect this. */
+      struct velvet_key_event e = k->key;
+      e.type = KEY_PRESS;
+      root->on_key(root, e);
+      e.type = KEY_RELEASE;
+      root->on_key(root, e);
       break;
     }
   }
@@ -580,6 +585,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   root = current->root;
   assert(root);
 
+  /* key release events are only supported in the root context (passing through to clients) */
   if (e.type == KEY_RELEASE) {
     if (current == root)
       root->on_key(root, e);

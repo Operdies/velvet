@@ -39,6 +39,8 @@ static struct keyboard kbd = {{
 static char *styles[6][15] = { 0 };
 
 static void draw_keyboard() {
+  static struct string b = {0};
+  string_clear(&b);
   char *spaces =
       "                                                                                                           ";
   char *dashes =
@@ -51,16 +53,16 @@ static void draw_keyboard() {
   char *dash = "─";
 
   int i = 0;
-  printf("\x1b[m\x1b[H\x1b[2J");
+  string_push_format_slow(&b, "\x1b[m\x1b[H\x1b[2J");
   for (; i < 6; i++) {
     for (int j = 0; j < 15 && kbd.layout[i][j].width; j++) {
       struct key *k = &kbd.layout[i][j];
       int total_width = keywidth(k);
       char *style = styles[i][j];
       if (!style) style = "\x1b[m";
-      printf("%s%s%.*s%s", style, topleft, (int)(total_width * strlen(dash)), dashes, topright);
+      string_push_format_slow(&b, "%s%s%.*s%s", style, topleft, (int)(total_width * strlen(dash)), dashes, topright);
     }
-    printf("\r\n");
+    string_push_format_slow(&b, "\r\n");
     for (int j = 0; j < 15 && kbd.layout[i][j].width; j++) {
       struct key *k = &kbd.layout[i][j];
       int textwidth = utf8_strlen(k->text);
@@ -71,18 +73,19 @@ static void draw_keyboard() {
       assert(padding >= 0);
       char *style = styles[i][j];
       if (!style) style = "\x1b[m";
-      printf("%s%s%.*s%s%.*s%s\x1b[m", style, pipe, leftpad, spaces, k->text, rightpad, spaces, pipe);
+      string_push_format_slow(&b, "%s%s%.*s%s%.*s%s\x1b[m", style, pipe, leftpad, spaces, k->text, rightpad, spaces, pipe);
     }
-    printf("\r\n");
+    string_push_format_slow(&b, "\r\n");
     for (int j = 0; j < 15 && kbd.layout[i][j].width; j++) {
       struct key *k = &kbd.layout[i][j];
       int total_width = keywidth(k);
       char *style = styles[i][j];
       if (!style) style = "\x1b[m";
-      printf("%s%s%.*s%s", style, bottomleft, (int)(total_width * strlen(dash)), dashes, bottomright);
+      string_push_format_slow(&b, "%s%s%.*s%s", style, bottomleft, (int)(total_width * strlen(dash)), dashes, bottomright);
     }
-    printf("\r\n");
+    string_push_format_slow(&b, "\r\n");
   }
+  io_write(STDOUT_FILENO, string_as_u8_slice(b));
 }
 
 bool quit = false;
@@ -155,7 +158,6 @@ int main(void) {
   uint8_t readbuf[100];
   while (!quit && (n = read(STDIN_FILENO, readbuf, 100)) != 0) {
     if (n < 0) continue;
-    if (n == 1 && readbuf[0] == 'q') break;
     struct u8_slice s = { .content = readbuf, .len = n };
     velvet_input_process(&v, s);
   }
