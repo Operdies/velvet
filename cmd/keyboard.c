@@ -106,7 +106,7 @@ void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
     for (int j = 0; j < 15; j++) {
       struct key k = kbd.layout[i][j];
       if (!k.name) continue;
-      if (e.key.kitty_final == 'u' && e.key.codepoint) {
+      if (e.key.kitty_terminator == 'u' && e.key.codepoint) {
         struct utf8 u = {0};
         int n = codepoint_to_utf8(e.key.codepoint, &u);
         int n2 = strlen(k.name);
@@ -117,7 +117,7 @@ void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
         for (int idx = 0; idx < LENGTH(named_keys); idx++) {
           struct velvet_key k2 = named_keys[idx];
           if (!k2.name) continue;
-          if (k2.codepoint != e.key.codepoint || e.key.kitty_final != k2.kitty_final) continue;
+          if (k2.codepoint != e.key.codepoint || e.key.kitty_terminator != k2.kitty_terminator) continue;
           if (strcasecmp(k2.name, k.name) == 0) {
             styles[i][j] = highlight;
             break;

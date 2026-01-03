@@ -31,7 +31,7 @@ struct velvet_key {
    * the original symbol is available in codepoint, and the altered
    * symbol is available in alternate_codepoint */
   uint32_t alternate_codepoint;
-  char kitty_final;
+  char kitty_terminator;
 };
 
 struct velvet_key_event {
@@ -41,8 +41,9 @@ struct velvet_key_event {
   bool removed;
 };
 
-#define X(n, e, cp, f) {.name = n, .escape = e, .codepoint = cp, .kitty_final = f},
+#define X(n, e, cp, f) {.name = n, .escape = e, .codepoint = cp, .kitty_terminator = f},
 static const struct velvet_key named_keys[] = {
+    {.name = "SPACE", .codepoint = ' ', .kitty_terminator = 'u', .escape = " "},
 #include "kitty_keys.def"
 };
 #undef X

@@ -89,7 +89,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
 
   k.key.codepoint = cp;
   k.modifiers = ((iscntrl * MODIFIER_CTRL) | (isshift * MODIFIER_SHIFT));
-  k.key.kitty_final = 'u';
+  k.key.kitty_terminator = 'u';
   return k;
 }
 
@@ -465,7 +465,7 @@ static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
     e.key.codepoint = ch;
   }
   if (e.key.codepoint && e.key.codepoint < 255) {
-    e.key.kitty_final = 'u';
+    e.key.kitty_terminator = 'u';
   }
   return e;
 }
@@ -479,7 +479,7 @@ static bool key_event_equals(struct velvet_key_event e1, struct velvet_key_event
     return false;
   if (k1.name || k2.name) 
     return k1.name && k2.name && strcasecmp(k1.name, k2.name) == 0;
-  if ((k1.kitty_final || k2.kitty_final) && k1.kitty_final != k2.kitty_final) 
+  if ((k1.kitty_terminator || k2.kitty_terminator) && k1.kitty_terminator != k2.kitty_terminator) 
     return false;
 
   /* match alternating case if modifiers are equal. This allows us to match Shift+1 and Shift + ! for example */
@@ -591,15 +591,16 @@ static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
 
   for (int i = 0; i < LENGTH(named_keys); i++) {
     struct velvet_key k = named_keys[i];
-    k.alternate_codepoint = alternate_codepoint;
-    if (k.codepoint == codepoint && k.kitty_final == c.final) {
+    if (k.kitty_terminator != c.final) continue;
+    if (alternate_codepoint) k.alternate_codepoint = alternate_codepoint;
+    if (k.codepoint == codepoint) {
       struct velvet_key_event e = {.modifiers = modifiers, .key = k};
       dispatch_key_event(v, e);
       return;
     }
   }
 
-  struct velvet_key k = {.codepoint = codepoint, .kitty_final = 'u', .alternate_codepoint = alternate_codepoint};
+  struct velvet_key k = {.codepoint = codepoint, .kitty_terminator = 'u', .alternate_codepoint = alternate_codepoint};
   struct velvet_key_event e = {.modifiers = modifiers, .key = k};
   dispatch_key_event(v, e);
 }
@@ -648,7 +649,7 @@ static void velvet_input_send_vk(struct velvet *v, struct velvet_key vk, enum ve
   int n = 0;
   struct utf8 buf = {0};
   char *escape = nullptr;
-  if (vk.kitty_final == 'u' && vk.codepoint && vk.codepoint < 255) {
+  if (vk.kitty_terminator == 'u' && vk.codepoint && vk.codepoint < 255) {
     uint32_t send = vk.alternate_codepoint && vk.alternate_codepoint < 255 ? vk.alternate_codepoint : vk.codepoint;
     n = codepoint_to_utf8(send, &buf);
     escape = (char*)buf.utf8;
