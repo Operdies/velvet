@@ -770,56 +770,106 @@ static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, e
   }
 }
 
-static void velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, enum kitty_keyboard_options o) {
+static bool is_private_use(uint32_t codepoint) {
+  return codepoint >= 57344 && codepoint <= 63743;
+}
+
+static bool isdigit(uint8_t ch) {
+  return ch >= '0' && ch <= '9';
+}
+
+static bool is_keypad(struct velvet_key k) {
+  uint32_t codepoint = k.codepoint;
+  uint32_t kp_0 = 57399; /* first kp codepoint */
+  uint32_t kp_begin = 57427; /* last kp codepoint */
+
+  /* KP_BEGIN can be encoded as a non-codepoint */
+  if (k.kitty_terminator == 'E' && codepoint == 1) return true;
+  return kp_0 <= codepoint && codepoint <= kp_begin;
+}
+
+static bool is_keypad_with_text(struct velvet_key k) {
+  uint32_t codepoint = k.codepoint;
+  uint32_t kp_0 = 57399;
+  uint32_t kp_separator = 57416;
+
+  if (k.kitty_terminator == 'E' && codepoint == 1) return false;
+  return kp_0 <= codepoint && codepoint <= kp_separator;
+}
+
+/* https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
+static void
+velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, enum kitty_keyboard_options o) {
   struct velvet_window *f = velvet_scene_get_focus(&v->scene);
   assert(f);
   if (!e.type) e.type = KEY_PRESS;
   bool is_mod = is_modifier(e.key.codepoint);
 
   bool do_send = (o & KITTY_KEYBOARD_REPORT_EVENT_TYPES) || e.type < KEY_RELEASE;
-  if (is_mod && !(o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES)) 
-    do_send = false;
+  if (is_mod && !(o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES)) do_send = false;
+
+  if (do_send && e.type == KEY_RELEASE) {
+    /* tab, backspace and return release events must only be repoted if KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES
+     * is set */
+    if (e.key.kitty_terminator == 'u' &&
+        (e.key.codepoint == '\t' || e.key.codepoint == '\r' || e.key.codepoint == '\b')) {
+      do_send = o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES;
+    }
+  }
 
   if (!do_send) return;
 
-  bool do_encode = (o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES) || is_mod /* modiifers must always be encoded */
-                   || (e.type == KEY_RELEASE) /* release events must be encoded. In my mind, repeat events should also
-                                                 be encoded, but this is not how other emulators do it. */
-                   || (e.modifiers & MODIFIER_CTRL) /* encode ctrl modified keys regardless of the disambiguate flag */
-                   || (e.key.codepoint == ESC);     /* ESC is also encoded */
+  /* Disambiguate escape codes description from kitty docs:
+   *Turning on this flag will cause the terminal to report the Esc, alt+key, ctrl+key, ctrl+alt+key, shift+alt+key keys
+   *using CSI u sequences instead of legacy ones. */
+  bool do_send_encoded =
+      (o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES) /* self explanatory */
+      || is_mod                                            /* modifers must always be encoded */
+      || (e.type == KEY_RELEASE) /* release events must be encoded. In my mind, repeat events should also
+                                    be encoded, but this is not how other emulators do it. */
+      || (e.key.escape && e.key.escape[0] == ESC) /* encode any key which is otherwise encoded with a leading ESC */
+      || (is_keypad(e.key) && !is_keypad_with_text(e.key)) /* all non-text keypad keys */
+      || (e.modifiers & (MODIFIER_CTRL | MODIFIER_ALT));   /* disambiguate ctrl / alt modifiers */
 
-  if (!do_encode) {
+  if (!do_send_encoded) {
+    /* send the base symbol. This applies to most pure-text keys */
     if (!is_mod) velvet_input_send_vk_basic(v, e.key, e.modifiers);
     return;
   }
 
+  uint32_t modifiers = e.modifiers + 1; /* modifiers are encoded as +1 */
+  bool do_encode_event = (o & KITTY_KEYBOARD_REPORT_EVENT_TYPES) && e.type > KEY_PRESS;
+  bool do_encode_modifier = do_encode_event || modifiers > 1;
+
+  enum kitty_keyboard_options flags = KITTY_KEYBOARD_REPORT_ASSOCIATED_TEXT | KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES;
+
+  /* associated text is not included on key release events */
+  bool do_encode_associated_text = e.type != KEY_RELEASE && (o & flags) == flags && e.associated_text.n;
+
+  bool encode_codepoint = do_encode_associated_text || do_encode_modifier || e.key.codepoint > 1 ||
+                          (o & KITTY_KEYBOARD_REPORT_ALTERNATE_KEYS && e.key.alternate_codepoint);
+
   struct string *s = &f->emulator.pending_input;
   string_push_cstr(s, "\x1b[");
-  string_push_int(s, e.key.codepoint);
-  if (o & KITTY_KEYBOARD_REPORT_ALTERNATE_KEYS && e.key.alternate_codepoint) {
-    string_push_char(s, ':');
-    string_push_int(s, e.key.alternate_codepoint);
+  if (encode_codepoint) {
+    string_push_int(s, e.key.codepoint);
+    if (o & KITTY_KEYBOARD_REPORT_ALTERNATE_KEYS && e.key.alternate_codepoint) {
+      string_push_char(s, ':');
+      string_push_int(s, e.key.alternate_codepoint);
+    }
   }
 
-  uint32_t modifiers = e.modifiers + 1; /* modifiers are encoded as +1 */
-  bool encode_event = (o & KITTY_KEYBOARD_REPORT_EVENT_TYPES) && e.type > KEY_PRESS;
-  bool encode_modifier = encode_event || modifiers > 1;
-  if (encode_modifier) {
+  if (do_encode_modifier) {
     string_push_char(s, ';');
     string_push_int(s, modifiers);
-    if (encode_event) {
+    if (do_encode_event) {
       string_push_char(s, ':');
       string_push_int(s, e.type);
     }
   }
 
-  /* TODO: associated text */
-  enum kitty_keyboard_options associated_text_req = KITTY_KEYBOARD_REPORT_ASSOCIATED_TEXT | KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES;
-  bool encode_associated_text = e.type != KEY_RELEASE /* associated text is not included on key release */
-                                && (o & associated_text_req) == associated_text_req;
-  if (encode_associated_text && e.associated_text.n) {
-    if (!encode_modifier)
-      string_push_char(s, ';');
+  if (do_encode_associated_text) {
+    if (!do_encode_modifier) string_push_char(s, ';');
     for (int i = 0; i < e.associated_text.n; i++) {
       string_push_char(s, ';');
       string_push_int(s, e.associated_text.codepoints[i]);
@@ -833,8 +883,8 @@ static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
   struct velvet_window *f = velvet_scene_get_focus(&v->scene);
   if (!f) return;
 
-  enum kitty_keyboard_options o = f->emulator.options.kitty.options;
-  if (o == 0) {
+  enum kitty_keyboard_options o = f->emulator.options.kitty[f->emulator.options.alternate_screen].options;
+  if (o == KITTY_KEYBOARD_NONE) {
     if (e.type != KEY_RELEASE) {
       if (!is_modifier(e.key.codepoint)) {
         velvet_input_send_vk_basic(v, e.key, e.modifiers);
