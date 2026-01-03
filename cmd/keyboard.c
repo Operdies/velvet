@@ -15,7 +15,8 @@ struct keyboard {
   struct key layout[6][15];
 };
 
-#define K5(t, w, n){.text = #t, .width = w, .name = #n}
+#define K6(t, w, n){.text = t, .width = w, .name = n}
+#define K5(t, w, n){.text = #t, .width = w, .name = n}
 #define K4(t, n){.text = t, .width = 1.0f, .name = #n}
 #define K3(t){.text = t, .width = 1.0f, .name = t}
 #define K2(t, w){.text = #t, .width = w, .name = #t}
@@ -26,12 +27,13 @@ static int keywidth(struct key *k) {
 }
 
 static struct keyboard kbd = {{
-  {K2(ESC, 1.5), K(F1), K(F2), K(F3), K(F4), K(F5), K(F6), K(F7), K(F8), K(F9), K(F10), K(F11), K(F12), K(DEL)},
-  {K3("§"), K(1), K(2), K(3), K(4), K(5), K(6), K(7), K(8), K(9), K(0), K(-), K(=), K2(BS, 1.5)},
-  {K2(TAB, 1.5), K(Q), K(W), K(E), K(R), K(T), K(Y), K(U), K(I), K(O), K(P), K([), K(]), K2(\\, 1)},
-  {K2(CAPS, 2.0), K(A), K(S), K(D), K(F), K(G), K(H), K(J), K(K), K(L), K(;), K3("'"), K2(RET, 1.5) },
-  {K2(LSFT, 1.5), K(`), K(Z), K(X), K(C), K(V), K(B), K(N), K(M), K3(","), K(.), K(/), K4("↑", UP), K2(RSFT, 1) },
-  {K(FN), K(CTRL), K(LOPT), K2(CMD, 1.25), K2(SPACE, 5), K2(CMD, 1.25), K(ROPT), K4("←", LEFT), K4("↓", DOWN), K4("→", RIGHT) },
+  {K2(ESC, 1.5), K(F1), K(F2), K(F3), K(F4), K(F5), K(F6), K(F7), K(F8), K(F9), K(F10), K(F11), K(F12), K5(DEL, 1.0, "DELETE")},
+  {K3("§"), K(1), K(2), K(3), K(4), K(5), K(6), K(7), K(8), K(9), K(0), K(-), K(=), K6("⌫", 1.5, "BACKSPACE")},
+  {K6("↹", 1.5, "TAB"), K(Q), K(W), K(E), K(R), K(T), K(Y), K(U), K(I), K(O), K(P), K([), K(]), K2(\\, 1)},
+  {K6("⇪", 2.0, "CAPS_LOCK"), K(A), K(S), K(D), K(F), K(G), K(H), K(J), K(K), K(L), K(;), K3("'"), K6("↵", 1.5, "RETURN") },
+  {K6("⇧", 1.5, "LEFT_SHIFT"), K(`), K(Z), K(X), K(C), K(V), K(B), K(N), K(M), K3(","), K(.), K(/), K4("↑", UP), K6("⇧", 1, "RIGHT_SHIFT") },
+  {K(FN), K6("^", 1.0, "LEFT_CONTROL"), K6("⌥", 1.0, "LEFT_ALT"), K6("⌘", 1.25, "LEFT_SUPER"), K2(SPACE, 5),
+    K6("⌘", 1.25, "RIGHT_SUPER"), K6("⌥", 1.0, "RIGHT_ALT"), K4("←", LEFT), K4("↓", DOWN), K4("→", RIGHT) },
 }};
 
 static char *styles[6][15] = { 0 };
@@ -91,17 +93,7 @@ void on_signal(int sig) {
 }
 
 void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
-  if (!e.modifiers && e.key.codepoint == 'q') {
-    quit = true; return;
-  }
-  char *highlight = "\x1b[42m";
-  if (e.modifiers & MODIFIER_SHIFT) styles[4][0] = highlight;
-  if (e.modifiers & MODIFIER_ALT) styles[5][2] = highlight;
-  if (e.modifiers & MODIFIER_CTRL) styles[5][1] = highlight;
-  if (e.modifiers & MODIFIER_SUPER) styles[5][3] = highlight;
-  if (e.modifiers & MODIFIER_HYPER) styles[5][0] = highlight;
-  if (e.modifiers & MODIFIER_META) styles[5][2] = highlight;
-  if (e.modifiers & MODIFIER_CAPS_LOCK) styles[3][0] = highlight;
+  char *highlight = e.type == KEY_RELEASE ? nullptr : "\x1b[7m";
 
   for (int i = 0; i < 6; i++) {
     for (int j = 0; j < 15; j++) {
@@ -128,9 +120,10 @@ void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
     }
   }
   draw_keyboard();
-  for (int i = 0; i < 6; i++)
-    for (int j = 0; j < 15; j++)
-      styles[i][j] = nullptr;
+}
+
+static void quit_keybind(struct velvet_keymap *k, struct velvet_key_event e) {
+  quit = true;
 }
 
 int main(void) {
@@ -152,6 +145,8 @@ int main(void) {
         .on_key = highlight_and_draw,
     };
     v.input.keymap = root;
+    struct velvet_keymap *quit = velvet_keymap_map(root, u8_slice_from_cstr("qqq"));
+    quit->on_key = quit_keybind;
   }
 
   draw_keyboard();
