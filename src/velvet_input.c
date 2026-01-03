@@ -90,6 +90,10 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   k.key.codepoint = cp;
   k.modifiers = ((iscntrl * MODIFIER_CTRL) | (isshift * MODIFIER_SHIFT));
   k.key.kitty_terminator = 'u';
+
+  uint32_t associated_text = k.key.alternate_codepoint ? k.key.alternate_codepoint : k.key.codepoint;
+  k.associated_text.n = 1;
+  k.associated_text.codepoints[0] = associated_text;
   return k;
 }
 
@@ -170,7 +174,7 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
   }
 }
 
-static void velvet_input_send_vk(struct velvet *v, struct velvet_key vk, enum velvey_key_modifier m);
+static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e);
 
 static bool skip_dragging(struct velvet_window *w, void *) {
   return w->dragging;
@@ -303,10 +307,12 @@ static void send_csi_mouse(struct velvet *v, struct csi c) {
        * I don't think it matters much so we just do what's easiest.
        */
       get_named_key_by_name("SS3_UP", &k);
-      velvet_input_send_vk(v, k, 0);
+      struct velvet_key_event e = { .key = k, .type = KEY_PRESS };
+      velvet_input_send_vk(v, e);
     } else if (sgr.scroll_direction == scroll_down) {
       get_named_key_by_name("SS3_DOWN", &k);
-      velvet_input_send_vk(v, k, 0);
+      struct velvet_key_event e = { .key = k, .type = KEY_PRESS };
+      velvet_input_send_vk(v, e);
     }
   } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
     struct screen *screen = vte_get_current_screen(&target->emulator);
@@ -450,9 +456,63 @@ static bool keymap_has_mapping(struct velvet_keymap *k) {
   return false;
 }
 
+/* keys such as altgr */
+static bool is_iso_shift(uint32_t codepoint) {
+  return codepoint == 57453     /* iso level 3 shift */
+         || codepoint == 57454; /* iso level 5 shift */
+}
+
+static bool is_shift(uint32_t codepoint) {
+  return codepoint == 57441     /* left shift */
+         || codepoint == 57447; /* right shift */
+}
+
+static bool is_ctrl(uint32_t codepoint) {
+  return codepoint == 57442     /* left control */
+         || codepoint == 57448; /* right control */
+}
+
+static bool is_meta(uint32_t codepoint) {
+  return codepoint == 57446     /* left meta */
+         || codepoint == 57452; /* right meta */
+}
+
+static bool is_alt(uint32_t codepoint) {
+  return codepoint == 57443     /* left alt */
+         || codepoint == 57449; /* right alt */
+}
+
+static bool is_super(uint32_t codepoint) {
+  return codepoint == 57444     /* left super */
+         || codepoint == 57450; /* right super */
+}
+
+static bool is_hyper(uint32_t codepoint) {
+  return codepoint == 57445     /* left hyper */
+         || codepoint == 57451; /* right hyper */
+}
+
+static bool is_caps_lock(uint32_t codepoint) {
+  return codepoint == 57358;
+}
+
+static bool is_scroll_lock(uint32_t codepoint) {
+  return codepoint == 57359;
+}
+static bool is_num_lock(uint32_t codepoint) {
+  return codepoint == 57360;
+}
+
+static bool is_modifier(uint32_t codepoint) {
+  return is_iso_shift(codepoint) || is_shift(codepoint) || is_meta(codepoint) || is_alt(codepoint) ||
+         is_ctrl(codepoint) || is_super(codepoint) || is_hyper(codepoint) || is_caps_lock(codepoint) ||
+         is_scroll_lock(codepoint) || is_num_lock(codepoint);
+}
+
 /* strip unsupported modifiers and collapse equivalent key states for easier comparisons */
 static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
-  /* just treat alt the same as meta for all practical purposes */
+  uint32_t c = e.key.codepoint;
+  /* treat alt the same as meta for all practical purposes */
   if ((e.modifiers & MODIFIER_ALT) || (e.modifiers & MODIFIER_META)) {
     e.modifiers &= ~MODIFIER_ALT;
     e.modifiers |= MODIFIER_META;
@@ -466,6 +526,19 @@ static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
   }
   if (e.key.codepoint && e.key.codepoint < 255) {
     e.key.kitty_terminator = 'u';
+  }
+  if (c) {
+    /* if the key is a literal modifier key, strip the corresponding modifier */
+    uint32_t unmask = 0;
+    if (is_super(c)) unmask |= MODIFIER_SUPER;
+    if (is_shift(c)) unmask |= MODIFIER_SHIFT;
+    if (is_ctrl(c)) unmask |= MODIFIER_CTRL;
+    if (is_meta(c)) unmask |= MODIFIER_ALT;
+    if (is_alt(c)) unmask |= MODIFIER_ALT;
+    if (is_hyper(c)) unmask |= MODIFIER_HYPER;
+    if (is_caps_lock(c)) unmask |= MODIFIER_CAPS_LOCK;
+    if (is_num_lock(c)) unmask |= MODIFIER_NUM_LOCK;
+    e.modifiers &= ~unmask;
   }
   return e;
 }
@@ -495,14 +568,23 @@ static bool key_event_equals(struct velvet_key_event e1, struct velvet_key_event
   assert(!"trap");
 }
 
+static bool is_modifier(uint32_t codepoint);
+
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   assert(v);
   assert(v->input.keymap);
   struct velvet_keymap *k, *root, *current;
+  if (!e.type) e.type = KEY_PRESS;
   current = v->input.keymap;
   root = current->root;
   assert(root);
+
+  if (e.type == KEY_RELEASE) {
+    if (current == root)
+      root->on_key(root, e);
+    return;
+  }
 
   // cancel any scheduled unwind
   io_schedule_cancel(&v->event_loop, v->input.unwind_callback_token);
@@ -553,6 +635,12 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
     return;
   }
 
+  /* don't unwind or cancel chains if the processed key is a modifier */
+  if (is_modifier(e.key.codepoint)) {
+    root->on_key(root, e);
+    return;
+  }
+
   if (current == root) {
     root->on_key(root, e);
   } else if (did_repeat) {
@@ -567,12 +655,6 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   }
 }
 
-static bool is_modifier(uint32_t codepoint) {
-  return codepoint == 57441 || codepoint == 57442 || codepoint == 57443 || codepoint == 57444 || codepoint == 57445 ||
-         codepoint == 57446 || codepoint == 57447 || codepoint == 57448 || codepoint == 57449 || codepoint == 57450 ||
-         codepoint == 57451 || codepoint == 57452;
-}
-
 static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
   uint32_t codepoint = c.params[0].primary;
   uint32_t alternate_codepoint = c.params[0].sub[0];
@@ -581,27 +663,31 @@ static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
 
   if (!codepoint) codepoint = 1;
   if (modifiers) modifiers -= 1;
-
-  if (event == 3 /* ignore key release events */) {
-    return;
-  }
-
-  if (is_modifier(codepoint)) 
-    return;
+  if (!event) event = KEY_PRESS;
 
   for (int i = 0; i < LENGTH(named_keys); i++) {
     struct velvet_key k = named_keys[i];
     if (k.kitty_terminator != c.final) continue;
     if (alternate_codepoint) k.alternate_codepoint = alternate_codepoint;
     if (k.codepoint == codepoint) {
-      struct velvet_key_event e = {.modifiers = modifiers, .key = k};
+      struct velvet_key_event e = {.modifiers = modifiers, .key = k, .type = event};
       dispatch_key_event(v, e);
       return;
     }
   }
 
   struct velvet_key k = {.codepoint = codepoint, .kitty_terminator = 'u', .alternate_codepoint = alternate_codepoint};
-  struct velvet_key_event e = {.modifiers = modifiers, .key = k};
+  struct velvet_key_event e = {.modifiers = modifiers, .key = k, .type = event};
+
+  for (int i = 2; i < c.n_params; i++) {
+    int codepoint = c.params[i].primary;
+    int index = e.associated_text.n++;
+    if (index >= LENGTH(e.associated_text.codepoints)) {
+      e.associated_text.n = 0;
+      break;
+    }
+    e.associated_text.codepoints[index] = codepoint;
+  }
   dispatch_key_event(v, e);
 }
 
@@ -645,7 +731,7 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   }
 }
 
-static void velvet_input_send_vk(struct velvet *v, struct velvet_key vk, enum velvey_key_modifier m) {
+static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, enum velvey_key_modifier m) {
   int n = 0;
   struct utf8 buf = {0};
   char *escape = nullptr;
@@ -678,10 +764,83 @@ static void velvet_input_send_vk(struct velvet *v, struct velvet_key vk, enum ve
   }
 }
 
+static void velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, enum kitty_keyboard_options o) {
+  struct velvet_window *f = velvet_scene_get_focus(&v->scene);
+  assert(f);
+  if (!e.type) e.type = KEY_PRESS;
+  bool is_mod = is_modifier(e.key.codepoint);
+
+  bool do_send = (o & KITTY_KEYBOARD_REPORT_EVENT_TYPES) || e.type < KEY_RELEASE;
+  if (is_mod && !(o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES)) 
+    do_send = false;
+
+  if (!do_send) return;
+
+  bool do_encode = (o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES) || is_mod /* modiifers must always be encoded */
+                   || (e.type == KEY_RELEASE) /* release events must be encoded. In my mind, repeat events should also
+                                                 be encoded, but this is not how other emulators do it. */
+                   || (e.modifiers & MODIFIER_CTRL); /* encode ctrl modified keys regardless of the disambiguate flag */
+
+  if (!do_encode) {
+    if (!is_mod) velvet_input_send_vk_basic(v, e.key, e.modifiers);
+    return;
+  }
+
+  struct string *s = &f->emulator.pending_input;
+  string_push_cstr(s, "\x1b[");
+  string_push_int(s, e.key.codepoint);
+  if (o & KITTY_KEYBOARD_REPORT_ALTERNATE_KEYS && e.key.alternate_codepoint) {
+    string_push_char(s, ':');
+    string_push_int(s, e.key.alternate_codepoint);
+  }
+
+  uint32_t modifiers = e.modifiers + 1; /* modifiers are encoded as +1 */
+  bool encode_event = (o & KITTY_KEYBOARD_REPORT_EVENT_TYPES) && e.type > KEY_PRESS;
+  bool encode_modifier = encode_event || modifiers > 1;
+  if (encode_modifier) {
+    string_push_char(s, ';');
+    string_push_int(s, modifiers);
+    if (encode_event) {
+      string_push_char(s, ':');
+      string_push_int(s, e.type);
+    }
+  }
+
+  /* TODO: associated text */
+  enum kitty_keyboard_options associated_text_req = KITTY_KEYBOARD_REPORT_ASSOCIATED_TEXT | KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES;
+  bool encode_associated_text = e.type != KEY_RELEASE /* associated text is not included on key release */
+                                && (o & associated_text_req) == associated_text_req;
+  if (encode_associated_text && e.associated_text.n) {
+    if (!encode_modifier)
+      string_push_char(s, ';');
+    for (int i = 0; i < e.associated_text.n; i++) {
+      string_push_char(s, ';');
+      string_push_int(s, e.associated_text.codepoints[i]);
+    }
+  }
+
+  string_push_char(s, e.key.kitty_terminator);
+}
+
+static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
+  struct velvet_window *f = velvet_scene_get_focus(&v->scene);
+  if (!f) return;
+
+  enum kitty_keyboard_options o = f->emulator.options.kitty.options;
+  if (o == 0) {
+    if (e.type != KEY_RELEASE) {
+      if (!is_modifier(e.key.codepoint)) {
+        velvet_input_send_vk_basic(v, e.key, e.modifiers);
+      }
+    }
+  } else {
+    velvet_input_send_kitty_encoding(v, e, o);
+  }
+}
+
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
   if (e.removed) return;
-  struct velvet *v = k->data;
-  velvet_input_send_vk(v, e.key, e.modifiers);
+  velvet_input_send_vk(k->data, e);
 }
 
 static void dispatch_normal(struct velvet *v, uint8_t ch) {
@@ -959,6 +1118,6 @@ void velvet_input_put(struct velvet *in, struct u8_slice str) {
     }
   }
   for (; velvet_key_iterator_next(&it); ) {
-    velvet_input_send_vk(in, it.current.key, it.current.modifiers);
+    velvet_input_send_vk(in, it.current);
   }
 }

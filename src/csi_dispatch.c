@@ -821,21 +821,47 @@ bool DECRQUPSS(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("D
 
 bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) { 
   (void)csi;
-  string_push_csi(&vte->pending_input, '?', INT_SLICE(0), "u");
+  string_push_csi(&vte->pending_input, '?', INT_SLICE(vte->options.kitty.options), "u");
   return true;
 }
 
 static bool KITTY_KEYBOARD_PUSH(struct vte *vte, struct csi *csi) {
-  velvet_log("TODO: Kitty Push");
+  enum kitty_keyboard_options flags = csi->params[0].primary;
+  vec_push(&vte->options.kitty.stack, &vte->options.kitty.options);
+  vte->options.kitty.options = flags;
   return true;
 }
 static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi) { 
-  velvet_log("TODO: Kitty Pop");
+  enum kitty_keyboard_options new_flags = 0;
+  int pop_count = csi->params[0].primary;
+  if (pop_count < 0) return true;
+  if (!pop_count) pop_count = 1;
+  void *popped = nullptr;
+
+  while (pop_count && (popped = vec_pop(&vte->options.kitty.stack))) {
+    new_flags = *(enum kitty_keyboard_options *)popped;
+    pop_count--;
+  }
+  vte->options.kitty.options = new_flags;
   return true;
 }
 
 static bool KITTY_KEYBOARD_MODIFY(struct vte *vte, struct csi *csi) {
-  velvet_log("TODO: Kitty Modify");
+  int flags = csi->params[0].primary;
+  int mode = csi->params[1].primary;
+  if (!mode) mode = 1;
+
+  if (mode == 1) {
+    /* reassign the current flags */
+    vte->options.kitty.options = flags;
+  } else if (mode == 2) {
+    /* set the specified flags and leave others unchanged */
+    vte->options.kitty.options |= flags;
+  } else if (mode == 3) {
+    /* unset the specified flags and leave others unchanged */
+    vte->options.kitty.options &= ~flags;
+  }
+
   return true;
 }
 

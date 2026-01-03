@@ -132,7 +132,7 @@ enum kitty_keyboard_options {
   KITTY_KEYBOARD_DISAMBIGUATE_ESCAPE_CODES = 1,
   KITTY_KEYBOARD_REPORT_EVENT_TYPES = 2,
   KITTY_KEYBOARD_REPORT_ALTERNATE_KEYS = 4,
-  KITTY_KEYBOARD_REPORT_ALL_KEYS = 8,
+  KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES = 8,
   KITTY_KEYBOARD_REPORT_ASSOCIATED_TEXT = 16,
 };
 
@@ -161,7 +161,11 @@ struct emulator_options {
   struct charset_options charset;
   struct cursor_options cursor;
   struct mouse_options mouse;
-  enum kitty_keyboard_options kitty_keyboard_options;
+
+  struct {
+    enum kitty_keyboard_options options;
+    struct vec /* kitty_keyboard_options */ stack;
+  } kitty;
 };
 
 /* finite state machine for parsing ansi escape codes */
@@ -185,6 +189,7 @@ struct vte {
 static const struct emulator_options emulator_options_default = {
     .auto_wrap_mode = true,
     .cursor.visible = true,
+    .kitty = {.stack = vec(enum kitty_keyboard_options)},
 };
 
 static const struct vte vte_default = {

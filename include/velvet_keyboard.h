@@ -34,9 +34,21 @@ struct velvet_key {
   char kitty_terminator;
 };
 
+enum velvet_key_event_type {
+  KEY_PRESS   = 1,
+  KEY_REPEAT  = 2,
+  KEY_RELEASE = 3,
+};
+
 struct velvet_key_event {
   struct velvet_key key;
   enum velvey_key_modifier modifiers;
+  enum velvet_key_event_type type;
+  struct {
+    /* TODO: How long can this be ? */
+    uint32_t codepoints[2];
+    int n;
+  } associated_text;
   /* set if the mapping was removed. If removed is set, no other fields will be set. */
   bool removed;
 };
