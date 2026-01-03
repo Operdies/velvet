@@ -610,7 +610,8 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
 
         /* If the current keymap is still active because of a repeat,
          * only trigger a continuation if it allows repeating. */
-        if (v->input.last_repeat && !k->is_repeatable) break;
+        if (v->input.last_repeat && !k->is_repeatable) 
+          break;
 
         uint64_t now = get_ms_since_startup();
         uint64_t last_repeat = v->input.last_repeat;
@@ -632,18 +633,18 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
     }
   }
 
+  /* don't unwind or cancel chains if the processed key is a modifier */
+  if (is_modifier(e.key.codepoint)) {
+    root->on_key(root, e);
+    return;
+  }
+
   bool did_repeat = v->input.last_repeat > 0;
   v->input.last_repeat = 0;
 
   // ESC cancels any pending keybind
   if (e.key.codepoint == ESC && current != root) {
     v->input.keymap = root;
-    return;
-  }
-
-  /* don't unwind or cancel chains if the processed key is a modifier */
-  if (is_modifier(e.key.codepoint)) {
-    root->on_key(root, e);
     return;
   }
 
