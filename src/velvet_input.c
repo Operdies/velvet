@@ -45,38 +45,51 @@ static void send_byte(struct velvet *v, uint8_t ch) {
   send_bytes(v, ch);
 }
 
-static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
-static struct velvet_key_event key_event_from_byte(uint8_t ch) {
-  // special case for <C-Space>
-  if (ch == 0)
-    return (struct velvet_key_event){.key.literal = true, .key.symbol = ' ', .modifiers = MODIFIER_CTRL};
-
-  for (int i = 0; i < LENGTH(keys); i++) {
-    struct special_key k = keys[i];
-    struct velvet_key_event special = {0};
-    struct u8_slice single = { .content = &ch, .len = 1 };
-    if (u8_slice_equals(single, u8_slice_from_cstr(k.escape))) {
-      special.key.literal = false;
-      special.key.special = k;
-      return special;
+static bool get_named_key_by_name(char *name, struct velvet_key *key) {
+  assert(key);
+  for (int i = 0; i < LENGTH(named_keys); i++) {
+    struct velvet_key n = named_keys[i];
+    if (n.name && strcasecmp(name, n.name) == 0) {
+      *key = n;
+      return true;
     }
+  }
+  return false;
+}
+
+static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
+
+static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
+  // special case for <C-Space>
+  if (cp == 0) {
+    struct velvet_key_event e = { .modifiers = MODIFIER_CTRL };
+    get_named_key_by_name("space", &e.key);
+    return e;
   }
 
   struct velvet_key_event k = {0};
-  bool iscntrl = CTRL(ch) == ch;
+  bool iscntrl = CTRL(cp) == cp;
   if (iscntrl) {
-    ch = ch + 96;
+    cp = cp + 96;
   }
 
-  bool isshift = ch >= 'A' && ch <= 'Z';
+  bool isshift = cp >= 'A' && cp <= 'Z';
+  if (isshift) {
+    k.key.alternate_codepoint = cp;
+    cp = cp + 32;
+  }
+
   if (!isshift) {
-  // TODO: locale aware shift table
-  isshift = (ch < LENGTH(VELVET_SHIFT_TABLE)) && VELVET_SHIFT_TABLE[ch];
+    isshift = (cp < LENGTH(VELVET_SHIFT_TABLE)) && VELVET_SHIFT_TABLE[cp];
+    if (isshift) {
+      k.key.alternate_codepoint = cp;
+      cp = VELVET_SHIFT_TABLE[cp];
+    }
   }
 
-  k.key.symbol = ch;
-  k.key.literal = true;
+  k.key.codepoint = cp;
   k.modifiers = ((iscntrl * MODIFIER_CTRL) | (isshift * MODIFIER_SHIFT));
+  k.key.kitty_final = 'u';
   return k;
 }
 
@@ -157,18 +170,7 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
   }
 }
 
-static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m);
-
-static bool get_special_key_by_name(char *name, struct special_key *key) {
-  for (int i = 0; i < LENGTH(keys); i++) {
-    struct special_key k = keys[i];
-    if (strcmp(name, k.name) == 0) {
-      *key = k;
-      return true;
-    }
-  }
-  return true;
-}
+static void velvet_input_send_vk(struct velvet *v, struct velvet_key vk, enum velvey_key_modifier m);
 
 static bool skip_dragging(struct velvet_window *w, void *) {
   return w->dragging;
@@ -288,18 +290,23 @@ static void send_csi_mouse(struct velvet *v, struct csi c) {
   if (do_send) {
     send_mouse_sgr(target, trans);
   } else if (sgr.event_type == mouse_scroll && target->emulator.options.alternate_screen) {
-    struct special_key k = {0};
+    struct velvet_key k = {0};
     /* In the absence of mouse tracking,
      * scroll up/down is treated as arrow keys in the alternate screen
      * Deliberately don't process this key in any keymaps.
      * Mappings related to scrolling should be handled by sequences such as '<S-M-ScrollWheelUp>'
      */
     if (sgr.scroll_direction == scroll_up) {
-      get_special_key_by_name("SS3_UP", &k);
-      velvet_input_send_special(v, k, 0);
+      /* NOTE: When kitty keyhandling is enabled, kitty encodes scrolling
+       * as successive key press and key release events using the kitty protocol encoding,
+       * whereas ghostty and alacritty uses the same encoding regardless of kitty protocol settings.
+       * I don't think it matters much so we just do what's easiest.
+       */
+      get_named_key_by_name("SS3_UP", &k);
+      velvet_input_send_vk(v, k, 0);
     } else if (sgr.scroll_direction == scroll_down) {
-      get_special_key_by_name("SS3_DOWN", &k);
-      velvet_input_send_special(v, k, 0);
+      get_named_key_by_name("SS3_DOWN", &k);
+      velvet_input_send_vk(v, k, 0);
     }
   } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
     struct screen *screen = vte_get_current_screen(&target->emulator);
@@ -365,18 +372,6 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
 
   // TODO: Is this accurate?
   if (ch >= 0x40 && ch <= 0x7E) {
-    struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
-    for (int i = 0; i < LENGTH(keys); i++) {
-      struct special_key k = keys[i];
-      if (u8_slice_equals(raw, u8_slice_from_cstr(k.escape))) {
-        string_clear(&v->input.command_buffer);
-        in->state = VELVET_INPUT_STATE_NORMAL;
-        struct velvet_key_event evt = {.key.special = k};
-        dispatch_key_event(v, evt);
-        return;
-      }
-    }
-
     struct csi c = {0};
     struct u8_slice s = string_range(&v->input.command_buffer, 2, -1);
     size_t len = csi_parse(&c, s);
@@ -390,12 +385,24 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
 #define CSI(l, i, f, fn, _)                                                                                            \
   case KEY(l, i, f): DISPATCH_##fn(v, c); break;
 #include "input_csi.def"
-      default: send_csi_todo(v); break;
+      default:
+        struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
+        for (int i = 0; i < LENGTH(named_keys); i++) {
+          struct velvet_key k = named_keys[i];
+          if (k.escape && u8_slice_equals(raw, u8_slice_from_cstr(k.escape))) {
+            struct velvet_key_event evt = {.key = k};
+            dispatch_key_event(v, evt);
+            break;
+          }
+        }
+        break;
       }
     }
     string_clear(&v->input.command_buffer);
     in->state = VELVET_INPUT_STATE_NORMAL;
   }
+#undef KEY
+#undef CSI
 }
 
 static void dispatch_tree_recursive(struct velvet *v, struct velvet_keymap *leaf, struct velvet_keymap *end_node) {
@@ -433,7 +440,6 @@ void velvet_input_unwind(struct velvet *v) {
 void input_unwind_callback(void *data) {
   struct velvet *v = data;
   velvet_input_unwind(v);
-  v->input.unwind_callback_token = 0;
 }
 
 static bool keymap_has_mapping(struct velvet_keymap *k) {
@@ -444,41 +450,53 @@ static bool keymap_has_mapping(struct velvet_keymap *k) {
   return false;
 }
 
-static struct velvet_key_event key_normalize(struct velvet_key_event key) {
+/* strip unsupported modifiers and collapse equivalent key states for easier comparisons */
+static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
   /* just treat alt the same as meta for all practical purposes */
-  if ((key.modifiers & MODIFIER_ALT) || (key.modifiers & MODIFIER_META)) {
-    key.modifiers &= ~MODIFIER_ALT;
-    key.modifiers |= MODIFIER_META;
+  if ((e.modifiers & MODIFIER_ALT) || (e.modifiers & MODIFIER_META)) {
+    e.modifiers &= ~MODIFIER_ALT;
+    e.modifiers |= MODIFIER_META;
   }
-  if (key.key.literal) {
-    int ch = key.key.symbol;
-    if (ch < LENGTH(VELVET_SHIFT_TABLE) && VELVET_SHIFT_TABLE[ch]) {
-      key.key.symbol = VELVET_SHIFT_TABLE[ch];
-      key.modifiers |= MODIFIER_SHIFT;
-    }
+  e.modifiers &= ~(MODIFIER_HYPER | MODIFIER_NUM_LOCK | MODIFIER_CAPS_LOCK);
+  if (e.key.escape && e.key.escape[0] && !e.key.escape[1]) {
+    uint8_t ch = e.key.escape[0];
+    if ((e.modifiers & MODIFIER_SHIFT) && ch >= 'a' && ch <= 'z') ch -= 32;
+    if ((e.modifiers & MODIFIER_CTRL)) ch = ch & 0x1f;
+    e.key.codepoint = ch;
   }
-  if (key.modifiers & MODIFIER_SHIFT) {
-    if (key.key.literal) {
-      char ch = key.key.symbol;
-      if (ch >= 'A' && ch <= 'Z') ch += 32;
-      key.key.symbol = ch;
-    }
+  if (e.key.codepoint && e.key.codepoint < 255) {
+    e.key.kitty_final = 'u';
   }
-  return key;
+  return e;
 }
 
-/* TODO: How should meta/alt behave */ 
-static bool key_event_equals(struct velvet_key_event k1, struct velvet_key_event k2) {
-  k1 = key_normalize(k1);
-  k2 = key_normalize(k2);
-  if (k1.modifiers != k2.modifiers) return false;
-  if (k1.key.literal != k2.key.literal) return false;
-  if (k1.key.literal) return k1.key.symbol == k2.key.symbol;
-  return strcmp(k1.key.special.name, k2.key.special.name) == 0;
+/* TODO: How should meta/alt behave */
+static bool key_event_equals(struct velvet_key_event e1, struct velvet_key_event e2) {
+  e1 = key_cannonicalize(e1);
+  e2 = key_cannonicalize(e2);
+  struct velvet_key k1 = e1.key, k2 = e2.key;
+  if (e1.modifiers != e2.modifiers) 
+    return false;
+  if (k1.name || k2.name) 
+    return k1.name && k2.name && strcasecmp(k1.name, k2.name) == 0;
+  if ((k1.kitty_final || k2.kitty_final) && k1.kitty_final != k2.kitty_final) 
+    return false;
+
+  /* match alternating case if modifiers are equal. This allows us to match Shift+1 and Shift + ! for example */
+  uint32_t a1 = k1.alternate_codepoint, a2 = k2.alternate_codepoint, c1 = k1.codepoint, c2 = k2.codepoint;
+  if (a1 && (a1 == c2 || a1 == a2)) return true;
+  if (a2 && (a2 == c1 || a2 == a1)) return true;
+  if (c1 || c2) return c1 == c2;
+
+  if (k1.escape || k2.escape) 
+    return k1.escape && k2.escape && strcmp(k1.escape, k2.escape) == 0;
+
+  /* both zero ?*/
+  assert(!"trap");
 }
 
 // this is supposed to emulate VIM-like behavior
-static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
+static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   assert(v);
   assert(v->input.keymap);
   struct velvet_keymap *k, *root, *current;
@@ -487,24 +505,17 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   assert(root);
 
   // cancel any scheduled unwind
-  struct io_schedule *unwind;
-  vec_find(unwind, v->event_loop.scheduled_actions, unwind->callback == input_unwind_callback);
-  if (unwind) vec_remove(&v->event_loop.scheduled_actions, unwind);
+  io_schedule_cancel(&v->event_loop, v->input.unwind_callback_token);
 
   // First check if this key matches a keybind in the current keymap
   for (k = current->first_child; k; k = k->next_sibling) {
-    if (key_event_equals(k->key, key)) {
+    if (key_event_equals(k->key, e)) {
       if (k->first_child) {
         v->input.keymap = k;
         // If this sequence has both a mapping and a continuation,
         // defer the mapping until the intended sequence can be determined.
-        if (keymap_has_mapping(k)) {
-          if (v->input.unwind_callback_token) {
-            io_schedule_cancel(&v->event_loop, v->input.unwind_callback_token);
-          }
-          v->input.unwind_callback_token =
-              io_schedule(&v->event_loop, v->input.options.key_chain_timeout_ms, input_unwind_callback, v);
-        }
+        v->input.unwind_callback_token =
+            io_schedule(&v->event_loop, v->input.options.key_chain_timeout_ms, input_unwind_callback, v);
       } else {
         // this choord is terminal so on_key must be set
         assert(k->on_key);
@@ -524,7 +535,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
         /* update the repeat timer */
         if (k->is_repeatable) v->input.last_repeat = now;
 
-        k->on_key(k, key);
+        k->on_key(k, e);
 
         /* reset the keymap unless the key is repeatable */
         if (!k->is_repeatable) v->input.keymap = k->root;
@@ -537,26 +548,60 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event key) {
   v->input.last_repeat = 0;
 
   // ESC cancels any pending keybind
-  if (key.key.literal && key.key.symbol == ESC && current != root) {
+  if (e.key.codepoint == ESC && current != root) {
     v->input.keymap = root;
     return;
   }
 
   if (current == root) {
-    root->on_key(root, key);
+    root->on_key(root, e);
   } else if (did_repeat) {
     /* don't unwind the unresolved stack if we are handling a repeat timeout */
     v->input.keymap = root;
-    dispatch_key_event(v, key);
+    dispatch_key_event(v, e);
   } else {
     // Since the current key was not matched, we should match the longest
     // prefix and then reinsert all pending keys
     velvet_input_unwind(v);
-    dispatch_key_event(v, key);
+    dispatch_key_event(v, e);
   }
 }
 
+static bool is_modifier(uint32_t codepoint) {
+  return codepoint == 57441 || codepoint == 57442 || codepoint == 57443 || codepoint == 57444 || codepoint == 57445 ||
+         codepoint == 57446 || codepoint == 57447 || codepoint == 57448 || codepoint == 57449 || codepoint == 57450 ||
+         codepoint == 57451 || codepoint == 57452;
+}
+
 static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
+  uint32_t codepoint = c.params[0].primary;
+  uint32_t alternate_codepoint = c.params[0].sub[0];
+  uint32_t modifiers = c.params[1].primary;
+  uint32_t event = c.params[1].sub[0];
+
+  if (!codepoint) codepoint = 1;
+  if (modifiers) modifiers -= 1;
+
+  if (event == 3 /* ignore key release events */) {
+    return;
+  }
+
+  if (is_modifier(codepoint)) 
+    return;
+
+  for (int i = 0; i < LENGTH(named_keys); i++) {
+    struct velvet_key k = named_keys[i];
+    k.alternate_codepoint = alternate_codepoint;
+    if (k.codepoint == codepoint && k.kitty_final == c.final) {
+      struct velvet_key_event e = {.modifiers = modifiers, .key = k};
+      dispatch_key_event(v, e);
+      return;
+    }
+  }
+
+  struct velvet_key k = {.codepoint = codepoint, .kitty_final = 'u', .alternate_codepoint = alternate_codepoint};
+  struct velvet_key_event e = {.modifiers = modifiers, .key = k};
+  dispatch_key_event(v, e);
 }
 
 static void dispatch_app(struct velvet *v, uint8_t ch) {
@@ -564,10 +609,12 @@ static void dispatch_app(struct velvet *v, uint8_t ch) {
   string_push_char(&v->input.command_buffer, ch);
 
   struct u8_slice key = string_as_u8_slice(v->input.command_buffer);
-  for (int i = 0; !found && i < LENGTH(keys); i++) {
-    struct u8_slice key_escape = u8_slice_from_cstr(keys[i].escape);
+  for (int i = 0; !found && i < LENGTH(named_keys); i++) {
+    struct velvet_key n = named_keys[i];
+    if (!n.escape) continue;
+    struct u8_slice key_escape = u8_slice_from_cstr(n.escape);
     if (u8_slice_equals(key, key_escape)) {
-      struct velvet_key_event e = { .key.special = keys[i] };
+      struct velvet_key_event e = { .key = n };
       dispatch_key_event(v, e);
       found = true;
     }
@@ -587,7 +634,7 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   } else {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    struct velvet_key_event k = key_event_from_byte(ch);
+    struct velvet_key_event k = key_event_from_codepoint(ch);
     /* ALT and META are different, but in VT environments they have historically
      * been collated. Since there is no way to distinguish them,
      * treat ESC as both. */
@@ -597,34 +644,43 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   }
 }
 
-static void velvet_input_send_literal(struct velvet *v, char s, enum velvey_key_modifier m) {
-  if (s == ESC) {
-    send_byte(v, ESC);
-  } else {
-    bool iscntrl = m & MODIFIER_CTRL;
-    bool is_meta = (m & MODIFIER_ALT) || (m & MODIFIER_META);
-    if (is_meta) send_byte(v, ESC);
-
-    if (iscntrl && s == ' ') send_byte(v, 0);
-    if (iscntrl) send_byte(v, s & 0x1f);
-    else send_byte(v, s);
+static void velvet_input_send_vk(struct velvet *v, struct velvet_key vk, enum velvey_key_modifier m) {
+  int n = 0;
+  struct utf8 buf = {0};
+  char *escape = nullptr;
+  if (vk.kitty_final == 'u' && vk.codepoint && vk.codepoint < 255) {
+    uint32_t send = vk.alternate_codepoint && vk.alternate_codepoint < 255 ? vk.alternate_codepoint : vk.codepoint;
+    n = codepoint_to_utf8(send, &buf);
+    escape = (char*)buf.utf8;
+  } else if (vk.escape && vk.escape[0]) {
+    escape = vk.escape;
+    n = strlen(escape);
   }
-}
 
-static void velvet_input_send_special(struct velvet *v, struct special_key s, enum velvey_key_modifier m) {
-  /* TODO: Modifiers + respect client keyboard settings */
-  for (char *ch = s.escape; *ch; ch++) {
-    send_byte(v, *ch);
+  if (escape && escape[0]) {
+    scroll_to_bottom(v);
+    if (vk.codepoint == ESC) {
+      send_byte(v, ESC);
+    } else {
+      bool is_meta = m & MODIFIER_ALT;
+      bool is_cntrl = m & MODIFIER_CTRL;
+
+      if (is_meta) send_byte(v, ESC);
+      bool is_byte = !escape[1];
+      if (is_byte && is_cntrl) {
+        char ch = escape[0] & 0x1f;
+        send_byte(v, ch);
+      } else {
+        for (int i = 0; i < n; i++) send_byte(v, escape[i]);
+      }
+    }
   }
 }
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
   if (e.removed) return;
-  // TODO: check keyboard settings of recipient and modify event accordingly
   struct velvet *v = k->data;
-  scroll_to_bottom(v);
-  if (e.key.literal) velvet_input_send_literal(v, e.key.symbol, e.modifiers);
-  else velvet_input_send_special(v, e.key.special, e.modifiers);
+  velvet_input_send_vk(v, e.key, e.modifiers);
 }
 
 static void dispatch_normal(struct velvet *v, uint8_t ch) {
@@ -637,7 +693,7 @@ static void dispatch_normal(struct velvet *v, uint8_t ch) {
     return;
   }
 
-  struct velvet_key_event key = key_event_from_byte(ch);
+  struct velvet_key_event key = key_event_from_codepoint(ch);
   dispatch_key_event(v, key);
   assert(v->input.keymap);
 }
@@ -659,7 +715,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
     struct velvet_key_event k = { 0 };
-    get_special_key_by_name("ESC", &k.key.special);
+    get_named_key_by_name("ESCAPE", &k.key);
     dispatch_key_event(v, k);
   }
 }
@@ -728,24 +784,24 @@ void velvet_input_destroy(struct velvet_input *in) {
 }
 
 static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
-  struct velvet_key k = {0};
   assert(s.len > 0);
 
-  if (s.len == 1) {
-    k = key_event_from_byte(s.content[0]).key;
-    *result = k;
-    return true;
-  }
-
-  for (int i = 0; i < LENGTH(keys); i++) {
-    struct u8_slice special = u8_slice_from_cstr(keys[i].name);
+  for (int i = 0; i < LENGTH(named_keys); i++) {
+    struct velvet_key n = named_keys[i];
+    if (!n.name) continue;
+    struct u8_slice special = u8_slice_from_cstr(n.name);
     if (u8_slice_equals_ignore_case(s, special)) {
-      k.literal = false;
-      k.special = keys[i];
-      *result = k;
+      *result = n;
       return true;
     }
   }
+
+  struct u8_slice_codepoint_iterator it = { .src = s };
+  if (u8_slice_codepoint_iterator_next(&it)) {
+    *result = key_event_from_codepoint(it.current.value).key;
+    return true;
+  }
+
   return false;
 }
 
@@ -783,9 +839,16 @@ static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
 
   if (key_end == 0 || (key_end - cursor) < 3) {
     /* basic ascii key */
-    it->current = key_event_from_byte(ch);
-    it->cursor = cursor + 1;
-    it->current_range = u8_slice_range(t, cursor, cursor + 1);
+    struct u8_slice_codepoint_iterator cp = {.src = u8_slice_range(t, cursor, -1)};
+    if (!u8_slice_codepoint_iterator_next(&cp) || cp.cursor == 0) {
+      it->invalid = true;
+      it->cursor = t.len;
+      it->current_range = u8_slice_range(t, cursor, cursor + 1);
+      return false;
+    }
+    it->current = key_event_from_codepoint(cp.current.value);
+    it->cursor = cursor + cp.cursor;
+    it->current_range = u8_slice_range(t, cursor, cursor + cp.cursor);
     return true;
   }
 
@@ -846,14 +909,15 @@ struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_sl
 
   struct velvet_key_iterator it = { .src = key_sequence };
   struct velvet_key_iterator test = it;
-  for (; velvet_key_iterator_next(&test);) {
-    if (test.invalid) {
-      velvet_log("Rejecting keymap %.*s: The key %.*s was not recognized.",
-                 (int)key_sequence.len,
-                 key_sequence.content,
-                 (int)test.current_range.len,
-                 test.current_range.content);
-    }
+  for (; velvet_key_iterator_next(&test););
+  
+  if (test.invalid) {
+    velvet_log("Rejecting keymap %.*s: The key %.*s was not recognized.",
+               (int)key_sequence.len,
+               key_sequence.content,
+               (int)test.current_range.len,
+               test.current_range.content);
+    return nullptr;
   }
 
 
@@ -893,8 +957,7 @@ void velvet_input_put(struct velvet *in, struct u8_slice str) {
       velvet_log("Put: rejecting invalid sequence %.*s", (int)str.len, str.content);
     }
   }
-  struct velvet_keymap *root = in->input.keymap->root;
   for (; velvet_key_iterator_next(&it); ) {
-    velvet_input_send(root, it.current);
+    velvet_input_send_vk(in, it.current.key, it.current.modifiers);
   }
 }

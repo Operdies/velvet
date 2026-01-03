@@ -24,7 +24,7 @@ VT(focus_out, CSI "O");
 VT(focus_in, CSI "I");
 VT(clear, CSI "2J");
 VT(kitty_keyboard_on, CSI ">31u");
-VT(kitty_keyboard_off, CSI ">0u");
+VT(kitty_keyboard_off, CSI "<u");
 
 VT_ANSI_MODE(application_mode, 1);
 VT_PRIVATE_MODE(synchronized_rendering, 2026);

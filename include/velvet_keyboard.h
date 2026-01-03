@@ -1,20 +1,8 @@
 #ifndef VELVET_KEYBOARD_H
 #define VELVET_KEYBOARD_H
 
+#include <stdint.h>
 #include <string.h>
-
-struct special_key {
-  char *name;
-  char *escape;
-};
-
-struct velvet_key {
-  bool literal;
-  union {
-    char symbol;
-    struct special_key special;
-  };
-};
 
 /* masks matching the Kitty keyboard protocol spec: https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
 enum velvey_key_modifier {
@@ -28,6 +16,23 @@ enum velvey_key_modifier {
   MODIFIER_NUM_LOCK  = 0b10000000, //(128)
 };
 
+static char VELVET_SHIFT_TABLE[] = {
+    ['!'] = '1',  ['@'] = '2', ['#'] = '3', ['$'] = '4', ['%'] = '5', ['^'] = '6', ['&'] = '7',
+    ['*'] = '8',  ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.', [':'] = ';', ['"'] = '\'',
+    ['|'] = '\\', ['~'] = '`', ['?'] = '/', ['{'] = '[', ['}'] = ']',
+};
+
+
+struct velvet_key {
+  char *name;
+  char *escape;
+  uint32_t codepoint;
+  /* if a modifier such as shift has altered the symbol,
+   * the original symbol is available in codepoint, and the altered
+   * symbol is available in alternate_codepoint */
+  uint32_t alternate_codepoint;
+  char kitty_final;
+};
 
 struct velvet_key_event {
   struct velvet_key key;
@@ -36,46 +41,10 @@ struct velvet_key_event {
   bool removed;
 };
 
-static char VELVET_SHIFT_TABLE[] = {
-    ['!'] = '1',  ['@'] = '2', ['#'] = '3', ['$'] = '4', ['%'] = '5', ['^'] = '6', ['&'] = '7',
-    ['*'] = '8',  ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.', [':'] = ';', ['"'] = '\'',
-    ['|'] = '\\', ['~'] = '`', ['?'] = '/', ['{'] = '[', ['}'] = ']',
+#define X(n, e, cp, f) {.name = n, .escape = e, .codepoint = cp, .kitty_final = f},
+static const struct velvet_key named_keys[] = {
+#include "kitty_keys.def"
 };
-
-/* TODO: Initialize some of these keys from terminfo */
-#define SPECIAL_KEYS                                                                                                   \
-  X(F1, "\x1bOP")                                                                                                      \
-  X(F2, "\x1bOQ")                                                                                                      \
-  X(F3, "\x1bOR")                                                                                                      \
-  X(F4, "\x1bOS")                                                                                                      \
-  X(F5, "\x1b[15~")                                                                                                    \
-  X(F6, "\x1b[17~")                                                                                                    \
-  X(F7, "\x1b[18~")                                                                                                    \
-  X(F8, "\x1b[19~")                                                                                                    \
-  X(F9, "\x1b[20~")                                                                                                    \
-  X(F10, "\x1b[21~")                                                                                                   \
-  X(F11, "\x1b[23~")                                                                                                   \
-  X(F12, "\x1b[24~")                                                                                                   \
-  X(SS3_UP, "\x1bOA")                                                                                                  \
-  X(UP, "\x1b[A")                                                                                                      \
-  X(SS3_DOWN, "\x1bOB")                                                                                                \
-  X(DOWN, "\x1b[B")                                                                                                    \
-  X(SS3_RIGHT, "\x1bOC")                                                                                               \
-  X(RIGHT, "\x1b[C")                                                                                                   \
-  X(SS3_LEFT, "\x1bOD")                                                                                                \
-  X(LEFT, "\x1b[D")                                                                                                    \
-  X(ESC, "\x1b")                                                                                                       \
-  X(DEL, "\x1b[3~")                                                                                                    \
-  X(BS, "\x08")                                                                                                        \
-  X(BS, "\x7f")                                                                                                        \
-  X(TAB, "\t")                                                                                                         \
-  X(CR, "\n")                                                                                                          \
-  X(SPACE, " ")
-
-static const struct special_key keys[] = {
-#define X(x, y) {.name = #x, .escape = y},
-    SPECIAL_KEYS
 #undef X
-};
 
 #endif

@@ -121,7 +121,7 @@ static const struct setup_pair setup_functions[] = {
     {.enable = enable_focus_reporting,  .disable = disable_focus_reporting  },
     {.enable = enable_bracketed_paste,  .disable = disable_bracketed_paste  },
     {.enable = enable_mouse_mode,       .disable = disable_mouse_mode       },
-    // {.enable = enable_kitty_keyboard,   .disable = disable_kitty_keyboard   },
+    {.enable = enable_kitty_keyboard,   .disable = disable_kitty_keyboard   },
 };
 
 void terminal_setup(void) {
