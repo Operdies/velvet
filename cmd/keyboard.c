@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "velvet.h"
 #include <string.h>
+#include <sys/signal.h>
 
 struct key {
   char *text;
