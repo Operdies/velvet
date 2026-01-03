@@ -288,12 +288,14 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
 }
 
 static void scrollback_init(struct screen *g, int min_cap) {
+  assert(!g->cells);
+  assert(!g->lines);
   assert(g->scroll.capacity < num_lines(g));
   int initial_size = g->scroll.capacity;
   int new_size = CLAMP(g->scroll.capacity * 2, min_cap, num_lines(g));
   assert(new_size > initial_size);
-  g->cells = velvet_erealloc(g->cells, new_size * g->w, sizeof(*g->cells));
-  g->lines = velvet_erealloc(g->lines, new_size, sizeof(*g->lines));
+  g->cells = velvet_calloc(sizeof(*g->cells), new_size * g->w);
+  g->lines = velvet_calloc(sizeof(*g->lines), new_size);
   g->scroll.capacity = new_size;
 
   for (int i = 0; i < initial_size; i++)

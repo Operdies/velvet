@@ -486,10 +486,10 @@ static void vte_init_alternate_screen(struct vte *vte) {
   if (vte->alternate.w != vte->ws.w || vte->alternate.h != vte->ws.h) {
     struct screen new = {.w = vte->ws.w, .h =  vte->ws.h};
     screen_initialize(&new, vte->ws.w,  vte->ws.h);
-    if (vte->primary.cells) {
+    if (vte->alternate.cells) {
       screen_copy_alternate(&new, &vte->alternate);
-      screen_destroy(&vte->alternate);
     }
+    screen_destroy(&vte->alternate);
     vte->alternate = new;
   }
 }
@@ -515,8 +515,8 @@ static void vte_init_primary_screen(struct vte *vte) {
     screen_initialize(&new, vte->ws.w,  vte->ws.h);
     if (vte->primary.cells) {
       screen_copy_primary(&new, &vte->primary);
-      screen_destroy(&vte->primary);
     }
+    screen_destroy(&vte->primary);
     vte->primary = new;
   }
 }
@@ -586,6 +586,7 @@ void vte_destroy(struct vte *vte) {
   string_destroy(&vte->command_buffer);
   string_destroy(&vte->osc.title);
   string_destroy(&vte->osc.icon);
+  vec_destroy(&vte->options.kitty.stack);
 }
 
 struct screen *vte_get_current_screen(struct vte *vte) {
