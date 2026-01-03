@@ -127,7 +127,7 @@ static struct velvet_input velvet_input_default = {
     .options =
         {
             .focus_follows_mouse = true,
-            .key_chain_timeout_ms = 500,
+            .key_chain_timeout_ms = 2000,
             .key_repeat_timeout_ms = 500,
         },
 };

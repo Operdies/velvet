@@ -407,7 +407,46 @@ static void draw_status(struct velvet *v) {
 
     string_push_format_slow(&buf, " %d ", i + 1);
   }
+
   string_push_bg(&buf, t.mantle);
+  string_push_fg(&buf, t.foreground);
+
+  struct velvet_key_event pending[10] = {0};
+  int n_pending = 0;
+  struct velvet_keymap *k = v->input.keymap;
+  while (k && n_pending < LENGTH(pending)) {
+    if (k == k->root) break;
+    pending[n_pending++] = k->key;
+    k = k->parent;
+  }
+
+  if (n_pending) {
+    string_push_cstr(&buf, "  ");
+    string_push_bg(&buf, t.background);
+    string_push_cstr(&buf, " ");
+    for (int i = 0; i < n_pending; i++) {
+      struct velvet_key_event e = pending[n_pending - i - 1];
+      if (e.modifiers) string_push_cstr(&buf, "<");
+      if (e.modifiers & MODIFIER_SHIFT) string_push_cstr(&buf, "S-");
+      if (e.modifiers & MODIFIER_ALT) string_push_cstr(&buf, "M-");
+      if (e.modifiers & MODIFIER_CTRL) string_push_cstr(&buf, "C-");
+      if (e.modifiers & MODIFIER_SUPER) string_push_cstr(&buf, "D-");
+
+      if (e.key.name) {
+        string_push_cstr(&buf, e.key.name);
+      } else if (e.key.codepoint) {
+        struct utf8 u = {0};
+        int n = codepoint_to_utf8(e.key.codepoint, &u);
+        string_push_range(&buf, u.utf8, n);
+      }
+
+      if (e.modifiers) string_push_cstr(&buf, ">");
+    }
+    string_push_cstr(&buf, " ");
+  }
+  string_push_bg(&buf, t.mantle);
+
+
   vte_process(&status->emulator, string_as_u8_slice(buf));
 }
 
