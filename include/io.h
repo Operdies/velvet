@@ -41,7 +41,6 @@ struct io_schedule {
 
 struct io {
   struct vec /* io_source */ sources;
-  struct vec /* pollfd */ pollfds;
   struct vec /* scheduled callbacks */ scheduled_actions;
   /* callbacks invoked when there is no io activity */
   struct vec /* idle callbacks */ idle_schedule;
@@ -50,11 +49,11 @@ struct io {
   int max_iterations;
   /* how many ms without activity is considered idle */
   int idle_timeout_ms;
+  void *backend;
 };
 
 static const struct io io_default = {
     .sources = vec(struct io_source),
-    .pollfds = vec(struct pollfd),
     .scheduled_actions = vec(struct io_schedule),
     .idle_schedule = vec(struct io_schedule),
     .max_iterations = mB(1) / sizeof(io_default.buffer),
