@@ -193,6 +193,7 @@ struct velvet_window_hit {
   enum velvet_window_hit_location where;
 };
 
+bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w);
 struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, uint64_t id);
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data);
 void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask);

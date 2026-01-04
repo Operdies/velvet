@@ -48,15 +48,22 @@ struct velvet_keymap_deferred_action {
   struct velvet_key_event key;
 };
 
+enum velvet_input_drag_event_type {
+  DRAG_MOVE,
+  DRAG_RESIZE,
+};
+
 struct velvet_input_drag_event {
   struct {
     /* the initial position of the mosue */
     int x, y;
     /* the initial position of the dragged client */
-    int client_x, client_y;
+    struct rect win;
   } drag_start;
   /* the id of the client being dragged */
   uint64_t id;
+  enum velvet_window_hit_location loc;
+  enum velvet_input_drag_event_type type;
 };
 
 struct velvet_input {

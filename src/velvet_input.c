@@ -45,7 +45,7 @@ static void send_byte(struct velvet *v, uint8_t ch) {
   send_bytes(v, ch);
 }
 
-static bool get_named_key_by_name(char *name, struct velvet_key *key) {
+static bool find_key(char *name, struct velvet_key *key) {
   assert(key);
   for (int i = 0; i < LENGTH(named_keys); i++) {
     struct velvet_key n = named_keys[i];
@@ -63,7 +63,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   // special case for <C-Space>
   if (cp == 0) {
     struct velvet_key_event e = { .modifiers = MODIFIER_CTRL };
-    get_named_key_by_name("space", &e.key);
+    find_key("space", &e.key);
     return e;
   }
 
@@ -184,7 +184,7 @@ static bool skip_non_tiled(struct velvet_window *w, void *) {
   return w->layer != VELVET_LAYER_TILED || w->dragging;
 }
 
-static void handle_border_drag(struct velvet *v, struct mouse_sgr sgr, struct velvet_window_hit hit) {
+static void dispatch_border_drag(struct velvet *v, struct mouse_sgr sgr, struct velvet_window_hit hit) {
   struct velvet_input *in = &v->input;
   struct velvet_window *drag = nullptr;
   if (in->dragging.id) {
@@ -197,26 +197,35 @@ static void handle_border_drag(struct velvet *v, struct mouse_sgr sgr, struct ve
 
   if (!drag) drag = hit.win;
   assert(drag);
-  if (sgr.event_type == mouse_click && sgr.trigger == mouse_down && (hit.where & VELVET_HIT_TITLE)) {
+  if (sgr.event_type == mouse_click && sgr.trigger == mouse_down && (hit.where & VELVET_HIT_BORDER)) {
     in->dragging = (struct velvet_input_drag_event){
         .id = drag->id,
-        .drag_start.x = sgr.column,
-        .drag_start.y = sgr.row,
-        .drag_start.client_x = drag->rect.window.x,
-        .drag_start.client_y = drag->rect.window.y,
+        .drag_start =
+            {
+                .x = sgr.column,
+                .y = sgr.row,
+                .win = drag->rect.window,
+            },
+        .type = (hit.where & VELVET_HIT_TITLE) ? DRAG_MOVE : DRAG_RESIZE,
+        .loc = hit.where,
     };
     drag->dragging = true;
+    if (in->dragging.type == DRAG_MOVE && drag->layer == VELVET_LAYER_TILED) {
+      struct rect new_size = drag->rect.window;
+      new_size.h = v->scene.ws.h / 2;
+      new_size.w = v->scene.ws.w / 2;
+      velvet_window_resize(drag, new_size);
+    }
     drag->layer = VELVET_LAYER_FLOATING;
-    struct rect new_size = drag->rect.window;
-    new_size.h = v->scene.ws.h / 2;
-    new_size.w = v->scene.ws.w / 2;
-    velvet_window_resize(drag, new_size);
     velvet_scene_set_focus(&v->scene, drag);
   } else if (sgr.event_type == mouse_click && sgr.trigger == mouse_up) {
     /* drop */
     drag->dragging = false;
+    if (!velvet_window_visible(&v->scene, drag)) drag->tags = v->scene.view;
+
+    bool is_drag_move = in->dragging.type == DRAG_MOVE;
     in->dragging = (struct velvet_input_drag_event){0};
-    if (sgr.modifiers & modifier_alt) {
+    if (is_drag_move && sgr.modifiers & modifier_alt) {
       struct velvet_window_hit drop_hit = {0};
       velvet_scene_hit(&v->scene, sgr.column - 1, sgr.row - 1, &drop_hit, skip_non_tiled, nullptr);
       struct velvet_window *drop_target = drop_hit.win;
@@ -238,92 +247,34 @@ static void handle_border_drag(struct velvet *v, struct mouse_sgr sgr, struct ve
       }
     }
   } else if (in->dragging.id && (sgr.event_type & mouse_move)) {
+    struct rect w = in->dragging.drag_start.win;
     int delta_x = sgr.column - in->dragging.drag_start.x;
     int delta_y = sgr.row - in->dragging.drag_start.y;
-    int adj_x = drag->rect.window.x - in->dragging.drag_start.client_x;
-    int adj_y = drag->rect.window.y - in->dragging.drag_start.client_y;
-    delta_x -= adj_x;
-    delta_y -= adj_y;
-    drag->rect.window.x += delta_x;
-    drag->rect.client.x += delta_x;
-    drag->rect.window.y += delta_y;
-    drag->rect.client.y += delta_y;
-    velvet_log("Border drag: %d,%d", delta_x, delta_y);
-  }
-}
 
-static void send_csi_mouse(struct velvet *v, struct csi c) {
-  struct velvet_input *in = &v->input;
-  struct mouse_sgr sgr = mouse_sgr_from_csi(c);
-  struct velvet_window_hit hit = {0};
-  velvet_scene_hit(&v->scene, sgr.column - 1, sgr.row - 1, &hit, nullptr, nullptr);
-  struct velvet_window *target = hit.win;
-
-  if (!v->input.dragging.id) {
-    if ((v->input.options.focus_follows_mouse || sgr.event_type == mouse_click) && hit.win) {
-      velvet_scene_set_focus(&v->scene, hit.win);
+    enum velvet_window_hit_location h = in->dragging.loc;
+    if (h & VELVET_HIT_TITLE) {
+      /* drag move */
+      w.x += delta_x;
+      w.y += delta_y;
+    } else if (h & VELVET_HIT_BORDER) {
+      /* drag resize */
+      h &= ~VELVET_HIT_BORDER;
+      if (h & VELVET_HIT_BORDER_TOP) {
+        w.y += delta_y;
+        w.h -= delta_y;
+      }
+      if (h & VELVET_HIT_BORDER_BOTTOM) {
+        w.h += delta_y;
+      }
+      if (h & VELVET_HIT_BORDER_LEFT) {
+        w.x += delta_x;
+        w.w -= delta_x;
+      }
+      if (h & VELVET_HIT_BORDER_RIGHT) {
+        w.w += delta_x;
+      }
     }
-  }
-
-  if (in->dragging.id || (hit.where & VELVET_HIT_BORDER)) {
-    handle_border_drag(v, sgr, hit);
-    return;
-  }
-
-  if (!target) return;
-
-  struct mouse_sgr trans = sgr;
-  trans.row = sgr.row - target->rect.client.y;
-  trans.column = sgr.column - target->rect.client.x;
-
-  struct mouse_options m = target->emulator.options.mouse;
-
-  bool do_send =
-      (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
-      ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
-       sgr.event_type == mouse_click) ||
-      (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none) ||
-      (m.tracking && sgr.event_type == mouse_scroll);
-
-  if (!(trans.row > 0 && trans.column > 0 && trans.column <= target->rect.client.w &&
-        trans.row <= target->rect.client.h)) {
-    /* verify the event is actually within the client area */
-    do_send = false;
-  }
-
-  if (do_send) {
-    send_mouse_sgr(target, trans);
-  } else if (sgr.event_type == mouse_scroll && target->emulator.options.alternate_screen) {
-    struct velvet_key k = {0};
-    /* In the absence of mouse tracking,
-     * scroll up/down is treated as arrow keys in the alternate screen
-     * Deliberately don't process this key in any keymaps.
-     * Mappings related to scrolling should be handled by sequences such as '<S-M-ScrollWheelUp>'
-     */
-    if (sgr.scroll_direction == scroll_up) {
-      /* NOTE: When kitty keyhandling is enabled, kitty encodes scrolling
-       * as successive key press and key release events using the kitty protocol encoding,
-       * whereas ghostty and alacritty uses the same encoding regardless of kitty protocol settings.
-       * I don't think it matters much so we just do what's easiest.
-       */
-      get_named_key_by_name("SS3_UP", &k);
-      struct velvet_key_event e = { .key = k, .type = KEY_PRESS };
-      velvet_input_send_vk(v, e);
-    } else if (sgr.scroll_direction == scroll_down) {
-      get_named_key_by_name("SS3_DOWN", &k);
-      struct velvet_key_event e = { .key = k, .type = KEY_PRESS };
-      velvet_input_send_vk(v, e);
-    }
-  } else if (sgr.event_type == mouse_scroll && !target->emulator.options.alternate_screen) {
-    struct screen *screen = vte_get_current_screen(&target->emulator);
-    /* in the primary screen, scrolling affects the current view */
-    int current_offset = screen_get_scroll_offset(screen);
-    if (sgr.scroll_direction == scroll_up) {
-      int num_lines = screen_get_scroll_height(screen);
-      screen_set_scroll_offset(screen, MIN(num_lines, current_offset + 1));
-    } else if (sgr.scroll_direction == scroll_down) {
-      screen_set_scroll_offset(screen, MAX(0, current_offset - 1));
-    }
+    velvet_window_resize(drag, w);
   }
 }
 
@@ -933,7 +884,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
     struct velvet_key_event k = { 0 };
-    get_named_key_by_name("ESCAPE", &k.key);
+    find_key("ESCAPE", &k.key);
     dispatch_key_event(v, k);
   }
 }
@@ -953,7 +904,79 @@ void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c) {
   dispatch_focus(v, c);
 }
 void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
-  send_csi_mouse(v, c);
+  struct velvet_input *in = &v->input;
+  struct mouse_sgr sgr = mouse_sgr_from_csi(c);
+  struct velvet_window_hit hit = {0};
+  velvet_scene_hit(&v->scene, sgr.column - 1, sgr.row - 1, &hit, nullptr, nullptr);
+  struct velvet_window *target = hit.win;
+
+  if (!v->input.dragging.id) {
+    if ((v->input.options.focus_follows_mouse || sgr.event_type == mouse_click) && hit.win) {
+      velvet_scene_set_focus(&v->scene, hit.win);
+    }
+  }
+
+  if (in->dragging.id || (hit.where & VELVET_HIT_BORDER)) {
+    dispatch_border_drag(v, sgr, hit);
+    return;
+  }
+
+  if (!target) return;
+
+  struct mouse_sgr trans = sgr;
+  trans.row = sgr.row - target->rect.client.y;
+  trans.column = sgr.column - target->rect.client.x;
+
+  struct mouse_options m = target->emulator.options.mouse;
+
+  bool do_send =
+      (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
+      ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
+       sgr.event_type == mouse_click) ||
+      (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none) ||
+      (m.tracking && sgr.event_type == mouse_scroll);
+
+  if (!(trans.row > 0 && trans.column > 0 && trans.column <= target->rect.client.w &&
+        trans.row <= target->rect.client.h)) {
+    /* verify the event is actually within the client area */
+    do_send = false;
+  }
+
+  if (do_send) {
+    send_mouse_sgr(target, trans);
+    return;
+  }
+
+  if (sgr.event_type != mouse_scroll) return;
+
+  if (target->emulator.options.alternate_screen) {
+    struct velvet_key k = {0};
+    /* In the absence of mouse tracking, scroll up/down is treated as arrow keys in the alternate screen */
+    if (sgr.scroll_direction == scroll_up) {
+      /* NOTE: When kitty keyhandling is enabled, kitty encodes scrolling
+       * as successive key press and key release events using the kitty protocol encoding,
+       * whereas ghostty and alacritty uses the same encoding regardless of kitty protocol settings.
+       * I don't think it matters much so we just do what's easiest.
+       */
+      find_key("SS3_UP", &k);
+      struct velvet_key_event e = {.key = k, .type = KEY_PRESS};
+      velvet_input_send_vk(v, e);
+    } else if (sgr.scroll_direction == scroll_down) {
+      find_key("SS3_DOWN", &k);
+      struct velvet_key_event e = {.key = k, .type = KEY_PRESS};
+      velvet_input_send_vk(v, e);
+    }
+  } else {
+    struct screen *screen = vte_get_current_screen(&target->emulator);
+    /* in the primary screen, scrolling affects the current view */
+    int current_offset = screen_get_scroll_offset(screen);
+    if (sgr.scroll_direction == scroll_up) {
+      int num_lines = screen_get_scroll_height(screen);
+      screen_set_scroll_offset(screen, MIN(num_lines, current_offset + 1));
+    } else if (sgr.scroll_direction == scroll_down) {
+      screen_set_scroll_offset(screen, MAX(0, current_offset - 1));
+    }
+  }
 }
 
 static void velvet_keymap_remove_internal(struct velvet_keymap *const k) {

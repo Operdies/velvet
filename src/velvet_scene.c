@@ -27,7 +27,7 @@ static bool managed(struct velvet_window *w) {
   return w->layer == VELVET_LAYER_FLOATING || w->layer == VELVET_LAYER_TILED;
 }
 
-static bool visible(struct velvet_scene *m, struct velvet_window *w) {
+bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w) {
   if (!managed(w)) return true;
   return m->view & w->tags;
 }
@@ -75,13 +75,13 @@ static void velvet_window_notify_focus(struct velvet_window *host, bool focus) {
 static void ensure_focus_visible(struct velvet_scene *m) {
   struct velvet_window *current = velvet_scene_get_focus(m);
   if (!current) return;
-  if (!visible(m, current)) {
+  if (!velvet_window_visible(m, current)) {
     uint64_t *f;
     struct velvet_window *focus;
     vec_foreach(f, m->focus_order) {
       vec_find(focus, m->windows, focus->id == *f);
       assert(focus && managed(focus));
-      if (visible(m, focus)) {
+      if (velvet_window_visible(m, focus)) {
         velvet_scene_set_focus(m, focus);
         return;
       }
@@ -135,7 +135,7 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
   }
 
   n_tiled = 0;
-  vec_where(win, scene->windows, win->layer == VELVET_LAYER_TILED && visible(scene, win)) n_tiled++;
+  vec_where(win, scene->windows, win->layer == VELVET_LAYER_TILED && velvet_window_visible(scene, win)) n_tiled++;
 
   idx = master_y = stack_y = 0;
   n_master_items = n_tiled > nmaster ? nmaster : n_tiled;
@@ -170,7 +170,7 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
   int stack_height_left = lines - status_height;
   int stack_items_left = n_stack_items;
 
-  vec_where(win, scene->windows, visible(scene, win) && win->layer == VELVET_LAYER_TILED) {
+  vec_where(win, scene->windows, velvet_window_visible(scene, win) && win->layer == VELVET_LAYER_TILED) {
     if (idx < nmaster) {
       int height = (float)master_height_left / master_items_left;
       struct rect region = rect_carve(scene->ws, 0, master_y, master_width, height);
@@ -189,7 +189,7 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
     idx++;
   }
 
-  vec_where(win, scene->windows, visible(scene, win) && win->layer == VELVET_LAYER_FLOATING) {
+  vec_where(win, scene->windows, velvet_window_visible(scene, win) && win->layer == VELVET_LAYER_FLOATING) {
     /* update changes to border size */
     struct rect region = win->rect.window;
     /* ensure floating windows are not lost off screen e.g. after a resize */
@@ -241,11 +241,11 @@ struct velvet_window *velvet_scene_get_next(struct velvet_scene *m, struct velve
   int index = start + 1;
   for (; index < (int)m->windows.length; index++) {
     p = vec_nth(m->windows, index);
-    if (managed(p) && visible(m, p)) return p;
+    if (managed(p) && velvet_window_visible(m, p)) return p;
   }
   for (index = 0; index < start; index++) {
     p = vec_nth(m->windows, index);
-    if (managed(p) && visible(m, p)) return p;
+    if (managed(p) && velvet_window_visible(m, p)) return p;
   }
   return w;
 }
@@ -257,11 +257,11 @@ struct velvet_window *velvet_scene_get_previous(struct velvet_scene *m, struct v
   int index = start - 1;
   for (; index >= 0; index--) {
     p = vec_nth(m->windows, index);
-    if (managed(p) && visible(m, p)) return p;
+    if (managed(p) && velvet_window_visible(m, p)) return p;
   }
   for (index = m->windows.length - 1; index > start; index--) {
     p = vec_nth(m->windows, index);
-    if (managed(p) && visible(m, p)) return p;
+    if (managed(p) && velvet_window_visible(m, p)) return p;
   }
   return w;
 }
@@ -718,10 +718,12 @@ static struct codepoint codepoint_from_cstr(char *src) {
 static void velvet_render_calculate_borders(struct velvet_scene *m, struct velvet_window *host) {
   static const int hard = 0;
   static const int rounded = 1;
-  int style = host->layer == VELVET_LAYER_TILED ? hard : rounded;
-  char *borders[2][4] = {
+  static const int dragging = 2;
+  int style = host->dragging ? dragging : host->layer == VELVET_LAYER_TILED ? hard : rounded;
+  char *borders[3][4] = {
       {"┌", "┘", "┐", "└"},
       {"╭", "╯", "╮", "╰"},
+      {"╔", "╝", "╗", "╚"},
   };
 
   struct velvet_render *r = &m->renderer;
@@ -954,7 +956,7 @@ bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_wi
     vec_foreach(winid, scene->focus_order) {
       h = velvet_scene_get_window_from_id(scene, *winid);
       if (h->layer != layer) continue;
-      if (!visible(scene, h)) continue;
+      if (!velvet_window_visible(scene, h)) continue;
       if (skip && skip(h, data)) continue;
 
       if (rect_contains(h->rect.client, x, y)) {
@@ -1049,7 +1051,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       if (win->layer != layer) continue;
       if (win->dragging) continue;
       if (!managed(win)) continue;
-      if (!visible(m, win)) continue;
+      if (!velvet_window_visible(m, win)) continue;
       /* the order doesn't matter here, but we draw borders first to make errors more visible */
       velvet_scene_stage_and_commit_window(m, win);
     }
