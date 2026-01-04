@@ -426,7 +426,7 @@ static void draw_status(struct velvet *v) {
     string_push_cstr(&buf, " ");
     for (int i = 0; i < n_pending; i++) {
       struct velvet_key_event e = pending[n_pending - i - 1];
-      if (e.modifiers) string_push_cstr(&buf, "<");
+      if (e.modifiers || e.key.name) string_push_cstr(&buf, "<");
       if (e.modifiers & MODIFIER_SHIFT) string_push_cstr(&buf, "S-");
       if (e.modifiers & MODIFIER_ALT) string_push_cstr(&buf, "M-");
       if (e.modifiers & MODIFIER_CTRL) string_push_cstr(&buf, "C-");
@@ -440,7 +440,7 @@ static void draw_status(struct velvet *v) {
         string_push_range(&buf, u.utf8, n);
       }
 
-      if (e.modifiers) string_push_cstr(&buf, ">");
+      if (e.modifiers || e.key.name) string_push_cstr(&buf, ">");
     }
     string_push_cstr(&buf, " ");
   }
