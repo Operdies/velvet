@@ -204,7 +204,6 @@ static void dispatch_border_drag(struct velvet *v, struct mouse_sgr sgr, struct 
             {
                 .x = sgr.column,
                 .y = sgr.row,
-                .win = drag->rect.window,
             },
         .type = (hit.where & VELVET_HIT_TITLE) ? DRAG_MOVE : DRAG_RESIZE,
         .loc = hit.where,
@@ -216,6 +215,7 @@ static void dispatch_border_drag(struct velvet *v, struct mouse_sgr sgr, struct 
       new_size.w = v->scene.ws.w / 2;
       velvet_window_resize(drag, new_size);
     }
+    in->dragging.drag_start.win = drag->rect.window;
     drag->layer = VELVET_LAYER_FLOATING;
     velvet_scene_set_focus(&v->scene, drag);
   } else if (sgr.event_type == mouse_click && sgr.trigger == mouse_up) {
