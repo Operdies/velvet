@@ -75,17 +75,20 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
     cp = cp + 96;
   }
 
-  bool isshift = cp >= 'A' && cp <= 'Z';
-  if (isshift) {
-    k.key.alternate_codepoint = cp;
-    cp = cp + 32;
-  }
-
-  if (!isshift) {
-    isshift = (cp < LENGTH(VELVET_SHIFT_TABLE)) && VELVET_SHIFT_TABLE[cp];
+  bool isshift= false;
+  if (!iscntrl) {
+    isshift = cp >= 'A' && cp <= 'Z';
     if (isshift) {
       k.key.alternate_codepoint = cp;
-      cp = VELVET_SHIFT_TABLE[cp];
+      cp = cp + 32;
+    }
+
+    if (!isshift) {
+      isshift = (cp < LENGTH(VELVET_SHIFT_TABLE)) && VELVET_SHIFT_TABLE[cp];
+      if (isshift) {
+        k.key.alternate_codepoint = cp;
+        cp = VELVET_SHIFT_TABLE[cp];
+      }
     }
   }
 
@@ -349,7 +352,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
         for (int i = 0; i < LENGTH(named_keys); i++) {
           struct velvet_key k = named_keys[i];
           if (k.escape && u8_slice_equals(raw, u8_slice_from_cstr(k.escape))) {
-            struct velvet_key_event evt = {.key = k};
+            struct velvet_key_event evt = {.key = k, .legacy = true};
             dispatch_key_event(v, evt);
             break;
           }
@@ -661,7 +664,7 @@ static void dispatch_app(struct velvet *v, uint8_t ch) {
     if (!n.escape) continue;
     struct u8_slice key_escape = u8_slice_from_cstr(n.escape);
     if (u8_slice_equals(key, key_escape)) {
-      struct velvet_key_event e = { .key = n };
+      struct velvet_key_event e = { .key = n, .legacy = true };
       dispatch_key_event(v, e);
       found = true;
     }
@@ -687,6 +690,7 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
      * treat ESC as both. */
     k.modifiers |= MODIFIER_ALT;
     k.modifiers |= MODIFIER_META;
+    k.legacy = true;
     dispatch_key_event(v, k);
   }
 }
@@ -838,7 +842,7 @@ static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
   if (!f) return;
 
   enum kitty_keyboard_options o = f->emulator.options.kitty[f->emulator.options.alternate_screen].options;
-  if (o == KITTY_KEYBOARD_NONE) {
+  if (o == KITTY_KEYBOARD_NONE || e.legacy) {
     if (e.type != KEY_RELEASE) {
       if (!is_modifier(e.key.codepoint)) {
         velvet_input_send_vk_basic(v, e.key, e.modifiers);
@@ -865,6 +869,7 @@ static void dispatch_normal(struct velvet *v, uint8_t ch) {
   }
 
   struct velvet_key_event key = key_event_from_codepoint(ch);
+  key.legacy = true;
   dispatch_key_event(v, key);
   assert(v->input.keymap);
 }

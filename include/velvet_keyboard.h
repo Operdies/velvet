@@ -49,6 +49,9 @@ struct velvet_key_event {
     uint32_t codepoints[2];
     int n;
   } associated_text;
+  /* set to true if the key was not obtained through a kitty escape sequence.
+   * In this case, we should send it as a basic key.*/
+  bool legacy;
   /* set if the mapping was removed. If removed is set, no other fields will be set. */
   bool removed;
 };
