@@ -68,7 +68,9 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   }
 
   struct velvet_key_event k = {0};
-  bool iscntrl = CTRL(cp) == cp;
+
+         
+  bool iscntrl = CTRL(cp) == cp && !((cp == '\t' || cp == '\r' || cp == '\b' || cp == ESC));
   if (iscntrl) {
     cp = cp + 96;
   }
