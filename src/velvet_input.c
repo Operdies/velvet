@@ -1137,8 +1137,9 @@ static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
 void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence) {
   struct velvet_key_iterator it = { .src = key_sequence };
   struct velvet_keymap *to_remove = root;
-  for (; velvet_key_iterator_next(&it); ) {
-    for (to_remove = to_remove->first_child; to_remove && !key_event_equals(to_remove->key, it.current); to_remove = to_remove->next_sibling);
+  for (; to_remove && velvet_key_iterator_next(&it);) {
+    for (to_remove = to_remove->first_child; to_remove && !key_event_equals(to_remove->key, it.current);
+         to_remove = to_remove->next_sibling);
   }
   if (to_remove) velvet_keymap_remove_internal(to_remove);
 }
