@@ -57,7 +57,7 @@ static const struct io io_default = {
     .pollfds = vec(struct pollfd),
     .scheduled_actions = vec(struct io_schedule),
     .idle_schedule = vec(struct io_schedule),
-    .max_iterations = mB(1) / sizeof(io_default.buffer),
+    .max_iterations = 100,
     .idle_timeout_ms = 2,
 };
 

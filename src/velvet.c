@@ -280,15 +280,22 @@ static void on_window_writable(struct io_source *src) {
   if (win->emulator.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(win->emulator.pending_input));
     if (written > 0) string_shift_left(&win->emulator.pending_input, (size_t)written);
+    else if (written == 0) velvet_scene_remove_exited(v);
   }
+  if (win->emulator.pending_input.len == 0) 
+    src->events &= ~IO_SOURCE_POLLOUT;
 }
 
 static void on_window_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
-  struct velvet_window *vte;
-  vec_find(vte, v->scene.windows, vte->pty == src->fd);
-  assert(vte);
-  velvet_window_process_output(vte, str);
+  if (str.len) {
+    struct velvet_window *vte;
+    vec_find(vte, v->scene.windows, vte->pty == src->fd);
+    assert(vte);
+    velvet_window_process_output(vte, str);
+  } else {
+    velvet_scene_remove_exited(v);
+  }
 }
 
 static void velvet_default_config(struct velvet *v) {

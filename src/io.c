@@ -97,7 +97,6 @@ int io_dispatch(struct io *io) {
     struct io_source *src = vec_nth(io->sources, i);
     assert((pfd->revents & POLLNVAL) == 0);
     for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < io->max_iterations; repeats++) {
-      const int poll_ms = 0;
       // Read output
       if ((pfd->revents & POLLIN) && src->on_readable) {
         src->on_readable(src);
@@ -135,7 +134,8 @@ int io_dispatch(struct io *io) {
         break;
       }
       pfd->revents = 0;
-      int poll_ret = poll(pfd, 1, poll_ms);
+      pfd->events = src->events;
+      int poll_ret = poll(pfd, 1, 0);
       if (poll_ret < 1) break;
     }
   }
