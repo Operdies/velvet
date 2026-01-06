@@ -944,6 +944,13 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         above.style.bg = rgb_mult(above.style.bg, o.dim);
         above.style.fg = rgb_mult(above.style.fg, o.dim);
       }
+
+      int column = i % r->w;
+      /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
+       * and this character is not a space. */
+      if (above.cp.value != ' ' && column && composite->cells[i - 1].cp.is_wide) 
+        composite->cells[i - 1].cp = codepoint_space;
+
       composite->cells[i] = above;
       staging->cells[i] = empty;
     }
