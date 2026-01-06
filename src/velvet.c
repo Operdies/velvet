@@ -18,6 +18,7 @@ static void velvet_session_render(struct u8_slice str, void *context) {
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
   if (s->input) close(s->input);
   if (s->output) close(s->output);
+  if (s->socket) close(s->socket);
   string_destroy(&s->pending_output);
   string_destroy(&s->commands.buffer);
   string_destroy(&s->cwd);
@@ -570,8 +571,9 @@ void velvet_destroy(struct velvet *velvet) {
   io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input);
-  struct velvet_session *s;
-  vec_foreach(s, velvet->sessions) velvet_session_destroy(velvet, s);
+  while (velvet->sessions.length) {
+    velvet_session_destroy(velvet, vec_nth(velvet->sessions, 0));
+  }
   vec_destroy(&velvet->sessions);
 }
 
