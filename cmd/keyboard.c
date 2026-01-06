@@ -90,12 +90,14 @@ static void draw_keyboard() {
 
 bool quit = false;
 void on_signal(int sig) {
+  (void)sig;
   terminal_reset();
   quit = true;
   // exit(0);
 }
 
 void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
+  (void)k;
   char *highlight = e.type == KEY_RELEASE ? nullptr : "\x1b[7m";
 
   for (int i = 0; i < 6; i++) {
@@ -126,6 +128,8 @@ void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
 }
 
 static void quit_keybind(struct velvet_keymap *k, struct velvet_key_event e) {
+  (void)k;
+  (void)e;
   quit = true;
 }
 

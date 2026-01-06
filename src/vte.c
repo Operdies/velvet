@@ -399,7 +399,7 @@ static void vte_dispatch_csi(struct vte *vte, uint8_t ch) {
     if (csi.state == CSI_ACCEPT) {
       csi_dispatch(vte, &csi);
     } else {
-      velvet_log("Reject CSI: %.*s", csi_body.len, csi_body.content);
+      velvet_log("Reject CSI: %.*s", (int)csi_body.len, csi_body.content);
     }
     vte->state = vte_ground;
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
@@ -433,6 +433,7 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
 }
 
 static bool dispatch_graphics(struct vte *vte, struct u8_slice cmd) {
+  (void)vte, (void)cmd;
   return true;
 }
 

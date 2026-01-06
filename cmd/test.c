@@ -138,12 +138,6 @@ static void fail() {
   if (exit_on_failure) __builtin_trap();
 }
 
-static void assert_ge(int actual, int expected, const char *test_name, const char *msg) {
-  if (actual > expected) return;
-  printf("Assertion failed: %d > %d (%s: %s)\n", actual, expected, test_name, msg);
-  fail();
-}
-
 static void assert_eq(int actual, int expected, const char *test_name, const char *msg) {
   if (actual == expected) return;
   printf("Assertion failed: %d == %d (%s: %s)\n", actual, expected, test_name, msg);

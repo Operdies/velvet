@@ -308,7 +308,7 @@ bool csi_dispatch(struct vte *vte, struct csi *csi) {
     if (csi->params[i].primary < 0) {
       // The parser accepts negative parameter values because some very specific input CSIs
       // can be negative. No CSI commands I am aware of support it, so we should reject such requests immediately.
-      velvet_log("Negative csi encountered: %.*s", vte->command_buffer.len, vte->command_buffer.content);
+      velvet_log("Negative csi encountered: %.*s", (int)vte->command_buffer.len, vte->command_buffer.content);
       return false;
     }
   }
@@ -724,7 +724,7 @@ static bool DECRST(struct vte *vte, struct csi *csi) { return DECSET(vte, csi); 
 static bool SGR(struct vte *vte, struct csi *csi) {
   char *error = csi_apply_sgr_from_params(&vte_get_current_screen(vte)->cursor.brush, csi->n_params, csi->params);
   if (error) {
-    velvet_log("Error parsing SGR: %.*s: %s", vte->command_buffer.len - 1, vte->command_buffer.content + 1, error);
+    velvet_log("Error parsing SGR: %.*s: %s", (int)vte->command_buffer.len - 1, vte->command_buffer.content + 1, error);
     return false;
   }
 
@@ -789,6 +789,7 @@ bool DECCARA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DEC
 bool DECSLRM(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECSLRM"); return false; }
 
 static bool XTMODKEYS(struct vte *vte, struct csi *csi) {
+  (void)vte, (void)csi;
   velvet_log("TODO: XTMODKEYS");
   return true;
 }

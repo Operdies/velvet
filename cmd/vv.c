@@ -502,6 +502,7 @@ struct vv_attach_context {
 };
 
 static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
+  (void)src;
   io_write(STDOUT_FILENO, str);
 }
 

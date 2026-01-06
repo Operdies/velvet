@@ -149,7 +149,6 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
    * A common interface to change settings is fine, but mixing all three in a huge if-else is not great */
 
   struct velvet_session *focus = velvet_get_focused_session(v);
-  struct velvet_window *win = velvet_scene_get_focus(&v->scene);
 
   int digit = 0;
   bool is_digit = u8_slice_digit(value, &digit);

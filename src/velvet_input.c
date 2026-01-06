@@ -102,37 +102,10 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   return k;
 }
 
-static void send_csi_todo(struct velvet *v) {
-  struct velvet_input *in = &v->input;
-  TODO("Input CSI: %.*s", (int)in->command_buffer.len, in->command_buffer.content);
-  string_clear(&v->input.command_buffer);
-}
-
 static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c);
 static void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c);
 static void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c);
 static void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c);
-
-static void mouse_debug_logging(struct mouse_sgr sgr) {
-  char *mousebuttons[] = {"left", "middle", "right", "none"};
-  char *mousebutton = mousebuttons[sgr.button_state];
-  char *scrolldirs[] = {"up", "down", "left", "right"};
-  char *scrolldir = scrolldirs[sgr.scroll_direction];
-  char *eventname = sgr.event_type & mouse_scroll ? "scroll"
-                    : sgr.event_type & mouse_move ? "move"
-                    : sgr.trigger == mouse_down   ? "click"
-                                                  : "release";
-
-  velvet_log("shift=%d,alt=%d,ctrl=%d",
-         !!(sgr.modifiers & modifier_shift),
-         !!(sgr.modifiers & modifier_alt),
-         !!(sgr.modifiers & modifier_ctrl));
-  switch (sgr.event_type) {
-  case mouse_click: velvet_log("%s %s at %d;%d", eventname, mousebutton, sgr.row, sgr.column); break;
-  case mouse_move: velvet_log("%s at %d;%d", eventname, sgr.row, sgr.column); break;
-  case mouse_scroll: velvet_log("%s %s %d;%d", eventname, scrolldir, sgr.row, sgr.column); break;
-  }
-}
 
 static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
   int btn = c.params[0].primary;
@@ -180,10 +153,6 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
 }
 
 static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e);
-
-static bool skip_dragging(struct velvet_window *w, void *) {
-  return w->dragging;
-}
 
 static bool skip_non_tiled(struct velvet_window *w, void *) {
   return w->layer != VELVET_LAYER_TILED || w->dragging;
@@ -407,14 +376,6 @@ void velvet_input_unwind(struct velvet *v) {
 void input_unwind_callback(void *data) {
   struct velvet *v = data;
   velvet_input_unwind(v);
-}
-
-static bool keymap_has_mapping(struct velvet_keymap *k) {
-  struct velvet_keymap *root = k->root;
-  for (; k && k != root; k = k->parent) {
-    if (k->on_key) return true;
-  }
-  return false;
 }
 
 /* keys such as altgr */
@@ -726,14 +687,6 @@ static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, e
       }
     }
   }
-}
-
-static bool is_private_use(uint32_t codepoint) {
-  return codepoint >= 57344 && codepoint <= 63743;
-}
-
-static bool isdigit(uint8_t ch) {
-  return ch >= '0' && ch <= '9';
 }
 
 static bool is_keypad(struct velvet_key k) {
@@ -1060,10 +1013,6 @@ struct velvet_key_iterator {
   struct u8_slice current_range;
   bool invalid;
 };
-
-static bool is_whitespace(char ch) {
-  return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v';
-}
 
 static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
   struct u8_slice t = it->src;

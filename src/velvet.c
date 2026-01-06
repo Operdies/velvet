@@ -378,7 +378,6 @@ static void string_push_fg(struct string *str, struct color rgb) {
 }
 
 static uint64_t status_winid = 1;
-static uint64_t bg_winid = 2;
 
 static bool occupied(struct velvet_scene *s, uint32_t tag) {
   struct velvet_window *w;
@@ -491,7 +490,7 @@ void velvet_loop(struct velvet *velvet) {
   start_default_shell(velvet);
 
   {
-    /* create status and background windows */
+    /* create status window */
     struct velvet_window status = {.id = status_winid, .layer = VELVET_LAYER_STATUS};
     status.emulator.options.alternate_screen = true;
     velvet_scene_manage(&velvet->scene, status);
