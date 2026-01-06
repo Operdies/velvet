@@ -26,7 +26,7 @@ BUILD ?= debug
 RELEASE_TARGET ?= release
 PROFILE_TARGET ?= profile
 RELEASE_LTO_TARGET ?= release_lto
-INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences
+INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps
 OUT_DIR ?= bin
 COMMANDS = vv test statusbar keyboard
 CMD_DIR = cmd
@@ -34,6 +34,9 @@ CMD_DIR = cmd
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
 CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
+
+UTF8PROC = deps/utf8proc/utf8proc.o
+DEPS = $(UTF8PROC)
 
 OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc io velvet_scene velvet_input velvet_cmd
 OBJECT_DIR = src
@@ -96,7 +99,7 @@ $(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c | $(OUT_DIR)
 	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(OUT_DIR)/%$(BINARY_EXTENSION): $(OUT_DIR)/%.c.o $(OBJECT_OUT) | $(OUT_DIR)
+$(OUT_DIR)/%$(BINARY_EXTENSION): $(OUT_DIR)/%.c.o $(OBJECT_OUT) $(DEPS) | $(OUT_DIR)
 	@echo $(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) > $@.txt
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 	$(STRIP) $@
@@ -128,6 +131,9 @@ $(PROFILE_TARGET):
 .PHONY: $(RELEASE_TARGET)
 $(RELEASE_TARGET):
 	@$(MAKE) BUILD=release all
+
+$(UTF8PROC): 
+	$(MAKE) -C ./deps/utf8proc utf8proc.o
 
 -include $(OBJECT_DEPS) $(CMD_DEPS)
 

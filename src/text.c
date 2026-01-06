@@ -1,8 +1,8 @@
 #include "text.h"
 #include "utils.h"
 #include <string.h>
-#include <wchar.h>
 #include <string.h>
+#include "utf8proc/utf8proc.h"
 
 // assume *str is a valid utf8 string
 int utf8_strlen(char *str) {
@@ -57,7 +57,7 @@ struct codepoint utf8_to_codepoint(const uint8_t utf8[4], int *len) {
     *len = 1;
   }
 
-  cp.is_wide = wcwidth(cp.value) > 1;
+  cp.is_wide = utf8proc_charwidth(cp.value) > 1;
   return cp;
 }
 
