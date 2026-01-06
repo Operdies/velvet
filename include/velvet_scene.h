@@ -133,7 +133,7 @@ struct velvet_render_state_cache {
   /* remember previous state changes to avoid re-transmitting them */
   struct {
     struct cursor position;
-    struct cursor_options style;
+    struct cursor_options options;
   } cursor;
   struct {
     struct screen_cell_style style;
@@ -304,7 +304,7 @@ static const struct velvet_theme velvet_theme_default = {
 static const struct velvet_render_state_cache render_state_cache_invalidated = {
     .cursor.position = {.column = -1, .line = -1},
     .cell.style = {.attr = -1, .bg = {.cmd = -1}, .fg = {.cmd = -1}},
-    .cursor.style = {.style = -1, .visible = false},
+    .cursor.options = {.style = -1, .visible = false},
 };
 
 static const struct velvet_scene velvet_scene_default = {

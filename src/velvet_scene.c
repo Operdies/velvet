@@ -483,14 +483,19 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
   }
 }
 
-static void velvet_render_set_cursor_style(struct velvet_render *r, struct cursor_options cursor) {
-  if (r->state.cursor.style.style != cursor.style) {
+static void velvet_render_set_cursor_visible(struct velvet_render *r, bool visible) {
+  if (r->state.cursor.options.visible != visible) {
+    string_push_slice(&r->draw_buffer, visible ? vt_cursor_visible_on : vt_cursor_visible_off);
+  }
+  r->state.cursor.options.visible = visible;
+}
+
+static void velvet_render_set_cursor(struct velvet_render *r, struct cursor_options cursor) {
+  if (r->state.cursor.options.style != cursor.style) {
     string_push_csi(&r->draw_buffer, 0, INT_SLICE(cursor.style), " q");
   }
-  if (r->state.cursor.style.visible != cursor.visible) {
-    string_push_slice(&r->draw_buffer, cursor.visible ? vt_cursor_visible_on : vt_cursor_visible_off);
-  }
-  r->state.cursor.style = cursor;
+  r->state.cursor.options.style = cursor.style;
+  velvet_render_set_cursor_visible(r, cursor.visible);
 }
 
 static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style);
@@ -690,7 +695,7 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
   }
 
   bool is_focused = h == velvet_scene_get_focus(m);
-  if (is_focused && should_emulate_cursor(h->emulator.options.cursor) && h->emulator.options.cursor.visible) {
+  if (is_focused && should_emulate_cursor(h->emulator.options.cursor)) {
     int x = h->rect.client.x + active->cursor.column;
     int y = h->rect.client.y + active->cursor.line + screen_get_scroll_offset(active);
     if (y < h->rect.client.y + h->rect.client.h) {
@@ -1067,6 +1072,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   int damage = velvet_render_calculate_damage(r);
   if (damage) {
+    velvet_render_set_cursor_visible(r, false);
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_on);
     velvet_render_render_damage_to_buffer(r);
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
@@ -1074,9 +1080,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   if (focused) {
     if (should_emulate_cursor(focused->emulator.options.cursor)) {
-      struct cursor_options hidden = {.visible = false};
-      velvet_render_set_cursor_style(r, hidden);
-    } else {
+      velvet_render_set_cursor_visible(r, false);
+    } else if (focused->emulator.options.cursor.visible) {
       struct screen *screen = vte_get_current_screen(&focused->emulator);
       struct cursor *cursor = &screen->cursor;
       int line = cursor->line + focused->rect.client.y + screen->scroll.view_offset;
@@ -1095,18 +1100,16 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
       if (cursor_obscured) {
         /* hide the cursor */
-        struct cursor_options hidden = {.visible = false};
-        velvet_render_set_cursor_style(r, hidden);
+        velvet_render_set_cursor_visible(r, false);
       } else {
         /* move cursor to focused host and update cursor */
         velvet_render_position_cursor(r, line, col);
-        velvet_render_set_cursor_style(r, focused->emulator.options.cursor);
+        velvet_render_set_cursor(r, focused->emulator.options.cursor);
       }
     }
   } else {
     /* hide the cursor if nothing is focused. */
-    struct cursor_options hidden = {.visible = false};
-    velvet_render_set_cursor_style(r, hidden);
+    velvet_render_set_cursor_visible(r, false);
   }
 
   struct u8_slice render = string_as_u8_slice(r->draw_buffer);
