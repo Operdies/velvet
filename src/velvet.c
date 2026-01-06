@@ -465,7 +465,7 @@ static void velvet_dispatch_frame(void *data) {
   if (focus) {
     velvet_align_and_arrange(v, focus);
     draw_status(v);
-    v->scene.renderer.options.no_repeat_wide_chars = focus->features.no_repeat_wide_chars;
+    v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_wide_chars;
     velvet_scene_render_damage(&v->scene, velvet_render, v);
   }
   io_schedule_cancel(&v->event_loop, v->active_render_token);

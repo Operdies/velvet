@@ -610,11 +610,11 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         int stride = wide ? 2 : 1;
         int repeats = 1;
         int remaining = end - col - 1;
-        for (; repeats < remaining && cell_equals(c[0], c[repeats * stride]); repeats++);
+        for (; repeats * stride < remaining && cell_equals(c[0], c[repeats * stride]); repeats++);
         repeats--;
         if (repeats > 0) {
           int num_bytes = utf8_len * repeats;
-          bool can_repeat = utf8_len == 1 || r->options.no_repeat_wide_chars == false;
+          bool can_repeat = utf8_len == 1 || r->options.no_repeat_multibyte_symbols == false;
           if (num_bytes > 10 && can_repeat) {
             string_push_csi(&r->draw_buffer, 0, INT_SLICE(repeats), "b");
           } else {
@@ -624,8 +624,7 @@ static void velvet_render_render_buffer(struct velvet_render *r,
           }
         }
         col += repeats * stride;
-        if (wide) 
-          col++;
+        if (wide) col++;
         r->state.cursor.position.column = MIN(col + 1, r->w - 1);
       }
     }
@@ -891,22 +890,6 @@ void velvet_scene_draw_tile_hint(struct velvet_scene *m, struct velvet_window *b
   }
 }
 
-static struct screen_cell blend_cells(struct screen_cell top, struct screen_cell bottom, float alpha) {
-  /* This blend implementation looks a bit off when space is used as a drawing character; */
-  struct screen_cell out = top;
-
-  if (top.cp.value == ' ') {
-    out.cp = bottom.cp;
-    /* if the top cell is blank, draw the glyph from the cell below, but tint it
-     * with the background color of the top cell. This creates the illusion of transparency. */
-    out.style.fg = color_alpha_blend(bottom.style.fg, top.style.bg, alpha);
-  }
-
-  /* always mix background colors */
-  out.style.bg = color_alpha_blend(bottom.style.bg, top.style.bg, alpha);
-  return out;
-}
-
 struct composite_options {
   struct pseudotransparency_options transparency;
   float dim;
@@ -933,19 +916,32 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
     if (!cell_equals(staging->cells[i], empty)) {
       struct screen_cell above = staging->cells[i];
       struct screen_cell below = composite->cells[i];
+      int column = i % r->w;
 
       bool blend = o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
                    (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || is_cell_bg_clear(above));
 
-      above = normalize_cell(t, above);
-      if (blend) above = blend_cells(above, normalize_cell(t, below), o.transparency.alpha);
+      if (blend) {
+        above = normalize_cell(t, above);
+        below = normalize_cell(t, below);
+        struct screen_cell *before = column ? &composite->cells[i-1] : nullptr;
+        bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
+
+        /* if the top cell is blank, draw the glyph from the cell below, but tint it
+         * with the background color of the top cell. This creates the illusion of transparency. */
+        bool blend_fg = above.cp.value == ' ' && !is_wide_continuation;
+        if (blend_fg) {
+          above.cp = below.cp;
+          above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, o.transparency.alpha);
+        }
+        above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, o.transparency.alpha);
+      }
 
       if (o.dim > 0) {
         above.style.bg = rgb_mult(above.style.bg, o.dim);
         above.style.fg = rgb_mult(above.style.fg, o.dim);
       }
 
-      int column = i % r->w;
       /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
        * and this character is not a space. */
       if (above.cp.value != ' ' && column && composite->cells[i - 1].cp.is_wide) 

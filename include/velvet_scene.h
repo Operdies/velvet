@@ -85,7 +85,7 @@ struct velvet_render_option {
    * I observed this with the stock emulator on MacOS.
    * If we detect the host emulator of the active session is AppleTerminal, then we disable this feature.
    */
-  bool no_repeat_wide_chars;
+  bool no_repeat_multibyte_symbols;
   /* debugging option for highlighting changed regions */
   bool display_damage;
   /* debugging option for highlighting line ends */
@@ -315,7 +315,7 @@ static const struct velvet_scene velvet_scene_default = {
         {
             .options =
                 {
-                    .no_repeat_wide_chars = false,
+                    .no_repeat_multibyte_symbols = false,
                     .display_eol = false,
                 },
             .state = render_state_cache_invalidated,
