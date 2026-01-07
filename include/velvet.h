@@ -41,6 +41,8 @@ struct velvet_input_options {
   uint64_t key_chain_timeout_ms;
   /* When a keybind repeatable mapping is triggered, allow retriggers within this window */
   uint64_t key_repeat_timeout_ms;
+  /* how many lines are scrolled at a time */
+  int scroll_multiplier;
 };
 
 struct velvet_keymap_deferred_action {
@@ -136,6 +138,7 @@ static struct velvet_input velvet_input_default = {
             .focus_follows_mouse = true,
             .key_chain_timeout_ms = 2000,
             .key_repeat_timeout_ms = 500,
+            .scroll_multiplier = 3,
         },
 };
 

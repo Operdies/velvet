@@ -932,9 +932,9 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
     int current_offset = screen_get_scroll_offset(screen);
     if (sgr.scroll_direction == scroll_up) {
       int num_lines = screen_get_scroll_height(screen);
-      screen_set_scroll_offset(screen, MIN(num_lines, current_offset + 1));
+      screen_set_scroll_offset(screen, MIN(num_lines, current_offset + in->options.scroll_multiplier));
     } else if (sgr.scroll_direction == scroll_down) {
-      screen_set_scroll_offset(screen, MAX(0, current_offset - 1));
+      screen_set_scroll_offset(screen, MAX(0, current_offset - in->options.scroll_multiplier));
     }
   }
 }
