@@ -1081,7 +1081,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
   }
 
-  if (focused) {
+  if (focused && velvet_window_visible(m, focused)) {
     if (should_emulate_cursor(focused->emulator.options.cursor)) {
       velvet_render_set_cursor_visible(r, false);
     } else if (focused->emulator.options.cursor.visible) {
