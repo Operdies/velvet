@@ -5,7 +5,7 @@
 #include <string.h>
 
 /* masks matching the Kitty keyboard protocol spec: https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
-enum velvey_key_modifier {
+enum velvet_key_modifier {
   MODIFIER_SHIFT     = 0b1,        //(1)
   MODIFIER_ALT       = 0b10,       //(2)
   MODIFIER_CTRL      = 0b100,      //(4)
@@ -42,7 +42,7 @@ enum velvet_key_event_type {
 
 struct velvet_key_event {
   struct velvet_key key;
-  enum velvey_key_modifier modifiers;
+  enum velvet_key_modifier modifiers;
   enum velvet_key_event_type type;
   struct {
     /* TODO: How long can this be ? */

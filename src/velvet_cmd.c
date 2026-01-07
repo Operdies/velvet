@@ -140,6 +140,23 @@ struct velvet_action_data {
   struct string cmd;
 };
 
+static enum velvet_key_modifier modifier_from_slice(struct u8_slice s) {
+  if (u8_match(s, "alt")) return MODIFIER_ALT;
+  if (u8_match(s, "control")) return MODIFIER_CTRL;
+  if (u8_match(s, "super")) return MODIFIER_SUPER;
+  return 0;
+}
+
+static void velvet_cmd_modremap(struct velvet *v, struct u8_slice option, struct u8_slice value) {
+  enum velvet_key_modifier from = modifier_from_slice(option);
+  enum velvet_key_modifier to = modifier_from_slice(value);
+  int enum_index[] = { [MODIFIER_ALT] = 0, [MODIFIER_CTRL] = 1, [MODIFIER_SUPER] = 2 };
+
+  if (from && to) {
+    v->input.options.modremap[enum_index[from]] = to;
+  }
+}
+
 static void
 velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8_slice option, struct u8_slice value) {
   /* TODO: This sucks. The implementation mixes:
@@ -163,6 +180,8 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
     if (is_digit) {
       v->scene.layout.notification_width = CLAMP(digit, 10, 80);
     }
+  } else if (modifier_from_slice(option)) {
+    velvet_cmd_modremap(v, option, value);
   } else if (u8_match(option, "columns")) {
     if (focus && is_digit) focus->ws.w = digit;
   } else if (u8_match(option, "lines_pixels")) {

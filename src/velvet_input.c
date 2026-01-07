@@ -4,6 +4,7 @@
 #include "velvet.h"
 #include <string.h>
 #include "velvet_keyboard.h"
+#include "utf8proc/utf8proc.h"
 
 #define ESC 0x1b
 #define BRACKETED_PASTE_MAX (1 << 20)
@@ -589,6 +590,21 @@ static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
   if (modifiers) modifiers -= 1;
   if (!event) event = KEY_PRESS;
 
+  enum velvet_key_modifier *remap = v->input.options.modremap;
+  enum velvet_key_modifier order[] = { MODIFIER_ALT, MODIFIER_CTRL, MODIFIER_SUPER };
+  uint32_t unmask = ~(MODIFIER_ALT | MODIFIER_CTRL | MODIFIER_SUPER);
+  uint32_t remapped_modifiers = modifiers & unmask;
+
+  for (int i = 0; i < LENGTH(order); i++) {
+    if (modifiers & order[i])  {
+      if (remap[i]) remapped_modifiers |= remap[i];
+      else remapped_modifiers |= order[i];
+    }
+  }
+
+  modifiers = remapped_modifiers;
+
+
   for (int i = 0; i < LENGTH(named_keys); i++) {
     struct velvet_key k = named_keys[i];
     if (k.kitty_terminator != c.final) continue;
@@ -656,7 +672,7 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   }
 }
 
-static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, enum velvey_key_modifier m) {
+static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, enum velvet_key_modifier m) {
   int n = 0;
   struct utf8 buf = {0};
   char *escape = nullptr;
