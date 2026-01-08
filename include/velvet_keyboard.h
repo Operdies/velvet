@@ -2,7 +2,6 @@
 #define VELVET_KEYBOARD_H
 
 #include <stdint.h>
-#include <string.h>
 
 /* masks matching the Kitty keyboard protocol spec: https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
 enum velvet_key_modifier {
@@ -15,13 +14,6 @@ enum velvet_key_modifier {
   MODIFIER_CAPS_LOCK = 0b1000000,  //(64)
   MODIFIER_NUM_LOCK  = 0b10000000, //(128)
 };
-
-static char VELVET_SHIFT_TABLE[] = {
-    ['!'] = '1',  ['@'] = '2', ['#'] = '3', ['$'] = '4', ['%'] = '5', ['^'] = '6', ['&'] = '7',
-    ['*'] = '8',  ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.', [':'] = ';', ['"'] = '\'',
-    ['|'] = '\\', ['~'] = '`', ['?'] = '/', ['{'] = '[', ['}'] = ']',
-};
-
 
 struct velvet_key {
   char *name;

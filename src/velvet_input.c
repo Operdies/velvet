@@ -61,6 +61,13 @@ static bool find_key(char *name, struct velvet_key *key) {
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
 
 static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
+  static char shift_table[] = {
+    ['!'] = '1',  ['@'] = '2', ['#'] = '3', ['$'] = '4', ['%'] = '5', ['^'] = '6', ['&'] = '7',
+    ['*'] = '8',  ['('] = '9', [')'] = '0', ['<'] = ',', ['>'] = '.', [':'] = ';', ['"'] = '\'',
+    ['|'] = '\\', ['~'] = '`', ['?'] = '/', ['{'] = '[', ['}'] = ']',
+  };
+
+
   // special case for <C-Space>
   if (cp == 0) {
     struct velvet_key_event e = { .modifiers = MODIFIER_CTRL };
@@ -85,10 +92,10 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
     }
 
     if (!isshift) {
-      isshift = (cp < LENGTH(VELVET_SHIFT_TABLE)) && VELVET_SHIFT_TABLE[cp];
+      isshift = (cp < LENGTH(shift_table)) && shift_table[cp];
       if (isshift) {
         k.key.alternate_codepoint = cp;
-        cp = VELVET_SHIFT_TABLE[cp];
+        cp = shift_table[cp];
       }
     }
   }
