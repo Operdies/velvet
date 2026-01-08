@@ -938,6 +938,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
       }
 
       if (o.dim > 0) {
+        above = normalize_cell(t, above);
         above.style.bg = rgb_mult(above.style.bg, o.dim);
         above.style.fg = rgb_mult(above.style.fg, o.dim);
       }
