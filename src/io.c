@@ -39,12 +39,12 @@ static void io_dispatch_idle_schedules(struct io *io) {
   }
 }
 
-int io_dispatch(struct io *io) {
+void io_dispatch(struct io *io) {
   // First execute any pending scheduled actions;
   // If a schedule was executed, return. This is needed because a scheduled
   // action can affect everything, including closing file descriptors,
   // and generally affecting all kinds of behavior.
-  if (io_dispatch_scheduled(io)) return 1;
+  if (io_dispatch_scheduled(io)) return;
   io->sequence++;
 
   vec_clear(&io->pollfds);
@@ -82,15 +82,15 @@ int io_dispatch(struct io *io) {
     if (errno != EAGAIN && errno != EINTR) {
       ERROR("poll:");
     }
-    return 0;
+    return;
   }
 
   if (polled == 0 && maybe_idle) {
     io_dispatch_idle_schedules(io);
-    return 0;
+    return;
   }
 
-  if (!polled) return 0;
+  if (!polled) return;
 
   for (size_t i = 0; i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(io->pollfds, i);
@@ -139,7 +139,6 @@ int io_dispatch(struct io *io) {
       if (poll_ret < 1) break;
     }
   }
-  return 1;
 }
 
 void io_add_source(struct io *io, struct io_source src) {

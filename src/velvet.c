@@ -246,18 +246,20 @@ static void velvet_render(struct u8_slice str, void *context) {
 }
 
 static void on_session_input(struct io_source *src, struct u8_slice str) {
-  struct velvet *m = src->data;
+  struct velvet *v = src->data;
   struct velvet_session *session;
-  vec_find(session, m->sessions, session->input == src->fd);
+  vec_find(session, v->sessions, session->input == src->fd);
 
   if (str.len == 0) {
-    velvet_detach_session(m, session);
+    velvet_detach_session(v, session);
     return;
   }
 
-  if (session) m->input.input_socket = session->socket;
-  velvet_input_process(m, str);
-  m->input.input_socket = 0;
+  if (session) v->input.input_socket = session->socket;
+  velvet_input_process(v, str);
+  v->input.input_socket = 0;
+
+  velvet_ensure_render_scheduled(v);
 }
 
 static void on_session_writable(struct io_source *src) {
@@ -296,6 +298,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
   } else {
     velvet_scene_remove_exited(v);
   }
+  velvet_ensure_render_scheduled(v);
 }
 
 static void velvet_default_config(struct velvet *v) {
@@ -471,6 +474,18 @@ static void velvet_dispatch_frame(void *data) {
   io_schedule_cancel(&v->event_loop, v->idle_render_token);
 }
 
+void velvet_ensure_render_scheduled(struct velvet *velvet) {
+  if (!io_schedule_exists(&velvet->event_loop, velvet->idle_render_token)) {
+    /* schedule a render as soon as io is idle */
+    velvet->idle_render_token = io_schedule_idle(&velvet->event_loop, velvet_dispatch_frame, velvet);
+  }
+  if (!io_schedule_exists(&velvet->event_loop, velvet->active_render_token)) {
+    /* or schedule a render within a reasonable time */
+    velvet->active_render_token =
+        io_schedule(&velvet->event_loop, velvet->min_ms_per_frame, velvet_dispatch_frame, velvet);
+  }
+}
+
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
@@ -500,8 +515,9 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_default_config(velvet);
 
-  velvet->idle_render_token = io_schedule_idle(loop, velvet_dispatch_frame, velvet);
   velvet->min_ms_per_frame = 10;
+  velvet_ensure_render_scheduled(velvet);
+
   for (;;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
@@ -545,16 +561,7 @@ void velvet_loop(struct velvet *velvet) {
     }
 
     // Dispatch all pending io
-    if (io_dispatch(loop)) {
-      if (!io_schedule_exists(loop, velvet->idle_render_token)) {
-        /* schedule a render as soon as io is idle */
-        velvet->idle_render_token = io_schedule_idle(loop, velvet_dispatch_frame, velvet);
-      }
-      if (!io_schedule_exists(loop, velvet->active_render_token)) {
-        /* or schedule a render within a reasonable time */
-        velvet->active_render_token = io_schedule(loop, velvet->min_ms_per_frame, velvet_dispatch_frame, velvet);
-      }
-    }
+    io_dispatch(loop);
 
     // quit ?
     struct velvet_window *real_client;

@@ -133,6 +133,7 @@ void velvet_input_unwind(struct velvet *v);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
+void velvet_ensure_render_scheduled(struct velvet *velvet);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {
     .options =

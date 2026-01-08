@@ -62,7 +62,7 @@ static const struct io io_default = {
 };
 
 /* Dispatch all pending io. */
-int io_dispatch(struct io *io);
+void io_dispatch(struct io *io);
 /* Add an io source to the io object. This source will be polled and dispatched during io_dispatch. */
 void io_add_source(struct io *io, struct io_source src);
 /* Remove all previously added io sources. */
