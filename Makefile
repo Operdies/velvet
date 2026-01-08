@@ -20,13 +20,17 @@ else
 	endif
 endif
 
+LUA_VERSION = lua-5.5.0
+LUA_DIR = deps/$(LUA_VERSION)
+LUA_LIBS = $(LUA_DIR)/src/liblua.a
+LUA_INCLUDE = $(LUA_DIR)/src/
 
 BUILD ?= debug
 
 RELEASE_TARGET ?= release
 PROFILE_TARGET ?= profile
 RELEASE_LTO_TARGET ?= release_lto
-INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps
+INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps -I$(LUA_INCLUDE)
 OUT_DIR ?= bin
 COMMANDS = vv test statusbar keyboard
 CMD_DIR = cmd
@@ -36,7 +40,8 @@ CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
 UTF8PROC = deps/utf8proc/libutf8proc.a
-DEPS = $(UTF8PROC)
+
+DEPS = $(UTF8PROC) $(LUA_LIBS)
 
 OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc io velvet_scene velvet_input velvet_cmd
 OBJECT_DIR = src
@@ -133,7 +138,10 @@ $(RELEASE_TARGET):
 	@$(MAKE) BUILD=release all
 
 $(UTF8PROC): 
-	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc
+	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc MAKEFLAGS=
+
+$(LUA_LIBS):
+	$(MAKE) -C $(LUA_DIR) all MAKEFLAGS=
 
 -include $(OBJECT_DEPS) $(CMD_DEPS)
 
