@@ -791,7 +791,7 @@ void test_csi_parsing(void) {
   } while (0)
 
 static void test_hashmap() {
-  const int stress = 1 << 15;
+  #define stress (1 << 15)
   struct hashmap h = {0};
   assert(hashmap_add(&h, 0, nullptr));
   assert(hashmap_get(&h, 0) == nullptr);

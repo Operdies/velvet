@@ -663,7 +663,7 @@ static void decset_set(struct vte *vte, int mode, bool on) {
         vte_enter_primary_screen(vte);
         screen_restore_cursor(screen);
       }
-    }
+    } break;
   case 2004: vte->options.bracketed_paste = on; break;
   case 1007: m->alternate_scroll_mode = on; break;
   case 9:

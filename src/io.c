@@ -65,7 +65,7 @@ int io_dispatch(struct io *io) {
   }
 
   uint64_t now = get_ms_since_startup();
-  int timeout = next_schedule ? next_schedule->when - now : -1;
+  int timeout = next_schedule ? (int64_t)next_schedule->when - (int64_t)now : -1;
   if (next_schedule && timeout < 0) timeout = 0;
   bool maybe_idle = false;
   if (io->idle_schedule.length) {
