@@ -364,7 +364,7 @@ void velvet_scene_destroy(struct velvet_scene *m) {
 
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
   uint64_t initial_focus = velvet_scene_get_focus(m)->id;
-  size_t index = vec_index(&m->windows, w);
+  ssize_t index = vec_index(&m->windows, w);
   assert(index >= 0);
   focus_remove(m, w);
   win_remove(m, w);
@@ -831,8 +831,8 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
 static void velvet_render_init_buffer(struct velvet_render_buffer *buf, int w, int h) {
   free(buf->cells);
   free(buf->lines);
-  buf->cells = velvet_calloc(sizeof(*buf->cells), w * h);
-  buf->lines = velvet_calloc(sizeof(*buf->lines), h);
+  buf->cells = velvet_calloc(w * h, sizeof(*buf->cells));
+  buf->lines = velvet_calloc(h, sizeof(*buf->lines));
   for (int i = 0; i < h; i++) {
     buf->lines[i].cells = &buf->cells[i * w];
   }

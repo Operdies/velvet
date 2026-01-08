@@ -70,8 +70,8 @@ void *velvet_erealloc(void *array, size_t nmemb, size_t size) {
   return p;
 }
 
-void *velvet_calloc(size_t sz, size_t count) {
-  void *ptr = calloc(sz, count);
+void *velvet_calloc(size_t nmemb, size_t size) {
+  void *ptr = calloc(nmemb, size);
   if (!ptr) velvet_die("calloc:");
   return ptr;
 }

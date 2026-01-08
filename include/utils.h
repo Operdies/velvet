@@ -10,7 +10,7 @@ void velvet_log(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 _Noreturn void velvet_die(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Normal exit
 _Noreturn void velvet_fatal(char *fmt, ...) __attribute__((format(printf, 1, 2)));
-void *velvet_calloc(size_t sz, size_t count) __attribute__((malloc, alloc_size(1, 2)));
+void *velvet_calloc(size_t nmemb, size_t size) __attribute__((malloc, alloc_size(1, 2)));
 void *velvet_erealloc(void *array, size_t nmemb, size_t size) __attribute__((alloc_size(2, 3)));
 void terminal_setup(void);
 void terminal_reset(void);
