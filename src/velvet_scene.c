@@ -1389,7 +1389,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
 
     string_ensure_null_terminated(&velvet_window->cmdline);
     char id[20];
-    snprintf(id, sizeof(id) - 1, "%llu", velvet_window->id);
+    snprintf(id, sizeof(id) - 1, "%lu", velvet_window->id);
     setenv("VELVET_WINID", id, true);
     char *argv[] = {"sh", "-c", (char*)velvet_window->cmdline.content, NULL};
     execvp("sh", argv);
