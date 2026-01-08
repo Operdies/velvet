@@ -658,7 +658,15 @@ static void velvet_render_render_damage_to_buffer(struct velvet_render *r) {
 }
 
 static bool should_emulate_cursor(struct cursor_options cur) {
-  return cur.visible && (cur.style == CURSOR_STYLE_DEFAULT || cur.style == CURSOR_STYLE_STEADY_BLOCK);
+  if (!cur.visible) return false;
+  switch (cur.style) {
+  case CURSOR_STYLE_DEFAULT:
+  case CURSOR_STYLE_BLINKING_BLOCK:
+  case CURSOR_STYLE_STEADY_BLOCK:
+  case CURSOR_STYLE_BLINKING_UNDERLINE:
+  case CURSOR_STYLE_STEADY_UNDERLINE: return true;
+  default: return false;
+  }
 }
 
 static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct velvet_window *h, struct velvet_theme t) {
@@ -701,8 +709,19 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
       struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
       if (current) {
         struct screen_cell cursor = *current;
-        cursor.style.fg = t.cursor.foreground;
-        cursor.style.bg = t.cursor.background;
+        switch (h->emulator.options.cursor.style) {
+        case CURSOR_STYLE_DEFAULT:
+        case CURSOR_STYLE_BLINKING_BLOCK:
+        case CURSOR_STYLE_STEADY_BLOCK:
+          cursor.style.fg = t.cursor.foreground;
+          cursor.style.bg = t.cursor.background;
+          break;
+        case CURSOR_STYLE_BLINKING_UNDERLINE:
+        case CURSOR_STYLE_STEADY_UNDERLINE: 
+            cursor.style.attr |= ATTR_UNDERLINE; 
+            break;
+        default: break;
+        };
         velvet_render_set_cell(r, y, x, cursor);
       }
     }
@@ -1076,7 +1095,6 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 
   int damage = velvet_render_calculate_damage(r);
   if (damage) {
-    velvet_render_set_cursor_visible(r, false);
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_on);
     velvet_render_render_damage_to_buffer(r);
     if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
