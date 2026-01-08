@@ -948,9 +948,11 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 
         /* if the top cell is blank, draw the glyph from the cell below, but tint it
          * with the background color of the top cell. This creates the illusion of transparency. */
-        bool blend_fg = above.cp.value == ' ' && !is_wide_continuation;
+        bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
+        bool blend_fg = !attributes_visible && above.cp.value == ' ' && !is_wide_continuation;
         if (blend_fg) {
           above.cp = below.cp;
+          above.style.attr = below.style.attr;
           above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, o.transparency.alpha);
         }
         above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, o.transparency.alpha);
