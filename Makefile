@@ -35,7 +35,7 @@ CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_D
 CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
-UTF8PROC = deps/utf8proc/utf8proc.o
+UTF8PROC = deps/utf8proc/libutf8proc.a
 DEPS = $(UTF8PROC)
 
 OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc io velvet_scene velvet_input velvet_cmd
@@ -133,7 +133,7 @@ $(RELEASE_TARGET):
 	@$(MAKE) BUILD=release all
 
 $(UTF8PROC): 
-	$(MAKE) -C ./deps/utf8proc utf8proc.o
+	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc
 
 -include $(OBJECT_DEPS) $(CMD_DEPS)
 
