@@ -1110,6 +1110,8 @@ void test_velvet_cmd() {
   assert(!velvet_cmd_iterator_next(&it));
 }
 
+static void test_lua();
+
 int main(void) {
   test_input_output();
   test_reflow();
@@ -1121,5 +1123,58 @@ int main(void) {
   test_string();
   test_vec();
   test_velvet_cmd();
+  test_lua();
   return n_failures;
+}
+
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+
+void *allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
+  (void)osize;
+  (void)ud;
+  if (nsize == 0) {
+    free(ptr);
+    ptr = nullptr;
+  } else {
+    ptr = realloc(ptr, nsize);
+  }
+  return ptr;
+}
+
+static void lua_die(lua_State *L) {
+  const char *str = luaL_tolstring(L, 1, 0);
+  velvet_die("lua error: %s", str);
+}
+
+void test_lua() {
+  lua_State *L = lua_newstate(allocator, nullptr, 0);
+  luaL_openselectedlibs(L, ~(LUA_DBLIBK | LUA_OSLIBK | LUA_IOLIBK), 0);
+
+  /* disable loading modules from the system path and C libraries. */
+  /* [1]: preload table, [2]: package.path */
+  if (luaL_dostring(L, "package.searchers = { package.searchers[1], package.searchers[2] }")) {
+    lua_die(L);
+  }
+  if (luaL_dostring(L, "package.path = './lua/?/init.lua;./lua/?.lua'") != LUA_OK) {
+    lua_die(L);
+  }
+  lua_pop(L, lua_gettop(L));
+
+  char *requires[] = {
+      "velvet",       /* lua/velvet/init.lua */
+      "velvet.test",  /* lua/velvet/test/init.lua */
+  };
+
+  for (int i = 0; i < LENGTH(requires); i++) {
+    char str[100];
+    snprintf(str, 99, "require('%s')", requires[i]);
+    if (luaL_dostring(L, str) != LUA_OK) {
+      lua_die(L);
+    }
+    lua_pop(L, lua_gettop(L));
+  }
+
+  lua_close(L);
 }

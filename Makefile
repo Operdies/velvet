@@ -49,7 +49,7 @@ OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJE
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
 CFLAGS = -std=c23 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
-LDFLAGS = 
+LDFLAGS = -lm
 
 DEBUG_CFLAGS = -O0 -g -fsanitize=address
 DEBUG_LDFLAGS = -fsanitize=address

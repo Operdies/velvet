@@ -34,12 +34,12 @@ static void vflogmsg(FILE *f, char *fmt, va_list ap) {
 #define REPLACEMENTS_LST                                                                                               \
   X("\x1b[", "<CSI>")                                                                                                  \
   X("\x1b", "<ESC>")                                                                                                   \
-  X("\t", "<TAB>")
 
 #define X(old, new) string_replace_inplace_slow(&str, old, new);
   REPLACEMENTS_LST
 
   for (int i = 'a' & 0x1f; i < ('z' & 0x1f); i++) {
+    if (i == '\n' || i == '\t') continue;
     char old[] = { i, 0 };
     char new[] = { '<', 'C', '-', i + 96, '>', 0 };
     string_replace_inplace_slow(&str, old, new);
