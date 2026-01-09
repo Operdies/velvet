@@ -85,10 +85,12 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
 
   bool isshift= false;
   if (!iscntrl) {
-    isshift = cp >= 'A' && cp <= 'Z';
-    if (isshift) {
-      k.key.alternate_codepoint = cp;
-      cp = cp + 32;
+    uint32_t upper = utf8proc_toupper(cp);
+    uint32_t lower = utf8proc_tolower(cp);
+    if (cp == upper) {
+      isshift = true;
+      k.key.alternate_codepoint = upper;
+      cp = lower;
     }
 
     if (!isshift) {
