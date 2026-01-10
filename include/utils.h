@@ -1,11 +1,13 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include "lua.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 void velvet_log(char *fmt, ...) __attribute__((format(printf, 1, 2)));
+_Noreturn void lua_die(lua_State *L);
 // Abornmal exit
 _Noreturn void velvet_die(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Normal exit

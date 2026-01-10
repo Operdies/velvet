@@ -33,7 +33,7 @@ bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w) {
 }
 
 static void assert_invariants(struct velvet_scene *m) {
-  uint64_t *focus;
+  int *focus;
   struct velvet_window *w;
   vec_foreach(focus, m->focus_order) {
     vec_find(w, m->windows, w->id == *focus);
@@ -76,7 +76,7 @@ static void ensure_focus_visible(struct velvet_scene *m) {
   struct velvet_window *current = velvet_scene_get_focus(m);
   if (!current) return;
   if (!velvet_window_visible(m, current)) {
-    uint64_t *f;
+    int *f;
     struct velvet_window *focus;
     vec_foreach(f, m->focus_order) {
       vec_find(focus, m->windows, focus->id == *f);
@@ -107,13 +107,35 @@ void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask) {
 }
 
 void velvet_scene_set_tags(struct velvet_scene *scene, uint32_t tag_mask) {
-  struct velvet_window *focus = velvet_scene_get_focus(scene);
-  static uint32_t tag_all = (1 << 10) - 1;
-  tag_mask &= tag_all;
-  /* a window must be visible somewhere. */
-  if (!tag_mask) return;
-  if (focus) {
-    focus->tags = tag_mask;
+  velvet_scene_set_tags_for_window(scene, 0, tag_mask);
+}
+
+uint32_t velvet_scene_get_tags_for_window(struct velvet_scene *scene, uint64_t winid) {
+  struct velvet_window *w = nullptr;
+  if (winid) {
+    w = velvet_scene_get_window_from_id(scene, winid);
+  } else {
+    w = velvet_scene_get_focus(scene);
+  }
+  return w->tags;
+}
+
+void velvet_scene_set_tags_for_window(struct velvet_scene *scene, uint64_t winid, uint32_t tag_mask) {
+  struct velvet_window *w = nullptr;
+  if (winid) {
+    w = velvet_scene_get_window_from_id(scene, winid);
+  } else {
+    w = velvet_scene_get_focus(scene);
+  }
+
+  if (w) {
+    static uint32_t tag_all = (1 << 10) - 1;
+    tag_mask &= tag_all;
+    /* a window must be visible somewhere. */
+    if (!tag_mask) return;
+    if (w) {
+      w->tags = tag_mask;
+    }
   }
   assert_invariants(scene);
 }
@@ -220,7 +242,7 @@ void velvet_scene_arrange(struct velvet_scene *scene) {
   assert_invariants(scene);
 }
 
-struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, uint64_t id) {
+struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, int id) {
   struct velvet_window *w;
   vec_find(w, m->windows, w->id == id);
   return w;
@@ -228,7 +250,7 @@ struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, ui
 
 struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
   if (m->focus_order.length) {
-    uint64_t *f = vec_nth(m->focus_order, 0);
+    int *f = vec_nth(m->focus_order, 0);
     return velvet_scene_get_window_from_id(m, *f);
   }
   return nullptr;
@@ -287,7 +309,7 @@ static void win_remove(struct velvet_scene *m, struct velvet_window *f) {
 }
 
 static void focus_remove(struct velvet_scene *m, struct velvet_window *f) {
-  uint64_t *foc;
+  int *foc;
   vec_find(foc, m->focus_order, *foc == f->id);
   if (foc) vec_remove(&m->focus_order, foc);
 }
@@ -305,8 +327,8 @@ void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_fo
   assert_invariants(m);
 }
 
-static uint64_t get_id() {
-  static uint64_t id = 1000;
+static int get_id() {
+  static int id = 1000;
   return id++;
 }
 
@@ -321,23 +343,25 @@ struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet
   return host;
 }
 
-void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template) {
+int velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = velvet_scene_manage(m, template);
   bool started = velvet_window_start(host);
   if (!started) {
     velvet_scene_remove_window(m, host);
+    return 0;
   }
+  return host->id;
 }
 
-void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
+int velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window host = { 0 };
   string_push_slice(&host.cmdline, cmdline);
   host.emulator = vte_default;
   host.border_width = 1;
   host.layer = VELVET_LAYER_TILED;
-  velvet_scene_spawn_process_from_template(m, host);
+  return velvet_scene_spawn_process_from_template(m, host);
 }
 
 static void velvet_render_destroy(struct velvet_render *renderer) {
@@ -363,7 +387,7 @@ void velvet_scene_destroy(struct velvet_scene *m) {
 }
 
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
-  uint64_t initial_focus = velvet_scene_get_focus(m)->id;
+  int initial_focus = velvet_scene_get_focus(m)->id;
   ssize_t index = vec_index(&m->windows, w);
   assert(index >= 0);
   focus_remove(m, w);
@@ -982,7 +1006,7 @@ static bool rect_contains(struct rect r, int x, int y) {
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data) {
   struct velvet_window *h;
   for (enum velvet_scene_layer layer = VELVET_LAYER_LAST - 1; layer >= VELVET_LAYER_STATUS; layer--) {
-    uint64_t *winid;
+    int *winid;
     vec_foreach(winid, scene->focus_order) {
       h = velvet_scene_get_window_from_id(scene, *winid);
       if (h->layer != layer) continue;
@@ -1072,7 +1096,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   struct velvet_theme t = m->theme;
 
   for (enum velvet_scene_layer layer = 0; layer < VELVET_LAYER_LAST; layer++) {
-    uint64_t *winid;
+    int *winid;
 
     /* draw windows in reverse focus order;  this is relevant
      * for floating windows which should be stacked in order of most recently focused */
@@ -1409,7 +1433,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
 
     string_ensure_null_terminated(&velvet_window->cmdline);
     char id[20];
-    snprintf(id, sizeof(id) - 1, "%lu", velvet_window->id);
+    snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
     setenv("VELVET_WINID", id, true);
     char *argv[] = {"sh", "-c", (char*)velvet_window->cmdline.content, NULL};
     execvp("sh", argv);

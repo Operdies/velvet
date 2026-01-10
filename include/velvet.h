@@ -3,6 +3,7 @@
 
 #include "collections.h"
 #include "io.h"
+#include "lua.h"
 #include "platform.h"
 #include "velvet_scene.h"
 #include "velvet_keyboard.h"
@@ -100,6 +101,7 @@ struct velvet_session {
 };
 
 struct velvet {
+  lua_State *L;
   struct velvet_scene scene;
   struct velvet_input input;
   struct io event_loop;

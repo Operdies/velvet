@@ -1006,7 +1006,7 @@ static void velvet_keymap_destroy(struct velvet_keymap *k) {
 
 void velvet_input_destroy(struct velvet_input *in) {
   string_destroy(&in->command_buffer);
-  velvet_keymap_destroy(in->keymap->root);
+  if (in->keymap) velvet_keymap_destroy(in->keymap->root);
 }
 
 static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {

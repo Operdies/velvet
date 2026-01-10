@@ -20,17 +20,25 @@ else
 	endif
 endif
 
+GEN_DIR = $(OUT_DIR)/gen
+LUA_DIST_DIR = $(OUT_DIR)/lua/velvet
+GEN_LUA_AUTOGEN = $(GEN_DIR)/velvet_lua_autogen.c
+GEN_C_HEADER = $(GEN_DIR)/velvet_api.h
+GEN_LUA_SPEC = lua/velvet/spec.lua
+GEN_LUA_GENERATOR = lua/velvet/api_gen.lua
+
 LUA_VERSION = lua-5.5.0
 LUA_DIR = deps/$(LUA_VERSION)
 LUA_LIBS = $(LUA_DIR)/src/liblua.a
 LUA_INCLUDE = $(LUA_DIR)/src/
+LUA = $(LUA_DIR)/src/lua
 
 BUILD ?= debug
 
 RELEASE_TARGET ?= release
 PROFILE_TARGET ?= profile
 RELEASE_LTO_TARGET ?= release_lto
-INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps -I$(LUA_INCLUDE)
+INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps -I$(LUA_INCLUDE) -I$(abspath .)/$(GEN_DIR)
 OUT_DIR ?= bin
 COMMANDS = vv test statusbar keyboard
 CMD_DIR = cmd
@@ -43,7 +51,7 @@ UTF8PROC = deps/utf8proc/libutf8proc.a
 
 DEPS = $(UTF8PROC) $(LUA_LIBS)
 
-OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc io velvet_scene velvet_input velvet_cmd
+OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc io velvet_scene velvet_input velvet_cmd velvet_lua velvet_api
 OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
@@ -100,7 +108,7 @@ $(OUT_DIR)/%.c.o: $(OBJECT_DIR)/%.c | $(OUT_DIR)
 	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c | $(OUT_DIR)
+$(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c | $(OUT_DIR) $(GEN_LUA_AUTOGEN)
 	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
@@ -140,8 +148,15 @@ $(RELEASE_TARGET):
 $(UTF8PROC): 
 	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc MAKEFLAGS=
 
-$(LUA_LIBS):
+$(LUA_LIBS): $(LUA)
+
+$(LUA):
 	$(MAKE) -C $(LUA_DIR) all MAKEFLAGS=
+
+$(GEN_LUA_AUTOGEN): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
+	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
+$(GEN_C_HEADER): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
+	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
 
 -include $(OBJECT_DEPS) $(CMD_DEPS)
 

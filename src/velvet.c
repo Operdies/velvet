@@ -1,6 +1,7 @@
 #include "velvet.h"
 #include "utils.h"
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <csi.h>
@@ -9,6 +10,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <pwd.h>
+#include "velvet_lua.h"
 
 static void velvet_session_render(struct u8_slice str, void *context) {
   struct velvet_session *s = context;
@@ -486,6 +488,22 @@ void velvet_ensure_render_scheduled(struct velvet *velvet) {
   }
 }
 
+static bool file_exists(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0;
+}
+
+static void velvet_source_config(struct velvet *v) {
+  char path[PATH_MAX];
+  char *home = getenv("HOME");
+  if (home) {
+    snprintf(path, PATH_MAX - 1, "%s/.config/velvet/init.lua", home);
+    if (file_exists(path)) {
+      velvet_lua_source(v, path);
+    }
+  }
+}
+
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
@@ -511,9 +529,12 @@ void velvet_loop(struct velvet *velvet) {
     velvet_scene_manage(&velvet->scene, status);
   }
 
-  velvet->scene.arrange(&velvet->scene);
-
   velvet_default_config(velvet);
+
+  velvet_lua_init(velvet);
+  velvet_source_config(velvet);
+
+  velvet->scene.arrange(&velvet->scene);
 
   velvet->min_ms_per_frame = 10;
   velvet_ensure_render_scheduled(velvet);
@@ -581,6 +602,7 @@ void velvet_loop(struct velvet *velvet) {
 }
 
 void velvet_destroy(struct velvet *velvet) {
+  lua_close(velvet->L);
   io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input);

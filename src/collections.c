@@ -57,7 +57,7 @@ void string_push_csi(struct string *str, uint8_t leading, struct int_slice param
   string_push(str, (uint8_t *)final);
 }
 
-void string_push_cstr(struct string *str, char *cstr) {
+void string_push_cstr(struct string *str, const char *cstr) {
   string_push_slice(str, u8_slice_from_cstr(cstr));
 }
 

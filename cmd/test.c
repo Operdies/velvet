@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "velvet_cmd.h"
+#include "velvet_lua.h"
 #include "velvet_scene.h"
 
 /* the SYM macro is not useful. It exists because of a treesitter parser bug which messes up indentation otherwise */
@@ -1128,53 +1129,36 @@ int main(void) {
 }
 
 #include "lua.h"
-#include "lualib.h"
 #include "lauxlib.h"
 
-void *allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
-  (void)osize;
-  (void)ud;
-  if (nsize == 0) {
-    free(ptr);
-    ptr = nullptr;
-  } else {
-    ptr = realloc(ptr, nsize);
-  }
-  return ptr;
-}
-
-static void lua_die(lua_State *L) {
-  const char *str = luaL_tolstring(L, 1, 0);
-  velvet_die("lua error: %s", str);
-}
-
-void test_lua() {
-  lua_State *L = lua_newstate(allocator, nullptr, 0);
-  luaL_openselectedlibs(L, ~(LUA_DBLIBK | LUA_OSLIBK | LUA_IOLIBK), 0);
-
-  /* disable loading modules from the system path and C libraries. */
-  /* [1]: preload table, [2]: package.path */
-  if (luaL_dostring(L, "package.searchers = { package.searchers[1], package.searchers[2] }")) {
-    lua_die(L);
-  }
-  if (luaL_dostring(L, "package.path = './lua/?/init.lua;./lua/?.lua'") != LUA_OK) {
+static void lua_assert(lua_State *L, char *cmd) {
+  if (luaL_dostring(L, cmd) != LUA_OK) {
     lua_die(L);
   }
   lua_pop(L, lua_gettop(L));
+}
+
+void test_lua() {
+  struct velvet v = {0};
+  velvet_lua_init(&v);
+  lua_State *L = v.L;
 
   char *requires[] = {
-      "velvet",       /* lua/velvet/init.lua */
-      "velvet.test",  /* lua/velvet/test/init.lua */
+      "require('velvet')", /* lua/velvet/init.lua */
+      "require('velvet.default_options')", /* lua/velvet/init.lua */
   };
 
   for (int i = 0; i < LENGTH(requires); i++) {
-    char str[100];
-    snprintf(str, 99, "require('%s')", requires[i]);
-    if (luaL_dostring(L, str) != LUA_OK) {
+    if (luaL_dostring(L, requires[i]) != LUA_OK) {
       lua_die(L);
     }
     lua_pop(L, lua_gettop(L));
   }
 
-  lua_close(L);
+  /* test that options are wired up correctly */
+  lua_assert(L, "assert(vv.options.key_repeat_timeout == 500)");
+  v.input.options.key_repeat_timeout_ms = 1234;
+  lua_assert(L, "assert(vv.options.key_repeat_timeout == 1234)");
+
+  velvet_destroy(&v);
 }

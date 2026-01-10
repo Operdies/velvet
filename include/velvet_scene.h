@@ -54,7 +54,7 @@ struct velvet_window {
   struct string icon;
   struct string cwd;
   int pty, pid;
-  uint64_t id;
+  int id;
   int border_width;
   struct {
     struct rect window;
@@ -194,15 +194,17 @@ struct velvet_window_hit {
 };
 
 bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w);
-struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, uint64_t id);
+struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, int id);
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data);
 void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask);
 void velvet_scene_toggle_view(struct velvet_scene *scene, uint32_t view_mask);
 void velvet_scene_set_tags(struct velvet_scene *scene, uint32_t tag_mask);
+void velvet_scene_set_tags_for_window(struct velvet_scene *scene, uint64_t winid, uint32_t tag_mask);
+uint32_t velvet_scene_get_tags_for_window(struct velvet_scene *scene, uint64_t winid);
 void velvet_scene_toggle_tags(struct velvet_scene *scene, uint32_t tag_mask);
 struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet_window template);
-void velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
-void velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
+int velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
+int velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
 void velvet_scene_resize(struct velvet_scene *m, struct rect w);
 void velvet_scene_arrange(struct velvet_scene *m);
@@ -309,7 +311,7 @@ static const struct velvet_render_state_cache render_state_cache_invalidated = {
 
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
-    .focus_order = vec(uint64_t),
+    .focus_order = vec(int),
     .theme = velvet_theme_default,
     .renderer =
         {

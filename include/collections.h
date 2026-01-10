@@ -88,7 +88,7 @@ void *hashmap_get(const struct hashmap *h, uint32_t key);
 // Return the item with the specified key, if it exists, returning it.
 bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
 int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
-void string_push_cstr(struct string *str, char *cstr);
+void string_push_cstr(struct string *str, const char *cstr);
 void string_push_string(struct string *dest, struct string src);
 void string_push_slice(struct string *str, struct u8_slice slice);
 void string_push_range(struct string *str, const uint8_t *const src,
@@ -172,8 +172,9 @@ bool u8_match(struct u8_slice s, char *opt);
 #define vec_rwhere(item, vec, cond) vec_rforeach(item, vec) if ((cond))
 
 #define vec_foreach(item, vec)                                                                                         \
-  assert(sizeof(*(item)) == (vec).element_size);                                                                       \
-  for ((item) = (vec).content; (((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size)); (item)++)
+  assert((vec).length == 0 || sizeof(*(item)) == (vec).element_size);                                                  \
+  for ((item) = (vec).content; (((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size));       \
+       (item)++)
 
 #define vec_where(item, vec, cond) vec_foreach(item, vec) if ((cond))
 

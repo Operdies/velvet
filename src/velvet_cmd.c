@@ -1,4 +1,5 @@
 #include "velvet_cmd.h"
+#include "lauxlib.h"
 #include "utils.h"
 
 static bool is_whitespace(char ch) {
@@ -392,6 +393,20 @@ static void velvet_cmd_spawn_tiled(struct velvet *v, struct velvet_session *sour
   velvet_cmd_create_window(v, it, source, o);
 }
 
+static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+  if (!velvet_cmd_arg_iterator_next(it)) {
+    velvet_log("lua: missing string");
+    return;
+  }
+  struct u8_slice cmd = it->current;
+  struct string S = {0};
+  string_push_slice(&S, cmd);
+  string_ensure_null_terminated(&S);
+  luaL_dostring(v->L, (char*)S.content);
+  lua_pop(v->L, lua_gettop(v->L));
+  string_destroy(&S);
+}
+
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   velvet_ensure_render_scheduled(v);
   struct velvet_session *sender = nullptr;
@@ -423,6 +438,8 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     command = it.current;
     if (u8_match(command, "detach")) {
       velvet_detach_session(v, velvet_get_focused_session(v));
+    } else if (u8_match(command, "lua")) {
+      velvet_lua(v, &it);
     } else if (u8_match(command, "put")) {
       velvet_cmd_put(v, &it);
     } else if (u8_match(command, "tag")) {

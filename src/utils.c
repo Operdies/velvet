@@ -9,6 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <platform.h>
+#include "lauxlib.h"
+#include "lua.h"
 #include "murmur3.h"
 #include "collections.h"
 
@@ -74,6 +76,11 @@ void *velvet_calloc(size_t nmemb, size_t size) {
   void *ptr = calloc(nmemb, size);
   if (!ptr) velvet_die("calloc:");
   return ptr;
+}
+
+_Noreturn void lua_die(lua_State *L) {
+  const char *str = luaL_tolstring(L, 1, 0);
+  velvet_die("lua error: %s", str);
 }
 
 _Noreturn void velvet_die(char *fmt, ...) {
