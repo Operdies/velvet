@@ -230,7 +230,20 @@ local api = {}
 ]])
 
 for i, fn in ipairs(spec.api) do
+  local optional = fn.optional or {}
+  if #optional > 0 then
+    table.insert(lua, ([[
+
+---@class velvet.api.%s.Opts
+]]):format(fn.name))
+    for i, opt in ipairs(optional) do
+      table.insert(lua, ([[
+--- @field %s? %s %s
+]]):format(opt.name, lua_type(opt.type), opt.doc))
+    end
+  end
   table.insert(lua, ([[
+
 --- %s
 ]]):format(fn.doc))
   for i, p in ipairs(fn.params or {}) do
@@ -242,6 +255,12 @@ for i, fn in ipairs(spec.api) do
   local params = {}
   for i, p in ipairs(fn.params or {}) do
     table.insert(params, p.name)
+  end
+  if #optional > 0 then 
+    table.insert(lua, ([[
+---@param opts? velvet.api.%s.Opts
+]]):format(fn.name))
+    table.insert(params, "opts")
   end
   table.insert(lua,
     ("function api.%s(%s) end\n")
