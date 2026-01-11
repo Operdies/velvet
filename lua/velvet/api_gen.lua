@@ -17,7 +17,28 @@ end
 
 ensure_dir(out_dir)
 
+local function string_lines(str)
+  if not str then return {} end
+  if (type(str) == 'table') then return str end
+  local lines = {}
+  for s in str:gmatch("[^\r\n]+") do 
+    table.insert(lines, s)
+  end
+  return lines
+end
+
+local function strings_prepend(tbl, between)
+  local str = ""
+  for i, s in ipairs(tbl or {}) do
+    str = str .. s
+    if i < #tbl then str = str .. between end
+  end
+  return str
+end
+
+
 for i, fn in ipairs(spec.options) do
+  fn.doc = string_lines(fn.doc)
   local getter = {
     name = "get_" .. fn.name,
     doc = ("Get %s"):format(fn.name),
@@ -28,7 +49,7 @@ for i, fn in ipairs(spec.options) do
     name = "set_" .. fn.name,
     doc = ("Set %s. Returns the new value."):format(fn.name),
     params = { { name = "new_value", type = fn.type, doc = fn.doc } },
-    returns = { type = fn.type, doc = "The value after the updated" }
+    returns = { type = fn.type, doc = "The value after the update" }
   }
   table.insert(spec.api, getter)
   table.insert(spec.api, setter)
@@ -38,6 +59,15 @@ for i, fn in ipairs(spec.api) do
   fn.parameters = fn.parameters or {}
   fn.optional = fn.optional or {}
   fn.returns = fn.returns or { type = "void" }
+
+  for _, p in ipairs(fn.parameters) do
+    p.doc = string_lines(p.doc)
+  end
+  for _, o in ipairs(fn.optional) do
+    o.doc = string_lines(o.doc)
+  end
+  fn.doc = string_lines(fn.doc)
+  fn.returns.doc = string_lines(fn.returns.doc)
 end
 
 -- Type Utilities {{{1
@@ -110,7 +140,7 @@ for i, fn in ipairs(spec.api) do
   local required_params = #required > 0 and ", " .. table.concat(required, ", ") or ""
   local optional_params = #optional > 0 and ", " .. table.concat(optional, ", ") or ""
 
-  table.insert(h, ("/* %s */\n"):format(fn.doc))
+  table.insert(h, ("/* %s */\n"):format(strings_prepend(fn.doc, "\n** ")))
   table.insert(h,
     ("%s vv_api_%s(struct velvet *v%s%s);\n")
     :format(c_type(fn.returns.type), fn.name, required_params, optional_params)
@@ -254,18 +284,18 @@ for i, fn in ipairs(spec.api) do
     for i, opt in ipairs(optional) do
       table.insert(lua, ([[
 --- @field %s? %s %s
-]]):format(opt.name, lua_type(opt.type), opt.doc))
+]]):format(opt.name, lua_type(opt.type), strings_prepend(opt.doc, "\n--- ")))
     end
   end
   table.insert(lua, ([[
 
 --- %s
-]]):format(fn.doc))
+]]):format(strings_prepend(fn.doc, "\n--- ")))
   for i, p in ipairs(fn.params or {}) do
     table.insert(lua, ([[
 --- @param %s %s %s
 --- 
-]]):format(p.name, lua_type(p.type), p.doc))
+]]):format(p.name, lua_type(p.type), strings_prepend(fn.doc, "\n--- ")))
   end
 
   local params = {}
@@ -280,7 +310,7 @@ for i, fn in ipairs(spec.api) do
   end
   table.insert(lua, ([[
 --- @return %s %s
-]]):format(lua_type(fn.returns.type), fn.returns.doc))
+]]):format(lua_type(fn.returns.type), strings_prepend(fn.returns.doc, "\n--- ")))
 
   table.insert(lua,
     ("function api.%s(%s) end\n")
@@ -308,7 +338,7 @@ for i, fn in ipairs(spec.options) do
 --- @type %s
 options.%s = %s
 
-]]):format(fn.doc, luatype, fn.name, fn.default))
+]]):format(strings_prepend(fn.doc, "\n--- "), luatype, fn.name, fn.default))
 end
 
 table.insert(options, "return options\n")

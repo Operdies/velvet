@@ -27,7 +27,8 @@ return {
   },
 
   api = {
-    { name = "spawn",
+    {
+      name = "spawn",
       doc = "Spawn a process in a new window. Returns the window ID.",
       params = {
         { name = "cmd", type = "string", doc = "The process to spawn." },
@@ -41,14 +42,16 @@ return {
       },
       returns = { type = "int", doc = "The ID of the new window" }
     },
-    { name = "get_tags",
+    {
+      name = "get_tags",
       doc = "Set the tags of the specified window.",
       params = {},
       optional = {
         { name = "winid", type = "int", doc = "Window ID" } },
       returns = { type = "int", doc = "The tags of the specified window." }
     },
-    { name = "set_tags",
+    {
+      name = "set_tags",
       doc = "Set the tags of the specified window.",
       params = {
         { name = "tags", type = "int", doc = "Bitmask of tags where <winid> should be shown." },
@@ -61,21 +64,13 @@ return {
       doc = "Detach the current session from the server.",
       optional = { { name = "session_id", type = "int", doc = "Session ID" } },
     },
-    { name = "close_window",
+    {
+      name = "close_window",
       doc = "Close the specified window, killing the associated process.",
-      optional = { 
-        { name = "winid", type = "int", doc = "The window to close" } ,
-        {
-          name = "force",
-          type = "bool",
-          doc = [[
-        Forcefully close the window.
-        If this option is set, velvet will rudely kill the hosted process and remove the window.
-        Otherwise, velvet will attempt to gracefully close it.
-        ]]
-        },
+      optional = {
+        { name = "winid", type = "int", doc = "The window to close (default: current window)" },
+        { name = "force", type = "bool", doc = "Forcefully close the window. (default: false)" },
       },
     },
   },
 }
-

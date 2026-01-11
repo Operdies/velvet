@@ -11,7 +11,7 @@ local api = {}
 --- @field layer? string The initial layer of the window. FLOATING|TILED
 
 --- Spawn a process in a new window. Returns the window ID.
---- @param cmd string The process to spawn.
+--- @param cmd string Spawn a process in a new window. Returns the window ID.
 --- 
 --- @param opts? velvet.api.spawn.Opts
 --- @return integer The ID of the new window
@@ -29,7 +29,7 @@ function api.get_tags(opts) end
 --- @field winid? integer Window ID
 
 --- Set the tags of the specified window.
---- @param tags integer Bitmask of tags where <winid> should be shown.
+--- @param tags integer Set the tags of the specified window.
 --- 
 --- @param opts? velvet.api.set_tags.Opts
 --- @return integer The tags of the window after the set operation.
@@ -40,19 +40,16 @@ function api.set_tags(tags, opts) end
 
 --- Detach the current session from the server.
 --- @param opts? velvet.api.detach.Opts
---- @return nil nil
+--- @return nil 
 function api.detach(opts) end
 
 --- @class velvet.api.close_window.Opts
---- @field winid? integer The window to close
---- @field force? boolean         Forcefully close the window.
-        If this option is set, velvet will rudely kill the hosted process and remove the window.
-        Otherwise, velvet will attempt to gracefully close it.
-        
+--- @field winid? integer The window to close (default: current window)
+--- @field force? boolean Forcefully close the window. (default: false)
 
 --- Close the specified window, killing the associated process.
 --- @param opts? velvet.api.close_window.Opts
---- @return nil nil
+--- @return nil 
 function api.close_window(opts) end
 
 --- Get key_repeat_timeout
@@ -60,9 +57,9 @@ function api.close_window(opts) end
 function api.get_key_repeat_timeout() end
 
 --- Set key_repeat_timeout. Returns the new value.
---- @param new_value integer Time in milliseconds before pending keybinds time out
+--- @param new_value integer Set key_repeat_timeout. Returns the new value.
 --- 
---- @return integer The value after the updated
+--- @return integer The value after the update
 function api.set_key_repeat_timeout(new_value) end
 
 --- Get view
@@ -70,8 +67,8 @@ function api.set_key_repeat_timeout(new_value) end
 function api.get_view() end
 
 --- Set view. Returns the new value.
---- @param new_value integer Bitmask of the currently visible tags.
+--- @param new_value integer Set view. Returns the new value.
 --- 
---- @return integer The value after the updated
+--- @return integer The value after the update
 function api.set_view(new_value) end
 
