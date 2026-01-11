@@ -1,3 +1,4 @@
+-- Setup {{{1
 local spec_path = assert(arg[1], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
 local out_dir = assert(arg[2], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
 local spec = dofile(spec_path)
@@ -16,7 +17,6 @@ end
 
 ensure_dir(out_dir)
 
--- Create getters and setters for all options
 for i, fn in ipairs(spec.options) do
   local getter = { name = "get_" .. fn.name, doc = ("Get %s"):format(fn.name), params = {}, returns = fn.type }
   local setter = {
@@ -28,6 +28,8 @@ for i, fn in ipairs(spec.options) do
   table.insert(spec.api, getter)
   table.insert(spec.api, setter)
 end
+
+-- Type Utilities {{{1
 
 local type_lookup = {
   void = { c_type = "void" },
@@ -75,10 +77,9 @@ local function lua_push(t, var)
   return type_lookup[t].push(var)
 end
 
-----------------------------------------------------------------------
--- Generate C header
-----------------------------------------------------------------------
+-- C Emitters {{{1
 
+-- C Header {{{2
 local h = {}
 table.insert(h, ("#ifndef %s\n#define %s\n"):format("VELVET_API_H", "VELVET_API_H"))
 table.insert(h, "struct velvet;\n\n")
@@ -107,9 +108,7 @@ table.insert(h, ("#endif /* %s */\n"):format("VELVET_API_H"))
 
 write_file(out_dir .. "/velvet_api.h", table.concat(h))
 
-----------------------------------------------------------------------
--- Generate Lua C functions
-----------------------------------------------------------------------
+-- C Lua Functions {{{2
 
 local c = {}
 table.insert(c, [[
@@ -189,37 +188,36 @@ static int l_vv_api_%s(lua_State *L){
   end
 end
 
--------- function table mapping vv.api.<func> to l_vv_api_<func> ----------
-do
-  table.insert(c, [=[
+table.insert(c, [=[
 [[maybe_unused]] static const struct luaL_Reg velvet_lua_function_table[] = {
 ]=])
 
-  for i, fn in ipairs(spec.options) do
-    local name = fn.name
-    table.insert(c, ([[
+for i, fn in ipairs(spec.options) do
+  local name = fn.name
+  table.insert(c, ([[
   { "get_%s", l_vv_api_get_%s },
   { "set_%s", l_vv_api_set_%s },
 ]]):format(name, name, name, name))
-  end
+end
 
-  for i, fn in ipairs(spec.api) do
-    local name = fn.name
-    table.insert(c, ([[
+for i, fn in ipairs(spec.api) do
+  local name = fn.name
+  table.insert(c, ([[
   { "%s", l_vv_api_%s },
 ]]):format(name, name))
-  end
+end
 
 
-  table.insert(c, [[
+table.insert(c, [[
   {0} /* sentinel */
 };
 ]])
-end
 
 write_file(out_dir .. "/velvet_lua_autogen.c", table.concat(c))
 
--------- lua api definition -------
+-- LUA emitters {{{1
+
+-- _api.lua {{{2
 local lua = {}
 
 table.insert(lua, [[
@@ -256,7 +254,7 @@ for i, fn in ipairs(spec.api) do
   for i, p in ipairs(fn.params or {}) do
     table.insert(params, p.name)
   end
-  if #optional > 0 then 
+  if #optional > 0 then
     table.insert(lua, ([[
 ---@param opts? velvet.api.%s.Opts
 ]]):format(fn.name))
@@ -271,7 +269,8 @@ end
 table.insert(lua, "\n")
 write_file("lua/velvet/_api.lua", table.concat(lua))
 
--------- lua options definition ----------
+-- _options.lua {{{2
+
 local options = {}
 table.insert(options, [[
 error("Cannot require meta file")
@@ -293,7 +292,7 @@ end
 table.insert(options, "return options\n")
 write_file("lua/velvet/_options.lua", table.concat(options))
 
------------ lua default options ----------
+-- generate options.lua {{{2
 
 local default_options = {}
 
@@ -310,3 +309,7 @@ end
 
 table.insert(default_options, "\n")
 write_file("lua/velvet/default_options.lua", table.concat(default_options))
+
+
+-- Modeline {{{1
+-- vim: fdm=marker shiftwidth=2
