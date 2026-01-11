@@ -34,16 +34,15 @@ struct mouse_sgr {
   int row, column;
 };
 
-#define send_bytes(in, ...)                                                                                            \
-  send(in, (struct u8_slice){.len = sizeof((uint8_t[]){__VA_ARGS__}), .content = (uint8_t[]){__VA_ARGS__}})
+#define send_bytes(sink, ...)                                                                                            \
+  send(sink, (struct u8_slice){.len = sizeof((uint8_t[]){__VA_ARGS__}), .content = (uint8_t[]){__VA_ARGS__}})
 
-static void send(struct velvet *v, struct u8_slice s) {
-  struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  if (focus) string_push_slice(&focus->emulator.pending_input, s);
+static void send(struct velvet_window *sink, struct u8_slice s) {
+  if (sink) string_push_slice(&sink->emulator.pending_input, s);
 }
 
-static void send_byte(struct velvet *v, uint8_t ch) {
-  send_bytes(v, ch);
+static void send_byte(struct velvet_window *sink, uint8_t ch) {
+  send_bytes(sink, ch);
 }
 
 static bool find_key(char *name, struct velvet_key *key) {
@@ -87,7 +86,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   if (!iscntrl) {
     uint32_t upper = utf8proc_toupper(cp);
     uint32_t lower = utf8proc_tolower(cp);
-    if (cp == upper) {
+    if (cp == upper && upper != lower) {
       isshift = true;
       k.key.alternate_codepoint = upper;
       cp = lower;
@@ -139,15 +138,11 @@ static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
 
 static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans) {
   int btn = trans.button_state | trans.modifiers | trans.event_type;
-  int start = target->emulator.pending_input.len;
   if (target->emulator.options.mouse.mode == MOUSE_MODE_SGR) {
     string_push_csi(&target->emulator.pending_input,
                     '<',
                     INT_SLICE(btn, trans.column, trans.row),
                     trans.trigger == mouse_down ? "M" : "m");
-    int end = target->emulator.pending_input.len;
-    struct u8_slice s = string_range(&target->emulator.pending_input, start, end);
-    velvet_log("send sgr: %.*s", (int)s.len, s.content);
   } else if (target->emulator.options.mouse.mode == MOUSE_MODE_DEFAULT) {
     /* CSI M Cb Cx Cy */
     uint8_t Cb = btn | trans.modifiers;
@@ -262,8 +257,7 @@ static void dispatch_border_drag(struct velvet *v, struct mouse_sgr sgr, struct 
   }
 }
 
-static void scroll_to_bottom(struct velvet *v) {
-  struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+static void scroll_to_bottom(struct velvet_window *focus) {
   if (focus) screen_set_scroll_offset(&focus->emulator.primary, 0);
 }
 
@@ -283,7 +277,7 @@ static void send_bracketed_paste(struct velvet *v) {
   }
   string_clear(&v->input.command_buffer);
   in->state = VELVET_INPUT_STATE_NORMAL;
-  scroll_to_bottom(v);
+  scroll_to_bottom(focus);
 }
 
 static void dispatch_csi(struct velvet *v, uint8_t ch) {
@@ -681,7 +675,7 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
   }
 }
 
-static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, enum velvet_key_modifier m) {
+static void velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enum velvet_key_modifier m) {
   int n = 0;
   struct utf8 buf = {0};
   char *escape = nullptr;
@@ -695,20 +689,20 @@ static void velvet_input_send_vk_basic(struct velvet *v, struct velvet_key vk, e
   }
 
   if (escape && escape[0]) {
-    scroll_to_bottom(v);
+    scroll_to_bottom(sink);
     if (vk.codepoint == ESC) {
-      send_byte(v, ESC);
+      send_byte(sink, ESC);
     } else {
       bool is_meta = m & MODIFIER_ALT;
       bool is_cntrl = m & MODIFIER_CTRL;
 
-      if (is_meta) send_byte(v, ESC);
+      if (is_meta) send_byte(sink, ESC);
       bool is_byte = !escape[1];
       if (is_byte && is_cntrl) {
         char ch = escape[0] & 0x1f;
-        send_byte(v, ch);
+        send_byte(sink, ch);
       } else {
-        for (int i = 0; i < n; i++) send_byte(v, escape[i]);
+        for (int i = 0; i < n; i++) send_byte(sink, escape[i]);
       }
     }
   }
@@ -769,7 +763,7 @@ velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, en
 
   if (!do_send_encoded) {
     /* send the base symbol. This applies to most pure-text keys */
-    if (!is_mod) velvet_input_send_vk_basic(v, e.key, e.modifiers);
+    if (!is_mod) velvet_input_send_vk_basic(f, e.key, e.modifiers);
     return;
   }
 
@@ -815,20 +809,24 @@ velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, en
   string_push_char(s, e.key.kitty_terminator);
 }
 
-static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
-  struct velvet_window *f = velvet_scene_get_focus(&v->scene);
-  if (!f) return;
-
+static void velvet_input_send_vk_to_window(struct velvet *v, struct velvet_key_event e, struct velvet_window *f) {
+  assert(f);
   enum kitty_keyboard_options o = f->emulator.options.kitty[f->emulator.options.alternate_screen].options;
   if (o == KITTY_KEYBOARD_NONE || e.legacy) {
     if (e.type != KEY_RELEASE) {
       if (!is_modifier(e.key.codepoint)) {
-        velvet_input_send_vk_basic(v, e.key, e.modifiers);
+        velvet_input_send_vk_basic(f, e.key, e.modifiers);
       }
     }
   } else {
     velvet_input_send_kitty_encoding(v, e, o);
   }
+}
+
+static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
+  struct velvet_window *f = velvet_scene_get_focus(&v->scene);
+  if (f) velvet_input_send_vk_to_window(v, e, f);
+  
 }
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
@@ -877,7 +875,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
 static void dispatch_focus(struct velvet *v, struct csi c) {
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
   if (focus && focus->emulator.options.focus_reporting) {
-    send(v, c.final == 'O' ? vt_focus_out : vt_focus_in);
+    send(focus, c.final == 'O' ? vt_focus_out : vt_focus_in);
   }
   if (c.final == 'I' && v->input.input_socket) v->focused_socket = v->input.input_socket;
 }
@@ -1170,7 +1168,9 @@ struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_sl
   return parent;
 }
 
-void velvet_input_put(struct velvet *in, struct u8_slice str) {
+void velvet_input_put_keys(struct velvet *in, struct u8_slice str, int win_id) {
+  struct velvet_window *win = velvet_scene_get_window_from_id(&in->scene, win_id);
+  if (!win) return;
   struct velvet_key_iterator it = { .src = str };
   struct velvet_key_iterator copy = it;
   for (; velvet_key_iterator_next(&copy); ) {
@@ -1179,6 +1179,11 @@ void velvet_input_put(struct velvet *in, struct u8_slice str) {
     }
   }
   for (; velvet_key_iterator_next(&it); ) {
-    velvet_input_send_vk(in, it.current);
+    velvet_input_send_vk_to_window(in, it.current, win);
   }
+}
+
+void velvet_input_put_text(struct velvet *in, struct u8_slice str, int win_id) {
+  struct velvet_window *win = velvet_scene_get_window_from_id(&in->scene, win_id);
+  if (win) string_push_slice(&win->emulator.pending_input, str);
 }

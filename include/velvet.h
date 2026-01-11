@@ -124,7 +124,8 @@ void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
  * This input will not be parsed for CSI sequences or any current keymap. */
-void velvet_input_put(struct velvet *in, struct u8_slice str);
+void velvet_input_put_keys(struct velvet *in, struct u8_slice str, int win_id);
+void velvet_input_put_text(struct velvet *in, struct u8_slice str, int win_id);
 /* Process e.g. standard input from the keyboard. This input will be parsed for CSI sequences and matched against the
  * current keymap. */
 void velvet_input_process(struct velvet *in, struct u8_slice str);

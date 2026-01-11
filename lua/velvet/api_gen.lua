@@ -21,23 +21,24 @@ local function string_lines(str)
   if not str then return {} end
   if (type(str) == 'table') then return str end
   local lines = {}
-  for s in str:gmatch("[^\r\n]+") do 
+  for s in str:gmatch("[^\r\n]+") do
     table.insert(lines, s)
   end
   return lines
 end
 
-local function strings_prepend(tbl, between)
+local function string_concatenate(tbl, after)
+  if type(tbl) == 'string' then return tbl end
   local str = ""
   for i, s in ipairs(tbl or {}) do
     str = str .. s
-    if i < #tbl then str = str .. between end
+    if i < #tbl then str = str .. after end
   end
   return str
 end
 
 
-for i, fn in ipairs(spec.options) do
+for _, fn in ipairs(spec.options) do
   fn.doc = string_lines(fn.doc)
   local getter = {
     name = "get_" .. fn.name,
@@ -55,7 +56,7 @@ for i, fn in ipairs(spec.options) do
   table.insert(spec.api, setter)
 end
 
-for i, fn in ipairs(spec.api) do 
+for _, fn in ipairs(spec.api) do
   fn.parameters = fn.parameters or {}
   fn.optional = fn.optional or {}
   fn.returns = fn.returns or { type = "void" }
@@ -73,7 +74,15 @@ end
 -- Type Utilities {{{1
 
 local type_lookup = {
+  ["int[]"] = { lua_type = "integer[]" },
   void = { c_type = "void", lua_type = "nil" },
+  ["function"] = {
+    c_type = "int",
+    lua_type = "function",
+    check = function(idx)
+      return ("luaL_checkfunction(L, %d)"):format(idx)
+    end,
+  },
   int = {
     c_type = "int",
     lua_type = "integer",
@@ -100,6 +109,22 @@ local type_lookup = {
   },
 }
 
+local function get_cname(name)
+  return "struct velvet_api_" .. name:gsub("[.]", "_")
+end
+
+local function get_luaname(name)
+  return "velvet.api." .. name
+end
+
+local function is_complex(name) return type_lookup[name].complex end
+local function is_manual(name) return spec.manual_types[name] end
+
+
+for name, _ in pairs(spec.types) do
+  type_lookup[name] = { c_type = get_cname(name), lua_type = get_luaname(name), complex = true }
+end
+
 local function lua_type(t)
   if t == nil then return "nil" end
   return type_lookup[t].lua_type
@@ -107,7 +132,7 @@ end
 
 
 local function c_type(t)
-  local entry = type_lookup[t] or error("No such type: " .. t)
+  local entry = type_lookup[t] or error("Unrecognized type: " .. t)
   return entry.c_type
 end
 
@@ -123,28 +148,55 @@ end
 
 -- C Header {{{2
 local h = {}
-table.insert(h, ("#ifndef %s\n#define %s\n"):format("VELVET_API_H", "VELVET_API_H"))
-table.insert(h, "struct velvet;\n\n")
+table.insert(h, ([[#ifndef %s
+#define %s
+struct velvet;
+typedef struct lua_State lua_State;
 
-for i, fn in ipairs(spec.api) do
+]]):format("VELVET_API_H", "VELVET_API_H"))
+
+-- Create structs for complex types.
+-- These structs will automatically be marshaled to and from lua
+for name, fields in pairs(spec.types) do
+  local cname = get_cname(name)
+  table.insert(h, ([[
+%s {
+]]):format(cname))
+  for _, fld in ipairs(fields) do
+    table.insert(h, ([[
+  %s %s; /* %s */
+]]):format(c_type(fld.type), fld.name, string_concatenate(fld.doc, "")))
+  end
+  table.insert(h, [[
+};
+
+]])
+end
+
+for _, fn in ipairs(spec.api) do
   local required = {}
-  for i, p in ipairs(fn.params or {}) do
+  for _, p in ipairs(fn.params or {}) do
     table.insert(required, c_type(p.type) .. " " .. p.name)
   end
 
   local optional = {}
-  for i, o in ipairs(fn.optional or {}) do
+  for _, o in ipairs(fn.optional or {}) do
     table.insert(optional, c_type(o.type) .. "* " .. o.name)
   end
 
   local required_params = #required > 0 and ", " .. table.concat(required, ", ") or ""
   local optional_params = #optional > 0 and ", " .. table.concat(optional, ", ") or ""
 
-  table.insert(h, ("/* %s */\n"):format(strings_prepend(fn.doc, "\n** ")))
-  table.insert(h,
-    ("%s vv_api_%s(struct velvet *v%s%s);\n")
-    :format(c_type(fn.returns.type), fn.name, required_params, optional_params)
-  )
+  table.insert(h, ("/* %s */\n"):format(string_concatenate(fn.doc, "\n** ")))
+  if is_manual(fn.returns.type) then
+    table.insert(h, ([[int vv_api_%s(lua_State *L%s%s);
+]]):format(fn.name, required_params, optional_params))
+  else
+    table.insert(h,
+      ("%s vv_api_%s(struct velvet *v%s%s);\n")
+      :format(c_type(fn.returns.type), fn.name, required_params, optional_params)
+    )
+  end
 end
 table.insert(h, ("#endif /* %s */\n"):format("VELVET_API_H"))
 
@@ -158,15 +210,22 @@ table.insert(c, [[
 #include "lauxlib.h"
 #include "velvet_api.h"
 
+/* Instead of creating a real gc handle, we only store a reference to the function.
+Cleaning up the handle in codegen is complicated, so instead the consumer must create its own handle. */
+static int luaL_checkfunction(lua_State *L, int idx) {
+  luaL_checktype(L, idx, LUA_TFUNCTION);
+  return idx;
+}
+
 static bool luaL_checkboolean(lua_State *L, int idx) {
   luaL_checktype(L, idx, LUA_TBOOLEAN);
   return lua_toboolean(L, idx);
 }
 ]])
 
-for i, fn in ipairs(spec.api) do
+for _, fn in ipairs(spec.api) do
   local params = {}
-  for i, p in ipairs(fn.params or {}) do
+  for _, p in ipairs(fn.params or {}) do
     table.insert(params, c_type(p.type) .. " " .. p.name)
   end
 
@@ -181,17 +240,34 @@ static int l_vv_api_%s(lua_State *L){
 
   local idx = 1
   local args = {}
-  for i, p in ipairs(fn.params or {}) do
-    table.insert(c,
-      ("  %s %s = %s;\n")
-      :format(c_type(p.type), p.name, lua_check(p.type, idx))
-    )
+  for _, p in ipairs(fn.params or {}) do
+    if is_complex(p.type) then
+      table.insert(c, ([[
+  luaL_checktype(L, %d, LUA_TTABLE);
+  %s %s = {0};
+]]):format(idx, c_type(p.type), p.name))
+
+      local typedef = spec.types[p.type]
+      for _, member in ipairs(typedef) do
+        table.insert(c, ([[
+  lua_getfield(L, %d, "%s");
+  %s.%s = %s;
+  lua_pop(L, 1);
+]]):format(idx, member.name, p.name, member.name, lua_check(member.type, -1)))
+      end
+
+    else
+      table.insert(c,
+        ("  %s %s = %s;\n")
+        :format(c_type(p.type), p.name, lua_check(p.type, idx))
+      )
+    end
     table.insert(args, p.name)
     idx = idx + 1
   end
 
   if #fn.optional > 0 then
-    for i, o in ipairs(fn.optional) do
+    for _, o in ipairs(fn.optional) do
       table.insert(c, ([[
   %s %s;
   %s* p_%s = nullptr;
@@ -204,7 +280,7 @@ static int l_vv_api_%s(lua_State *L){
     luaL_checktype(L, %d, LUA_TTABLE);
 ]]):format(idx, idx, idx))
 
-    for i, o in ipairs(fn.optional) do
+    for _, o in ipairs(fn.optional) do
       table.insert(c, ([[
     lua_getfield(L, %d, "%s");
     if (!lua_isnil(L, -1)) {
@@ -221,10 +297,31 @@ static int l_vv_api_%s(lua_State *L){
   local argsstring = #args > 0 and ", " .. table.concat(args, ", ") or ""
   if fn.returns.type == 'void' then
     table.insert(c, ([[
-    vv_api_%s(v%s);
-    return 0;
+  vv_api_%s(v%s);
+  return 0;
 }
 ]]):format(fn.name, argsstring))
+  elseif is_manual(fn.returns.type) then 
+    table.insert(c, ([[
+  return vv_api_%s(L%s);
+}
+]]):format(fn.name, argsstring))
+  elseif is_complex(fn.returns.type) then
+    table.insert(c, ([[
+  %s ret = vv_api_%s(v%s);
+  lua_newtable(L);
+]]):format(c_type(fn.returns.type), fn.name, argsstring))
+    local typedef = spec.types[fn.returns.type]
+    for _, member in ipairs(typedef) do
+      table.insert(c, ([[
+  %s;
+  lua_setfield(L, -2, "%s");
+]]):format(lua_push(member.type, "ret." .. member.name), member.name))
+    end
+    table.insert(c, [[
+  return 1;
+}
+]]);
   else
     table.insert(c, ([[
   %s ret = vv_api_%s(v%s);
@@ -239,7 +336,7 @@ table.insert(c, [=[
 [[maybe_unused]] static const struct luaL_Reg velvet_lua_function_table[] = {
 ]=])
 
-for i, fn in ipairs(spec.options) do
+for _, fn in ipairs(spec.options) do
   local name = fn.name
   table.insert(c, ([[
   { "get_%s", l_vv_api_get_%s },
@@ -247,7 +344,7 @@ for i, fn in ipairs(spec.options) do
 ]]):format(name, name, name, name))
 end
 
-for i, fn in ipairs(spec.api) do
+for _, fn in ipairs(spec.api) do
   local name = fn.name
   table.insert(c, ([[
   { "%s", l_vv_api_%s },
@@ -274,32 +371,44 @@ error("Cannot require meta file")
 local api = {}
 ]])
 
-for i, fn in ipairs(spec.api) do
+for name, fields in pairs(spec.types) do
+  local lua_name = get_luaname(name)
+  table.insert(lua, ([[
+
+--- @class %s
+]]):format(lua_name))
+  for _, fld in ipairs(fields) do
+    table.insert(lua, ([[
+--- @field %s? %s %s
+]]):format(fld.name, lua_type(fld.type), fld.doc))
+  end
+end
+
+for _, fn in ipairs(spec.api) do
   local optional = fn.optional or {}
   if #optional > 0 then
     table.insert(lua, ([[
 
 --- @class velvet.api.%s.Opts
 ]]):format(fn.name))
-    for i, opt in ipairs(optional) do
+    for _, opt in ipairs(optional) do
       table.insert(lua, ([[
 --- @field %s? %s %s
-]]):format(opt.name, lua_type(opt.type), strings_prepend(opt.doc, "\n--- ")))
+]]):format(opt.name, lua_type(opt.type), string_concatenate(opt.doc, "\n--- ")))
     end
   end
   table.insert(lua, ([[
 
 --- %s
-]]):format(strings_prepend(fn.doc, "\n--- ")))
-  for i, p in ipairs(fn.params or {}) do
+]]):format(string_concatenate(fn.doc, "\n--- ")))
+  for _, p in ipairs(fn.params or {}) do
     table.insert(lua, ([[
 --- @param %s %s %s
---- 
-]]):format(p.name, lua_type(p.type), strings_prepend(fn.doc, "\n--- ")))
+]]):format(p.name, lua_type(p.type), string_concatenate(p.doc, "\n--- ")))
   end
 
   local params = {}
-  for i, p in ipairs(fn.params or {}) do
+  for _, p in ipairs(fn.params or {}) do
     table.insert(params, p.name)
   end
   if #optional > 0 then
@@ -310,7 +419,7 @@ for i, fn in ipairs(spec.api) do
   end
   table.insert(lua, ([[
 --- @return %s %s
-]]):format(lua_type(fn.returns.type), strings_prepend(fn.returns.doc, "\n--- ")))
+]]):format(lua_type(fn.returns.type), string_concatenate(fn.returns.doc, "\n--- ")))
 
   table.insert(lua,
     ("function api.%s(%s) end\n")
@@ -331,14 +440,14 @@ error("Cannot require meta file")
 local options = {}
 ]])
 
-for i, fn in ipairs(spec.options) do
+for _, fn in ipairs(spec.options) do
   local luatype = lua_type(fn.type)
   table.insert(options, ([[
 --- %s
 --- @type %s
 options.%s = %s
 
-]]):format(strings_prepend(fn.doc, "\n--- "), luatype, fn.name, fn.default))
+]]):format(string_concatenate(fn.doc, "\n--- "), luatype, fn.name, fn.default))
 end
 
 table.insert(options, "return options\n")
@@ -353,7 +462,7 @@ table.insert(default_options, [[
 --- It sets all options to their default values.
 ]])
 
-for i, fn in ipairs(spec.options) do
+for _, fn in ipairs(spec.options) do
   table.insert(default_options, ([[
 vv.options.%s = %s
 ]]):format(fn.name, fn.default))

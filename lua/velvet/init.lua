@@ -3,13 +3,14 @@ local vv = {
   inspect = require('velvet.inspect'),
   --- @type velvet.api
   api = {},
-  --- @type velvet.keymap
-  keymap = {},
-  --- @type velvet.options 
-  options = {}
+  --- @type velvet.options
+  options = {},
+  --- Write string to the velvet log
+  --- @param text string the string to log
+  print = function(text) end
 }
 
--- vv.api is populated in C. Here we use a metatable to direct 
+-- vv.api is populated in C. Here we use a metatable to direct
 -- vv.options reads and assignments to the vv_api accessors
 vv.options = setmetatable(vv.options, {
   __index = function(_, k)

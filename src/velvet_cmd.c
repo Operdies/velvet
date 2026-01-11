@@ -308,7 +308,8 @@ static void velvet_cmd_put(struct velvet *v, struct velvet_cmd_arg_iterator *it)
     return;
   }
   keys = it->current;
-  velvet_input_put(v, keys);
+  struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+  velvet_input_put_keys(v, keys, focus->id);
 }
 
 struct window_create_options {

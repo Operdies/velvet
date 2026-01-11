@@ -1,32 +1,44 @@
+#include "lauxlib.h"
 #include "velvet.h"
 #include <sys/stat.h>
 #include "velvet_api.h"
 
-/* Get Time in milliseconds before pending keybinds time out */
 int vv_api_get_key_repeat_timeout(struct velvet *v) {
   return v->input.options.key_repeat_timeout_ms;
 }
-/* Set Time in milliseconds before pending keybinds time out */
 int vv_api_set_key_repeat_timeout(struct velvet *v, int new_value) {
   v->input.options.key_repeat_timeout_ms = new_value;
   return v->input.options.key_repeat_timeout_ms;
 }
 
-/* Get Bitmask of the currently visible tags. */
 int vv_api_get_view(struct velvet *v) {
   return v->scene.view;
 }
-/* Set Bitmask of the currently visible tags. */
 int vv_api_set_view(struct velvet *v, int new_value) {
   velvet_scene_set_view(&v->scene, new_value);
   return v->scene.view;
 }
-int vv_api_get_tags(struct velvet *vv, int *winid){
-  return velvet_scene_get_tags_for_window(&vv->scene, winid ? *winid : 0);
+int vv_api_get_tags(struct velvet *vv, int winid){
+  return velvet_scene_get_tags_for_window(&vv->scene, winid);
 }
-int vv_api_set_tags(struct velvet *vv, int tags, int *winid){
-  velvet_scene_set_tags_for_window(&vv->scene, winid ? *winid : 0, tags);
+int vv_api_set_tags(struct velvet *vv, int tags, int winid){
+  velvet_scene_set_tags_for_window(&vv->scene, winid, tags);
   return vv_api_get_tags(vv, winid);
+}
+
+static bool layer_from_string(const char *layer, enum velvet_scene_layer *out) {
+  struct u8_slice S = u8_slice_from_cstr(layer);
+  if (u8_match(S, "floating")) {
+    *out = VELVET_LAYER_FLOATING;
+    return true;
+  } else if (u8_match(S, "tiled")) {
+    *out = VELVET_LAYER_TILED;
+    return true;
+  } else if (u8_match(S, "background")) {
+    *out = VELVET_LAYER_BACKGROUND;
+    return true;
+  }
+  return false;
 }
 
 int vv_api_spawn(struct velvet *vv, const char* cmd, int* left, int* top, int* width, int* height, const char** layer) {
@@ -44,17 +56,9 @@ int vv_api_spawn(struct velvet *vv, const char* cmd, int* left, int* top, int* w
   };
   string_push_cstr(&template.cmdline, cmd);
 
-  if (layer && *layer) {
-    struct u8_slice S = u8_slice_from_cstr(*layer);
-    if (u8_match(S, "floating")) {
-      template.layer = VELVET_LAYER_FLOATING;
-    } else if (u8_match(S, "tiled")) {
-      template.layer = VELVET_LAYER_TILED;
-    } else if (u8_match(S, "background")) {
-      template.layer = VELVET_LAYER_BACKGROUND;
-    }
+  if (layer && *layer && layer_from_string(*layer, &template.layer)) {
+    layer_from_string(*layer, &template.layer);
   }
-
   return (int)velvet_scene_spawn_process_from_template(&vv->scene, template);
 }
 
@@ -70,15 +74,159 @@ void vv_api_detach(struct velvet *vv, int *session_id) {
   }
 }
 
-void vv_api_close_window(struct velvet *v, int* winid, bool* force) {
-  struct velvet_window *w;
-  if (winid) {
-    w = velvet_scene_get_window_from_id(&v->scene, *winid);
-  } else {
-    w = velvet_scene_get_focus(&v->scene);
-  }
+void vv_api_close_window(struct velvet *v, int winid, bool force) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
+  if (w) velvet_scene_kill_window(&v->scene, w, force);
+}
 
+int vv_api_get_focused_window(struct velvet *v){
+  struct velvet_window *w = velvet_scene_get_focus(&v->scene);
+  return w ? w->id : 0;
+}
+
+struct velvet_api_window_geometry vv_api_get_window_geometry(struct velvet *v, int winid){
+  struct velvet_api_window_geometry geom = {0};
+  struct velvet_window *w;
+  vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
-    velvet_scene_kill_window(&v->scene, w, force ? *force : false);
+    struct rect r = w->rect.window;
+    geom.height = r.h;
+    geom.left = r.x;
+    geom.top = r.y;
+    geom.width = r.w;
+  }
+  return geom;
+}
+
+void vv_api_set_window_geometry(struct velvet *v, int winid, struct velvet_api_window_geometry geometry) {
+  struct velvet_window *w;
+  vec_find(w, v->scene.windows, w->id == winid);
+  if (w) {
+    struct rect new_geometry = {.h = geometry.height, .y = geometry.top, .x = geometry.left, .w = geometry.width};
+    w->layer = VELVET_LAYER_FLOATING;
+    velvet_window_resize(w, new_geometry);
+  }
+}
+
+bool vv_api_is_window_valid(struct velvet *v, int winid) {
+  struct velvet_window *w;
+  vec_find(w, v->scene.windows, w->id == winid);
+  return w ? true : false;
+}
+
+int vv_api_list_windows(lua_State *L) {
+  struct velvet *vv = *(struct velvet **)lua_getextraspace(L);
+  lua_newtable(L);
+  int index = 1;
+  struct velvet_window *w;
+  vec_foreach(w, vv->scene.windows) {
+    /* internal windows -- hide them from the lua API for now, and get rid of them later */
+    if (w->id < 1000) continue;
+    lua_pushinteger(L, w->id);
+    lua_seti(L, -2, index++);
+  }
+  return 1;
+}
+
+struct velvet_api_terminal_geometry vv_api_get_terminal_geometry(struct velvet *v) {
+  struct velvet_api_terminal_geometry geom = { .height = v->scene.ws.h, .width = v->scene.ws.w };
+  return geom;
+}
+
+static void pcall_func_ref(lua_State *L, int func_ref) {
+  lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
+
+  if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+    const char *err = lua_tostring(L, -1);
+    velvet_log("lua error: %s", err);
+    lua_pop(L, 1);
+  }
+}
+
+static void keymap_execute(struct velvet_keymap *k, struct velvet_key_event evt) {
+  struct velvet *v = k->root->data;
+  lua_State *L = v->L;
+  int lua_function = (int)(int64_t)k->data;
+  if (evt.removed) {
+    luaL_unref(L, LUA_REGISTRYINDEX, lua_function);
+  } else {
+    pcall_func_ref(L, lua_function);
+  }
+}
+
+void vv_api_keymap_set(struct velvet *v, const char *keys, int function, bool *repeatable) {
+  struct u8_slice chords = u8_slice_from_cstr(keys);
+  struct velvet_keymap *added = velvet_keymap_map(v->input.keymap->root, chords);
+  if (added) {
+    bool rep = repeatable ? *repeatable : false;
+    added->is_repeatable = rep;
+    /* create a gc handle. This handle is cleared when the keymap is removed */
+    luaL_checktype(v->L, function, LUA_TFUNCTION);
+    lua_pushvalue(v->L, function);
+    int ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
+    added->data = (void *)(int64_t)ref;
+    added->on_key = keymap_execute;
+  }
+}
+
+void vv_api_keymap_del(struct velvet *v, const char* keys) {
+  struct u8_slice chords = u8_slice_from_cstr(keys);
+  velvet_keymap_unmap(v->input.keymap->root, chords);
+}
+
+const char *vv_api_get_layer(struct velvet *v, int winid) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
+  if (w) {
+    switch (w->layer) {
+    case VELVET_LAYER_BACKGROUND: return "background";
+    case VELVET_LAYER_STATUS: return "status";
+    case VELVET_LAYER_TILED: return "tiled";
+    case VELVET_LAYER_FLOATING: return "floating";
+    case VELVET_LAYER_NOTIFICATION: return "notification";
+    default: break;
+    }
+  }
+  return nullptr;
+}
+
+void vv_api_set_layer(struct velvet *v, int winid, const char* layer) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
+  enum velvet_scene_layer new_layer;
+  if (w) {
+    if (layer_from_string(layer, &new_layer))
+      w->layer = new_layer;
+  }
+}
+
+bool vv_api_get_display_damage(struct velvet *v) {
+  return v->scene.renderer.options.display_damage;
+}
+bool vv_api_set_display_damage(struct velvet *v, bool new_value) {
+  velvet_scene_set_display_damage(&v->scene, new_value);
+  return v->scene.renderer.options.display_damage;
+}
+
+void vv_api_window_send_text(struct velvet *v, int winid, const char* text) {
+  struct u8_slice t = u8_slice_from_cstr(text);
+  velvet_input_put_text(v, t, winid);
+}
+
+void vv_api_window_send_keys(struct velvet *v, int winid, const char* keys) {
+  struct u8_slice t = u8_slice_from_cstr(keys);
+  velvet_input_put_keys(v, t, winid);
+}
+
+void vv_api_set_focused_window(struct velvet *v, int winid){
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
+  if (w) velvet_scene_set_focus(&v->scene, w);
+}
+
+void vv_api_swap_windows(struct velvet *v, int first, int second) {
+  struct velvet_window *w1 = velvet_scene_get_window_from_id(&v->scene, first);
+  struct velvet_window *w2 = velvet_scene_get_window_from_id(&v->scene, second);
+  if (w1 && w2) {
+    int i1 = vec_index(&v->scene.windows, w1);
+    int i2 = vec_index(&v->scene.windows, w2);
+    vec_swap(&v->scene.windows, i1, i2);
   }
 }

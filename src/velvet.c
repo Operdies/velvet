@@ -299,14 +299,6 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
 static void velvet_default_config(struct velvet *v) {
   struct string config = {0};
   string_push_cstr(&config,
-                   "map <C-x>c     'spawn       zsh'\n"
-                   "map <C-x>d     detach\n"
-                   "map <C-x><C-x> put          <C-x>\n"
-                   "map <C-x>t     set          layer          tiled\n"
-                   "map <C-x>f     set          layer          floating\n"
-                   "map <C-x>,,,   set          display_damage true\n"
-                   "map <C-x>...   set          display_damage false\n"
-                   "map -r         <C-x>b       spawn          bash\n"
                    "map -r         <C-x>x       incborder\n"
                    "map -r         <C-x><C-c>   cycle-transparency\n"
                    "map -r         <C-x>a       decborder\n"
@@ -314,21 +306,7 @@ static void velvet_default_config(struct velvet *v) {
                    "map -r         <C-x>]       incfactor\n"
                    "map -r         <C-x>i       incnmaster\n"
                    "map -r         <C-x>o       decnmaster\n"
-                   "map -r         '<C-x><C-j>' focus-next\n"
-                   "map -r         '<C-x><C-k>' focus-previous\n"
-                   "map -r         '<C-x>j'     swap-next\n"
-                   "map -r         '<C-x>k'     swap-previous\n"
                    );
-
-  for (int i = 1; i <= 9; i++) {
-    string_push_format_slow(&config, "map <M-%d>      view       %d\n", i, 1 << (i - 1));
-    string_push_format_slow(&config, "map <S-M-%d>    tag        %d\n", i, 1 << (i - 1));
-    string_push_format_slow(&config, "map <C-x>%d     toggletag  %d\n", i, 1 << (i - 1));
-    string_push_format_slow(&config, "map <C-x><M-%d> toggleview %d\n", i, 1 << (i - 1));
-  }
-  string_push_format_slow(&config, "map <M-0>      view %d\n", (1 << 10) - 1); /* view all */
-  string_push_format_slow(&config, "map <M-TAB>    view %d\n", 0);             /* 0 -> previous mask */
-  string_push_format_slow(&config, "map <S-M-0>    tag %d\n", (1 << 10) - 1);  /* tag all */
 
   struct u8_slice cfg = string_as_u8_slice(config);
   struct velvet_cmd_iterator it = {.src = cfg};
