@@ -25,6 +25,12 @@ function api.window_send_keys(winid, keys) end
 --- @return nil 
 function api.window_send_text(winid, text) end
 
+--- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.
+--- @param from string The modifier to remap.
+--- @param to string The new modifier emitted when the remapped modifier is used.
+--- @return nil 
+function api.keymap_remap_modifier(from, to) end
+
 --- Delete the mapping associated with |keys|
 --- @param keys string The mapping to remove
 --- @return nil 

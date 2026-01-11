@@ -67,6 +67,14 @@ return {
       },
     },
     {
+      name = "keymap_remap_modifier",
+      doc = "Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.",
+      params = {
+        { name = "from", type = "string", doc = "The modifier to remap." },
+        { name = "to", type = "string", doc = "The new modifier emitted when the remapped modifier is used." },
+      },
+    },
+    {
       name = "keymap_del",
       doc = "Delete the mapping associated with |keys|",
       params = {

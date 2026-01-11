@@ -230,3 +230,25 @@ void vv_api_swap_windows(struct velvet *v, int first, int second) {
     vec_swap(&v->scene.windows, i1, i2);
   }
 }
+
+static enum velvet_key_modifier modifier_from_slice(struct u8_slice s) {
+  if (u8_match(s, "alt") || u8_match(s, "meta") || u8_match(s, "M")) return MODIFIER_ALT;
+  if (u8_match(s, "control") || u8_match(s, "C")) return MODIFIER_CTRL;
+  if (u8_match(s, "super") || u8_match(s, "D")) return MODIFIER_SUPER;
+  return 0;
+}
+
+void vv_api_keymap_remap_modifier(struct velvet *v, const char *from, const char *to) {
+  enum velvet_key_modifier f, t;
+  struct u8_slice f1, t1;
+  f1 = u8_slice_from_cstr(from);
+  t1 = u8_slice_from_cstr(to);
+  f = modifier_from_slice(f1);
+  t = modifier_from_slice(t1);
+
+  int enum_index[] = { [MODIFIER_ALT] = 0, [MODIFIER_CTRL] = 1, [MODIFIER_SUPER] = 2 };
+
+  if (f && t) {
+    v->input.options.modremap[enum_index[f]] = t;
+  }
+}
