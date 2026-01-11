@@ -991,16 +991,14 @@ static void velvet_keymap_remove_internal(struct velvet_keymap *const k) {
 }
 
 static void velvet_keymap_destroy(struct velvet_keymap *k) {
+  /* the remove event is needed to free resources associated with the event */
+  if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
   struct velvet_keymap *chld = k->first_child;
   for (; chld; ) {
-    chld->parent = nullptr;
-    chld->root = nullptr;
     struct velvet_keymap *next = chld->next_sibling;
     velvet_keymap_destroy(chld);
     chld = next;
   }
-  /* the remove event is needed to free resources associated with the event */
-  if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
   free(k);
 }
 

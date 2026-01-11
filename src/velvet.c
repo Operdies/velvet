@@ -595,7 +595,6 @@ void velvet_loop(struct velvet *velvet) {
 }
 
 void velvet_destroy(struct velvet *velvet) {
-  lua_close(velvet->L);
   io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input);
@@ -603,5 +602,6 @@ void velvet_destroy(struct velvet *velvet) {
     velvet_session_destroy(velvet, vec_nth(velvet->sessions, 0));
   }
   vec_destroy(&velvet->sessions);
+  lua_close(velvet->L);
 }
 
