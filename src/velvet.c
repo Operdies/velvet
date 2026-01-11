@@ -147,13 +147,6 @@ static void socket_accept(struct io_source *src) {
   vec_push(&velvet->sessions, &c);
 }
 
-static void velvet_remove_window(struct velvet *v, struct velvet_window *h) {
-  struct velvet_scene *m = &v->scene;
-  h->pid = 0;
-  velvet_window_destroy(h);
-  velvet_scene_remove_window(m, h);
-}
-
 static void velvet_scene_remove_schedule(void *data) {
   struct velvet *v = data;
   uint64_t now = get_ms_since_startup();
@@ -162,7 +155,7 @@ static void velvet_scene_remove_schedule(void *data) {
              v->scene.windows,
              (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->exited_at &&
                  h->exited_at + h->close.delay_ms <= now) {
-    velvet_remove_window(v, h);
+    velvet_scene_close_and_remove_window(&v->scene, h);
   }
 }
 
@@ -184,7 +177,7 @@ void velvet_scene_remove_exited(struct velvet *v) {
         }
         io_schedule(&v->event_loop, h->close.delay_ms + 1, velvet_scene_remove_schedule, v);
       } else {
-        velvet_remove_window(v, h);
+        velvet_scene_remove_window(&v->scene, h);
       }
     }
   }

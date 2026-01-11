@@ -374,18 +374,6 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
   free(renderer->staging_buffer.lines);
 }
 
-void velvet_scene_destroy(struct velvet_scene *m) {
-  assert_invariants(m);
-  struct velvet_window *h;
-  vec_foreach(h, m->windows) {
-    velvet_window_destroy(h);
-  }
-  vec_destroy(&m->windows);
-  vec_destroy(&m->focus_order);
-  velvet_render_destroy(&m->renderer);
-  assert_invariants(m);
-}
-
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
   int initial_focus = velvet_scene_get_focus(m)->id;
   ssize_t index = vec_index(&m->windows, w);
@@ -1337,6 +1325,25 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
   velvet_window->pty = velvet_window->pid = 0;
 }
 
+void velvet_scene_kill_window(struct velvet_scene *s, struct velvet_window *w, bool force) {
+  if (w->pty > 0) {
+    close(w->pty);
+    w->pty = 0;
+  }
+  if (w->pid > 0) {
+    if (force) {
+      kill(w->pid, SIGKILL);
+    } else {
+      kill(w->pid, SIGHUP);
+    }
+  }
+}
+
+void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_window *w) {
+    velvet_window_destroy(w);
+    velvet_scene_remove_window(s, w);
+}
+
 void velvet_window_update_title(struct velvet_window *p) {
   if (p->emulator.osc.title.len > 0) {
     string_clear(&p->title);
@@ -1442,4 +1449,16 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   velvet_window->pid = pid;
   set_nonblocking(velvet_window->pty);
   return true;
+}
+
+void velvet_scene_destroy(struct velvet_scene *m) {
+  assert_invariants(m);
+  struct velvet_window *h;
+  vec_foreach(h, m->windows) {
+    velvet_window_destroy(h);
+  }
+  vec_destroy(&m->windows);
+  vec_destroy(&m->focus_order);
+  velvet_render_destroy(&m->renderer);
+  assert_invariants(m);
 }

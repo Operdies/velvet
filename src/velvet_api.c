@@ -57,3 +57,28 @@ int vv_api_spawn(struct velvet *vv, const char* cmd, int* left, int* top, int* w
 
   return (int)velvet_scene_spawn_process_from_template(&vv->scene, template);
 }
+
+void vv_api_detach(struct velvet *vv, int *session_id) {
+  struct velvet_session *s;
+  if (session_id) {
+    vec_find(s, vv->sessions, s->socket == *session_id);
+  } else {
+    s = velvet_get_focused_session(vv);
+  }
+  if (s) {
+    velvet_detach_session(vv, s);
+  }
+}
+
+void vv_api_close_window(struct velvet *v, int* winid, bool* force) {
+  struct velvet_window *w;
+  if (winid) {
+    w = velvet_scene_get_window_from_id(&v->scene, *winid);
+  } else {
+    w = velvet_scene_get_focus(&v->scene);
+  }
+
+  if (w) {
+    velvet_scene_kill_window(&v->scene, w, force ? *force : false);
+  }
+}

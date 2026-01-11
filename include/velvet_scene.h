@@ -74,7 +74,6 @@ struct velvet_window {
   } transparency;
 };
 
-void velvet_window_destroy(struct velvet_window *velvet_window);
 void velvet_window_resize(struct velvet_window *velvet_window, struct rect window);
 bool velvet_window_start(struct velvet_window *velvet_window);
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
@@ -193,6 +192,8 @@ struct velvet_window_hit {
   enum velvet_window_hit_location where;
 };
 
+void velvet_scene_kill_window(struct velvet_scene *s, struct velvet_window *w, bool force);
+void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_window *w);
 bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w);
 struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, int id);
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data);
