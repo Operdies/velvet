@@ -13,6 +13,12 @@ return {
 
   options = {
     {
+      name = "focus_follows_mouse",
+      type = "bool",
+      default = true,
+      doc = "Automatically focusa window when the mouse moves over it."
+    },
+    {
       name = "key_repeat_timeout",
       type = "int",
       default = 500,

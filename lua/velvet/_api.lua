@@ -3,15 +3,15 @@ error("Cannot require meta file")
 --- @class velvet.api
 local api = {}
 
+--- @class velvet.api.terminal.geometry
+--- @field width? integer The width of the terminal
+--- @field height? integer The height of the terminal
+
 --- @class velvet.api.window.geometry
 --- @field left? integer The leftmost cell of the window.
 --- @field top? integer The topmost cell of the window.
 --- @field width? integer The width of the window
 --- @field height? integer The height of the window
-
---- @class velvet.api.terminal.geometry
---- @field width? integer The width of the terminal
---- @field height? integer The height of the terminal
 
 --- Send keys to the window specified by |winid|. Unlike |window_send_text|, the input to this function will parse and send escaped keys using the same syntax as keymaps.
 --- @param winid integer The window receiving the keys
@@ -133,6 +133,15 @@ function api.detach(opts) end
 --- @param force boolean Forcefully close the window. (default: false)
 --- @return nil 
 function api.close_window(winid, force) end
+
+--- Get focus_follows_mouse
+--- @return boolean The current value
+function api.get_focus_follows_mouse() end
+
+--- Set focus_follows_mouse. Returns the new value.
+--- @param new_value boolean Automatically focusa window when the mouse moves over it.
+--- @return boolean The value after the update
+function api.set_focus_follows_mouse(new_value) end
 
 --- Get key_repeat_timeout
 --- @return integer The current value

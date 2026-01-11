@@ -2,6 +2,10 @@ error("Cannot require meta file")
 --- @meta
 --- @class velvet.options
 local options = {}
+--- Automatically focusa window when the mouse moves over it.
+--- @type boolean
+options.focus_follows_mouse = true
+
 --- Time in milliseconds before pending keybinds time out
 --- @type integer
 options.key_repeat_timeout = 500

@@ -252,3 +252,11 @@ void vv_api_keymap_remap_modifier(struct velvet *v, const char *from, const char
     v->input.options.modremap[enum_index[f]] = t;
   }
 }
+
+bool vv_api_get_focus_follows_mouse(struct velvet *v) {
+    return v->input.options.focus_follows_mouse;
+}
+bool vv_api_set_focus_follows_mouse(struct velvet *v, bool new_value) {
+  v->input.options.focus_follows_mouse = new_value;
+  return new_value;
+}
