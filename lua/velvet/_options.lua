@@ -1,6 +1,6 @@
 error("Cannot require meta file")
----@meta
----@class velvet.options
+--- @meta
+--- @class velvet.options
 local options = {}
 --- Time in milliseconds before pending keybinds time out
 --- @type integer

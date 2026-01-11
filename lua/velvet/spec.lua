@@ -39,37 +39,43 @@ return {
         { name = "height", type = "int",    doc = "Height of the new window." },
         { name = "layer",  type = "string", doc = "The initial layer of the window. FLOATING|TILED" },
       },
-      returns = "int",
+      returns = { type = "int", doc = "The ID of the new window" }
     },
     { name = "get_tags",
       doc = "Set the tags of the specified window.",
       params = {},
       optional = {
         { name = "winid", type = "int", doc = "Window ID" } },
-      returns = "int",
+      returns = { type = "int", doc = "The tags of the specified window." }
     },
     { name = "set_tags",
       doc = "Set the tags of the specified window.",
       params = {
         { name = "tags", type = "int", doc = "Bitmask of tags where <winid> should be shown." },
       },
-      optional = {
-        { name = "winid", type = "int", doc = "Window ID" } },
-      returns = "int",
+      optional = { { name = "winid", type = "int", doc = "Window ID" } },
+      returns = { type = "int", doc = "The tags of the window after the set operation." }
     },
-    -- map = {
-    --   doc = "map keys to an action",
-    --   params = {
-    --     lhs = { type = "string", doc = "keys" },
-    --     rhs = { type = "function", doc = "action" },
-    --   },
-    --   returns = "void",
-    -- },
-    -- close_window = {
-    --   doc = "Close a window by ID",
-    --   params = { winid = { type = "int", doc = "Window ID" }, },
-    --   returns = "void",
-    -- },
+    {
+      name = "detach",
+      doc = "Detach the current session from the server.",
+      optional = { { name = "session_id", type = "int", doc = "Session ID" } },
+    },
+    { name = "close_window",
+      doc = "Close the specified window, killing the associated process.",
+      optional = { 
+        { name = "winid", type = "int", doc = "The window to close" } ,
+        {
+          name = "force",
+          type = "bool",
+          doc = [[
+        Forcefully close the window.
+        If this option is set, velvet will rudely kill the hosted process and remove the window.
+        Otherwise, velvet will attempt to gracefully close it.
+        ]]
+        },
+      },
+    },
   },
 }
 
