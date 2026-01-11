@@ -3,6 +3,7 @@
 #include "csi.h"
 #include "osc.h"
 #include "text.h"
+#include "utf8proc/utf8proc.h"
 #include "utils.h"
 #include <string.h>
 #include <unistd.h>
@@ -200,6 +201,15 @@ static void ground_accept(struct vte *vte) {
 
   int len;
   struct codepoint symbol = utf8_to_codepoint(vte->pending_symbol.utf8, &len);
+  int width = utf8proc_charwidth(symbol.value);
+  /* this is true for codepoints which modify the preceding characters, such
+   * as acutes and variation selectors. Since we don't properly handle
+   * graphemes, we just ignore those characters for now. */
+  if (width == 0) {
+    TODO("grapheme clusters");
+    vte->pending_symbol = (struct utf8){0};
+    return;
+  }
   struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush };
   screen_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = symbol;
