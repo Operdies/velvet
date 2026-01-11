@@ -3,15 +3,15 @@ error("Cannot require meta file")
 --- @class velvet.api
 local api = {}
 
---- @class velvet.api.terminal.geometry
---- @field width? integer The width of the terminal
---- @field height? integer The height of the terminal
-
 --- @class velvet.api.window.geometry
 --- @field left? integer The leftmost cell of the window.
 --- @field top? integer The topmost cell of the window.
 --- @field width? integer The width of the window
 --- @field height? integer The height of the window
+
+--- @class velvet.api.terminal.geometry
+--- @field width? integer The width of the terminal
+--- @field height? integer The height of the terminal
 
 --- Send keys to the window specified by |winid|. Unlike |window_send_text|, the input to this function will parse and send escaped keys using the same syntax as keymaps.
 --- @param winid integer The window receiving the keys
@@ -67,6 +67,16 @@ function api.spawn(cmd, opts) end
 --- @param winid integer Window ID
 --- @return boolean Bool indicating whether the window ID is valid.
 function api.is_window_valid(winid) end
+
+--- Schedule |function| to run after |delay| ms
+--- @param delay integer delay in miliseconds
+--- @param func function function to schedule
+--- @return nil 
+function api.schedule_after(delay, func) end
+
+--- Get the number of milliseconds elapsed since startup
+--- @return integer milliseconds elapsed since startup
+function api.get_current_tick() end
 
 --- Swap the two windows. This affects the layout of tiled windows.
 --- @param first integer Window ID

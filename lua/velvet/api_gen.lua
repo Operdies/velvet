@@ -77,14 +77,14 @@ local type_lookup = {
   ["int[]"] = { lua_type = "integer[]" },
   void = { c_type = "void", lua_type = "nil" },
   ["function"] = {
-    c_type = "int",
+    c_type = "lua_Integer",
     lua_type = "function",
     check = function(idx)
       return ("luaL_checkfunction(L, %d)"):format(idx)
     end,
   },
   int = {
-    c_type = "int",
+    c_type = "lua_Integer",
     lua_type = "integer",
     check = function(idx)
       return ("luaL_checkinteger(L, %d)"):format(idx)
@@ -150,6 +150,7 @@ end
 local h = {}
 table.insert(h, ([[#ifndef %s
 #define %s
+#include "lua.h"
 struct velvet;
 typedef struct lua_State lua_State;
 
@@ -189,7 +190,7 @@ for _, fn in ipairs(spec.api) do
 
   table.insert(h, ("/* %s */\n"):format(string_concatenate(fn.doc, "\n** ")))
   if is_manual(fn.returns.type) then
-    table.insert(h, ([[int vv_api_%s(lua_State *L%s%s);
+    table.insert(h, ([[lua_Integer vv_api_%s(lua_State *L%s%s);
 ]]):format(fn.name, required_params, optional_params))
   else
     table.insert(h,
@@ -212,12 +213,12 @@ table.insert(c, [[
 
 /* Instead of creating a real gc handle, we only store a reference to the function.
 Cleaning up the handle in codegen is complicated, so instead the consumer must create its own handle. */
-static int luaL_checkfunction(lua_State *L, int idx) {
+static lua_Integer luaL_checkfunction(lua_State *L, lua_Integer idx) {
   luaL_checktype(L, idx, LUA_TFUNCTION);
   return idx;
 }
 
-static bool luaL_checkboolean(lua_State *L, int idx) {
+static bool luaL_checkboolean(lua_State *L, lua_Integer idx) {
   luaL_checktype(L, idx, LUA_TBOOLEAN);
   return lua_toboolean(L, idx);
 }

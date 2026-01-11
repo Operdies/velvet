@@ -129,6 +129,19 @@ return {
       returns = { type = "bool", doc = "Bool indicating whether the window ID is valid." }
     },
     {
+      name = "schedule_after",
+      params = {
+        { name = "delay",  type = "int", doc = "delay in miliseconds" },
+        { name = "func", type = "function", doc = "function to schedule" },
+      },
+      doc = "Schedule |function| to run after |delay| ms",
+    },
+    {
+      name = "get_current_tick",
+      doc = "Get the number of milliseconds elapsed since startup",
+      returns = { type = "int", doc = "milliseconds elapsed since startup" }
+    },
+    {
       name = "swap_windows",
       params = {
         { name = "first",  type = "int", doc = "Window ID" },

@@ -39,6 +39,7 @@ int screen_bottom(const struct screen *g) {
 void screen_clear_line(struct screen *g, int n) {
   struct screen_cell clear = { .cp = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = screen_get_line(g, n);
+  assert(row->cells);
   row->has_newline = false;
   row->eol = 0;
   for (int i = 0; i < g->w; i++) {
