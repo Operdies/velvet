@@ -394,17 +394,45 @@ static void velvet_cmd_spawn_tiled(struct velvet *v, struct velvet_session *sour
   velvet_cmd_create_window(v, it, source, o);
 }
 
-static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it) {
+static int l_velvet_lua_print_to_socket(lua_State *L) {
+  int source_socket = luaL_checkinteger(L, 1);
+  if (source_socket == 0) return 0;
+  size_t len = 0;
+  const char *str = luaL_checklstring(L, 2, &len);
+  write(source_socket, str, len);
+  return 0;
+}
+
+static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int source_socket) {
   if (!velvet_cmd_arg_iterator_next(it)) {
     velvet_log("lua: missing string");
     return;
   }
   struct u8_slice cmd = it->current;
+  lua_State *L = v->L;
+  lua_pushcfunction(L, l_velvet_lua_print_to_socket);
+  lua_setglobal(L, "lua_hack_print_to_socket");
+
   struct string S = {0};
-  string_push_slice(&S, cmd);
-  string_ensure_null_terminated(&S);
-  luaL_dostring(v->L, (char*)S.content);
-  lua_pop(v->L, lua_gettop(v->L));
+  string_push_format_slow(&S,
+                          "(function()\n"
+                          "local print = function(x) lua_hack_print_to_socket(%d, vv.inspect(x) .. '\\n') end\n"
+                          "%.*s\n"
+                          "end)()",
+                          source_socket,
+                          (int)cmd.len,
+                          cmd.content);
+
+  if (luaL_loadbuffer(v->L, (char*)S.content, S.len, nullptr) != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK) {
+    size_t len = 0;
+    const char *err = lua_tolstring(L, -1, &len);
+    if (source_socket) {
+      write(source_socket, err, len);
+    } else {
+      velvet_log("lua cmd error: %s", err);
+    }
+  }
+  lua_pop(L, lua_gettop(L));
   string_destroy(&S);
 }
 
@@ -440,7 +468,7 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     if (u8_match(command, "detach")) {
       velvet_detach_session(v, velvet_get_focused_session(v));
     } else if (u8_match(command, "lua")) {
-      velvet_lua(v, &it);
+      velvet_lua(v, &it, source_socket);
     } else if (u8_match(command, "put")) {
       velvet_cmd_put(v, &it);
     } else if (u8_match(command, "tag")) {

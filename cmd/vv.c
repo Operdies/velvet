@@ -492,6 +492,17 @@ static void vv_configure(struct velvet_args args) {
     io_write(sockfd, string_as_u8_slice(payload));
     string_destroy(&payload);
   } 
+
+  int n = 0;
+  do {
+    n = 0;
+    struct pollfd pfd = {.fd = sockfd, .events = POLL_IN};
+    if (poll(&pfd, 1, 5) > 0) {
+      char buf[1024];
+      n = read(sockfd, buf, sizeof(buf));
+      printf("%.*s", n, buf);
+    }
+  } while (n > 0);
   close(sockfd);
 }
 
