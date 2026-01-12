@@ -175,11 +175,11 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
     if (focus && is_digit) focus->ws.h = digit;
   } else if (u8_match(option, "notification_height")) {
     if (is_digit) {
-      v->scene.layout.notification_height = CLAMP(digit, 3, 12);
+      v->scene.layout.notification_height = CLAMP(digit, 3, v->scene.ws.h);
     }
   } else if (u8_match(option, "notification_width")) {
     if (is_digit) {
-      v->scene.layout.notification_width = CLAMP(digit, 10, 80);
+      v->scene.layout.notification_width = CLAMP(digit, 10, v->scene.ws.w);
     }
   } else if (modifier_from_slice(option)) {
     velvet_cmd_modremap(v, option, value);
