@@ -50,18 +50,10 @@ function api.keymap_set(keys, func, opts) end
 --- @return velvet.api.terminal.geometry The geometry of the terminal window.
 function api.get_terminal_geometry() end
 
---- @class velvet.api.spawn.Opts
---- @field left? integer Leftmost column of the new window.
---- @field top? integer Topmost row of the new window.
---- @field width? integer Width of the new window.
---- @field height? integer Height of the new window.
---- @field layer? string The initial layer of the window. FLOATING|TILED
-
 --- Spawn a process in a new window. Returns the window ID.
 --- @param cmd string The process to spawn.
---- @param opts? velvet.api.spawn.Opts
 --- @return integer The ID of the new window
-function api.spawn(cmd, opts) end
+function api.spawn(cmd) end
 
 --- Check whether the given window ID is valid.
 --- @param winid integer Window ID
@@ -140,9 +132,8 @@ function api.detach(opts) end
 
 --- Close the specified window, killing the associated process.
 --- @param winid integer The window to close (default: current window)
---- @param force boolean Forcefully close the window. (default: false)
 --- @return nil 
-function api.close_window(winid, force) end
+function api.close_window(winid) end
 
 --- Get focus_follows_mouse
 --- @return boolean The current value

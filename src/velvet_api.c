@@ -50,26 +50,15 @@ static bool layer_from_string(const char *layer, enum velvet_scene_layer *out) {
   return false;
 }
 
-lua_Integer vv_api_spawn(struct velvet *vv, const char* cmd, lua_Integer* left, lua_Integer* top, lua_Integer* width, lua_Integer* height, const char** layer) {
-  struct rect initial_size = {
-    .x = left ? *left : 10,
-    .y = top ? *top : 5,
-    .w = width ? *width : 80,
-    .h = height ? *height : 24,
-  };
+lua_Integer vv_api_spawn(struct velvet *v, const char* cmd) {
   struct velvet_window template = {
     .emulator = vte_default,
     .border_width = 1,
     .layer = VELVET_LAYER_TILED,
-    .rect.window = initial_size,
   };
 
-  if (layer && *layer) {
-    if (!layer_from_string(*layer, &template.layer)) 
-      lua_bail(vv->L, "Layer %s does not exist.", *layer);
-  }
   string_push_cstr(&template.cmdline, cmd);
-  return (lua_Integer)velvet_scene_spawn_process_from_template(&vv->scene, template);
+  return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template);
 }
 
 void vv_api_detach(struct velvet *vv, lua_Integer *session_id) {
@@ -84,7 +73,7 @@ void vv_api_detach(struct velvet *vv, lua_Integer *session_id) {
   }
 }
 
-void vv_api_close_window(struct velvet *v, lua_Integer winid, bool force) {
+void vv_api_close_window(struct velvet *v, lua_Integer winid) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
   if (w) velvet_scene_close_and_remove_window(&v->scene, w);
 }

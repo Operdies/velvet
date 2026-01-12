@@ -113,13 +113,6 @@ return {
       params = {
         { name = "cmd", type = "string", doc = "The process to spawn." },
       },
-      optional = {
-        { name = "left",   type = "int",    doc = "Leftmost column of the new window." },
-        { name = "top",    type = "int",    doc = "Topmost row of the new window." },
-        { name = "width",  type = "int",    doc = "Width of the new window." },
-        { name = "height", type = "int",    doc = "Height of the new window." },
-        { name = "layer",  type = "string", doc = "The initial layer of the window. FLOATING|TILED" },
-      },
       returns = { type = "int", doc = "The ID of the new window" }
     },
     {
@@ -219,7 +212,6 @@ return {
       doc = "Close the specified window, killing the associated process.",
       params = {
         { name = "winid", type = "int",  doc = "The window to close (default: current window)" },
-        { name = "force", type = "bool", doc = "Forcefully close the window. (default: false)" },
       },
     },
   },
