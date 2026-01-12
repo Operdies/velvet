@@ -11,6 +11,15 @@ lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_valu
   return v->input.options.key_repeat_timeout_ms;
 }
 
+static void lua_bail(lua_State *L, char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void lua_bail(lua_State *L, char *fmt, ...) {
+  va_list ap;
+  va_start(ap);
+  lua_pushvfstring(L, fmt, ap);
+  va_end(ap);
+  lua_error(L);
+}
+
 lua_Integer vv_api_get_view(struct velvet *v) {
   return v->scene.view;
 }
@@ -54,11 +63,12 @@ lua_Integer vv_api_spawn(struct velvet *vv, const char* cmd, lua_Integer* left, 
     .layer = VELVET_LAYER_TILED,
     .rect.window = initial_size,
   };
-  string_push_cstr(&template.cmdline, cmd);
 
-  if (layer && *layer && layer_from_string(*layer, &template.layer)) {
-    layer_from_string(*layer, &template.layer);
+  if (layer && *layer) {
+    if (!layer_from_string(*layer, &template.layer)) 
+      lua_bail(vv->L, "Layer %s does not exist.", *layer);
   }
+  string_push_cstr(&template.cmdline, cmd);
   return (lua_Integer)velvet_scene_spawn_process_from_template(&vv->scene, template);
 }
 
@@ -76,7 +86,7 @@ void vv_api_detach(struct velvet *vv, lua_Integer *session_id) {
 
 void vv_api_close_window(struct velvet *v, lua_Integer winid, bool force) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (w) velvet_scene_kill_window(&v->scene, w, force);
+  if (w) velvet_scene_close_and_remove_window(&v->scene, w);
 }
 
 lua_Integer vv_api_get_focused_window(struct velvet *v){
@@ -219,8 +229,9 @@ void vv_api_set_layer(struct velvet *v, lua_Integer winid, const char* layer) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
   enum velvet_scene_layer new_layer;
   if (w) {
-    if (layer_from_string(layer, &new_layer))
-      w->layer = new_layer;
+    if (!layer_from_string(layer, &new_layer))
+      lua_bail(v->L, "Layer %s does not exist.", layer);
+    w->layer = new_layer;
   }
 }
 

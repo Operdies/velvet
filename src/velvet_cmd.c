@@ -415,13 +415,15 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
 
   struct string S = {0};
   string_push_format_slow(&S,
-                          "(function()\n"
-                          "local print = function(x) lua_hack_print_to_socket(%d, vv.inspect(x) .. '\\n') end\n"
-                          "%.*s\n"
-                          "end)()",
-                          source_socket,
+                          "local func = function() %.*s end\n"
+                          "local global_print = print\n"
+                          "print = function(x) lua_hack_print_to_socket(%d, vv.inspect(x) .. '\\n') end\n"
+                          "local ok, err = pcall(func)\n"
+                          "if not ok then print(err) end\n"
+                          "print = global_print\n",
                           (int)cmd.len,
-                          cmd.content);
+                          cmd.content,
+                          source_socket);
 
   if (luaL_loadbuffer(v->L, (char*)S.content, S.len, nullptr) != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK) {
     size_t len = 0;
