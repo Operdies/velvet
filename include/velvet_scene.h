@@ -71,6 +71,11 @@ struct velvet_window {
     bool override;
     struct pseudotransparency_options options;
   } transparency;
+  struct {
+    void (*on_move)(int win_id, void *);
+    void (*on_resize)(int win_id, void *);
+    void *data;
+  } events;
 };
 
 void velvet_window_resize(struct velvet_window *velvet_window, struct rect window);
@@ -170,6 +175,14 @@ struct velvet_scene {
   void (*arrange)(struct velvet_scene* scene);
   uint32_t view;
   uint32_t prev_view;
+  struct {
+    void (*on_screen_resized)(void *);
+    void (*on_window_created)(int win_id, void *);
+    void (*on_window_removed)(int win_id, void *);
+    void (*on_window_moved)(int win_id, void *);
+    void (*on_window_resized)(int win_id, void *);
+    void *data;
+  } events;
 };
 
 enum velvet_window_hit_location {

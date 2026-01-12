@@ -135,6 +135,17 @@ function api.detach(opts) end
 --- @return nil 
 function api.close_window(winid) end
 
+--- 
+--- @param winid integer Window ID
+--- @return string New title
+function api.window_get_title(winid) end
+
+--- 
+--- @param winid integer Window ID
+--- @param title string New title
+--- @return nil 
+function api.window_set_title(winid, title) end
+
 --- Get focus_follows_mouse
 --- @return boolean The current value
 function api.get_focus_follows_mouse() end

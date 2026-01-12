@@ -475,6 +475,33 @@ static void velvet_source_config(struct velvet *v) {
   }
 }
 
+static void velvet_emit_event(struct velvet *v, const char *evt, int data) {
+  lua_State *L = v->L;
+  // vv.emit_event(evt, data)
+  lua_getglobal(L, "vv");
+  lua_getfield(L, -1, "events");
+  lua_getfield(L, -1, "emit_event");
+  lua_pushstring(L, evt);
+  lua_pushinteger(L, data);
+  lua_pcall(L, 2, 0, 0); 
+}
+
+static void on_screen_resized(void *data) {
+  velvet_emit_event(data, "screen_resized", 0);
+}
+static void on_window_created(int win_id, void *data) {
+  velvet_emit_event(data, "window_created", win_id);
+}
+static void on_window_removed(int win_id, void *data) {
+  velvet_emit_event(data, "window_removed", win_id);
+}
+static void on_window_moved(int win_id, void *data) {
+  velvet_emit_event(data, "window_moved", win_id);
+}
+static void on_window_resized(int win_id, void *data) {
+  velvet_emit_event(data, "window_resized", win_id);
+}
+
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
@@ -490,6 +517,21 @@ void velvet_loop(struct velvet *velvet) {
     velvet->input.keymap = root;
   }
 
+  velvet_default_config(velvet);
+  velvet_lua_init(velvet);
+
+  {
+    struct velvet_scene *s = &velvet->scene;
+    s->events.data = velvet;
+    s->events.on_screen_resized = on_screen_resized;
+    s->events.on_window_created = on_window_created;
+    s->events.on_window_removed = on_window_removed;
+    s->events.on_window_moved = on_window_moved;
+    s->events.on_window_resized = on_window_resized;
+  }
+
+  velvet_source_config(velvet);
+
   velvet_scene_resize(&velvet->scene, ws);
   start_default_shell(velvet);
 
@@ -499,11 +541,6 @@ void velvet_loop(struct velvet *velvet) {
     status.emulator.options.alternate_screen = true;
     velvet_scene_manage(&velvet->scene, status);
   }
-
-  velvet_default_config(velvet);
-
-  velvet_lua_init(velvet);
-  velvet_source_config(velvet);
 
   velvet->scene.arrange(&velvet->scene);
 

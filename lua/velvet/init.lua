@@ -7,7 +7,8 @@ local vv = {
   options = {},
   --- Write string to the velvet log
   --- @param text string the string to log
-  print = function(text) end
+  print = function(text) end,
+  events = require('velvet.events'),
 }
 
 -- vv.api is populated in C. Here we use a metatable to direct

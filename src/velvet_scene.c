@@ -340,6 +340,9 @@ struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet
 
   if (managed(host)) vec_push(&m->focus_order, &host->id);
   m->arrange(m);
+  host->events.data = m->events.data;
+  host->events.on_move = m->events.on_window_moved;
+  host->events.on_resize = m->events.on_window_resized;
   return host;
 }
 
@@ -351,6 +354,7 @@ int velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velv
     velvet_scene_remove_window(m, host);
     return 0;
   }
+  if (m->events.on_window_created) m->events.on_window_created(host->id, m->events.data);
   return host->id;
 }
 
@@ -375,6 +379,7 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
 }
 
 void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
+  int win_id = w->id;
   int initial_focus = velvet_scene_get_focus(m)->id;
   ssize_t index = vec_index(&m->windows, w);
   assert(index >= 0);
@@ -383,11 +388,14 @@ void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w)
 
   struct velvet_window *new_focus = velvet_scene_get_focus(m);
   if (new_focus && new_focus->id != initial_focus) velvet_window_notify_focus(new_focus, true);
+
+  if (m->events.on_window_removed) m->events.on_window_removed(win_id, m->events.data);
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
   if (m->ws.w != w.w || m->ws.h != w.h || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
     m->ws = w;
+    if (m->events.on_screen_resized) m->events.on_screen_resized(m->events.data);
     m->arrange(m);
   }
 }
@@ -1381,12 +1389,16 @@ void velvet_window_process_output(struct velvet_window *velvet_window, struct u8
   vte_process(&velvet_window->emulator, str);
 }
 
+static bool rect_same_position(struct rect b1, struct rect b2) {
+  return b1.x == b2.x && b1.y == b2.y;
+}
+
 static bool rect_same_size(struct rect b1, struct rect b2) {
   return b1.w == b2.w && b1.h == b2.h;
 }
 
-void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer) {
-  int bw = velvet_window->border_width;
+void velvet_window_resize(struct velvet_window *win, struct rect outer) {
+  int bw = win->border_width;
   // Refuse to go below a minimum size
   int min_size = bw * 2 + 1;
   if (outer.w < min_size) outer.w = min_size;
@@ -1404,16 +1416,24 @@ void velvet_window_resize(struct velvet_window *velvet_window, struct rect outer
       .y_pixel = inner.h * pixels_per_row,
   };
 
-  if (!rect_same_size(velvet_window->rect.client, inner)) {
+  if (!rect_same_size(win->rect.client, inner)) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
-    if (velvet_window->pty) ioctl(velvet_window->pty, TIOCSWINSZ, &ws);
-    if (velvet_window->pid) kill(velvet_window->pid, SIGWINCH);
+    if (win->pty) ioctl(win->pty, TIOCSWINSZ, &ws);
+    if (win->pid) kill(win->pid, SIGWINCH);
   }
 
-  velvet_window->rect.window = outer;
-  velvet_window->rect.client = inner;
+  bool send_resize = !rect_same_size(win->rect.window, outer) && win->events.on_resize;
+  bool send_move = !rect_same_position(win->rect.window, outer) && win->events.on_move;
 
-  vte_set_size(&velvet_window->emulator, inner);
+  win->rect.window = outer;
+  win->rect.client = inner;
+
+  vte_set_size(&win->emulator, inner);
+
+  if (send_resize)
+    win->events.on_resize(win->id, win->events.data);
+  if (send_move)
+    win->events.on_move(win->id, win->events.data);
 }
 
 bool velvet_window_start(struct velvet_window *velvet_window) {

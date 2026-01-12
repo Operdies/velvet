@@ -121,8 +121,10 @@ local function is_complex(name) return type_lookup[name].complex end
 local function is_manual(name) return spec.manual_types[name] end
 
 
-for name, _ in pairs(spec.types) do
-  type_lookup[name] = { c_type = get_cname(name), lua_type = get_luaname(name), complex = true }
+local complex_index = {}
+for _, type in ipairs(spec.types) do
+  type_lookup[type.name] = { c_type = get_cname(type.name), lua_type = get_luaname(type.name), complex = true }
+  complex_index[type.name] = type
 end
 
 local function lua_type(t)
@@ -158,12 +160,12 @@ typedef struct lua_State lua_State;
 
 -- Create structs for complex types.
 -- These structs will automatically be marshaled to and from lua
-for name, fields in pairs(spec.types) do
-  local cname = get_cname(name)
+for _, type in ipairs(spec.types) do
+  local cname = get_cname(type.name)
   table.insert(h, ([[
 %s {
 ]]):format(cname))
-  for _, fld in ipairs(fields) do
+  for _, fld in ipairs(type.fields) do
     table.insert(h, ([[
   %s %s; /* %s */
 ]]):format(c_type(fld.type), fld.name, string_concatenate(fld.doc, "")))
@@ -248,8 +250,8 @@ static int l_vv_api_%s(lua_State *L){
   %s %s = {0};
 ]]):format(idx, c_type(p.type), p.name))
 
-      local typedef = spec.types[p.type]
-      for _, member in ipairs(typedef) do
+      local typedef = complex_index[p.type]
+      for _, member in ipairs(typedef.fields) do
         table.insert(c, ([[
   lua_getfield(L, %d, "%s");
   %s.%s = %s;
@@ -312,8 +314,8 @@ static int l_vv_api_%s(lua_State *L){
   %s ret = vv_api_%s(v%s);
   lua_newtable(L);
 ]]):format(c_type(fn.returns.type), fn.name, argsstring))
-    local typedef = spec.types[fn.returns.type]
-    for _, member in ipairs(typedef) do
+    local typedef = complex_index[fn.returns.type]
+    for _, member in ipairs(typedef.fields) do
       table.insert(c, ([[
   %s;
   lua_setfield(L, -2, "%s");
@@ -372,13 +374,13 @@ error("Cannot require meta file")
 local api = {}
 ]])
 
-for name, fields in pairs(spec.types) do
-  local lua_name = get_luaname(name)
+for _, type in ipairs(spec.types) do
+  local lua_name = get_luaname(type.name)
   table.insert(lua, ([[
 
 --- @class %s
 ]]):format(lua_name))
-  for _, fld in ipairs(fields) do
+  for _, fld in ipairs(type.fields) do
     table.insert(lua, ([[
 --- @field %s? %s %s
 ]]):format(fld.name, lua_type(fld.type), fld.doc))

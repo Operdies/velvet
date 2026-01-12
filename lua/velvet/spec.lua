@@ -6,11 +6,6 @@
 --- and pass them as normal C parameters according to the generated header file.
 --- The C header is manually implemented elsewhere.
 return {
-  meta = {
-    name = "velvet",
-    api_version = 1,
-  },
-
   options = {
     {
       name = "focus_follows_mouse",
@@ -39,16 +34,21 @@ return {
   },
 
   types = {
-    ["window.geometry"] = {
-      { name = "left",   type = "int", doc = "The leftmost cell of the window." },
-      { name = "top",    type = "int", doc = "The topmost cell of the window." },
-      { name = "width",  type = "int", doc = "The width of the window" },
-      { name = "height", type = "int", doc = "The height of the window" },
-      type = "struct",
+    {
+      name = "window.geometry",
+      fields = {
+        { name = "left",   type = "int", doc = "The leftmost cell of the window." },
+        { name = "top",    type = "int", doc = "The topmost cell of the window." },
+        { name = "width",  type = "int", doc = "The width of the window" },
+        { name = "height", type = "int", doc = "The height of the window" }
+      }
     },
-    ["terminal.geometry"] = {
-      { name = "width",  type = "int", doc = "The width of the terminal" },
-      { name = "height", type = "int", doc = "The height of the terminal" },
+    {
+      name = "terminal.geometry",
+      fields = {
+        { name = "width",  type = "int", doc = "The width of the terminal" },
+        { name = "height", type = "int", doc = "The height of the terminal" },
+      }
     },
   },
 
@@ -212,6 +212,20 @@ return {
       doc = "Close the specified window, killing the associated process.",
       params = {
         { name = "winid", type = "int",  doc = "The window to close (default: current window)" },
+      },
+    },
+    {
+      name = "window_get_title",
+      params = {
+        { name = "winid", type = "int", doc = "Window ID" },
+      },
+      returns = { name = "title", type = "string", doc = "New title" }
+    },
+    {
+      name = "window_set_title",
+      params = {
+        { name = "winid", type = "int",    doc = "Window ID" },
+        { name = "title", type = "string", doc = "New title" },
       },
     },
   },
