@@ -117,9 +117,8 @@ lua_Integer vv_api_get_windows(lua_State *L) {
   lua_newtable(L);
   lua_Integer index = 1;
   struct velvet_window *w;
-  vec_foreach(w, vv->scene.windows) {
-    /* internal windows -- hide them from the lua API for now, and get rid of them later */
-    if (w->id < 1000) continue;
+  /* hide non-regular windows from the LUA api for now */
+  vec_where(w, vv->scene.windows, w->id >= 1000 && (w->layer == VELVET_LAYER_TILED || w->layer == VELVET_LAYER_FLOATING)) {
     lua_pushinteger(L, w->id);
     lua_seti(L, -2, index++);
   }
