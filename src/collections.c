@@ -276,6 +276,12 @@ void *vec_new_element(struct vec *v) {
   return vec_nth(*v, v->length - 1);
 }
 
+void vec_sort(struct vec *v, int (*cmp)(const void*,const void*)) {
+  assert(v->element_size);
+  assert(cmp);
+  if (v->length) qsort(v->content, v->length, v->element_size, cmp);
+}
+
 #define HASHMAP_MAX_LOAD (0.7)
 
 [[gnu::const]] static uint32_t hashmap_hash(uint32_t key) {

@@ -127,6 +127,8 @@ void vec_remove_at(struct vec *v, size_t n);
 void vec_swap(struct vec *v, size_t i, size_t j);
 void vec_clear(struct vec *v);
 void vec_destroy(struct vec *v);
+/* sort the vector in-place according to a comparison function */
+void vec_sort(struct vec *v, int (*cmp)(const void *, const void *));
 /* Append a zero'd out structure to the vector and return a pointer to it */
 void *vec_new_element(struct vec *v);
 void *vec_nth_unchecked(struct vec v, size_t i);
