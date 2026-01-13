@@ -328,3 +328,7 @@ lua_Integer vv_api_get_active_session(struct velvet *v) {
   if (s) return s->socket;
   return 0;
 }
+
+void vv_api_server_kill(struct velvet *v) {
+  v->quit = true;
+}

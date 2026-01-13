@@ -66,6 +66,10 @@ function api.get_active_session() end
 --- @return nil 
 function api.session_detach(session_id) end
 
+--- Kill the velvet instance.
+--- @return nil 
+function api.server_kill() end
+
 --- Get the IDs of all windows.
 --- @return integer[] List of window IDs
 function api.get_windows() end

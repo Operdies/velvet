@@ -131,6 +131,10 @@ return {
       doc = "Detach |session| session from the server.",
       params = { { name = "session_id", type = "int", doc = "Session ID" } },
     },
+    {
+      name = "server_kill",
+      doc = "Kill the velvet instance. All child processes will be killed."
+    },
     --- Windows {{{2
     {
       name = "get_windows",
