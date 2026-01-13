@@ -290,9 +290,11 @@ lua_Integer vv_api_get_current_tick(struct velvet *v) {
 const char* vv_api_window_get_title(struct velvet *v, lua_Integer winid) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
   if (!w) lua_bail(v->L, "Window id %lld is not valid.", winid);
-  string_ensure_null_terminated(&w->emulator.osc.title);
-  return (char*)w->emulator.osc.title.content;
+  velvet_window_update_title(w);
+  string_ensure_null_terminated(&w->title);
+  return (char *)w->title.content;
 }
+
 void vv_api_window_set_title(struct velvet *v, lua_Integer winid, const char* title) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
   if (!w) lua_bail(v->L, "Window id %lld is not valid.", winid);
