@@ -27,9 +27,16 @@ animation.easing = {
 
 local animating = {}
 
+local animation_sequence_id = 0
+local get_id = function()
+  animation_sequence_id = animation_sequence_id + 1
+  return animation_sequence_id
+end
+
 --- @class animate_options
---- @field easing_function function easing function
---- @field done function callback called when the animation completes
+--- @field easing_function? function easing function
+--- @field on_completed? function callback called when the animation completes
+--- @field on_cancelled? function callback called if the animation was cancelled
 
 --- Change the dimensions of window |id| to |target| over |duration| ms
 --- @param id integer Window ID
@@ -37,8 +44,8 @@ local animating = {}
 --- @param duration integer Animation duration in milliseconds
 --- @param opts? animate_options additional parameters
 function animation.animate(id, target, duration, opts)
-  if animating[id] then return end
-  animating[id] = true
+  local sequence = get_id()
+  animating[id] = sequence
 
   local start_time = vv.api.get_current_tick()
   local geom = vv.api.window_get_geometry(id)
@@ -50,15 +57,15 @@ function animation.animate(id, target, duration, opts)
   local ease = opts and opts.easing_function or animation.easing.linear
   local f = function() end
   f = function()
-    if not vv.api.window_is_valid(id) then
-      animating[id] = nil
+    if animating[id] ~= sequence or not vv.api.window_is_valid(id) then
+      if opts and opts.on_cancelled then opts.on_cancelled() end
       return
     end
     local elapsed = vv.api.get_current_tick() - start_time
     if elapsed >= duration then
       animating[id] = nil
       vv.api.window_set_geometry(id, target)
-      if opts and opts.done then opts.done() end
+      if opts and opts.on_completed then opts.on_completed() end
       return
     end
     local pct = ease(elapsed / duration)

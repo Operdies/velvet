@@ -540,9 +540,10 @@ void velvet_loop(struct velvet *velvet) {
   }
 
   velvet_source_config(velvet);
-
   velvet_scene_resize(&velvet->scene, ws);
-  start_default_shell(velvet);
+
+  if (!velvet_scene_get_focus(&velvet->scene))
+    start_default_shell(velvet);
 
   {
     /* create status window */
