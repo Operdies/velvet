@@ -134,6 +134,7 @@ void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequenc
 struct velvet_keymap * velvet_keymap_map(struct velvet_keymap *root, struct u8_slice keys);
 void velvet_input_unwind(struct velvet *v);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
+void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 void velvet_ensure_render_scheduled(struct velvet *velvet);

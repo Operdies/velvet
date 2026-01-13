@@ -2,7 +2,7 @@ error("Cannot require meta file")
 --- @meta
 --- @class velvet.options
 local options = {}
---- Automatically focusa window when the mouse moves over it.
+--- Automatically focus a window when the mouse moves over it.
 --- @type boolean
 options.focus_follows_mouse = true
 

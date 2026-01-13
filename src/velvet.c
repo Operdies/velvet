@@ -45,6 +45,12 @@ void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
   }
 }
 
+void velvet_set_focused_session(struct velvet *v, int socket_fd) {
+  struct velvet_session *s;
+  vec_find(s, v->sessions, s->socket == socket_fd);
+  if (s) v->focused_socket = socket_fd;
+}
+
 struct velvet_session *velvet_get_focused_session(struct velvet *v) {
   if (v->sessions.length && v->focused_socket) {
     struct velvet_session *f;

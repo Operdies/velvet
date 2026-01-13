@@ -6,12 +6,13 @@
 --- and pass them as normal C parameters according to the generated header file.
 --- The C header is manually implemented elsewhere.
 return {
+  --- options {{{1
   options = {
     {
       name = "focus_follows_mouse",
       type = "bool",
       default = true,
-      doc = "Automatically focusa window when the mouse moves over it."
+      doc = "Automatically focus a window when the mouse moves over it."
     },
     {
       name = "key_repeat_timeout",
@@ -33,6 +34,7 @@ return {
     },
   },
 
+  --- types {{{1
   types = {
     {
       name = "window.geometry",
@@ -55,29 +57,16 @@ return {
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
   manual_types = { ["int[]"] = true },
 
+  --- api {{{1
   api = {
-    {
-      name = "window_send_keys",
-      doc = "Send keys to the window specified by |winid|. Unlike |window_send_text|, the input to this function will parse and send escaped keys using the same syntax as keymaps.",
-      params = { 
-        { name = "winid", type = "int", doc = "The window receiving the keys" },
-        { name = "keys", type = "string", doc = "The keys to send" },
-      },
-    },
-    {
-      name = "window_send_text",
-      doc = "Send text to the window specified by |winid|",
-      params = { 
-        { name = "winid", type = "int", doc = "The window receiving the text" },
-        { name = "text", type = "string", doc = "The text to send" },
-      },
-    },
+    --- keymap {{{2
     {
       name = "keymap_remap_modifier",
-      doc = "Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.",
+      doc =
+      "Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.",
       params = {
         { name = "from", type = "string", doc = "The modifier to remap." },
-        { name = "to", type = "string", doc = "The new modifier emitted when the remapped modifier is used." },
+        { name = "to",   type = "string", doc = "The new modifier emitted when the remapped modifier is used." },
       },
     },
     {
@@ -102,32 +91,20 @@ return {
         },
       },
     },
+    --- screen {{{2
     {
       name = "get_terminal_geometry",
       doc = "Get the size of the terminal.",
       returns = { name = "geometry", type = "terminal.geometry", doc = "The geometry of the terminal window." },
     },
-    {
-      name = "spawn",
-      doc = "Spawn a process in a new window. Returns the window ID.",
-      params = {
-        { name = "cmd", type = "string", doc = "The process to spawn." },
-      },
-      returns = { type = "int", doc = "The ID of the new window" }
-    },
-    {
-      name = "is_window_valid",
-      doc = "Check whether the given window ID is valid.",
-      params = { { name = "winid", type = "int", doc = "Window ID" } },
-      returns = { type = "bool", doc = "Bool indicating whether the window ID is valid." }
-    },
+    --- timing {{{2
     {
       name = "schedule_after",
       params = {
-        { name = "delay",  type = "int", doc = "delay in miliseconds" },
-        { name = "func", type = "function", doc = "function to schedule" },
+        { name = "delay", type = "int",      doc = "delay in miliseconds" },
+        { name = "func",  type = "function", doc = "function to run" },
       },
-      doc = "Schedule |function| to run after |delay| ms",
+      doc = "Schedule |function| to run after at least |delay| ms",
     },
     {
       name = "get_current_tick",
@@ -135,17 +112,39 @@ return {
       returns = { type = "int", doc = "milliseconds elapsed since startup" }
     },
     {
+      name = "get_sessions",
+      doc = "Get the IDs of all sessions.",
+      returns = { type = "int[]", doc = "List of session IDs" }
+    },
+    {
+      name = "set_active_session",
+      doc = "Get the ID of the active session",
+      params = {{ name = "session_id", type = "int", doc = "Session ID" }},
+    },
+    {
+      name = "get_active_session",
+      doc = "Get the ID of the active session",
+      returns = { name = "session_id", type = "int", doc = "Session ID" },
+    },
+    {
+      name = "session_detach",
+      doc = "Detach |session| session from the server.",
+      params = { { name = "session_id", type = "int", doc = "Session ID" } },
+    },
+    --- Windows {{{2
+    {
+      name = "get_windows",
+      doc = "Get the IDs of all windows.",
+      returns = { type = "int[]", doc = "List of window IDs" }
+    },
+    {
+      -- TODO: deprecate this
       name = "swap_windows",
       params = {
         { name = "first",  type = "int", doc = "Window ID" },
         { name = "second", type = "int", doc = "Window ID" },
       },
-      doc = "Swap the two windows. This affects the layout of tiled windows.",
-    },
-    {
-      name = "set_focused_window",
-      params = { { name = "winid", type = "int", doc = "Window ID" } },
-      doc = "Focus the window specified by |winid|",
+      doc = "Swap two windows. This affects the layout of tiled windows.",
     },
     {
       name = "get_focused_window",
@@ -153,80 +152,110 @@ return {
       returns = { type = "int", doc = "TThe ID of the currently focused window." }
     },
     {
-      name = "list_windows",
-      doc = "Get the IDs of all windows.",
-      returns = { type = "int[]", doc = "List of window IDs" }
+      name = "set_focused_window",
+      params = { { name = "win_id", type = "int", doc = "Window ID" } },
+      doc = "Focus the window with id |win_id|",
     },
     {
-      name = "get_window_geometry",
-      doc = "Get the geometry of ths specified window.",
-      params = { { name = "winid", type = "int", doc = "Window ID" } },
+      name = "window_get_geometry",
+      doc = "Get the geometry of the specified window.",
+      params = { { name = "win_id", type = "int", doc = "Window ID" } },
       returns = { name = "geometry", type = "window.geometry", "Window geometry" },
     },
     {
-      name = "set_window_geometry",
-      doc = "Set the geometry of ths specified window.",
+      name = "window_set_geometry",
+      doc = "Set the geometry of the specified window.",
       params = {
-        { name = "winid",    type = "int",             doc = "Window ID" },
+        { name = "win_id",   type = "int",             doc = "Window ID" },
         { name = "geometry", type = "window.geometry", doc = "Window geometry" },
       },
     },
     {
-      name = "get_tags",
+      name = "window_get_tags",
       doc = "Set the tags of the specified window.",
-      params = { { name = "winid", type = "int", doc = "Window ID" } },
+      params = { { name = "win_id", type = "int", doc = "Window ID" } },
       returns = { type = "int", doc = "The tags of the specified window." }
     },
     {
-      name = "get_layer",
-      doc = "set the layer of the specified window.",
+      name = "window_get_layer",
+      doc = "get the layer of the specified window.",
       params = {
-        { name = "winid", type = "int", doc = "Window ID" },
+        { name = "win_id", type = "int", doc = "Window ID" },
       },
       returns = { name = "layer", type = "string", doc = "The current layer" },
     },
     {
-      name = "set_layer",
+      name = "window_set_layer",
       doc = "set the layer of the specified window.",
       params = {
-        { name = "winid", type = "int",    doc = "Window ID" },
-        { name = "layer", type = "string", doc = "The new layer" },
+        { name = "win_id", type = "int",    doc = "Window ID" },
+        { name = "layer",  type = "string", doc = "The new layer" },
       },
     },
     {
-      name = "set_tags",
+      name = "window_set_tags",
       doc = "Set the tags of the specified window.",
       params = {
-        { name = "tags",  type = "int", doc = "Bitmask of tags where <winid> should be shown." },
-        { name = "winid", type = "int", doc = "Window ID" },
+        { name = "win_id", type = "int", doc = "Window ID" },
+        { name = "tags",   type = "int", doc = "Bitmask of tags where <win_id> should be shown." },
       },
       returns = { type = "int", doc = "The tags of the window after the set operation." }
     },
     {
-      name = "detach",
-      doc = "Detach the current session from the server.",
-      optional = { { name = "session_id", type = "int", doc = "Session ID" } },
-    },
-    {
-      name = "close_window",
+      name = "window_close",
       doc = "Close the specified window, killing the associated process.",
       params = {
-        { name = "winid", type = "int",  doc = "The window to close (default: current window)" },
+        { name = "win_id", type = "int", doc = "The window to close" },
       },
     },
     {
       name = "window_get_title",
+      doc = "Get the title of the window with id |win_id|",
       params = {
-        { name = "winid", type = "int", doc = "Window ID" },
+        { name = "win_id", type = "int", doc = "Window ID" },
       },
-      returns = { name = "title", type = "string", doc = "New title" }
+      returns = { name = "title", type = "string", doc = "Window title" }
     },
     {
       name = "window_set_title",
+      doc = "Set the title of the window with id |win_id|",
       params = {
-        { name = "winid", type = "int",    doc = "Window ID" },
-        { name = "title", type = "string", doc = "New title" },
+        { name = "win_id", type = "int",    doc = "Window ID" },
+        { name = "title",  type = "string", doc = "New title" },
       },
+    },
+    {
+      name = "window_send_keys",
+      doc = "Send |keys| to the window with id |win_id|. Unlike |window_send_text|, keys such as <C-x> will be encoded .",
+      params = {
+        { name = "win_id", type = "int",    doc = "The window receiving the keys" },
+        { name = "keys",   type = "string", doc = "The keys to send" },
+      },
+    },
+    {
+      name = "window_send_text",
+      doc = "Send |text| to the window with id |win_id|",
+      params = {
+        { name = "win_id", type = "int",    doc = "The window receiving the text" },
+        { name = "text",   type = "string", doc = "The text to send" },
+      },
+    },
+    {
+      name = "window_create_process",
+      doc = "Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window ID.",
+      params = {
+        { name = "cmd", type = "string", doc = "The process to spawn." },
+      },
+      returns = { type = "int", doc = "The ID of the new window" }
+    },
+    {
+      name = "window_is_valid",
+      doc = "Returns true if a window exists with id |win_id|.",
+      params = { { name = "win_id", type = "int", doc = "Window ID" } },
+      returns = { type = "bool", doc = "Bool indicating whether the window ID is valid." }
     },
   },
 }
+
+-- Modeline {{{1
+-- vim: fdm=marker shiftwidth=2
