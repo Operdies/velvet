@@ -204,7 +204,6 @@ struct velvet_window_hit {
   enum velvet_window_hit_location where;
 };
 
-void velvet_scene_kill_window(struct velvet_scene *s, struct velvet_window *w, bool force);
 void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_window *w);
 bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w);
 struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, int id);
@@ -218,7 +217,6 @@ void velvet_scene_toggle_tags(struct velvet_scene *scene, uint32_t tag_mask);
 struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet_window template);
 int velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template);
 int velvet_scene_spawn_process(struct velvet_scene *m, struct u8_slice cmdline);
-void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w);
 void velvet_scene_resize(struct velvet_scene *m, struct rect w);
 void velvet_scene_arrange(struct velvet_scene *m);
 void velvet_scene_destroy(struct velvet_scene *m);

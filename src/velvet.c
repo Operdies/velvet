@@ -183,7 +183,7 @@ void velvet_scene_remove_exited(struct velvet *v) {
         }
         io_schedule(&v->event_loop, h->close.delay_ms + 1, velvet_scene_remove_schedule, v);
       } else {
-        velvet_scene_remove_window(&v->scene, h);
+        velvet_scene_close_and_remove_window(&v->scene, h);
       }
     }
   }

@@ -304,9 +304,6 @@ struct velvet_window *velvet_scene_focus_next(struct velvet_scene *m) {
   return f;
 }
 
-static void win_remove(struct velvet_scene *m, struct velvet_window *f) {
-  vec_remove(&m->windows, f);
-}
 
 static void focus_remove(struct velvet_scene *m, struct velvet_window *f) {
   int *foc;
@@ -346,6 +343,20 @@ struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet
   return host;
 }
 
+static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
+  int win_id = w->id;
+  int initial_focus = velvet_scene_get_focus(m)->id;
+  ssize_t index = vec_index(&m->windows, w);
+  assert(index >= 0);
+  focus_remove(m, w);
+  vec_remove(&m->windows, w);
+
+  struct velvet_window *new_focus = velvet_scene_get_focus(m);
+  if (new_focus && new_focus->id != initial_focus) velvet_window_notify_focus(new_focus, true);
+
+  if (m->events.on_window_removed) m->events.on_window_removed(win_id, m->events.data);
+}
+
 int velvet_scene_spawn_process_from_template(struct velvet_scene *m, struct velvet_window template) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = velvet_scene_manage(m, template);
@@ -376,20 +387,6 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
   }
   free(renderer->staging_buffer.cells);
   free(renderer->staging_buffer.lines);
-}
-
-void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
-  int win_id = w->id;
-  int initial_focus = velvet_scene_get_focus(m)->id;
-  ssize_t index = vec_index(&m->windows, w);
-  assert(index >= 0);
-  focus_remove(m, w);
-  win_remove(m, w);
-
-  struct velvet_window *new_focus = velvet_scene_get_focus(m);
-  if (new_focus && new_focus->id != initial_focus) velvet_window_notify_focus(new_focus, true);
-
-  if (m->events.on_window_removed) m->events.on_window_removed(win_id, m->events.data);
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
@@ -1331,20 +1328,6 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
   string_destroy(&velvet_window->icon);
   string_destroy(&velvet_window->cwd);
   velvet_window->pty = velvet_window->pid = 0;
-}
-
-void velvet_scene_kill_window(struct velvet_scene *s, struct velvet_window *w, bool force) {
-  if (w->pty > 0) {
-    close(w->pty);
-    w->pty = 0;
-  }
-  if (w->pid > 0) {
-    if (force) {
-      kill(w->pid, SIGKILL);
-    } else {
-      kill(w->pid, SIGHUP);
-    }
-  }
 }
 
 void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_window *w) {

@@ -26,8 +26,8 @@ static void string_ensure_capacity(struct string *str, size_t required) {
     str->cap = newsize;
     if (prev && str->len) {
       memcpy(str->content, prev, str->len);
-      free(prev);
     }
+    free(prev);
   }
 }
 
