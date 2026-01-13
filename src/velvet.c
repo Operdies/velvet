@@ -1,4 +1,5 @@
 #include "velvet.h"
+#include "lauxlib.h"
 #include "utils.h"
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -471,13 +472,15 @@ static bool file_exists(const char *path) {
 }
 
 static void velvet_source_config(struct velvet *v) {
-  char path[PATH_MAX];
+  char path[PATH_MAX] = {0};
   char *home = getenv("HOME");
   if (home) {
     snprintf(path, PATH_MAX - 1, "%s/.config/velvet/init.lua", home);
-    if (file_exists(path)) {
-      velvet_lua_source(v, path);
-    }
+  }
+  if (file_exists(path)) {
+    velvet_lua_source(v, path);
+  } else {
+    luaL_dostring(v->L, "require('velvet.default_config')");
   }
 }
 

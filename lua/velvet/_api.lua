@@ -66,7 +66,7 @@ function api.get_active_session() end
 --- @return nil 
 function api.session_detach(session_id) end
 
---- Kill the velvet instance.
+--- Kill the velvet instance. All child processes will be killed.
 --- @return nil 
 function api.server_kill() end
 
