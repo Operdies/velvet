@@ -3,6 +3,7 @@
 #include "lua.h"
 #include "lualib.h"
 #include "velvet_lua_autogen.c"
+#include <string.h>
 
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)osize;
@@ -59,12 +60,26 @@ void velvet_lua_init(struct velvet *v) {
   if (luaL_dostring(L, "package.searchers = { package.searchers[1], package.searchers[2] }")) {
     lua_die(L);
   }
-  if (luaL_dostring(L, "package.path = './lua/?/init.lua;./lua/?.lua'") != LUA_OK) {
+
+  char *binpath = platform_get_exe_path();
+  char *lastslash = strrchr(binpath, '/');
+  *lastslash = 0;
+  if (chdir(binpath) == -1)
+    velvet_die("chdir:");
+  free(binpath);
+
+  /* The lua distribution is in the parent directory of the folder containing the vv binaries.
+   * We don't want to load lua libraries from any other directories by default.
+   * End users can manually add search paths if they want to. */
+  if (luaL_dostring(L, "package.path = '../lua/?/init.lua;../lua/?.lua'") != LUA_OK) {
     lua_die(L);
   }
 
   /* set `vv` in the global scope */
-  luaL_dostring(L, "vv = require('velvet')");
+  if (luaL_dostring(L, "vv = require('velvet')") != LUA_OK) {
+    lua_die(L);
+  }
+
   velvet_lua_init_api(v);
   velvet_lua_init_log(v);
   velvet_lua_set_default_options(v);

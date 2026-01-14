@@ -729,8 +729,7 @@ static bool is_keypad_with_text(struct velvet_key k) {
 
 /* https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
 static void
-velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, enum kitty_keyboard_options o) {
-  struct velvet_window *f = velvet_scene_get_focus(&v->scene);
+velvet_input_send_kitty_encoding(struct velvet_window *f, struct velvet_key_event e, enum kitty_keyboard_options o) {
   assert(f);
   if (!e.type) e.type = KEY_PRESS;
   bool is_mod = is_modifier(e.key.codepoint);
@@ -809,7 +808,7 @@ velvet_input_send_kitty_encoding(struct velvet *v, struct velvet_key_event e, en
   string_push_char(s, e.key.kitty_terminator);
 }
 
-static void velvet_input_send_vk_to_window(struct velvet *v, struct velvet_key_event e, struct velvet_window *f) {
+static void velvet_input_send_vk_to_window(struct velvet_key_event e, struct velvet_window *f) {
   assert(f);
   enum kitty_keyboard_options o = f->emulator.options.kitty[f->emulator.options.alternate_screen].options;
   if (o == KITTY_KEYBOARD_NONE || e.legacy) {
@@ -819,13 +818,13 @@ static void velvet_input_send_vk_to_window(struct velvet *v, struct velvet_key_e
       }
     }
   } else {
-    velvet_input_send_kitty_encoding(v, e, o);
+    velvet_input_send_kitty_encoding(f, e, o);
   }
 }
 
 static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
   struct velvet_window *f = velvet_scene_get_focus(&v->scene);
-  if (f) velvet_input_send_vk_to_window(v, e, f);
+  if (f) velvet_input_send_vk_to_window(e, f);
   
 }
 
@@ -1179,7 +1178,7 @@ void velvet_input_put_keys(struct velvet *in, struct u8_slice str, int win_id) {
     }
   }
   for (; velvet_key_iterator_next(&it); ) {
-    velvet_input_send_vk_to_window(in, it.current, win);
+    velvet_input_send_vk_to_window(it.current, win);
   }
 }
 

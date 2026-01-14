@@ -129,8 +129,8 @@ local function swap(a, b)
       end
     end
     currently_animating = true
-    animation.animate(a, g2, 200, { easing_function = animation.easing.spring, done = done })
-    animation.animate(b, g1, 200, { easing_function = animation.easing.spring, done = done })
+    animation.animate(a, g2, 200, { easing_function = animation.easing.spring, on_completed = done })
+    animation.animate(b, g1, 200, { easing_function = animation.easing.spring, on_completed = done })
     vv.api.swap_windows(a, b)
   end
 end
@@ -162,10 +162,10 @@ end
 local map = vv.api.keymap_set
 local rmap = function(keys, action) vv.api.keymap_set(keys, action, { repeatable = true }) end
 
-map("<M-down>", focus_next)
-map("<M-up>", focus_prev)
-map("<M-S-down>", swap_next)
-map("<M-S-up>", swap_prev)
+map("<M-right>", focus_next)
+map("<M-left>", focus_prev)
+map("<M-S-right>", swap_next)
+map("<M-S-left>", swap_prev)
 rmap("<C-x><C-j>", focus_next)
 rmap("<C-x><C-k>", focus_prev)
 rmap("<C-x>j", swap_next)

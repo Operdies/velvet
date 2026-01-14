@@ -70,7 +70,10 @@ void vv_api_session_detach(struct velvet *v, lua_Integer session_id) {
 
 void vv_api_window_close(struct velvet *v, lua_Integer winid) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (w) velvet_scene_close_and_remove_window(&v->scene, w);
+  if (w) {
+    velvet_scene_close_and_remove_window(&v->scene, w);
+    velvet_ensure_render_scheduled(v);
+  }
 }
 
 lua_Integer vv_api_get_focused_window(struct velvet *v){
@@ -210,7 +213,7 @@ const char *vv_api_window_get_layer(struct velvet *v, lua_Integer winid) {
 
 void vv_api_window_set_layer(struct velvet *v, lua_Integer winid, const char* layer) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  enum velvet_scene_layer new_layer;
+  enum velvet_scene_layer new_layer = 0;
   if (w) {
     if (!layer_from_string(layer, &new_layer))
       lua_bail(v->L, "Layer %s does not exist.", layer);
