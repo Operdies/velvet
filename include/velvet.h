@@ -138,6 +138,7 @@ void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 void velvet_ensure_render_scheduled(struct velvet *velvet);
+void velvet_emit_event(struct velvet *v, const char *evt, int data);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {
     .options =

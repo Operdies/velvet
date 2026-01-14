@@ -159,104 +159,6 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
 
 static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e);
 
-static bool skip_non_tiled(struct velvet_window *w, void *) {
-  return w->layer != VELVET_LAYER_TILED || w->dragging;
-}
-
-static void dispatch_border_drag(struct velvet *v, struct mouse_sgr sgr, struct velvet_window_hit hit) {
-  struct velvet_input *in = &v->input;
-  struct velvet_window *drag = nullptr;
-  if (in->dragging.id) {
-    drag = velvet_scene_get_window_from_id(&v->scene, in->dragging.id);
-    if (!drag) {
-      in->dragging = (struct velvet_input_drag_event){0};
-      return;
-    }
-  }
-
-  if (!drag) drag = hit.win;
-  assert(drag);
-  if (sgr.event_type == mouse_click && sgr.trigger == mouse_down && (hit.where & VELVET_HIT_BORDER)) {
-    in->dragging = (struct velvet_input_drag_event){
-        .id = drag->id,
-        .drag_start =
-            {
-                .x = sgr.column,
-                .y = sgr.row,
-            },
-        .type = (hit.where & VELVET_HIT_TITLE) ? DRAG_MOVE : DRAG_RESIZE,
-        .loc = hit.where,
-    };
-    drag->dragging = true;
-    if (in->dragging.type == DRAG_MOVE && drag->layer == VELVET_LAYER_TILED) {
-      struct rect new_size = drag->rect.window;
-      new_size.h = v->scene.ws.h / 2;
-      new_size.w = v->scene.ws.w / 2;
-      velvet_window_resize(drag, new_size);
-    }
-    in->dragging.drag_start.win = drag->rect.window;
-    drag->layer = VELVET_LAYER_FLOATING;
-    velvet_scene_set_focus(&v->scene, drag);
-  } else if (sgr.event_type == mouse_click && sgr.trigger == mouse_up) {
-    /* drop */
-    drag->dragging = false;
-    if (!velvet_window_visible(&v->scene, drag)) drag->tags = v->scene.view;
-
-    bool is_drag_move = in->dragging.type == DRAG_MOVE;
-    in->dragging = (struct velvet_input_drag_event){0};
-    if (is_drag_move && sgr.modifiers & modifier_alt) {
-      struct velvet_window_hit drop_hit = {0};
-      velvet_scene_hit(&v->scene, sgr.column - 1, sgr.row - 1, &drop_hit, skip_non_tiled, nullptr);
-      struct velvet_window *drop_target = drop_hit.win;
-      if (drop_target && drop_target != drag) {
-        drag->layer = VELVET_LAYER_TILED;
-        bool above /* otherwise below */ = (sgr.row - drop_target->rect.window.y) < (drop_target->rect.window.h / 2);
-        int target_index = vec_index(&v->scene.windows, drag);
-        int drop_index = vec_index(&v->scene.windows, drop_target);
-
-        /* account for the fact that we temporarily remove the window */
-        if (target_index < drop_index) drop_index--;
-        if (!above) drop_index++;
-        struct velvet_window t = *drag;
-        vec_remove(&v->scene.windows, drag);
-        vec_insert(&v->scene.windows, drop_index, &t);
-        velvet_scene_set_focus(&v->scene, drop_target);
-      } else {
-        drag->layer = VELVET_LAYER_TILED;
-      }
-    }
-  } else if (in->dragging.id && (sgr.event_type & mouse_move)) {
-    struct rect w = in->dragging.drag_start.win;
-    int delta_x = sgr.column - in->dragging.drag_start.x;
-    int delta_y = sgr.row - in->dragging.drag_start.y;
-
-    enum velvet_window_hit_location h = in->dragging.loc;
-    if (h & VELVET_HIT_TITLE) {
-      /* drag move */
-      w.x += delta_x;
-      w.y += delta_y;
-    } else if (h & VELVET_HIT_BORDER) {
-      /* drag resize */
-      h &= ~VELVET_HIT_BORDER;
-      if (h & VELVET_HIT_BORDER_TOP) {
-        w.y += delta_y;
-        w.h -= delta_y;
-      }
-      if (h & VELVET_HIT_BORDER_BOTTOM) {
-        w.h += delta_y;
-      }
-      if (h & VELVET_HIT_BORDER_LEFT) {
-        w.x += delta_x;
-        w.w -= delta_x;
-      }
-      if (h & VELVET_HIT_BORDER_RIGHT) {
-        w.w += delta_x;
-      }
-    }
-    velvet_window_resize(drag, w);
-  }
-}
-
 static void scroll_to_bottom(struct velvet_window *focus) {
   if (focus) screen_set_scroll_offset(&focus->emulator.primary, 0);
 }
@@ -899,7 +801,7 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   }
 
   if (in->dragging.id || (hit.where & VELVET_HIT_BORDER)) {
-    dispatch_border_drag(v, sgr, hit);
+    velvet_emit_event(v, "mouse_event", 0);
     return;
   }
 

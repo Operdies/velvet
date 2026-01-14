@@ -10,10 +10,6 @@ options.focus_follows_mouse = true
 --- @type integer
 options.key_repeat_timeout = 500
 
---- Bitmask of the currently visible tags.
---- @type integer
-options.view = 1
-
 --- Enable damage tracking when the screen is updated. (debugging feature)
 --- @type boolean
 options.display_damage = false

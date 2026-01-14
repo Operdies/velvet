@@ -21,12 +21,6 @@ return {
       doc = "Time in milliseconds before pending keybinds time out",
     },
     {
-      name = "view",
-      type = "int",
-      default = 1,
-      doc = "Bitmask of the currently visible tags.",
-    },
-    {
       name = "display_damage",
       type = "bool",
       default = false,
@@ -173,37 +167,6 @@ return {
         { name = "win_id",   type = "int",             doc = "Window ID" },
         { name = "geometry", type = "window.geometry", doc = "Window geometry" },
       },
-    },
-    {
-      name = "window_get_tags",
-      doc = "Set the tags of the specified window.",
-      params = { { name = "win_id", type = "int", doc = "Window ID" } },
-      returns = { type = "int", doc = "The tags of the specified window." }
-    },
-    {
-      name = "window_get_layer",
-      doc = "get the layer of the specified window.",
-      params = {
-        { name = "win_id", type = "int", doc = "Window ID" },
-      },
-      returns = { name = "layer", type = "string", doc = "The current layer" },
-    },
-    {
-      name = "window_set_layer",
-      doc = "set the layer of the specified window.",
-      params = {
-        { name = "win_id", type = "int",    doc = "Window ID" },
-        { name = "layer",  type = "string", doc = "The new layer" },
-      },
-    },
-    {
-      name = "window_set_tags",
-      doc = "Set the tags of the specified window.",
-      params = {
-        { name = "win_id", type = "int", doc = "Window ID" },
-        { name = "tags",   type = "int", doc = "Bitmask of tags where <win_id> should be shown." },
-      },
-      returns = { type = "int", doc = "The tags of the window after the set operation." }
     },
     {
       name = "window_close",

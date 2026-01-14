@@ -100,28 +100,6 @@ function api.window_get_geometry(win_id) end
 --- @return nil 
 function api.window_set_geometry(win_id, geometry) end
 
---- Set the tags of the specified window.
---- @param win_id integer Window ID
---- @return integer The tags of the specified window.
-function api.window_get_tags(win_id) end
-
---- get the layer of the specified window.
---- @param win_id integer Window ID
---- @return string The current layer
-function api.window_get_layer(win_id) end
-
---- set the layer of the specified window.
---- @param win_id integer Window ID
---- @param layer string The new layer
---- @return nil 
-function api.window_set_layer(win_id, layer) end
-
---- Set the tags of the specified window.
---- @param win_id integer Window ID
---- @param tags integer Bitmask of tags where <win_id> should be shown.
---- @return integer The tags of the window after the set operation.
-function api.window_set_tags(win_id, tags) end
-
 --- Close the specified window, killing the associated process.
 --- @param win_id integer The window to close
 --- @return nil 
@@ -177,15 +155,6 @@ function api.get_key_repeat_timeout() end
 --- @param new_value integer Time in milliseconds before pending keybinds time out
 --- @return integer The value after the update
 function api.set_key_repeat_timeout(new_value) end
-
---- Get view
---- @return integer The current value
-function api.get_view() end
-
---- Set view. Returns the new value.
---- @param new_value integer Bitmask of the currently visible tags.
---- @return integer The value after the update
-function api.set_view(new_value) end
 
 --- Get display_damage
 --- @return boolean The current value

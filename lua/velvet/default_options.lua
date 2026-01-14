@@ -2,6 +2,5 @@
 --- It sets all options to their default values.
 vv.options.focus_follows_mouse = true
 vv.options.key_repeat_timeout = 500
-vv.options.view = 1
 vv.options.display_damage = false
 

@@ -179,7 +179,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   struct dumb_screen *expected = make_dumb_screen(5, 8, expected1);
 
   struct velvet_scene v = velvet_scene_default;
-  struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default, .layer = VELVET_LAYER_TILED});
+  struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
 
   velvet_scene_resize(&v, blarge);
   velvet_window_resize(p, blarge);
@@ -208,7 +208,7 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
   struct velvet_scene v = velvet_scene_default;
-  struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default, .layer = VELVET_LAYER_TILED});
+  struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
   velvet_scene_resize(&v, bsmall);
   velvet_window_resize(p, bsmall);
 
@@ -246,7 +246,7 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
   struct dumb_screen *large = make_dumb_screen(5, 8, large1);
 
   struct velvet_scene v = velvet_scene_default;
-  struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default, .layer = VELVET_LAYER_TILED});
+  struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
   velvet_scene_resize(&v, blarge);
   velvet_window_resize(p, blarge);
   velvet_window_process_output(p, u8_slice_from_cstr(input));

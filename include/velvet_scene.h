@@ -7,32 +7,6 @@
 
 #define DAMAGE_MAX 20
 
-enum velvet_scene_layer {
-  VELVET_LAYER_BACKGROUND,
-  VELVET_LAYER_STATUS,
-  VELVET_LAYER_TILED,
-  VELVET_LAYER_FLOATING,
-  VELVET_LAYER_NOTIFICATION,
-  VELVET_LAYER_LAST,
-};
-
-enum velvet_window_close_when {
-  VELVET_WINDOW_CLOSE_ON_EXIT = 0,
-  VELVET_WINDOW_CLOSE_ON_ESCAPE = 1,
-  VELVET_WINDOW_CLOSE_AFTER_DELAY = 2,
-};
-
-enum velvet_window_kind {
-  VELVET_WINDOW_PTY_HOST,
-  VELVET_WINDOW_HINT,
-};
-
-struct velvet_window_close_behavior {
-  enum velvet_window_close_when when;
-  uint64_t delay_ms;
-};
-
-
 enum pseudotransparency_blend_mode {
   /* no pseudotransparency */
   PSEUDOTRANSPARENCY_OFF,
@@ -54,6 +28,8 @@ struct velvet_window {
   struct string cwd;
   int pty, pid;
   int id;
+  int z_index;
+  bool hidden;
   int border_width;
   struct {
     struct rect window;
@@ -62,15 +38,7 @@ struct velvet_window {
   } rect;
   uint64_t exited_at;
   struct vte emulator;
-  struct velvet_window_close_behavior close;
-  enum velvet_window_kind kind;
-  enum velvet_scene_layer layer;
-  bool dragging;
-  uint32_t tags;
-  struct {
-    bool override;
-    struct pseudotransparency_options options;
-  } transparency;
+  struct pseudotransparency_options transparency;
   struct {
     void (*on_move)(int win_id, void *);
     void (*on_resize)(int win_id, void *);
@@ -123,7 +91,6 @@ struct velvet_theme {
     bool enabled;
     float magnitude;
   } dim_inactive;
-  struct pseudotransparency_options pseudotransparency[VELVET_LAYER_LAST];
   struct color palette[16];
   struct {
     struct color visible;
@@ -172,9 +139,6 @@ struct velvet_scene {
   struct velvet_render renderer;
   struct velvet_theme theme;
   struct velvet_scene_layout layout;
-  void (*arrange)(struct velvet_scene* scene);
-  uint32_t view;
-  uint32_t prev_view;
   struct {
     void (*on_screen_resized)(void *);
     void (*on_window_created)(int win_id, void *);
@@ -205,7 +169,6 @@ struct velvet_window_hit {
 };
 
 void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_window *w);
-bool velvet_window_visible(struct velvet_scene *m, struct velvet_window *w);
 struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, int id);
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data);
 void velvet_scene_set_view(struct velvet_scene *scene, uint32_t view_mask);
@@ -221,10 +184,7 @@ void velvet_scene_resize(struct velvet_scene *m, struct rect w);
 void velvet_scene_arrange(struct velvet_scene *m);
 void velvet_scene_destroy(struct velvet_scene *m);
 void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_focus);
-struct velvet_window *velvet_scene_focus_previous(struct velvet_scene *m);
-struct velvet_window *velvet_scene_focus_next(struct velvet_scene *m);
 void velvet_scene_set_display_damage(struct velvet_scene *m, bool track_damage);
-void velvet_scene_draw_tile_hint(struct velvet_scene *m, struct velvet_window *before);
 
 typedef void(render_func_t)(struct u8_slice str, void *context);
 void velvet_scene_render_full(struct velvet_scene *m, render_func_t *render_func, void *context);
@@ -272,12 +232,6 @@ static const struct velvet_theme velvet_theme_default = {
         {
             .active = RGB("#f38ba8"),
             .inactive = RGB("#b4befe"),
-        },
-    .pseudotransparency =
-        {
-            [VELVET_LAYER_TILED]        = {.mode = PSEUDOTRANSPARENCY_CLEAR, .alpha   = 0.15f},
-            [VELVET_LAYER_FLOATING]     = {.mode = PSEUDOTRANSPARENCY_ALL,   .alpha   = 0.15f},
-            [VELVET_LAYER_NOTIFICATION] = {.mode = PSEUDOTRANSPARENCY_ALL,   .alpha   = 0.50f},
         },
     .dim_inactive =
         {
@@ -334,7 +288,6 @@ static const struct velvet_scene velvet_scene_default = {
             .state = render_state_cache_invalidated,
 
         },
-    .arrange = velvet_scene_arrange,
     .layout =
         {
             .nmaster = 1,
@@ -342,8 +295,6 @@ static const struct velvet_scene velvet_scene_default = {
             .notification_height = 5,
             .notification_width = 40,
         },
-    .view = 1,
-    .prev_view = 1,
 };
 
 #endif // VELVET_SCENE_H

@@ -282,6 +282,24 @@ void vec_sort(struct vec *v, int (*cmp)(const void*,const void*)) {
   if (v->length) qsort(v->content, v->length, v->element_size, cmp);
 }
 
+ssize_t vec_binsearch(struct vec *v, const void *elem, int (*cmp)(const void *, const void *)) {
+  size_t lower = 0;
+  size_t upper = v->length - 1;
+  while (lower < upper) {
+    size_t test = lower + (upper - lower) / 2;
+    int c = cmp(elem, vec_nth(*v, test));
+    if (c == 0) return test;
+    if (c > 0) {
+      /* elem > test */
+      lower = test + 1;
+    } else {
+      /* elem < test */
+      upper = test - 1;
+    }
+  }
+  return ~lower;
+}
+
 #define HASHMAP_MAX_LOAD (0.7)
 
 [[gnu::const]] static uint32_t hashmap_hash(uint32_t key) {

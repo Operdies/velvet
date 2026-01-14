@@ -20,41 +20,10 @@ static void lua_bail(lua_State *L, char *fmt, ...) {
   lua_error(L);
 }
 
-lua_Integer vv_api_get_view(struct velvet *v) {
-  return v->scene.view;
-}
-lua_Integer vv_api_set_view(struct velvet *v, lua_Integer new_value) {
-  velvet_scene_set_view(&v->scene, new_value);
-  return v->scene.view;
-}
-lua_Integer vv_api_window_get_tags(struct velvet *vv, lua_Integer winid){
-  return velvet_scene_get_tags_for_window(&vv->scene, winid);
-}
-lua_Integer vv_api_window_set_tags(struct velvet *vv, lua_Integer winid, lua_Integer tags){
-  velvet_scene_set_tags_for_window(&vv->scene, winid, tags);
-  return vv_api_window_get_tags(vv, winid);
-}
-
-static bool layer_from_string(const char *layer, enum velvet_scene_layer *out) {
-  struct u8_slice S = u8_slice_from_cstr(layer);
-  if (u8_match(S, "floating")) {
-    *out = VELVET_LAYER_FLOATING;
-    return true;
-  } else if (u8_match(S, "tiled")) {
-    *out = VELVET_LAYER_TILED;
-    return true;
-  } else if (u8_match(S, "background")) {
-    *out = VELVET_LAYER_BACKGROUND;
-    return true;
-  }
-  return false;
-}
-
 lua_Integer vv_api_window_create_process(struct velvet *v, const char* cmd) {
   struct velvet_window template = {
     .emulator = vte_default,
     .border_width = 1,
-    .layer = VELVET_LAYER_TILED,
   };
 
   string_push_cstr(&template.cmdline, cmd);
@@ -103,7 +72,6 @@ void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velv
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
     struct rect new_geometry = {.h = geometry.height, .y = geometry.top, .x = geometry.left, .w = geometry.width};
-    w->layer = VELVET_LAYER_FLOATING;
     velvet_window_resize(w, new_geometry);
     velvet_ensure_render_scheduled(v);
   }
@@ -116,12 +84,12 @@ bool vv_api_window_is_valid(struct velvet *v, lua_Integer winid) {
 }
 
 lua_Integer vv_api_get_windows(lua_State *L) {
-  struct velvet *vv = *(struct velvet **)lua_getextraspace(L);
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   lua_newtable(L);
   lua_Integer index = 1;
   struct velvet_window *w;
   /* hide non-regular windows from the LUA api for now */
-  vec_where(w, vv->scene.windows, w->id >= 1000 && (w->layer == VELVET_LAYER_TILED || w->layer == VELVET_LAYER_FLOATING)) {
+  vec_foreach(w, v->scene.windows) {
     lua_pushinteger(L, w->id);
     lua_seti(L, -2, index++);
   }
@@ -194,31 +162,6 @@ void vv_api_keymap_set(struct velvet *v, const char *keys, lua_Integer function,
 void vv_api_keymap_del(struct velvet *v, const char* keys) {
   struct u8_slice chords = u8_slice_from_cstr(keys);
   velvet_keymap_unmap(v->input.keymap->root, chords);
-}
-
-const char *vv_api_window_get_layer(struct velvet *v, lua_Integer winid) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (w) {
-    switch (w->layer) {
-    case VELVET_LAYER_BACKGROUND: return "background";
-    case VELVET_LAYER_STATUS: return "status";
-    case VELVET_LAYER_TILED: return "tiled";
-    case VELVET_LAYER_FLOATING: return "floating";
-    case VELVET_LAYER_NOTIFICATION: return "notification";
-    default: break;
-    }
-  }
-  return nullptr;
-}
-
-void vv_api_window_set_layer(struct velvet *v, lua_Integer winid, const char* layer) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  enum velvet_scene_layer new_layer = 0;
-  if (w) {
-    if (!layer_from_string(layer, &new_layer))
-      lua_bail(v->L, "Layer %s does not exist.", layer);
-    w->layer = new_layer;
-  }
 }
 
 bool vv_api_get_display_damage(struct velvet *v) {

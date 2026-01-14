@@ -154,18 +154,6 @@ static void socket_accept(struct io_source *src) {
   vec_push(&velvet->sessions, &c);
 }
 
-static void velvet_scene_remove_schedule(void *data) {
-  struct velvet *v = data;
-  uint64_t now = get_ms_since_startup();
-  struct velvet_window *h;
-  vec_rwhere(h,
-             v->scene.windows,
-             (h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->exited_at &&
-                 h->exited_at + h->close.delay_ms <= now) {
-    velvet_scene_close_and_remove_window(&v->scene, h);
-  }
-}
-
 void velvet_scene_remove_exited(struct velvet *v) {
   int status;
   pid_t pid = 0;
@@ -176,16 +164,8 @@ void velvet_scene_remove_exited(struct velvet *v) {
     vec_find(h, m->windows, h->pid == pid);
     if (h) {
       h->exited_at = get_ms_since_startup();
-      if ((h->close.when & VELVET_WINDOW_CLOSE_AFTER_DELAY) && h->close.delay_ms > 0) {
-        if (h->pty > 0) {
-          /* close the pty, but defer cleanup */
-          close(h->pty);
-          h->pty = 0;
-        }
-        io_schedule(&v->event_loop, h->close.delay_ms + 1, velvet_scene_remove_schedule, v);
-      } else {
-        velvet_scene_close_and_remove_window(&v->scene, h);
-      }
+      velvet_emit_event(v, "window_process_dead", h->id);
+      velvet_scene_close_and_remove_window(&v->scene, h);
     }
   }
 }
@@ -338,106 +318,24 @@ static void start_default_shell(struct velvet *v) {
   velvet_scene_spawn_process(&v->scene, u8_slice_from_cstr(shell));
 }
 
+void velvet_emit_event(struct velvet *v, const char *evt, int data) {
+  lua_State *L = v->L;
+  // vv.emit_event(evt, data)
+  lua_getglobal(L, "vv");
+  lua_getfield(L, -1, "events");
+  lua_getfield(L, -1, "emit_event");
+  lua_pushstring(L, evt);
+  lua_pushinteger(L, data);
+  lua_pcall(L, 2, 0, 0); 
+}
+
 static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {
   bool resized = false;
   if (focus->ws.w && focus->ws.h && (focus->ws.w != v->scene.ws.w || focus->ws.h != v->scene.ws.h)) {
     velvet_scene_resize(&v->scene, focus->ws);
     resized = true;
   }
-  v->scene.arrange(&v->scene);
   return resized;
-}
-
-static void string_push_color(struct string *str, struct color rgb, bool fg) {
-  assert(rgb.cmd == COLOR_RGB);
-  int cmd = fg ? 38 : 48;
-  string_push_format_slow(str, "\x1b[%d;2;%d;%d;%dm", cmd, rgb.r, rgb.g, rgb.b);
-}
-static void string_push_bg(struct string *str, struct color rgb) {
-  string_push_color(str, rgb, false);
-}
-static void string_push_fg(struct string *str, struct color rgb) {
-  string_push_color(str, rgb, true);
-}
-
-static uint64_t status_winid = 1;
-
-static bool occupied(struct velvet_scene *s, uint32_t tag) {
-  struct velvet_window *w;
-  vec_where(w,
-            s->windows,
-            (w->layer == VELVET_LAYER_FLOATING || w->layer == VELVET_LAYER_TILED) && w->tags & tag) return true;
-  return false;
-}
-
-static void draw_status(struct velvet *v) {
-  static struct string buf = {0};
-  string_clear(&buf);
-  struct velvet_window *status = velvet_scene_get_window_from_id(&v->scene, status_winid);
-  assert(status);
-  assert(!status->emulator.pending_input.len);
-  int numtags = 9;
-
-  struct velvet_theme t = v->scene.theme;
-  string_push_bg(&buf, t.mantle);
-  string_push_fg(&buf, t.mantle);
-  string_push_format_slow(&buf, "\r\x1b[K");
-
-  for (int i = 0; i < numtags; i++) {
-    int tagmask = 1 << i;
-    bool tag_visible = v->scene.view & tagmask;
-    if (tag_visible) {
-      string_push_bg(&buf, t.status.visible);
-    } else if (occupied(&v->scene, tagmask)) {
-      string_push_bg(&buf, t.status.not_visible);
-    } else {
-      /* hide empty tags */
-      continue;
-    }
-
-    string_push_format_slow(&buf, " %d ", i + 1);
-  }
-
-  string_push_bg(&buf, t.mantle);
-  string_push_fg(&buf, t.foreground);
-
-  struct velvet_key_event pending[10] = {0};
-  int n_pending = 0;
-  struct velvet_keymap *k = v->input.keymap;
-  while (k && n_pending < LENGTH(pending)) {
-    if (k == k->root) break;
-    pending[n_pending++] = k->key;
-    k = k->parent;
-  }
-
-  if (n_pending) {
-    string_push_cstr(&buf, "  ");
-    string_push_bg(&buf, t.background);
-    string_push_cstr(&buf, " ");
-    for (int i = 0; i < n_pending; i++) {
-      struct velvet_key_event e = pending[n_pending - i - 1];
-      if (e.modifiers || e.key.name) string_push_cstr(&buf, "<");
-      if (e.modifiers & MODIFIER_SHIFT) string_push_cstr(&buf, "S-");
-      if (e.modifiers & MODIFIER_ALT) string_push_cstr(&buf, "M-");
-      if (e.modifiers & MODIFIER_CTRL) string_push_cstr(&buf, "C-");
-      if (e.modifiers & MODIFIER_SUPER) string_push_cstr(&buf, "D-");
-
-      if (e.key.name) {
-        string_push_cstr(&buf, e.key.name);
-      } else if (e.key.codepoint) {
-        struct utf8 u = {0};
-        int n = codepoint_to_utf8(e.key.codepoint, &u);
-        string_push_range(&buf, u.utf8, n);
-      }
-
-      if (e.modifiers || e.key.name) string_push_cstr(&buf, ">");
-    }
-    string_push_cstr(&buf, " ");
-  }
-  string_push_bg(&buf, t.mantle);
-
-
-  vte_process(&status->emulator, string_as_u8_slice(buf));
 }
 
 static void velvet_dispatch_frame(void *data) {
@@ -446,7 +344,6 @@ static void velvet_dispatch_frame(void *data) {
   struct velvet_session *focus = velvet_get_focused_session(v);
   if (focus) {
     velvet_align_and_arrange(v, focus);
-    draw_status(v);
     v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_wide_chars;
     velvet_scene_render_damage(&v->scene, velvet_render, v);
   }
@@ -484,22 +381,18 @@ static void velvet_source_config(struct velvet *v) {
   }
 }
 
-static void velvet_emit_event(struct velvet *v, const char *evt, int data) {
-  lua_State *L = v->L;
-  // vv.emit_event(evt, data)
-  lua_getglobal(L, "vv");
-  lua_getfield(L, -1, "events");
-  lua_getfield(L, -1, "emit_event");
-  lua_pushstring(L, evt);
-  lua_pushinteger(L, data);
-  lua_pcall(L, 2, 0, 0); 
-}
-
 static void on_screen_resized(void *data) {
   velvet_emit_event(data, "screen_resized", 0);
 }
 static void on_window_created(int win_id, void *data) {
-  velvet_emit_event(data, "window_created", win_id);
+  struct velvet *v = data;
+  struct velvet_window *win = velvet_scene_get_window_from_id(&v->scene, win_id);
+  assert(win);
+  velvet_emit_event(v, "window_created", win_id);
+  if (win->rect.window.h == 0 || win->rect.window.w == 0)  {
+    struct rect default_size = v->scene.ws;
+    velvet_window_resize(win, default_size);
+  }
 }
 static void on_window_removed(int win_id, void *data) {
   velvet_emit_event(data, "window_removed", win_id);
@@ -544,15 +437,6 @@ void velvet_loop(struct velvet *velvet) {
 
   if (!velvet_scene_get_focus(&velvet->scene))
     start_default_shell(velvet);
-
-  {
-    /* create status window */
-    struct velvet_window status = {.id = status_winid, .layer = VELVET_LAYER_STATUS};
-    status.emulator.options.alternate_screen = true;
-    velvet_scene_manage(&velvet->scene, status);
-  }
-
-  velvet->scene.arrange(&velvet->scene);
 
   velvet->min_ms_per_frame = 10;
   velvet_ensure_render_scheduled(velvet);
@@ -604,10 +488,7 @@ void velvet_loop(struct velvet *velvet) {
 
     // quit ?
     struct velvet_window *real_client;
-    vec_find(real_client,
-             velvet->scene.windows,
-             real_client->kind == VELVET_WINDOW_PTY_HOST &&
-                 (real_client->layer == VELVET_LAYER_TILED || real_client->layer == VELVET_LAYER_FLOATING));
+    vec_find(real_client, velvet->scene.windows, real_client);
 
     if (!real_client || velvet->quit) break;
   }

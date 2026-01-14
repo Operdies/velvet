@@ -173,14 +173,6 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
   bool boolean = digit || (value.len && value.content[0] == 't');
   if (u8_match(option, "lines")) {
     if (focus && is_digit) focus->ws.h = digit;
-  } else if (u8_match(option, "notification_height")) {
-    if (is_digit) {
-      v->scene.layout.notification_height = CLAMP(digit, 3, v->scene.ws.h);
-    }
-  } else if (u8_match(option, "notification_width")) {
-    if (is_digit) {
-      v->scene.layout.notification_width = CLAMP(digit, 10, v->scene.ws.w);
-    }
   } else if (modifier_from_slice(option)) {
     velvet_cmd_modremap(v, option, value);
   } else if (u8_match(option, "columns")) {
@@ -200,14 +192,7 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
     v->input.options.key_chain_timeout_ms = digit;
   } else if (u8_match(option, "focus_follows_mouse")) {
     v->input.options.focus_follows_mouse = boolean;
-  } else if (u8_match(option, "layer")) {
-    struct velvet_window *window = velvet_scene_get_focus(&v->scene);
-    if (u8_match(value, "floating")) {
-      window->layer = VELVET_LAYER_FLOATING;
-    } else if (u8_match(value, "tiled")) {
-      window->layer = VELVET_LAYER_TILED;
-    }
-  } else if (u8_match(option, "display_damage")) {
+  }  else if (u8_match(option, "display_damage")) {
     velvet_scene_set_display_damage(&v->scene, boolean);
   } else if (u8_match(option, "no_repeat_wide_chars")) {
     focus->features.no_repeat_wide_chars = boolean;
@@ -221,36 +206,6 @@ static void velvet_action_callback(struct velvet_keymap *k, struct velvet_key_ev
     free(d);
   } else {
     velvet_cmd(d->v, 0, string_as_u8_slice(d->cmd));
-  }
-}
-
-enum tagcmd {
-  VIEW_SET,
-  VIEW_TOGGLE,
-  TAG_SET,
-  TAG_TOGGLE,
-};
-
-static void velvet_cmd_tag(struct velvet *v, struct velvet_cmd_arg_iterator *it, enum tagcmd cmd) {
-  if (!velvet_cmd_arg_iterator_next(it)) {
-    velvet_log("tag action missing argument.");
-    return;
-  }
-
-  struct u8_slice value = it->current;
-  int digit = 0;
-  bool is_digit = u8_slice_digit(value, &digit);
-  if (!is_digit) {
-    velvet_log("tag action expected numeric argument.");
-    return;
-  }
-  uint32_t mask = (uint32_t)digit;
-
-  switch (cmd) {
-  case VIEW_SET: velvet_scene_set_view(&v->scene, mask); break;
-  case VIEW_TOGGLE: velvet_scene_toggle_view(&v->scene, mask); break;
-  case TAG_SET: velvet_scene_set_tags(&v->scene, mask); break;
-  case TAG_TOGGLE: velvet_scene_toggle_tags(&v->scene, mask); break;
   }
 }
 
@@ -313,10 +268,7 @@ static void velvet_cmd_put(struct velvet *v, struct velvet_cmd_arg_iterator *it)
 }
 
 struct window_create_options {
-  struct velvet_window_close_behavior close;
   int border_width;
-  enum velvet_window_kind kind;
-  enum velvet_scene_layer layer;
 };
 
 static void velvet_cmd_create_window(struct velvet *v,
@@ -358,9 +310,6 @@ static void velvet_cmd_create_window(struct velvet *v,
   struct velvet_window win = {
       .border_width = o.border_width,
       .emulator = vte_default,
-      .layer = o.layer,
-      .close = o.close,
-      .kind = o.kind,
   };
   if (working_directory.len) string_push_slice(&win.cwd, working_directory);
 
@@ -374,24 +323,6 @@ static void velvet_cmd_create_window(struct velvet *v,
     string_push_slice(&win.emulator.osc.title, title);
   }
   velvet_scene_spawn_process_from_template(&v->scene, win);
-}
-
-static void velvet_cmd_spawn_background(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
-  struct window_create_options o = {.border_width = 0,
-                                    .layer = VELVET_LAYER_BACKGROUND};
-  velvet_cmd_create_window(v, it, source, o);
-}
-
-static void velvet_cmd_spawn_notification(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
-  struct window_create_options o = {.border_width = 1,
-                                    .close = {.when = VELVET_WINDOW_CLOSE_AFTER_DELAY, .delay_ms = 1500},
-                                    .layer = VELVET_LAYER_NOTIFICATION};
-  velvet_cmd_create_window(v, it, source, o);
-}
-
-static void velvet_cmd_spawn_tiled(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
-  struct window_create_options o = {.border_width = 1, .layer = VELVET_LAYER_TILED};
-  velvet_cmd_create_window(v, it, source, o);
 }
 
 static int l_velvet_lua_print_to_socket(lua_State *L) {
@@ -438,6 +369,11 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
   string_destroy(&S);
 }
 
+static void velvet_cmd_spawn(struct velvet *v, struct velvet_session *source, struct velvet_cmd_arg_iterator *it) {
+  struct window_create_options o = {.border_width = 1};
+  velvet_cmd_create_window(v, it, source, o);
+}
+
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   velvet_ensure_render_scheduled(v);
   struct velvet_session *sender = nullptr;
@@ -473,43 +409,10 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
       velvet_lua(v, &it, source_socket);
     } else if (u8_match(command, "put")) {
       velvet_cmd_put(v, &it);
-    } else if (u8_match(command, "tag")) {
-      velvet_cmd_tag(v, &it, TAG_SET);
-    } else if (u8_match(command, "view-previous")) {
-      velvet_scene_set_view(&v->scene, 0);
-    } else if (u8_match(command, "view")) {
-      velvet_cmd_tag(v, &it, VIEW_SET);
-    } else if (u8_match(command, "cycle-transparency")) {
-      if (focused) {
-        if (!focused->transparency.override) {
-          focused->transparency.options = s->theme.pseudotransparency[focused->layer];
-          focused->transparency.override = true;
-        }
-        enum pseudotransparency_blend_mode next_mode = (focused->transparency.options.mode + 1) % (PSEUDOTRANSPARENCY_ALL + 1);
-        focused->transparency.options = s->theme.pseudotransparency[focused->layer];
-        focused->transparency.options.mode = next_mode;
-      }
-    } else if (u8_match(command, "toggletag")) {
-      velvet_cmd_tag(v, &it, TAG_TOGGLE);
-    } else if (u8_match(command, "toggleview")) {
-      velvet_cmd_tag(v, &it, VIEW_TOGGLE);
-    } else if (u8_match(command, "decfactor")) {
-      s->layout.mfact = MAX(s->layout.mfact - 0.05, 0.05);
-    } else if (u8_match(command, "incfactor")) {
-      s->layout.mfact = MIN(s->layout.mfact + 0.05, 0.95);
-    } else if (u8_match(command, "decnmaster")) {
-      s->layout.nmaster = MAX(s->layout.nmaster - 1, 0);
-    } else if (u8_match(command, "incnmaster")) {
-      s->layout.nmaster = MIN(s->layout.nmaster + 1, 5);
-    } else if (u8_match(command, "incborder")) {
-      int max_border = MIN(focused->rect.window.h, focused->rect.window.w) / 2;
-      focused->border_width = MIN(focused->border_width + 1, max_border);
-    } else if (u8_match(command, "decborder")) {
-      focused->border_width = MAX(focused->border_width - 1, 0);
     } else if (u8_match(command, "map")) {
       velvet_cmd_map(v, &it);
     } else if (u8_match(command, "spawn")) {
-      velvet_cmd_spawn_tiled(v, sender, &it);
+      velvet_cmd_spawn(v, sender, &it);
     } else if (u8_match(command, "unmap")) {
       struct u8_slice keys;
       if (velvet_cmd_arg_iterator_next(&it)) {
@@ -518,30 +421,6 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
         velvet_keymap_unmap(v->input.keymap->root, keys);
       } else {
         velvet_log("`unmap' command missing `keys' parameter.");
-      }
-    } else if (u8_match(command, "background")) {
-      velvet_cmd_spawn_background(v, sender, &it);
-    } else if (u8_match(command, "notify")) {
-      velvet_cmd_spawn_notification(v, sender, &it);
-    } else if (u8_match(command, "focus-next")) {
-      velvet_scene_focus_next(&v->scene);
-    } else if (u8_match(command, "focus-previous")) {
-      velvet_scene_focus_previous(&v->scene);
-    } else if (u8_match(command, "swap-next")) {
-      struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-      struct velvet_window *next = velvet_scene_focus_next(&v->scene);
-      if (focus != next) {
-        int i1 = vec_index(&v->scene.windows, focus);
-        int i2 = vec_index(&v->scene.windows, next);
-        vec_swap(&v->scene.windows, i1, i2);
-      }
-    } else if (u8_match(command, "swap-previous")) {
-      struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-      struct velvet_window *prev = velvet_scene_focus_previous(&v->scene);
-      if (focus != prev) {
-        int i1 = vec_index(&v->scene.windows, focus);
-        int i2 = vec_index(&v->scene.windows, prev);
-        vec_swap(&v->scene.windows, i1, i2);
       }
     } else if (u8_match(command, "quit")) {
       v->quit = true;
