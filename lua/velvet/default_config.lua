@@ -190,3 +190,34 @@ end
 
 map("<M-0>", function() set_view({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end)
 map("<S-M-0>", function() set_tags({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end)
+
+local function round(x)
+  if x >= 0 then
+    return math.floor(x + 0.5)
+  else
+    return math.ceil(x - 0.5)
+  end
+end
+
+local e = vv.events
+local arrange_group = e.create_group("vv.default.arrange", true)
+
+local function arrange()
+  print(vv.inspect({ message = "arrange" }))
+  local term = vv.api.get_terminal_geometry()
+  local left, top
+  left = 0
+  top = 0
+  local windows = vv.api.get_windows()
+  for _, id in ipairs(windows) do
+    local geom = { width = 30, height = 30, left = left, top = top }
+    top = top + geom.height
+    left = left + geom.width
+    vv.api.window_set_geometry(id, geom)
+  end
+end
+
+e.subscribe(arrange_group, e.screen.resized, arrange)
+e.subscribe(arrange_group, e.window.created, arrange)
+e.subscribe(arrange_group, e.window.removed, arrange)
+arrange()

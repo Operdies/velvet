@@ -326,7 +326,11 @@ void velvet_emit_event(struct velvet *v, const char *evt, int data) {
   lua_getfield(L, -1, "emit_event");
   lua_pushstring(L, evt);
   lua_pushinteger(L, data);
-  lua_pcall(L, 2, 0, 0); 
+  int ok = lua_pcall(L, 2, 0, 0); 
+  if (ok != LUA_OK) {
+    const char *err = luaL_tolstring(L, -1, nullptr);
+    velvet_log("emit event: %s", err);
+  }
 }
 
 static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {
