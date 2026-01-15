@@ -1423,11 +1423,19 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   struct rect c = velvet_window->rect.client;
   struct winsize velvet_windowsize = {.ws_col = c.w, .ws_row = c.h, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
-  /* TODO: Configure termios
-   * Configuring termios based on the startup pty breaks stuff.
-   * I initially tried to set it because I observed weird <DEL> behavior under zsh
-   * on MacOS, but later realized that TMUX/Zellij has the exact same issue. */
+  /* block signal generation in the child. This is important because signals delivered between fork() and exec() will be
+   * delivered to the parent because the installed signal handlers write to a pipe which is shared across fork(). */
+  sigset_t block, sighandler;
+  sigfillset(&block);
+  sigprocmask(SIG_BLOCK, &block, &sighandler);
+
   pid_t pid = forkpty(&velvet_window->pty, nullptr, nullptr, &velvet_windowsize);
+
+  /* immediately restore the original signal handler in the parent */
+  if (pid != 0) {
+    sigprocmask(SIG_SETMASK, &sighandler, NULL);
+  }
+
   if (pid < 0) {
     ERROR("Unable to spawn process:");
     return false;
@@ -1451,6 +1459,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   }
   velvet_window->pid = pid;
   set_nonblocking(velvet_window->pty);
+  fcntl(velvet_window->pty, F_SETFD, FD_CLOEXEC);
   return true;
 }
 

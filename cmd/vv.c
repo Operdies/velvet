@@ -26,6 +26,9 @@ static void signal_trap(int sig, siginfo_t *siginfo, void *context) {
 static void install_signal_handlers(int *pipes) {
   if (pipe(pipes) < 0) velvet_die("pipe:");
 
+  fcntl(pipes[0], F_SETFD, FD_CLOEXEC);
+  fcntl(pipes[1], F_SETFD, FD_CLOEXEC);
+
   struct sigaction sig_handle = {0};
   sig_handle.sa_sigaction = &signal_handler;
   sig_handle.sa_flags = SA_SIGINFO;
@@ -282,8 +285,8 @@ int main(int argc, char **argv) {
     // redirect all output/error to log files
     char *outpath = "/tmp/velvet.stdout";
     char *errpath = "/tmp/velvet.stderr";
-    int new_stderr = open(errpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
-    int new_stdout = open(outpath, O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
+    int new_stderr = open(errpath, O_TRUNC | O_CREAT | O_WRONLY | O_CLOEXEC, S_IRWXU);
+    int new_stdout = open(outpath, O_TRUNC | O_CREAT | O_WRONLY | O_CLOEXEC, S_IRWXU);
     dup2(new_stderr, STDERR_FILENO);
     dup2(new_stdout, STDOUT_FILENO);
   }
