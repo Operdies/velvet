@@ -107,6 +107,14 @@ local type_lookup = {
     end,
     push = function(var) return ("lua_pushboolean(L, %s)"):format(var) end
   },
+  float = {
+    c_type = "float",
+    lua_type = "number",
+    check = function(idx)
+      return ("luaL_checknumber(L, %d)"):format(idx)
+    end,
+    push = function(var) return ("lua_pushnumber(L, %s)"):format(var) end
+  },
 }
 
 local function get_cname(name)

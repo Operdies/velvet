@@ -80,6 +80,50 @@ function api.get_windows() end
 --- @return nil 
 function api.swap_windows(first, second) end
 
+--- Set the z index of |win| to |z|
+--- @param win integer Window ID
+--- @param z integer New z index of |win|
+--- @return nil 
+function api.window_set_z_index(win, z) end
+
+--- Get the z index of |win|
+--- @param win integer Window ID
+--- @return integer The z index of |win|
+function api.window_get_z_index(win) end
+
+--- Set window hidden flag. A hidden window will not be rendered.
+--- @param win_id integer Window ID
+--- @param hidden boolean New hidden state of |win_id|
+--- @return nil 
+function api.window_set_hidden(win_id, hidden) end
+
+--- Get window hidden flag. A hidden window will not be rendered.
+--- @param win_id integer Window ID
+--- @return boolean Bool indicating if the window is hidden.
+function api.window_get_hidden(win_id) end
+
+--- Get window opacity
+--- @param win integer Window ID
+--- @return number The new window opacity.
+function api.window_get_opacity(win) end
+
+--- Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|
+--- @param win integer Window ID
+--- @param opacity number The new window opacity.
+--- @return nil 
+function api.window_set_opacity(win, opacity) end
+
+--- Get window transparency mode.
+--- @param win integer Window ID
+--- @return string Set transparency mode. Valid values are 'off', 'clear', 'all'
+function api.window_get_transparency_mode(win) end
+
+--- Set window transparency mode.
+--- @param win integer Window ID
+--- @param mode string Set transparency mode. Valid values are 'off', 'clear', 'all'
+--- @return nil 
+function api.window_set_transparency_mode(win, mode) end
+
 --- Get the ID of the currently focused window.
 --- @return integer TThe ID of the currently focused window.
 function api.get_focused_window() end

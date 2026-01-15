@@ -734,7 +734,7 @@ static bool rect_contains(struct rect r, int x, int y) {
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data) {
   struct velvet_window *h;
   vec_sort(&scene->windows, window_cmp);
-  vec_where(h, scene->windows, !h->hidden && (!skip || !skip(h, data))) {
+  vec_rwhere(h, scene->windows, !h->hidden && (!skip || !skip(h, data))) {
     if (rect_contains(h->rect.client, x, y)) {
       struct velvet_window_hit client_hit = {.win = h, .where = VELVET_HIT_CLIENT};
       *hit = client_hit;

@@ -1,5 +1,6 @@
 ---@class vv
 local vv = {
+  arrange_group_name = 'velvet.arrange',
   inspect = require('velvet.inspect'),
   --- @type velvet.api
   api = {},

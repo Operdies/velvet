@@ -145,6 +145,62 @@ return {
       doc = "Swap two windows. This affects the layout of tiled windows.",
     },
     {
+      name = "window_set_z_index",
+      doc = "Set the z index of |win| to |z|",
+      params = {
+        { name = "win", type = "int", doc = "Window ID" },
+        { name = "z",   type = "int", doc = "New z index of |win|" }
+      },
+    },
+    {
+      name = "window_get_z_index",
+      doc = "Get the z index of |win|",
+      params = { { name = "win", type = "int", doc = "Window ID" } },
+      returns = { type = "int", doc = "The z index of |win|" }
+    },
+    {
+      name = "window_set_hidden",
+      doc = "Set window hidden flag. A hidden window will not be rendered.",
+      params = {
+        { name = "win_id", type = "int",  doc = "Window ID" },
+        { name = "hidden", type = "bool", doc = "New hidden state of |win_id|" }
+      },
+    },
+    {
+      name = "window_get_hidden",
+      doc = "Get window hidden flag. A hidden window will not be rendered.",
+      params = { { name = "win_id", type = "int", doc = "Window ID" } },
+      returns = { type = "bool", doc = "Bool indicating if the window is hidden." }
+    },
+    {
+      name = "window_get_opacity",
+      doc = "Get window opacity",
+      params = { { name = "win", type = "int", doc = "Window ID" } },
+      returns = { type = "float", doc = "The new window opacity." },
+    },
+    {
+      name = "window_set_opacity",
+      doc = "Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|",
+      params = {
+        { name = "win",     type = "int",   doc = "Window ID" },
+        { name = "opacity", type = "float", doc = "The new window opacity." },
+      },
+    },
+    {
+      name = "window_get_transparency_mode",
+      doc = "Get window transparency mode.",
+      params = { { name = "win", type = "int", doc = "Window ID" } },
+      returns = { type = "string", doc = "Set transparency mode. Valid values are 'off', 'clear', 'all'" },
+    },
+    {
+      name = "window_set_transparency_mode",
+      doc = "Set window transparency mode.",
+      params =
+      { { name = "win", type = "int",   doc = "Window ID" },
+        { name = "mode", type = "string", doc = "Set transparency mode. Valid values are 'off', 'clear', 'all'" },
+      },
+    },
+    {
       name = "get_focused_window",
       doc = "Get the ID of the currently focused window.",
       returns = { type = "int", doc = "TThe ID of the currently focused window." }
