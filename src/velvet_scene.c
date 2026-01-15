@@ -1134,10 +1134,18 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
 
   pid_t pid = forkpty(&velvet_window->pty, nullptr, nullptr, &velvet_windowsize);
 
-  /* immediately restore the original signal handler in the parent */
   if (pid != 0) {
-    sigprocmask(SIG_SETMASK, &sighandler, NULL);
+    /* restore all default handlers in the child */
+    struct sigaction sa = {0};
+    sa.sa_handler = SIG_DFL;
+
+    for (int sig = 1; sig < NSIG; sig++) {
+      sigaction(sig, &sa, NULL);
+    }
   }
+
+  /* restore signal generation in both child and parent */
+  sigprocmask(SIG_SETMASK, &sighandler, NULL);
 
   if (pid < 0) {
     ERROR("Unable to spawn process:");
