@@ -14,7 +14,7 @@ static bool io_dispatch_scheduled(struct io *io) {
 
   // Execute all schedules which were sequenced before the current io_dispatch call
   for (;;) {
-    vec_find(schedule, io->scheduled_actions, schedule->when <= now && schedule->sequence <= io->sequence);
+    vec_find(schedule, io->scheduled_actions, schedule->when <= now && schedule->sequence < io->sequence);
     if (!schedule) break;
     // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
     // This is needed because we may otherwise corrupt the vec structure.
@@ -29,7 +29,7 @@ static bool io_dispatch_scheduled(struct io *io) {
 static void io_dispatch_idle_schedules(struct io *io) {
   struct io_schedule *schedule;
   for (;;) {
-    vec_find(schedule, io->idle_schedule, schedule->sequence <= io->sequence);
+    vec_find(schedule, io->idle_schedule, schedule->sequence < io->sequence);
     if (!schedule) break;
     // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
     // This is needed because we may otherwise corrupt the vec structure.
@@ -65,7 +65,7 @@ void io_dispatch(struct io *io) {
   }
 
   uint64_t now = get_ms_since_startup();
-  int timeout = next_schedule ? (int64_t)next_schedule->when - (int64_t)now : -1;
+  int timeout = next_schedule ? MAX(0, (int64_t)next_schedule->when - (int64_t)now) : -1;
   if (next_schedule && timeout < 0) timeout = 0;
   bool maybe_idle = false;
   if (io->idle_schedule.length) {
