@@ -407,6 +407,9 @@ static void on_window_moved(int win_id, void *data) {
 static void on_window_resized(int win_id, void *data) {
   velvet_emit_event(data, "window_resized", win_id);
 }
+static void on_window_focused(int win_id, void *data) {
+  velvet_emit_event(data, "window_focused", win_id);
+}
 
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
@@ -434,6 +437,7 @@ void velvet_loop(struct velvet *velvet) {
     s->events.on_window_removed = on_window_removed;
     s->events.on_window_moved = on_window_moved;
     s->events.on_window_resized = on_window_resized;
+    s->events.on_window_focused = on_window_focused;
   }
 
   velvet_source_config(velvet);

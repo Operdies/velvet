@@ -226,6 +226,7 @@ function dwm.activate()
   e.subscribe(grp, e.screen.resized, arrange)
   e.subscribe(grp, e.window.created, add_window)
   e.subscribe(grp, e.window.removed, remove_window)
+  e.subscribe(grp, e.window.focused, arrange)
   if #windows > 0 then
     set_focus(lst[1])
   end

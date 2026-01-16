@@ -66,6 +66,7 @@ void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_fo
     /* TODO: Current focus not set when leaving workspace */
     if (current_focus) velvet_window_notify_focus(current_focus, false);
     velvet_window_notify_focus(new_focus, true);
+    if (m->events.on_window_focused) m->events.on_window_focused(new_focus->id, m->events.data);
   }
 }
 

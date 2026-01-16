@@ -145,6 +145,7 @@ struct velvet_scene {
     void (*on_window_removed)(int win_id, void *);
     void (*on_window_moved)(int win_id, void *);
     void (*on_window_resized)(int win_id, void *);
+    void (*on_window_focused)(int win_id, void *);
     void *data;
   } events;
 };

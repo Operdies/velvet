@@ -12,7 +12,7 @@ local event_handlers = {}
 local event_groups = {}
 local events = {
   screen = { resized = "screen_resized" },
-  window = { created = "window_created", removed = "window_removed", moved = "window_moved", resized = "window_resized" },
+  window = { created = "window_created", removed = "window_removed", moved = "window_moved", resized = "window_resized", focused = "window_focused" },
 
   ---Create a new event group. An event group can be cleared and unregistered together
   ---@param group_name string the name of the new group.
