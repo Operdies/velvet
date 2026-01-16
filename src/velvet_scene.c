@@ -130,8 +130,8 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
     free(renderer->buffers[i].cells);
     free(renderer->buffers[i].lines);
   }
-  free(renderer->staging_buffer.cells);
-  free(renderer->staging_buffer.lines);
+  free(renderer->staged.buffer.cells);
+  free(renderer->staged.buffer.lines);
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
@@ -215,7 +215,7 @@ static struct screen_cell *velvet_render_get_staged_cell(struct velvet_render *r
   if (!(line >= 0 && line < r->h)) return nullptr;
   if (!(column >= 0 && column < r->w)) return nullptr;
 
-  struct velvet_render_buffer *b = &r->staging_buffer;
+  struct velvet_render_buffer *b = &r->staged.buffer;
   struct velvet_render_buffer_line *l = &b->lines[line];
   return &l->cells[column];
 }
@@ -224,24 +224,34 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
   /* out of bounds writes here is not a bug. It is expected for controls which are partially off-screen. */
   if (!(line >= 0 && line < r->h)) return;
   if (!(column >= 0 && column < r->w)) return;
-  struct velvet_render_buffer *b = &r->staging_buffer;
+  struct velvet_render_buffer *b = &r->staged.buffer;
   struct velvet_render_buffer_line *l = &b->lines[line];
   struct screen_cell *c = l->cells;
+  int left, right;
+  left = right = column;
   
   /* a wide char cannot start on the last column */
   if (value.cp.is_wide && column >= (r->w - 1)) 
     value.cp = codepoint_space;
 
   /* if the previous cell held a wide char, reset it. */
-  if (column && c[column-1].cp.is_wide) 
+  if (column && c[column-1].cp.is_wide) {
     c[column-1].cp = codepoint_space;
+    left--;
+  }
 
   c[column] = value;
   if (value.cp.is_wide && column < (r->w - 1)) {
     /* if this cell is wide, reset the next cell if possible (including style override) */
     value.cp = codepoint_space;
     c[column + 1] = value;
+    right++;
   }
+
+  r->staged.left = MIN(r->staged.left, left);
+  r->staged.right = MAX(r->staged.right, right);
+  r->staged.bottom = MAX(r->staged.bottom, line);
+  r->staged.top = MIN(r->staged.top, line);
 }
 
 static void velvet_render_set_cursor_visible(struct velvet_render *r, bool visible) {
@@ -608,6 +618,14 @@ static void velvet_render_calculate_borders(struct velvet_scene *m, struct velve
   }
 }
 
+static void velvet_render_reset_staged_region(struct velvet_render *r) {
+  r->staged.bottom = -1;
+  r->staged.left = r->w;
+  r->staged.right = -1;
+  r->staged.top = r->h;
+}
+
+
 static void velvet_render_init_buffer(struct velvet_render_buffer *buf, int w, int h) {
   free(buf->cells);
   free(buf->lines);
@@ -623,8 +641,9 @@ static void velvet_render_init_buffers(struct velvet_scene *m) {
   r->h = m->ws.h;
   r->w = m->ws.w;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
-  velvet_render_init_buffer(&r->staging_buffer, r->w, r->h);
+  velvet_render_init_buffer(&r->staged.buffer, r->w, r->h);
   r->state = render_state_cache_invalidated;
+  velvet_render_reset_staged_region(r);
 }
 
 static void velvet_render_clear_buffer(struct velvet_render *r, struct velvet_render_buffer *b, struct screen_cell space) {
@@ -700,50 +719,55 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 
   struct screen_cell empty = {0};
   struct velvet_render_buffer *composite = get_current_buffer(r);
-  struct velvet_render_buffer *staging = &r->staging_buffer;
+  struct velvet_render_buffer *staging = &r->staged.buffer;
 
-  for (int i = 0; i < r->w * r->h; i++) {
-    if (!cell_equals(staging->cells[i], empty)) {
-      struct screen_cell above = staging->cells[i];
-      struct screen_cell below = composite->cells[i];
-      int column = i % r->w;
+  for (int row = r->staged.top; row <= r->staged.bottom; row++) {
+    for (int column = r->staged.left; column <= r->staged.right; column++) {
+      int cell_index = row * r->w + column;
+      if (!cell_equals(staging->cells[cell_index], empty)) {
+        struct screen_cell above = staging->cells[cell_index];
+        struct screen_cell below = composite->cells[cell_index];
 
-      bool blend = i != block_blend_index && o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
-                   (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || is_cell_bg_clear(above));
+        bool blend = cell_index != block_blend_index && o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
+                     (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || is_cell_bg_clear(above));
 
-      if (blend) {
-        above = normalize_cell(t, above);
-        below = normalize_cell(t, below);
-        struct screen_cell *before = column ? &composite->cells[i-1] : nullptr;
-        bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
+        if (blend) {
+          above = normalize_cell(t, above);
+          below = normalize_cell(t, below);
+          struct screen_cell *before = column ? &composite->cells[cell_index - 1] : nullptr;
+          bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
 
-        /* if the top cell is blank, draw the glyph from the cell below, but tint it
-         * with the background color of the top cell. This creates the illusion of transparency. */
-        bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
-        bool blend_fg = !attributes_visible && above.cp.value == ' ' && !is_wide_continuation;
-        if (blend_fg) {
-          above.cp = below.cp;
-          above.style.attr = below.style.attr;
-          above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, o.transparency.alpha);
+          /* if the top cell is blank, draw the glyph from the cell below, but tint it
+           * with the background color of the top cell. This creates the illusion of transparency. */
+          bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED |
+                                                        ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
+          bool blend_fg = !attributes_visible && above.cp.value == ' ' && !is_wide_continuation;
+          if (blend_fg) {
+            above.cp = below.cp;
+            above.style.attr = below.style.attr;
+            above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, o.transparency.alpha);
+          }
+          above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, o.transparency.alpha);
         }
-        above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, o.transparency.alpha);
+
+        if (o.dim > 0) {
+          above = normalize_cell(t, above);
+          above.style.bg = rgb_mult(above.style.bg, o.dim);
+          above.style.fg = rgb_mult(above.style.fg, o.dim);
+        }
+
+        /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
+         * and this character is not a space. */
+        if (above.cp.value != ' ' && column && composite->cells[cell_index - 1].cp.is_wide)
+          composite->cells[cell_index - 1].cp = codepoint_space;
+
+        composite->cells[cell_index] = above;
+        staging->cells[cell_index] = empty;
       }
-
-      if (o.dim > 0) {
-        above = normalize_cell(t, above);
-        above.style.bg = rgb_mult(above.style.bg, o.dim);
-        above.style.fg = rgb_mult(above.style.fg, o.dim);
-      }
-
-      /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
-       * and this character is not a space. */
-      if (above.cp.value != ' ' && column && composite->cells[i - 1].cp.is_wide) 
-        composite->cells[i - 1].cp = codepoint_space;
-
-      composite->cells[i] = above;
-      staging->cells[i] = empty;
     }
   }
+
+  velvet_render_reset_staged_region(r);
 }
 
 static bool rect_contains(struct rect r, int x, int y) {

@@ -117,7 +117,13 @@ struct velvet_render {
   /* the staging buffer is a temporary buffer which must be explicitly comitted to the
    * current render buffer. This is useful for rendering a layer and then comitting it with effects applied such as
    * alpha blending etc. */
-  struct velvet_render_buffer staging_buffer;
+  struct {
+    struct velvet_render_buffer buffer;
+    /* track the bounding box of the staged area.
+     * This should be fairly efficient because we usually stage
+     * a single window (rectangular) at a time. */
+    int bottom, left, right, top;
+  } staged;
   int current_buffer;
   struct string draw_buffer;
   struct velvet_render_option options;
