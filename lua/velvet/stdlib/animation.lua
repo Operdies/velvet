@@ -37,6 +37,7 @@ end
 --- @field easing_function? function easing function
 --- @field on_completed? function callback called when the animation completes
 --- @field on_cancelled? function callback called if the animation was cancelled
+--- @field ms_per_frame? integer the number of milliseconds between animation frames
 
 --- Change the dimensions of window |id| to |target| over |duration| ms
 --- @param id integer Window ID
@@ -44,6 +45,8 @@ end
 --- @param duration integer Animation duration in milliseconds
 --- @param opts? animate_options additional parameters
 function animation.animate(id, target, duration, opts)
+  local delay_ms = opts and opts.ms_per_frame or 30
+  if delay_ms < 1 then delay_ms = 1 end
   local sequence = get_id()
   animating[id] = sequence
 
@@ -76,7 +79,7 @@ function animation.animate(id, target, duration, opts)
       height = round(geom.height + delta_h * pct),
     }
     vv.api.window_set_geometry(id, frame_geom)
-    vv.api.schedule_after(10, f)
+    vv.api.schedule_after(delay_ms, f)
   end
   f()
 end
