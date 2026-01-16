@@ -129,7 +129,7 @@ local function arrange()
   end
 
   for i, id in ipairs(focus_order) do
-    if layers[id] == 'floating' then
+    if not tiled(id) then
       vv.api.window_set_z_index(id, floating_z + i)
     end
   end
@@ -281,6 +281,7 @@ function dwm.focus_prev()
   local focus = vv.api.get_focused_window()
   local p = get_prev_matching(focus, visible)
   if p then set_focus(p) end
+  arrange()
 end
 
 --- Focus the next visible window
@@ -288,6 +289,7 @@ function dwm.focus_next()
   local focus = vv.api.get_focused_window()
   local n = get_next_matching(focus, visible)
   if n then set_focus(n) end
+  arrange()
 end
 
 --- Swap the focused window with the next visible tiled window

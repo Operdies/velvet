@@ -24,7 +24,6 @@ map("<S-M-0>", function() dwm.set_tags(vv.api.get_focused_window(), { 1, 2, 3, 4
 map("<C-x>t", function() dwm.set_layer(vv.api.get_focused_window(), "tiled") end)
 map("<C-x>f", function() 
   local win = vv.api.get_focused_window()
-  vv.api.window_set_geometry(win, { left = 10, top = 10, width = 30, height = 14 })
   dwm.set_layer(win, "floating") 
 end)
 
