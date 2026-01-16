@@ -163,6 +163,7 @@ void velvet_scene_remove_exited(struct velvet *v) {
     struct velvet_window *h;
     vec_find(h, m->windows, h->pid == pid);
     if (h) {
+      h->pid = 0;
       h->exited_at = get_ms_since_startup();
       velvet_emit_event(v, "window_process_dead", h->id);
       velvet_scene_close_and_remove_window(&v->scene, h);

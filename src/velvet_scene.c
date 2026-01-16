@@ -1055,19 +1055,32 @@ static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_sty
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 void velvet_window_destroy(struct velvet_window *velvet_window) {
   if (velvet_window->pty > 0) {
+    /* CONT and HUP the process group of the pty.
+     * This is needed to kill panes with e.g. attached debuggers since stopped processes cannot process signals. */
+    pid_t pgid = tcgetpgrp(velvet_window->pty);
+    if (pgid > 0) {
+      kill(-pgid, SIGCONT);
+      kill(-pgid, SIGHUP);
+      kill(-pgid, SIGTERM);
+      /* TODO: Only send SIGTERM if the process does not close within a reasonable time */
+    } else if (velvet_window->pid > 0) {
+      /* should not happen but I'm scared of leaking processes. */
+      kill(velvet_window->pid, SIGCONT);
+      kill(velvet_window->pid, SIGHUP);
+      kill(velvet_window->pid, SIGTERM);
+    }
+
     close(velvet_window->pty);
-    velvet_window->pty = 0;
+
+    /* window_destroy may have been called because |pid| exited.
+     * if that is the case, it was set to 0, and we should not attempt to reap it. */
+    if (velvet_window->pid > 0) {
+      int status;
+      pid_t result = waitpid(velvet_window->pid, &status, WNOHANG);
+      if (result == -1) ERROR("waitpid:");
+    }
   }
-  if (velvet_window->pid > 0) {
-    int status;
-    kill(velvet_window->pid, SIGTERM);
-    /* If a process explicitly handles SIGTERM, tell it in no uncertain terms that
-     * nobody is listening. This fixes an issue when shutting down velvet while a window is being debugged
-     * by lldb-dap which intercepts SIGTERM and prevents the server socket from closing */
-    kill(velvet_window->pid, SIGHUP);
-    pid_t result = waitpid(velvet_window->pid, &status, WNOHANG);
-    if (result == -1) ERROR("waitpid:");
-  }
+
   vte_destroy(&velvet_window->emulator);
   string_destroy(&velvet_window->cmdline);
   string_destroy(&velvet_window->title);
