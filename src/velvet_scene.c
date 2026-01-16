@@ -673,23 +673,41 @@ static bool is_cell_bg_clear(struct screen_cell c) {
 }
 
 static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win, struct velvet_theme t) {
+  struct velvet_render *r = &m->renderer;
   bool is_focused = velvet_scene_get_focus(m) == win;
   struct composite_options o = {
       .transparency = win->transparency,
       .dim = !is_focused && t.dim_inactive.enabled ? t.dim_inactive.magnitude : 0,
   };
 
+  int block_blend_index = -1;
+
+  if (is_focused) {
+    switch (win->emulator.options.cursor.style) {
+    case CURSOR_STYLE_DEFAULT:
+    case CURSOR_STYLE_BLINKING_BLOCK:
+    case CURSOR_STYLE_STEADY_BLOCK: {
+      struct screen *screen = vte_get_current_screen(&win->emulator);
+      struct cursor *cursor = &screen->cursor;
+      int cursor_line = cursor->line + win->rect.client.y + screen->scroll.view_offset;
+      int cursor_col = cursor->column + win->rect.client.x;
+      block_blend_index = cursor_line * r->w + cursor_col;
+    } break;
+    default: break;
+    }
+  }
+
   struct screen_cell empty = {0};
-  struct velvet_render *r = &m->renderer;
   struct velvet_render_buffer *composite = get_current_buffer(r);
   struct velvet_render_buffer *staging = &r->staging_buffer;
+
   for (int i = 0; i < r->w * r->h; i++) {
     if (!cell_equals(staging->cells[i], empty)) {
       struct screen_cell above = staging->cells[i];
       struct screen_cell below = composite->cells[i];
       int column = i % r->w;
 
-      bool blend = o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
+      bool blend = i != block_blend_index && o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
                    (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || is_cell_bg_clear(above));
 
       if (blend) {
