@@ -1128,24 +1128,25 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
 
   /* block signal generation in the child. This is important because signals delivered between fork() and exec() will be
    * delivered to the parent because the installed signal handlers write to a pipe which is shared across fork(). */
-  sigset_t block, sighandler;
+  sigset_t block, sighandler, trash_signalset;
   sigfillset(&block);
   sigprocmask(SIG_BLOCK, &block, &sighandler);
 
   pid_t pid = forkpty(&velvet_window->pty, nullptr, nullptr, &velvet_windowsize);
 
   if (pid != 0) {
-    /* restore all default handlers in the child */
+    /* restore all default handlers in the child process */
     struct sigaction sa = {0};
     sa.sa_handler = SIG_DFL;
 
     for (int sig = 1; sig < NSIG; sig++) {
-      sigaction(sig, &sa, NULL);
+      if (sig == SIGKILL || sig == SIGSTOP) continue; /* cannot be set */
+      sigaction(sig, &sa, nullptr);
     }
   }
 
   /* restore signal generation in both child and parent */
-  sigprocmask(SIG_SETMASK, &sighandler, NULL);
+  sigprocmask(SIG_SETMASK, &sighandler, &trash_signalset);
 
   if (pid < 0) {
     ERROR("Unable to spawn process:");
