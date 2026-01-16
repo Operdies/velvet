@@ -257,7 +257,7 @@ static char *csi_apply_sgr_from_params(struct screen_cell_style *style, int n, s
       style->attr |= enable[attribute->primary];
     } else if (attribute->primary == 21) {
       style->attr |= ATTR_UNDERLINE_DOUBLE;
-    } else if (attribute->primary >= 22 && attribute->primary <= 28) {
+    } else if (attribute->primary >= 22 && attribute->primary <= 29) {
       uint32_t disable[] = {
           [2] = (ATTR_BOLD | ATTR_FAINT),
           [3] = ATTR_ITALIC,
