@@ -27,10 +27,42 @@ map("<C-x>f", function()
   dwm.set_layer(win, "floating") 
 end)
 
-map("<M-right>", dwm.focus_next)
-map("<M-left>", dwm.focus_prev)
-map("<M-S-right>", dwm.swap_next)
-map("<M-S-left>", dwm.swap_prev)
+local function translate(geom, x, y) 
+  return { width = geom.width, height = geom.height, left = geom.left + x, top = geom.top + y }
+end
+
+local function scale(geom, dx, dy)
+  return { width = geom.width + dx, height = geom.height + dy, left = geom.left, top = geom.top }
+end
+
+local function move_and_resize(x, y, dx, dy)
+  local win = vv.api.get_focused_window()
+  local geom = translate(scale(vv.api.window_get_geometry(win), dx, dy), x, y)
+  dwm.set_layer(win, "floating") 
+  vv.api.window_set_geometry(win, geom)
+end
+
+local function resize(dx, dy)
+  move_and_resize(0, 0, dx, dy)
+end
+
+local function move(x, y)
+  move_and_resize(x, y, 0, 0)
+end
+
+local function apply(func, ...)
+  local args = { ... }
+  return function() func(table.unpack(args)) end
+end
+
+map("<M-right>", apply(move, 2, 0))
+map("<M-left>", apply(move, -2, 0))
+map("<M-S-right>", apply(resize, 2, 0))
+map("<M-S-left>", apply(resize, -2, 0))
+map("<M-up>", apply(move, 0, -1))
+map("<M-down>", apply(move, 0, 1))
+map("<M-S-up>", apply(resize, 0, -1))
+map("<M-S-down>", apply(resize, 0, 1))
 rmap("<C-x><C-j>", dwm.focus_next)
 rmap("<C-x><C-k>", dwm.focus_prev)
 rmap("<C-x>j", dwm.swap_next)
