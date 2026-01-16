@@ -4,14 +4,14 @@ error("Cannot require meta file")
 local api = {}
 
 --- @class velvet.api.window.geometry
---- @field left? integer The leftmost cell of the window.
---- @field top? integer The topmost cell of the window.
---- @field width? integer The width of the window
---- @field height? integer The height of the window
+--- @field left integer The leftmost cell of the window.
+--- @field top integer The topmost cell of the window.
+--- @field width integer The width of the window
+--- @field height integer The height of the window
 
 --- @class velvet.api.terminal.geometry
---- @field width? integer The width of the terminal
---- @field height? integer The height of the terminal
+--- @field width integer The width of the terminal
+--- @field height integer The height of the terminal
 
 --- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.
 --- @param from string The modifier to remap.

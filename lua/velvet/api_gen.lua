@@ -390,7 +390,7 @@ for _, type in ipairs(spec.types) do
 ]]):format(lua_name))
   for _, fld in ipairs(type.fields) do
     table.insert(lua, ([[
---- @field %s? %s %s
+--- @field %s %s %s
 ]]):format(fld.name, lua_type(fld.type), fld.doc))
   end
 end
