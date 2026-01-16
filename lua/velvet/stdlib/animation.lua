@@ -76,7 +76,7 @@ function animation.animate(id, target, duration, opts)
       height = round(geom.height + delta_h * pct),
     }
     vv.api.window_set_geometry(id, frame_geom)
-    vv.api.schedule_after(5, f)
+    vv.api.schedule_after(10, f)
   end
   f()
 end
