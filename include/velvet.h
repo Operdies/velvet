@@ -45,7 +45,7 @@ struct velvet_input_options {
   /* how many lines are scrolled at a time */
   int scroll_multiplier;
   /* remap modifiers */
-  enum velvet_key_modifier modremap[3];
+  enum velvet_api_key_modifiers modremap[3];
 };
 
 struct velvet_keymap_deferred_action {
@@ -138,7 +138,6 @@ void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 void velvet_ensure_render_scheduled(struct velvet *velvet);
-void velvet_emit_event(struct velvet *v, const char *evt, int data);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {
     .options =

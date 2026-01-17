@@ -2,22 +2,13 @@
 #define VELVET_SCENE_H
 
 #include "collections.h"
-#include "platform.h"
 #include "vte.h"
+#include "velvet_api.h"
 
 #define DAMAGE_MAX 20
 
-enum pseudotransparency_blend_mode {
-  /* no pseudotransparency */
-  PSEUDOTRANSPARENCY_OFF,
-  /* apply transparency to clear cells */
-  PSEUDOTRANSPARENCY_CLEAR,
-  /* apply transparency to all cells */
-  PSEUDOTRANSPARENCY_ALL,
-};
-
 struct pseudotransparency_options {
-  enum pseudotransparency_blend_mode mode;
+  enum velvet_api_transparency_mode mode;
   float alpha;
 };
 
@@ -26,6 +17,7 @@ struct velvet_window {
   struct string title;
   struct string icon;
   struct string cwd;
+  bool is_lua_window;
   int pty, pid;
   int id;
   int z_index;
@@ -39,14 +31,9 @@ struct velvet_window {
   uint64_t exited_at;
   struct vte emulator;
   struct pseudotransparency_options transparency;
-  struct {
-    void (*on_move)(int win_id, void *);
-    void (*on_resize)(int win_id, void *);
-    void *data;
-  } events;
 };
 
-void velvet_window_resize(struct velvet_window *velvet_window, struct rect window);
+void velvet_window_resize(struct velvet_window *velvet_window, struct rect window, struct velvet *v);
 bool velvet_window_start(struct velvet_window *velvet_window);
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
 void velvet_window_update_title(struct velvet_window *p);
@@ -140,20 +127,13 @@ struct velvet_scene_layout {
 struct velvet_scene {
   struct vec /*velvet_window*/ windows;
   /* id of window in `windows`. Window can be retrieved with id2win */
-  struct vec /* int */ focus_order; 
+  int focus;
   struct rect ws;
   struct velvet_render renderer;
   struct velvet_theme theme;
   struct velvet_scene_layout layout;
-  struct {
-    void (*on_screen_resized)(void *);
-    void (*on_window_created)(int win_id, void *);
-    void (*on_window_removed)(int win_id, void *);
-    void (*on_window_moved)(int win_id, void *);
-    void (*on_window_resized)(int win_id, void *);
-    void (*on_window_focused)(int win_id, void *);
-    void *data;
-  } events;
+  /* needed to raise window creation events. It is a bit spaghetty, but the alternative is just a lot of fuzz for */
+  struct velvet *v;
 };
 
 enum velvet_window_hit_location {
@@ -283,7 +263,6 @@ static const struct velvet_render_state_cache render_state_cache_invalidated = {
 
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
-    .focus_order = vec(int),
     .theme = velvet_theme_default,
     .renderer =
         {

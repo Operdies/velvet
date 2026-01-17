@@ -12,12 +12,14 @@ lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_valu
   return v->input.options.key_repeat_timeout_ms;
 }
 
-static void lua_bail(lua_State *L, char *fmt, ...) {
+_Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   va_list ap;
   va_start(ap);
   lua_pushvfstring(L, fmt, ap);
   va_end(ap);
   lua_error(L);
+  /* lua_error longjumps back to lua call site */
+  assert(!"Unreachable");
 }
 
 lua_Integer vv_api_window_create_process(struct velvet *v, const char* cmd) {
@@ -28,6 +30,33 @@ lua_Integer vv_api_window_create_process(struct velvet *v, const char* cmd) {
 
   string_push_cstr(&template.cmdline, cmd);
   return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template);
+}
+
+lua_Integer vv_api_window_create(struct velvet *v) {
+  struct velvet_window template = {
+    .emulator = vte_default,
+    .is_lua_window = true,
+  };
+  struct velvet_window *created = velvet_scene_manage(&v->scene, template);
+  string_clear(&created->title);
+  string_push_format_slow(&created->title, "Naked window %d", created->id);
+  return created->id;
+}
+
+bool vv_api_window_is_lua(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win_id);
+  if (w) return w->is_lua_window;
+  return false;
+}
+
+void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win_id);
+  if (w && w->is_lua_window) {
+    struct u8_slice s = u8_slice_from_cstr(text);
+    velvet_window_process_output(w, s);
+  } else {
+    lua_bail(v->L, "Window %I is not a valid lua window.", win_id);
+  }
 }
 
 void vv_api_session_detach(struct velvet *v, lua_Integer session_id) {
@@ -72,7 +101,7 @@ void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velv
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
     struct rect new_geometry = {.h = geometry.height, .y = geometry.top, .x = geometry.left, .w = geometry.width};
-    velvet_window_resize(w, new_geometry);
+    velvet_window_resize(w, new_geometry, v);
     velvet_ensure_render_scheduled(v);
   }
 }
@@ -96,8 +125,8 @@ lua_Integer vv_api_get_windows(lua_State *L) {
   return 1;
 }
 
-struct velvet_api_terminal_geometry vv_api_get_terminal_geometry(struct velvet *v) {
-  struct velvet_api_terminal_geometry geom = { .height = v->scene.ws.h, .width = v->scene.ws.w };
+struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
+  struct velvet_api_screen_geometry geom = { .height = v->scene.ws.h, .width = v->scene.ws.w };
   return geom;
 }
 
@@ -197,26 +226,28 @@ void vv_api_swap_windows(struct velvet *v, lua_Integer first, lua_Integer second
   }
 }
 
-static enum velvet_key_modifier modifier_from_slice(struct u8_slice s) {
-  if (u8_match(s, "alt") || u8_match(s, "meta") || u8_match(s, "M")) return MODIFIER_ALT;
-  if (u8_match(s, "control") || u8_match(s, "C")) return MODIFIER_CTRL;
-  if (u8_match(s, "super") || u8_match(s, "D")) return MODIFIER_SUPER;
-  return 0;
+enum velvet_api_key_modifiers check_modifier(lua_State *L, enum velvet_api_key_modifiers m) {
+  switch (m) {
+  case VELVET_API_KEY_MODIFIERS_ALT: return m;
+  case VELVET_API_KEY_MODIFIERS_CTRL: return m;
+  case VELVET_API_KEY_MODIFIERS_SUPER: return m;
+  case VELVET_API_KEY_MODIFIERS_SHIFT: lua_bail(L, "Shift cannot be remapped.");
+  case VELVET_API_KEY_MODIFIERS_HYPER: lua_bail(L, "Hyper cannot be remapped.");
+  case VELVET_API_KEY_MODIFIERS_META: return VELVET_API_KEY_MODIFIERS_ALT;
+  case VELVET_API_KEY_MODIFIERS_CAPS_LOCK: lua_bail(L, "Caps lock cannot be remapped.");
+  case VELVET_API_KEY_MODIFIERS_NUM_LOCK: lua_bail(L, "Num lock cannot be remapped."); break;
+  default: lua_bail(L, "Multiple modifiers specified. Please specify a single modifier.");
+  }
+
+  /* unreachable */
+  assert(!"Unreachable");
 }
 
-void vv_api_keymap_remap_modifier(struct velvet *v, const char *from, const char *to) {
-  enum velvet_key_modifier f, t;
-  struct u8_slice f1, t1;
-  f1 = u8_slice_from_cstr(from);
-  t1 = u8_slice_from_cstr(to);
-  f = modifier_from_slice(f1);
-  t = modifier_from_slice(t1);
-
-  lua_Integer enum_index[] = { [MODIFIER_ALT] = 0, [MODIFIER_CTRL] = 1, [MODIFIER_SUPER] = 2 };
-
-  if (f && t) {
-    v->input.options.modremap[enum_index[f]] = t;
-  }
+void vv_api_keymap_remap_modifier(struct velvet *v, enum velvet_api_key_modifiers from, enum velvet_api_key_modifiers to) {
+  lua_Integer enum_index[] = { [VELVET_API_KEY_MODIFIERS_ALT] = 0, [VELVET_API_KEY_MODIFIERS_CTRL] = 1, [VELVET_API_KEY_MODIFIERS_SUPER] = 2 };
+  from = check_modifier(v->L, from);
+  to = check_modifier(v->L, to);
+  v->input.options.modremap[enum_index[from]] = to;
 }
 
 bool vv_api_get_focus_follows_mouse(struct velvet *v) {
@@ -320,26 +351,23 @@ void vv_api_window_set_opacity(struct velvet *v, lua_Integer win, float opacity)
   w->transparency.alpha = 1.0 - opacity;
   velvet_ensure_render_scheduled(v);
 }
-const char* vv_api_window_get_transparency_mode(struct velvet *v, lua_Integer win) {
+
+enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(struct velvet *v, lua_Integer win) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
   if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
-  switch (w->transparency.mode) {
-  case PSEUDOTRANSPARENCY_OFF: return "off";
-  case PSEUDOTRANSPARENCY_CLEAR: return "clear";
-  case PSEUDOTRANSPARENCY_ALL: return "all";
-  }
+  return w->transparency.mode;
 }
-void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win, const char *mode) {
+
+void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win, enum velvet_api_transparency_mode mode) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
   if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
 
-  if (strcmp(mode, "off") == 0)
-    w->transparency.mode = PSEUDOTRANSPARENCY_OFF;
-  else if (strcmp(mode, "clear") == 0)
-    w->transparency.mode = PSEUDOTRANSPARENCY_CLEAR;
-  else if (strcmp(mode, "all") == 0)
-    w->transparency.mode = PSEUDOTRANSPARENCY_ALL;
-  else
-    lua_bail(v->L, "Transparency mode %s is not valid.", mode);
+  switch (mode) {
+  case VELVET_API_TRANSPARENCY_MODE_NONE:
+  case VELVET_API_TRANSPARENCY_MODE_CLEAR:
+  case VELVET_API_TRANSPARENCY_MODE_ALL: w->transparency.mode = mode; break;
+  default: lua_bail(v->L, "Invalid transparency mode %I", mode);
+  }
+
   velvet_ensure_render_scheduled(v);
 }

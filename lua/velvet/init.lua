@@ -1,6 +1,7 @@
 ---@class vv
 local vv = {
   arrange_group_name = 'velvet.arrange',
+  -- stolen directly from vim.inspect
   inspect = require('velvet.inspect'),
   --- @type velvet.api
   api = {},
@@ -22,5 +23,8 @@ vv.options = setmetatable(vv.options, {
     return vv.api["set_" .. k](v, {})
   end,
 })
+
+--- global debug print function
+function dbg(x) vv.print(vv.inspect(x)) end
 
 return vv

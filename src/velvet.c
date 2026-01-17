@@ -165,7 +165,6 @@ void velvet_scene_remove_exited(struct velvet *v) {
     if (h) {
       h->pid = 0;
       h->exited_at = get_ms_since_startup();
-      velvet_emit_event(v, "window_process_dead", h->id);
       velvet_scene_close_and_remove_window(&v->scene, h);
     }
   }
@@ -284,56 +283,6 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
   velvet_ensure_render_scheduled(v);
 }
 
-static void velvet_default_config(struct velvet *v) {
-  struct string config = {0};
-  string_push_cstr(&config,
-                   "map -r         <C-x>x       incborder\n"
-                   "map -r         <C-x><C-c>   cycle-transparency\n"
-                   "map -r         <C-x>a       decborder\n"
-                   "map -r         <C-x>[       decfactor\n"
-                   "map -r         <C-x>]       incfactor\n"
-                   "map -r         <C-x>i       incnmaster\n"
-                   "map -r         <C-x>o       decnmaster\n"
-                   );
-
-  struct u8_slice cfg = string_as_u8_slice(config);
-  struct velvet_cmd_iterator it = {.src = cfg};
-  while (velvet_cmd_iterator_next(&it)) {
-    velvet_cmd(v, 0, it.current);
-  }
-  string_destroy(&config);
-}
-
-
-static void start_default_shell(struct velvet *v) {
-  char *shell = nullptr;
-  uid_t uid = getuid();
-  struct passwd *pw = getpwuid(uid);
-
-  if (pw == NULL) {
-    velvet_log("Error getting default shell:");
-    shell = "sh";
-  } else {
-    shell = pw->pw_shell;
-  }
-  velvet_scene_spawn_process(&v->scene, u8_slice_from_cstr(shell));
-}
-
-void velvet_emit_event(struct velvet *v, const char *evt, int data) {
-  lua_State *L = v->L;
-  // vv.emit_event(evt, data)
-  lua_getglobal(L, "vv");
-  lua_getfield(L, -1, "events");
-  lua_getfield(L, -1, "emit_event");
-  lua_pushstring(L, evt);
-  lua_pushinteger(L, data);
-  int ok = lua_pcall(L, 2, 0, 0); 
-  if (ok != LUA_OK) {
-    const char *err = luaL_tolstring(L, -1, nullptr);
-    velvet_log("emit event: %s", err);
-  }
-}
-
 static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {
   bool resized = false;
   if (focus->ws.w && focus->ws.h && (focus->ws.w != v->scene.ws.w || focus->ws.h != v->scene.ws.h)) {
@@ -386,32 +335,6 @@ static void velvet_source_config(struct velvet *v) {
   }
 }
 
-static void on_screen_resized(void *data) {
-  velvet_emit_event(data, "screen_resized", 0);
-}
-static void on_window_created(int win_id, void *data) {
-  struct velvet *v = data;
-  struct velvet_window *win = velvet_scene_get_window_from_id(&v->scene, win_id);
-  assert(win);
-  velvet_emit_event(v, "window_created", win_id);
-  if (win->rect.window.h == 0 || win->rect.window.w == 0)  {
-    struct rect default_size = v->scene.ws;
-    velvet_window_resize(win, default_size);
-  }
-}
-static void on_window_removed(int win_id, void *data) {
-  velvet_emit_event(data, "window_removed", win_id);
-}
-static void on_window_moved(int win_id, void *data) {
-  velvet_emit_event(data, "window_moved", win_id);
-}
-static void on_window_resized(int win_id, void *data) {
-  velvet_emit_event(data, "window_resized", win_id);
-}
-static void on_window_focused(int win_id, void *data) {
-  velvet_emit_event(data, "window_focused", win_id);
-}
-
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
@@ -427,25 +350,12 @@ void velvet_loop(struct velvet *velvet) {
     velvet->input.keymap = root;
   }
 
-  velvet_default_config(velvet);
   velvet_lua_init(velvet);
 
-  {
-    struct velvet_scene *s = &velvet->scene;
-    s->events.data = velvet;
-    s->events.on_screen_resized = on_screen_resized;
-    s->events.on_window_created = on_window_created;
-    s->events.on_window_removed = on_window_removed;
-    s->events.on_window_moved = on_window_moved;
-    s->events.on_window_resized = on_window_resized;
-    s->events.on_window_focused = on_window_focused;
-  }
-
+  /* We need to pass in a velvet reference to the scene so it can raise events */
+  velvet->scene.v = velvet;
   velvet_source_config(velvet);
   velvet_scene_resize(&velvet->scene, ws);
-
-  if (!velvet_scene_get_focus(&velvet->scene))
-    start_default_shell(velvet);
 
   velvet->min_ms_per_frame = 10;
   velvet_ensure_render_scheduled(velvet);

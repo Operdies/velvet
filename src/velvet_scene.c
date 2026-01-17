@@ -8,20 +8,12 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <signal.h>
+#include "velvet_api.h"
+#include "platform.h"
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
 static bool color_equals(struct color a, struct color b);
-
-struct rect rect_carve(struct rect source, int x, int y, int width, int height) {
-  int pixels_per_column = (int)((float)source.x_pixel / (float)source.w);
-  int pixels_per_row = (int)((float)source.y_pixel / (float)source.h);
-
-  struct rect out = { .x = x, .y = y, .w = width, .h = height };
-  out.x_pixel = out.w * pixels_per_column;
-  out.y_pixel = out.h * pixels_per_row;
-  return out;
-}
 
 static int window_cmp(const void *a1, const void *b1) {
   const struct velvet_window *a = a1;
@@ -44,47 +36,43 @@ struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, in
 }
 
 struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
-  if (m->focus_order.length) {
-    int *f = vec_nth(m->focus_order, 0);
-    return velvet_scene_get_window_from_id(m, *f);
-  }
+  if (m->focus) return velvet_scene_get_window_from_id(m, m->focus);
   return nullptr;
 }
 
-static void focus_remove(struct velvet_scene *m, struct velvet_window *f) {
-  int *foc;
-  vec_find(foc, m->focus_order, *foc == f->id);
-  if (foc) vec_remove(&m->focus_order, foc);
-}
-
 void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_focus) {
-  if (new_focus->hidden) return;
   struct velvet_window *current_focus = velvet_scene_get_focus(m);
-  if (new_focus != current_focus) {
-    focus_remove(m, new_focus);
-    vec_insert(&m->focus_order, 0, &new_focus->id);
-    /* TODO: Current focus not set when leaving workspace */
+  if (new_focus != current_focus || new_focus == nullptr) {
     if (current_focus) velvet_window_notify_focus(current_focus, false);
-    velvet_window_notify_focus(new_focus, true);
-    if (m->events.on_window_focused) m->events.on_window_focused(new_focus->id, m->events.data);
+    if (new_focus) velvet_window_notify_focus(new_focus, true);
+
+    struct velvet_api_window_focus_changed_event_args event_args = { .new_focus = new_focus ? new_focus->id : 0, .old_focus = current_focus ? current_focus->id : 0 };
+    m->focus = event_args.new_focus;
+    if (event_args.new_focus != event_args.old_focus && m->v)
+      velvet_api_raise_window_focus_changed(m->v, event_args);
   }
 }
 
-static int get_id() {
+static int next_id() {
   static int id = 1000;
   return id++;
 }
 
-struct velvet_window * velvet_scene_manage(struct velvet_scene *m, struct velvet_window template) {
+struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_window template) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
-  if (!host->id) host->id = get_id();
+  host->id = next_id();
 
-  vec_push(&m->focus_order, &host->id);
-  host->events.data = m->events.data;
-  host->events.on_move = m->events.on_window_moved;
-  host->events.on_resize = m->events.on_window_resized;
+  // void velvet_api_raise_window_created(struct velvet *v, struct velvet_api_window_created_event_args args);
+  struct velvet_api_window_created_event_args event_args = { .id = host->id };
+  if (m->v) velvet_api_raise_window_created(m->v, event_args);
+
+  /* if the window was not sized during the created event, set an initial size */
+  if (host->rect.window.w <= 0 || host->rect.window.h <= 0) {
+    struct rect default_size = { .w = m->ws.w, .h = m->ws.h };
+    velvet_window_resize(host, default_size, m->v);
+  }
   return host;
 }
 
@@ -93,13 +81,30 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
   int initial_focus = velvet_scene_get_focus(m)->id;
   ssize_t index = vec_index(&m->windows, w);
   assert(index >= 0);
-  focus_remove(m, w);
   vec_remove(&m->windows, w);
 
   struct velvet_window *new_focus = velvet_scene_get_focus(m);
   if (new_focus && new_focus->id != initial_focus) velvet_window_notify_focus(new_focus, true);
-  if (m->events.on_window_removed) 
-    m->events.on_window_removed(win_id, m->events.data);
+
+  struct velvet_api_window_closed_event_args event_args = {.id = win_id};
+
+  /* if the focused window was closed, give lua handlers an opportunity to set the new focus */
+  /* 1. first by raising an event stating the focused window was closed.  */
+  if (m->v) velvet_api_raise_window_closed(m->v, event_args);
+  if (m->focus == win_id) {
+    m->focus = 0;
+    if (m->v) {
+      struct velvet_api_window_focus_changed_event_args event_args = {.old_focus = win_id, .new_focus = 0};
+      /* If the focus was not updated, send another hint that the focus is now not set.  */
+      velvet_api_raise_window_focus_changed(m->v, event_args);
+    }
+    if (m->focus == 0) {
+      /* 3. Finally, if no focus was set, focus the first visible window. */
+      struct velvet_window *first_visible;
+      vec_find(first_visible, m->windows, !first_visible->hidden);
+      if (first_visible) velvet_scene_set_focus(m, first_visible);
+    }
+  }
 }
 
 int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template) {
@@ -110,8 +115,6 @@ int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct 
     velvet_scene_remove_window(scene, host);
     return 0;
   }
-  if (scene->events.on_window_created) 
-    scene->events.on_window_created(host->id, scene->events.data);
   return host->id;
 }
 
@@ -134,10 +137,14 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
   free(renderer->staged.buffer.lines);
 }
 
-void velvet_scene_resize(struct velvet_scene *m, struct rect w) {
-  if (m->ws.w != w.w || m->ws.h != w.h || m->ws.x_pixel != w.x_pixel || m->ws.y_pixel != w.y_pixel) {
-    m->ws = w;
-    if (m->events.on_screen_resized) m->events.on_screen_resized(m->events.data);
+void velvet_scene_resize(struct velvet_scene *m, struct rect new_size) {
+  if (m->ws.w != new_size.w || m->ws.h != new_size.h || m->ws.x_pixel != new_size.x_pixel || m->ws.y_pixel != new_size.y_pixel) {
+    struct velvet_api_screen_resized_event_args event_args = {
+        .new_size = {.height = new_size.h, .width = new_size.w},
+        .old_size = {.height = m->ws.h, .width = m->ws.w},
+    };
+    m->ws = new_size;
+    if (m->v) velvet_api_raise_screen_resized(m->v, event_args);
   }
 }
 
@@ -728,8 +735,8 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         struct screen_cell above = staging->cells[cell_index];
         struct screen_cell below = composite->cells[cell_index];
 
-        bool blend = cell_index != block_blend_index && o.transparency.mode != PSEUDOTRANSPARENCY_OFF &&
-                     (o.transparency.mode == PSEUDOTRANSPARENCY_ALL || is_cell_bg_clear(above));
+        bool blend = cell_index != block_blend_index && o.transparency.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
+                     (o.transparency.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
 
         if (blend) {
           above = normalize_cell(t, above);
@@ -819,6 +826,8 @@ static void velvet_scene_stage_and_commit_window(struct velvet_scene *m, struct 
 }
 
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
+  assert(m->ws.h > 0);
+  assert(m->ws.w > 0);
   if (m->windows.length == 0) return;
   vec_sort(&m->windows, window_cmp);
 
@@ -878,7 +887,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       /* if a window is above the current window and obscures the cursor, we should not show it */
       struct velvet_window_hit hit;
       if (velvet_scene_hit(m, col, line, &hit, nullptr, nullptr) && hit.win != focused) {
-        if (hit.win->transparency.mode == PSEUDOTRANSPARENCY_OFF)
+        if (hit.win->transparency.mode == VELVET_API_TRANSPARENCY_MODE_NONE)
           cursor_obscured = true;
       }
 
@@ -1138,7 +1147,7 @@ static bool rect_same_size(struct rect b1, struct rect b2) {
   return b1.w == b2.w && b1.h == b2.h;
 }
 
-void velvet_window_resize(struct velvet_window *win, struct rect outer) {
+void velvet_window_resize(struct velvet_window *win, struct rect outer, struct velvet *v) {
   int bw = win->border_width;
   // Refuse to go below a minimum size
   int min_size = bw * 2 + 1;
@@ -1163,18 +1172,21 @@ void velvet_window_resize(struct velvet_window *win, struct rect outer) {
     if (win->pid) kill(win->pid, SIGWINCH);
   }
 
-  bool send_resize = !rect_same_size(win->rect.window, outer) && win->events.on_resize;
-  bool send_move = !rect_same_position(win->rect.window, outer) && win->events.on_move;
+  struct velvet_api_window_geometry old = { .left = win->rect.window.x, .top = win->rect.window.y, .width = win->rect.window.w, .height = win->rect.window.h };
+  struct velvet_api_window_geometry new = { .left = outer.x, .top = outer.y, .width = outer.w, .height = outer.h };
 
   win->rect.window = outer;
   win->rect.client = inner;
-
   vte_set_size(&win->emulator, inner);
 
-  if (send_resize)
-    win->events.on_resize(win->id, win->events.data);
-  if (send_move)
-    win->events.on_move(win->id, win->events.data);
+  if (!rect_same_size(win->rect.window, outer)) {
+    struct velvet_api_window_resized_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
+    if (v) velvet_api_raise_window_resized(v, event_args);
+  }
+  if (!rect_same_position(win->rect.window, outer)) {
+    struct velvet_api_window_moved_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
+    if (v) velvet_api_raise_window_moved(v, event_args);
+  }
 }
 
 bool velvet_window_start(struct velvet_window *velvet_window) {
@@ -1239,6 +1251,5 @@ void velvet_scene_destroy(struct velvet_scene *m) {
     velvet_window_destroy(h);
   }
   vec_destroy(&m->windows);
-  vec_destroy(&m->focus_order);
   velvet_render_destroy(&m->renderer);
 }

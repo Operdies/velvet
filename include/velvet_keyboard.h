@@ -2,18 +2,7 @@
 #define VELVET_KEYBOARD_H
 
 #include <stdint.h>
-
-/* masks matching the Kitty keyboard protocol spec: https://sw.kovidgoyal.net/kitty/keyboard-protocol/ */
-enum velvet_key_modifier {
-  MODIFIER_SHIFT     = 0b1,        //(1)
-  MODIFIER_ALT       = 0b10,       //(2)
-  MODIFIER_CTRL      = 0b100,      //(4)
-  MODIFIER_SUPER     = 0b1000,     //(8)
-  MODIFIER_HYPER     = 0b10000,    //(16)
-  MODIFIER_META      = 0b100000,   //(32)
-  MODIFIER_CAPS_LOCK = 0b1000000,  //(64)
-  MODIFIER_NUM_LOCK  = 0b10000000, //(128)
-};
+#include <velvet_api.h>
 
 struct velvet_key {
   char *name;
@@ -26,16 +15,10 @@ struct velvet_key {
   char kitty_terminator;
 };
 
-enum velvet_key_event_type {
-  KEY_PRESS   = 1,
-  KEY_REPEAT  = 2,
-  KEY_RELEASE = 3,
-};
-
 struct velvet_key_event {
   struct velvet_key key;
-  enum velvet_key_modifier modifiers;
-  enum velvet_key_event_type type;
+  enum velvet_api_key_modifiers modifiers;
+  enum velvet_api_key_event_type type;
   struct {
     /* TODO: How long can this be ? */
     uint32_t codepoints[2];

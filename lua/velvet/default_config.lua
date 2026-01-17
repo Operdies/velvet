@@ -10,7 +10,6 @@ map("<C-x>d", function() vv.api.session_detach(vv.api.get_active_session()) end)
 map("<C-x><C-x>", function() vv.api.window_send_keys(vv.api.get_focused_window(), "<C-x>") end)
 
 local dwm = require('velvet.layout.dwm')
-dwm.activate()
 
 for i = 1, 9 do
   map(("<C-x>%d"):format(i), function() dwm.toggle_tag(vv.api.get_focused_window(), i) end)
@@ -21,10 +20,10 @@ end
 
 map("<M-0>", function() dwm.set_view({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end)
 map("<S-M-0>", function() dwm.set_tags(vv.api.get_focused_window(), { 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end)
-map("<C-x>t", function() dwm.set_layer(vv.api.get_focused_window(), "tiled") end)
+map("<C-x>t", function() dwm.set_layer(vv.api.get_focused_window(), dwm.layers.tiled) end)
 map("<C-x>f", function() 
   local win = vv.api.get_focused_window()
-  dwm.set_layer(win, "floating") 
+  dwm.set_layer(win, dwm.layers.floating) 
 end)
 
 local function translate(geom, x, y) 
@@ -38,7 +37,7 @@ end
 local function move_and_resize(x, y, dx, dy)
   local win = vv.api.get_focused_window()
   local geom = translate(scale(vv.api.window_get_geometry(win), dx, dy), x, y)
-  dwm.set_layer(win, "floating") 
+  dwm.set_layer(win, dwm.layers.floating) 
   vv.api.window_set_geometry(win, geom)
 end
 
@@ -69,3 +68,6 @@ rmap("<C-x>j", dwm.swap_next)
 rmap("<C-x>k", dwm.swap_prev)
 map("<C-x>g", dwm.zoom)
 
+local ok, err = pcall(dwm.activate)
+vv.api.window_create_process(default_shell)
+if not ok then dbg({ dwm_activate = err }) end

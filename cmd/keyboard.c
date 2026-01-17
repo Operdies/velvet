@@ -4,6 +4,7 @@
 #include "velvet.h"
 #include <string.h>
 #include <sys/signal.h>
+#include <velvet_api.h>
 
 struct key {
   char *text;
@@ -98,7 +99,7 @@ void on_signal(int sig) {
 
 void highlight_and_draw(struct velvet_keymap *k, struct velvet_key_event e) {
   (void)k;
-  char *highlight = e.type == KEY_RELEASE ? nullptr : "\x1b[7m";
+  char *highlight = e.type == VELVET_API_KEY_EVENT_TYPE_RELEASE ? nullptr : "\x1b[7m";
 
   for (int i = 0; i < 6; i++) {
     for (int j = 0; j < 15; j++) {

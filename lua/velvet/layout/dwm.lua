@@ -1,6 +1,11 @@
-local dwm = {}
+local dwm = {
+  layers = {
+    tiled = 1, floating = 2,
+  },
+}
 local vv = require('velvet')
 
+local taskbar = 0
 local r_left = 0
 local r_top = 0
 local r_bottom = 0
@@ -60,6 +65,8 @@ local function visible(win)
 end
 
 local function set_focus(win)
+  if win == 0 then return end
+  if win == taskbar then return end
   local current_index = table_index(focus_order, win)
   if current_index ~= nil then table.remove(focus_order, current_index) end
   table.insert(focus_order, win)
@@ -84,7 +91,7 @@ local function ensure_focus_visible()
 end
 
 local function tiled(win)
-  return layers[win] == nil or layers[win] == 'tiled'
+  return layers[win] == dwm.layers.tiled
 end
 
 -- arbitrarily decide tiled windows begin at z 10 and floating windows begin at z 100
@@ -92,14 +99,28 @@ local tiled_z = 10
 local floating_z = 100
 
 local nmaster = 1
-local function arrange()
+
+local function status_update()
+  local status = "\x1b[?25l\x1b[?7l\x1b[H\x1b[2J"
+  for i=1,9 do 
+    local bg = view[i] and "\x1b[48;2;255;0;0m" or "\x1b[48;2;0;0;255m"
+    status = status .. ("%s %d "):format(bg, i)
+  end
+  status = status .. "\x1b[m"
+  vv.api.window_write(taskbar, status)
+end
+
+local function arrange2()
+  local term = vv.api.get_screen_geometry()
+  vv.api.window_set_geometry(taskbar, { width = term.width, height = 1, left = 0, top = term.height - 1 })
+
   local focused_id = vv.api.get_focused_window()
+  if vv.api.window_is_lua(focused_id) then return end
   if focused_id ~= nil and focused_id ~= get_focus() then
     -- if focus was changed outside of this module, update internal focus order tracking
     set_focus(focused_id)
   end
 
-  local term = vv.api.get_terminal_geometry()
   term.width = term.width - (r_left + r_right)
   term.height = term.height - (r_top + r_bottom)
 
@@ -108,13 +129,14 @@ local function arrange()
   for _, id in ipairs(windows) do
     local vis = visible(id)
     vv.api.window_set_hidden(id, not vis)
-    local floating = layers[id] == "floating"
+    local floating = layers[id] == dwm.layers.floating
+    local t = vv.api.transparency_mode
     if floating then
-      vv.api.window_set_transparency_mode(id, "all")
-      vv.api.window_set_opacity(id, 0.5)
+      vv.api.window_set_transparency_mode(id, t.all)
+      vv.api.window_set_opacity(id, 0.8)
     else
-      vv.api.window_set_transparency_mode(id, "clear")
-      vv.api.window_set_opacity(id, 0.2)
+      vv.api.window_set_transparency_mode(id, t.none)
+      vv.api.window_set_opacity(id, 1.0)
     end
     if vis then
       if not floating then
@@ -144,9 +166,17 @@ local function arrange()
   end
 
   ensure_focus_visible()
+  status_update()
+end
+
+local function arrange()
+  local ok, err = pcall(arrange2)
+  if not ok then dbg({ arrange_error = err }) end
 end
 
 local function add_window(win)
+  if vv.api.window_is_lua(win) then return end
+  layers[win] = dwm.layers.tiled
   table.insert(windows, 1, win)
   vv.api.set_focused_window(win)
   tags[win] = table.move(view, 1, #view, 1, {})
@@ -154,6 +184,7 @@ local function add_window(win)
 end
 
 local function remove_window(win)
+  layers[win] = nil
   for i, id in ipairs(windows) do
     if id == win then
       table.remove(windows, i)
@@ -221,12 +252,18 @@ function dwm.activate()
   for _, id in ipairs(lst) do
     table.insert(windows, id)
     tags[id] = view
+    layers[id] = dwm.layers.tiled
   end
-  local grp = e.create_group(vv.arrange_group_name, true)
-  e.subscribe(grp, e.screen.resized, arrange)
-  e.subscribe(grp, e.window.created, add_window)
-  e.subscribe(grp, e.window.removed, remove_window)
-  e.subscribe(grp, e.window.focused, arrange)
+  local event_handler = e.create_group(vv.arrange_group_name, true)
+  taskbar = vv.api.window_create()
+  -- taskbar is below tiled windows, but the tiling
+  -- area does not overlap with the taskar area.
+  vv.api.window_set_z_index(taskbar, tiled_z - 1)
+  dwm.reserve(0, 0, 1, 0)
+  event_handler.screen_resized = arrange
+  event_handler.window_created = function(args) add_window(args.id) end
+  event_handler.window_closed = function(args) remove_window(args.id) end
+  event_handler.window_focus_changed = arrange
   if #windows > 0 then
     set_focus(lst[1])
   end
@@ -321,13 +358,14 @@ end
 --- If the selected window is the first tiled window, swap with the next tiled window.
 function dwm.zoom()
   local focus_id = vv.api.get_focused_window()
+  if focus_id == 0 then return end
   local focus_index = table_index(windows, focus_id)
   local next_index = get_first_matching(windows, function(id) return id ~= focus_id and visible(id) and tiled(id) end)
   if next_index then
     local next_id = windows[next_index]
     table_swap(windows, focus_index, next_index)
     local new_focus = get_first_matching(windows, function(id) return id == focus_id or id == next_id end)
-    set_focus(new_focus)
+    if new_focus then set_focus(windows[new_focus]) end
     arrange()
   end
 end

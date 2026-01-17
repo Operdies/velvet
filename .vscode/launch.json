@@ -22,8 +22,7 @@
       "args": [ "--foreground", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
-      // "console": "integratedTerminal",
-      "console": "externalTerminal",
+      "console": "integratedTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/lldb-config"
       ]

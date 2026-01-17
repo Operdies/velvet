@@ -182,7 +182,7 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
 
   velvet_scene_resize(&v, blarge);
-  velvet_window_resize(p, blarge);
+  velvet_window_resize(p, blarge, nullptr);
 
   {
     // 1. Write the input and verify the output
@@ -210,7 +210,7 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   struct velvet_scene v = velvet_scene_default;
   struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
   velvet_scene_resize(&v, bsmall);
-  velvet_window_resize(p, bsmall);
+  velvet_window_resize(p, bsmall, nullptr);
 
   velvet_window_process_output(p, u8_slice_from_cstr(input));
   struct string output = {0};
@@ -222,14 +222,14 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   }
   {
     string_clear(&output);
-    velvet_window_resize(p, blarge);
+    velvet_window_resize(p, blarge, nullptr);
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(large, vte_get_current_screen(&p->emulator), test_name);
   }
   {
     string_clear(&output);
-    velvet_window_resize(p, bsmall);
+    velvet_window_resize(p, bsmall, nullptr);
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     // It is always possibly to losslessly convert back to the initial screen, so let's verify that
@@ -248,7 +248,7 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
   struct velvet_scene v = velvet_scene_default;
   struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
   velvet_scene_resize(&v, blarge);
-  velvet_window_resize(p, blarge);
+  velvet_window_resize(p, blarge, nullptr);
   velvet_window_process_output(p, u8_slice_from_cstr(input));
   {
     velvet_scene_render_damage(&v, render_func, nullptr);
@@ -256,7 +256,7 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
     assert_screen_equals(large, vte_get_current_screen(&p->emulator), test_name);
   }
   {
-    velvet_window_resize(p, bsmall);
+    velvet_window_resize(p, bsmall, nullptr);
     velvet_scene_render_damage(&v, render_func, nullptr);
     velvet_scene_render_full(&v, render_func, nullptr);
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
