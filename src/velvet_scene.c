@@ -1052,7 +1052,6 @@ static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_sty
   return a.attr == b.attr && color_equals(a.fg, b.fg) && color_equals(a.bg, b.bg);
 }
 
-extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 void velvet_window_destroy(struct velvet_window *velvet_window) {
   if (velvet_window->pty > 0) {
     /* CONT and HUP the process group of the pty.
@@ -1188,6 +1187,9 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   sigfillset(&block);
   sigprocmask(SIG_BLOCK, &block, &sighandler);
 
+  /* forward declare forkpty since it's the only thing we need from its header,
+   * and the header is different on Mac and Linux. On Mac it is <util.h> (????????) */
+  extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
   pid_t pid = forkpty(&velvet_window->pty, nullptr, nullptr, &velvet_windowsize);
 
   if (pid != 0) {
