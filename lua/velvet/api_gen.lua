@@ -3,7 +3,7 @@ local spec_path = assert(arg[1], "usage: lua api_gen.lua <api_spec.lua> <out_dir
 local out_dir = assert(arg[2], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
 local spec = dofile(spec_path)
 
-local inspect = dofile ("/Users/alex/repos/velvet/lua/velvet/inspect.lua")
+local inspect = dofile("lua/velvet/inspect.lua")
 local dbg = function(x) print(inspect(x)) end
 
 out_dir = out_dir:gsub("/$", "", 1)
@@ -343,14 +343,14 @@ for _, fn in ipairs(spec.api) do
     table.insert(params, c_type(p.type) .. " " .. p.name)
   end
 
-  table.insert(c,
-    ([[
+  table.insert(c, ([[
 
 static int l_vv_api_%s(lua_State *L){
-  struct velvet *v = *(struct velvet**)lua_getextraspace(L);
 ]])
-    :format(fn.name)
-  )
+    :format(fn.name))
+  if not is_manual(fn.returns.type) then
+    table.insert(c, '  struct velvet *v = *(struct velvet**)lua_getextraspace(L);\n')
+  end
 
   local idx = 1
   local args = {}

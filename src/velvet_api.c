@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "velvet_api.h"
+#include "platform.h"
 
 lua_Integer vv_api_get_key_repeat_timeout(struct velvet *v) {
   return v->input.options.key_repeat_timeout_ms;
@@ -23,11 +24,7 @@ _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
 }
 
 lua_Integer vv_api_window_create_process(struct velvet *v, const char* cmd) {
-  struct velvet_window template = {
-    .emulator = vte_default,
-    .border_width = 1,
-  };
-
+  struct velvet_window template = { .emulator = vte_default };
   string_push_cstr(&template.cmdline, cmd);
   return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template);
 }
@@ -84,7 +81,7 @@ struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, l
   struct velvet_window *w;
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
-    struct rect r = w->rect.window;
+    struct rect r = w->geometry;
     geom.height = r.h;
     geom.left = r.x;
     geom.top = r.y;

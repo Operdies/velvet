@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <pwd.h>
 #include "velvet_lua.h"
+#include "platform.h"
 
 static void velvet_session_render(struct u8_slice str, void *context) {
   struct velvet_session *s = context;

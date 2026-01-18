@@ -22,12 +22,7 @@ struct velvet_window {
   int id;
   int z_index;
   bool hidden;
-  int border_width;
-  struct {
-    struct rect window;
-    struct rect client;
-    struct rect title;
-  } rect;
+  struct rect geometry;
   uint64_t exited_at;
   struct vte emulator;
   struct pseudotransparency_options transparency;
@@ -128,23 +123,8 @@ struct velvet_scene {
   struct velvet *v;
 };
 
-enum velvet_window_hit_location {
-  VELVET_HIT_TITLE               = 1,
-  VELVET_HIT_CLIENT              = 2,
-  VELVET_HIT_BORDER              = 4,
-  VELVET_HIT_BORDER_TOP          = 8                        | VELVET_HIT_BORDER,
-  VELVET_HIT_BORDER_BOTTOM       = 16                       | VELVET_HIT_BORDER,
-  VELVET_HIT_BORDER_LEFT         = 32                       | VELVET_HIT_BORDER,
-  VELVET_HIT_BORDER_RIGHT        = 64                       | VELVET_HIT_BORDER,
-  VELVET_HIT_BORDER_TOPLEFT      = VELVET_HIT_BORDER_TOP    | VELVET_HIT_BORDER_LEFT,
-  VELVET_HIT_BORDER_TOPRIGHT     = VELVET_HIT_BORDER_TOP    | VELVET_HIT_BORDER_RIGHT,
-  VELVET_HIT_BORDER_BOTTOM_LEFT  = VELVET_HIT_BORDER_BOTTOM | VELVET_HIT_BORDER_LEFT,
-  VELVET_HIT_BORDER_BOTTOM_RIGHT = VELVET_HIT_BORDER_BOTTOM | VELVET_HIT_BORDER_RIGHT,
-};
-
 struct velvet_window_hit {
   struct velvet_window *win;
-  enum velvet_window_hit_location where;
 };
 
 void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_window *w);

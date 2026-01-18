@@ -69,7 +69,7 @@ struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_
   if (m->v) velvet_api_raise_window_created(m->v, event_args);
 
   /* if the window was not sized during the created event, set an initial size */
-  if (host->rect.window.w <= 0 || host->rect.window.h <= 0) {
+  if (host->geometry.w <= 0 || host->geometry.h <= 0) {
     struct rect default_size = { .w = m->ws.w, .h = m->ws.h };
     velvet_window_resize(host, default_size, m->v);
   }
@@ -120,10 +120,8 @@ int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct 
 
 int velvet_scene_spawn_process(struct velvet_scene *scene, struct u8_slice cmdline) {
   assert(scene->windows.element_size == sizeof(struct velvet_window));
-  struct velvet_window host = { 0 };
+  struct velvet_window host = { .emulator = vte_default };
   string_push_slice(&host.cmdline, cmdline);
-  host.emulator = vte_default;
-  host.border_width = 1;
   return velvet_scene_spawn_process_from_template(scene, host);
 }
 
@@ -471,15 +469,15 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
   struct velvet_render *r = &m->renderer;
   struct screen *active = vte_get_current_screen(&h->emulator);
   assert(active);
-  assert(active->w == h->rect.client.w);
-  assert(active->h == h->rect.client.h);
+  assert(active->w == h->geometry.w);
+  assert(active->h == h->geometry.h);
 
   for (int line = 0; line < active->h; line++) {
     struct screen_line *screen_line = screen_get_view_line(active, line);
-    int render_line = h->rect.client.y + line;
+    int render_line = h->geometry.y + line;
     if (render_line >= r->h) break;
     for (int column = 0; column < active->w; column++) {
-      int render_column = h->rect.client.x + column;
+      int render_column = h->geometry.x + column;
       if (render_column >= r->w) break;
       struct screen_cell cell = screen_line->cells[column];
       if (r->options.display_eol) {
@@ -501,9 +499,9 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
 
   bool is_focused = h == velvet_scene_get_focus(m);
   if (is_focused && should_emulate_cursor(h->emulator.options.cursor)) {
-    int x = h->rect.client.x + active->cursor.column;
-    int y = h->rect.client.y + active->cursor.line + screen_get_scroll_offset(active);
-    if (y < h->rect.client.y + h->rect.client.h) {
+    int x = h->geometry.x + active->cursor.column;
+    int y = h->geometry.y + active->cursor.line + screen_get_scroll_offset(active);
+    if (y < h->geometry.y + h->geometry.h) {
       struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
       if (current) {
         struct screen_cell cursor = *current;
@@ -526,124 +524,114 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
   }
 }
 
-/* lol very unsafe :) */
-static struct codepoint codepoint_from_cstr(char *src) {
-  struct utf8 result = {0};
-  char *dst = (char *)result.utf8;
-  for (; *src; *dst++ = *src++);
-
-  int len;
-  return utf8_to_codepoint(result.utf8, &len);
-}
-
-static void velvet_render_calculate_borders(struct velvet_scene *m, struct velvet_window *host) {
-  static const int hard = 0;
-  // static const int rounded = 1;
-  // static const int dragging = 2;
-  int style = hard;
-  char *borders[3][4] = {
-      {"┌", "┘", "┐", "└"},
-      {"╭", "╯", "╮", "╰"},
-      {"╔", "╝", "╗", "╚"},
-  };
-
-  struct velvet_render *r = &m->renderer;
-
-  struct codepoint topleft = codepoint_from_cstr(borders[style][0]);
-  struct codepoint bottomright = codepoint_from_cstr(borders[style][1]);
-  struct codepoint topright = codepoint_from_cstr(borders[style][2]);
-  struct codepoint bottomleft = codepoint_from_cstr(borders[style][3]);
-
-  struct codepoint pipe = codepoint_from_cstr("│");
-  struct codepoint dash = codepoint_from_cstr("─");
-  // struct utf8 top_connector = utf8_from_cstr("┬");
-  // struct utf8 left_connector = utf8_from_cstr("├");
-  // struct utf8 right_connector = utf8_from_cstr("┤");
-  // struct utf8 cross_connector = utf8_from_cstr("┼");
-  struct codepoint elipsis = codepoint_from_cstr("…");
-  bool is_focused = host == velvet_scene_get_focus(m);
-  struct rect w = host->rect.window;
-  struct rect c = host->rect.client;
-  int bw = host->border_width;
-
-  if (!bw) return;
-
-  struct velvet_theme theme = m->theme;
-  struct color chrome_color = is_focused ? theme.title.active : theme.title.inactive;
-  struct screen_cell_style chrome = { .fg = chrome_color, .bg = theme.background };
-  {
-    struct screen_cell vert = {.cp = dash, .style = chrome};
-    struct screen_cell horz = {.cp = pipe, .style = chrome};
-
-    /* title chrome */
-    for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y - 1, column, vert);
-
-    /* bottom chrome */
-    for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y + c.h, column, vert);
-
-    /* left chrome */
-    for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x - 1, horz);
-
-    /* right chrome */
-    for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x + c.w, horz);
-
-    struct screen_cell corner = {.style = chrome };
-    corner.cp = topleft;
-    velvet_render_set_cell(r, c.y - 1, c.x - 1, corner);
-    corner.cp = topright;
-    velvet_render_set_cell(r, c.y - 1, c.x + c.w, corner);
-    corner.cp = bottomleft;
-    velvet_render_set_cell(r, c.y + c.h, c.x - 1, corner);
-    corner.cp = bottomright;
-    velvet_render_set_cell(r, c.y + c.h, c.x + c.w, corner);
-  }
-
-  {
-    struct screen_cell truncation_symbol = {.cp = elipsis, .style = chrome};
-
-    int title_end = c.x + c.w;
-
-    /* draw scroll offset */
-    struct screen *active = vte_get_current_screen(&host->emulator);
-    if (screen_get_scroll_offset(active)) {
-      int scroll_height = screen_get_scroll_height(active);
-      char buf[40] = {0};
-      struct string tmp = { .content = (uint8_t*)buf, .len = 0, .cap = sizeof(buf) };
-      string_push_char(&tmp, '[');
-      string_push_int(&tmp, screen_get_scroll_offset(active));
-      string_push_char(&tmp, '/');
-      string_push_int(&tmp, scroll_height);
-      string_push_char(&tmp, ']');
-      struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(tmp)};
-      int start = c.x + c.w - tmp.len;
-      if (start > c.x) {
-        while (u8_slice_codepoint_iterator_next(&it)) {
-          struct screen_cell chr = {.style = chrome, .cp = it.current};
-          velvet_render_set_cell(r, c.y - 1, start++, chr);
-        }
-      }
-      title_end -= tmp.len;
-    }
-
-    int i = c.x + 1;
-    /* draw the title */
-    struct rect title_box = { .x = i, .h = 1, .y = c.y - 1 };
-    struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
-    for (; i < title_end - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
-      struct screen_cell chr = {.style = chrome, .cp = it.current};
-      velvet_render_set_cell(r, c.y - 1, i, chr);
-    }
-
-    /* add a space or truncation symbol */
-    if (i < title_end - 1 && u8_slice_codepoint_iterator_next(&it)) {
-      /* title was truncated */
-      velvet_render_set_cell(r, c.y - 1, i, truncation_symbol);
-      i++;
-    }
-    title_box.w = i - title_box.x;
-    host->rect.title = title_box;
-  }
-}
+// static void velvet_render_calculate_borders(struct velvet_scene *m, struct velvet_window *host) {
+//   static const int hard = 0;
+//   // static const int rounded = 1;
+//   // static const int dragging = 2;
+//   int style = hard;
+//   char *borders[3][4] = {
+//       {"┌", "┘", "┐", "└"},
+//       {"╭", "╯", "╮", "╰"},
+//       {"╔", "╝", "╗", "╚"},
+//   };
+//
+//   struct velvet_render *r = &m->renderer;
+//
+//   struct codepoint topleft = codepoint_from_cstr(borders[style][0]);
+//   struct codepoint bottomright = codepoint_from_cstr(borders[style][1]);
+//   struct codepoint topright = codepoint_from_cstr(borders[style][2]);
+//   struct codepoint bottomleft = codepoint_from_cstr(borders[style][3]);
+//
+//   struct codepoint pipe = codepoint_from_cstr("│");
+//   struct codepoint dash = codepoint_from_cstr("─");
+//   // struct utf8 top_connector = utf8_from_cstr("┬");
+//   // struct utf8 left_connector = utf8_from_cstr("├");
+//   // struct utf8 right_connector = utf8_from_cstr("┤");
+//   // struct utf8 cross_connector = utf8_from_cstr("┼");
+//   struct codepoint elipsis = codepoint_from_cstr("…");
+//   bool is_focused = host == velvet_scene_get_focus(m);
+//   struct rect w = host->geometry;
+//   struct rect c = host->geometry;
+//   int bw = host->border_width;
+//
+//   if (!bw) return;
+//
+//   struct velvet_theme theme = m->theme;
+//   struct color chrome_color = is_focused ? theme.title.active : theme.title.inactive;
+//   struct screen_cell_style chrome = { .fg = chrome_color, .bg = theme.background };
+//   {
+//     struct screen_cell vert = {.cp = dash, .style = chrome};
+//     struct screen_cell horz = {.cp = pipe, .style = chrome};
+//
+//     /* title chrome */
+//     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y - 1, column, vert);
+//
+//     /* bottom chrome */
+//     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y + c.h, column, vert);
+//
+//     /* left chrome */
+//     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x - 1, horz);
+//
+//     /* right chrome */
+//     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x + c.w, horz);
+//
+//     struct screen_cell corner = {.style = chrome };
+//     corner.cp = topleft;
+//     velvet_render_set_cell(r, c.y - 1, c.x - 1, corner);
+//     corner.cp = topright;
+//     velvet_render_set_cell(r, c.y - 1, c.x + c.w, corner);
+//     corner.cp = bottomleft;
+//     velvet_render_set_cell(r, c.y + c.h, c.x - 1, corner);
+//     corner.cp = bottomright;
+//     velvet_render_set_cell(r, c.y + c.h, c.x + c.w, corner);
+//   }
+//
+//   {
+//     struct screen_cell truncation_symbol = {.cp = elipsis, .style = chrome};
+//
+//     int title_end = c.x + c.w;
+//
+//     /* draw scroll offset */
+//     struct screen *active = vte_get_current_screen(&host->emulator);
+//     if (screen_get_scroll_offset(active)) {
+//       int scroll_height = screen_get_scroll_height(active);
+//       char buf[40] = {0};
+//       struct string tmp = { .content = (uint8_t*)buf, .len = 0, .cap = sizeof(buf) };
+//       string_push_char(&tmp, '[');
+//       string_push_int(&tmp, screen_get_scroll_offset(active));
+//       string_push_char(&tmp, '/');
+//       string_push_int(&tmp, scroll_height);
+//       string_push_char(&tmp, ']');
+//       struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(tmp)};
+//       int start = c.x + c.w - tmp.len;
+//       if (start > c.x) {
+//         while (u8_slice_codepoint_iterator_next(&it)) {
+//           struct screen_cell chr = {.style = chrome, .cp = it.current};
+//           velvet_render_set_cell(r, c.y - 1, start++, chr);
+//         }
+//       }
+//       title_end -= tmp.len;
+//     }
+//
+//     int i = c.x + 1;
+//     /* draw the title */
+//     struct rect title_box = { .x = i, .h = 1, .y = c.y - 1 };
+//     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
+//     for (; i < title_end - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
+//       struct screen_cell chr = {.style = chrome, .cp = it.current};
+//       velvet_render_set_cell(r, c.y - 1, i, chr);
+//     }
+//
+//     /* add a space or truncation symbol */
+//     if (i < title_end - 1 && u8_slice_codepoint_iterator_next(&it)) {
+//       /* title was truncated */
+//       velvet_render_set_cell(r, c.y - 1, i, truncation_symbol);
+//       i++;
+//     }
+//     title_box.w = i - title_box.x;
+//     host->rect.title = title_box;
+//   }
+// }
 
 static void velvet_render_reset_staged_region(struct velvet_render *r) {
   r->staged.bottom = -1;
@@ -734,8 +722,8 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
     case CURSOR_STYLE_STEADY_BLOCK: {
       struct screen *screen = vte_get_current_screen(&win->emulator);
       struct cursor *cursor = &screen->cursor;
-      int cursor_line = cursor->line + win->rect.client.y + screen->scroll.view_offset;
-      int cursor_col = cursor->column + win->rect.client.x;
+      int cursor_line = cursor->line + win->geometry.y + screen->scroll.view_offset;
+      int cursor_col = cursor->column + win->geometry.x;
       block_blend_index = cursor_line * r->w + cursor_col;
     } break;
     default: break;
@@ -803,24 +791,13 @@ static bool rect_contains(struct rect r, int x, int y) {
   return r.x <= x && x < r.x + r.w && r.y <= y && y < r.y + r.h;
 }
 
-bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window*, void*), void *data) {
+bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window *, void *), void *data) {
   struct velvet_window *h;
   vec_sort(&scene->windows, window_cmp);
   vec_rwhere(h, scene->windows, !h->hidden && (!skip || !skip(h, data))) {
-    if (rect_contains(h->rect.client, x, y)) {
-      struct velvet_window_hit client_hit = {.win = h, .where = VELVET_HIT_CLIENT};
+    if (rect_contains(h->geometry, x, y)) {
+      struct velvet_window_hit client_hit = {.win = h};
       *hit = client_hit;
-      return true;
-    } else if (rect_contains(h->rect.window, x, y)) {
-      struct rect w = h->rect.window;
-      struct velvet_window_hit border_hit = {.win = h, .where = VELVET_HIT_BORDER};
-      if (x == w.x) border_hit.where |= VELVET_HIT_BORDER_LEFT;
-      if (x == w.x + w.w - 1) border_hit.where |= VELVET_HIT_BORDER_RIGHT;
-      if (y == w.y) border_hit.where |= VELVET_HIT_BORDER_TOP;
-      if (y == w.y + w.h - 1) border_hit.where |= VELVET_HIT_BORDER_BOTTOM;
-      if (rect_contains(h->rect.title, x, y)) border_hit.where |= VELVET_HIT_TITLE;
-
-      *hit = border_hit;
       return true;
     }
   }
@@ -830,15 +807,10 @@ bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_wi
 
 static void velvet_scene_stage_and_commit_window(struct velvet_scene *m, struct velvet_window *w) {
   struct velvet_theme t = m->theme;
-  velvet_render_calculate_borders(m, w);
   if (w->emulator.options.reverse_video) {
-    /* reverse video should not apply to borders, so we
-     * need to commit twice if reverse video is used */
-    velvet_scene_commit_staged(m, w, t);
     struct color fg = t.foreground;
     t.foreground = t.background;
     t.background = fg;
-
     fg = t.cursor.foreground;
     t.cursor.foreground = t.cursor.background;
     t.cursor.background = fg;
@@ -902,8 +874,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     } else if (focused->emulator.options.cursor.visible) {
       struct screen *screen = vte_get_current_screen(&focused->emulator);
       struct cursor *cursor = &screen->cursor;
-      int line = cursor->line + focused->rect.client.y + screen->scroll.view_offset;
-      int col = cursor->column + focused->rect.client.x;
+      int line = cursor->line + focused->geometry.y + screen->scroll.view_offset;
+      int col = cursor->column + focused->geometry.x;
 
       bool cursor_obscured = false;
       /* if a window is above the current window and obscures the cursor, we should not show it */
@@ -1156,8 +1128,8 @@ void velvet_window_update_title(struct velvet_window *p) {
 
 
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
-  assert(velvet_window->emulator.ws.h == velvet_window->rect.client.h);
-  assert(velvet_window->emulator.ws.w == velvet_window->rect.client.w);
+  assert(velvet_window->emulator.ws.h == velvet_window->geometry.h);
+  assert(velvet_window->emulator.ws.w == velvet_window->geometry.w);
   vte_process(&velvet_window->emulator, str);
 }
 
@@ -1170,9 +1142,8 @@ static bool rect_same_size(struct rect b1, struct rect b2) {
 }
 
 void velvet_window_resize(struct velvet_window *win, struct rect outer, struct velvet *v) {
-  int bw = win->border_width;
   // Refuse to go below a minimum size
-  int min_size = bw * 2 + 1;
+  int min_size = 1;
   if (outer.w < min_size) outer.w = min_size;
   if (outer.h < min_size) outer.h = min_size;
 
@@ -1180,39 +1151,39 @@ void velvet_window_resize(struct velvet_window *win, struct rect outer, struct v
   int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.h);
 
   struct rect inner = {
-      .x = outer.x + bw,
-      .y = outer.y + bw,
-      .w = outer.w - 2 * bw,
-      .h = outer.h - 2 * bw,
+      .x = outer.x,
+      .y = outer.y,
+      .w = outer.w,
+      .h = outer.h,
       .x_pixel = inner.w * pixels_per_column,
       .y_pixel = inner.h * pixels_per_row,
   };
 
-  if (!rect_same_size(win->rect.client, inner)) {
+  if (!rect_same_size(win->geometry, inner)) {
     struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
     if (win->pty) ioctl(win->pty, TIOCSWINSZ, &ws);
     if (win->pid) kill(win->pid, SIGWINCH);
   }
 
-  struct velvet_api_window_geometry old = { .left = win->rect.window.x, .top = win->rect.window.y, .width = win->rect.window.w, .height = win->rect.window.h };
+  struct velvet_api_window_geometry old = { .left = win->geometry.x, .top = win->geometry.y, .width = win->geometry.w, .height = win->geometry.h };
   struct velvet_api_window_geometry new = { .left = outer.x, .top = outer.y, .width = outer.w, .height = outer.h };
 
-  win->rect.window = outer;
-  win->rect.client = inner;
+  win->geometry = outer;
+  win->geometry = inner;
   vte_set_size(&win->emulator, inner);
 
-  if (!rect_same_size(win->rect.window, outer)) {
+  if (!rect_same_size(win->geometry, outer)) {
     struct velvet_api_window_resized_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_resized(v, event_args);
   }
-  if (!rect_same_position(win->rect.window, outer)) {
+  if (!rect_same_position(win->geometry, outer)) {
     struct velvet_api_window_moved_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_moved(v, event_args);
   }
 }
 
 bool velvet_window_start(struct velvet_window *velvet_window) {
-  struct rect c = velvet_window->rect.client;
+  struct rect c = velvet_window->geometry;
   struct winsize velvet_windowsize = {.ws_col = c.w, .ws_row = c.h, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
   /* block signal generation in the child. This is important because signals delivered between fork() and exec() will be

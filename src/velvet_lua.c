@@ -4,6 +4,7 @@
 #include "lualib.h"
 #include "velvet_lua_autogen.c"
 #include <string.h>
+#include "platform.h"
 
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)osize;

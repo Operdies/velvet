@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include "platform.h"
 
 #include "utils.h"
 #include "velvet.h"

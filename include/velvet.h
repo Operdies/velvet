@@ -4,7 +4,6 @@
 #include "collections.h"
 #include "io.h"
 #include "lua.h"
-#include "platform.h"
 #include "velvet_scene.h"
 #include "velvet_keyboard.h"
 
@@ -67,7 +66,6 @@ struct velvet_input_drag_event {
   } drag_start;
   /* the id of the client being dragged */
   uint64_t id;
-  enum velvet_window_hit_location loc;
   enum velvet_input_drag_event_type type;
 };
 
