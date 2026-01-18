@@ -5,19 +5,21 @@ local dwm = {
 }
 local vv = require('velvet')
 
-local taskbar = 0
+--- @type velvet.window
+local taskbar = nil
 local r_left = 0
 local r_top = 0
 local r_bottom = 0
 local r_right = 0
 
 local move_duration = 0
-local function win_move(win, new_geom)
+local function win_move(win, to)
+  local client_area = to
   if move_duration > 0 then
     local a = require('velvet.stdlib.animation')
-    a.animate(win, new_geom, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
+    a.animate(win, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
   else
-    vv.api.window_set_geometry(win, new_geom)
+    vv.api.window_set_geometry(win, client_area)
   end
 end
 
@@ -72,7 +74,7 @@ end
 
 local function set_focus(win)
   if win == 0 then return end
-  if win == taskbar then return end
+  if win == taskbar.id then return end
   local current_index = table_index(focus_order, win)
   if current_index ~= nil then table.remove(focus_order, current_index) end
   table.insert(focus_order, win)
@@ -101,36 +103,43 @@ local function tiled(win)
 end
 
 -- arbitrarily decide where floating and tiled windows begin
-local tiled_z = 100
-local floating_z = 1000
+local tiled_z = -1000
+local floating_z = -100
 
 local nmaster = 1
 local mfact = 0.5
 local dim_inactive = 0
 
 local function status_update()
-  if not vv.api.window_is_lua(taskbar) then return end
-  local palette = vv.options.color_palette
-  local active = palette.red
-  local inactive = palette.blue
+  local sz = vv.api.get_screen_geometry()
+  taskbar:set_cursor_visible(false)
+  taskbar:set_line_wrapping(false)
+  taskbar:set_geometry({ left = 0, top = sz.height - 1, width = sz.width, height = 1 })
+  taskbar:clear_background_color()
+  taskbar:clear()
+  taskbar:set_foreground_color('black')
+  taskbar:set_cursor(1, 1)
 
-  local text_color = palette.black
-  local fg = ('\x1b[38;2;%d;%d;%dm'):format(text_color.red, text_color.green, text_color.blue)
-  local active_csi = ('\x1b[48;2;%d;%d;%dm'):format(active.red, active.green, active.blue)
-  local inactive_csi = ('\x1b[48;2;%d;%d;%dm'):format(inactive.red, inactive.green, inactive.blue)
-
-  local status = fg .. "\x1b[?25l\x1b[?7l\x1b[H\x1b[2J"
   for i=1,9 do 
-    local bg = view[i] and active_csi or inactive_csi
-    status = status .. ("%s %d "):format(bg, i)
+    taskbar:set_background_color(view[i] and 'red' or 'blue')
+    taskbar:draw((" %d "):format(i))
   end
-  status = status .. "\x1b[m"
-  vv.api.window_write(taskbar, status)
+
+  local function view_mouse_hit(_, args)
+    if args.mouse_button == vv.api.mouse_button.left then
+      local col = args.pos.col
+      local hit = 1 + ((col - 1) // 3)
+      if hit >= 1 and hit <= 9 then
+        dwm.set_view(hit)
+      end
+    end
+  end
+  taskbar:on_mouse_move(view_mouse_hit)
+  taskbar:on_mouse_click(view_mouse_hit)
 end
 
 local function arrange2()
   local term = vv.api.get_screen_geometry()
-  vv.api.window_set_geometry(taskbar, { width = term.width, height = 1, left = 0, top = term.height - 1 })
 
   local focused_id = vv.api.get_focused_window()
   if vv.api.window_is_lua(focused_id) then return end
@@ -175,11 +184,8 @@ local function arrange2()
   end
 
   for i, id in ipairs(focus_order) do
-    if not tiled(id) then
-      vv.api.window_set_z_index(id, floating_z + i)
-    else
-      vv.api.window_set_z_index(id, tiled_z + i)
-    end
+    local z = tiled(id) and (tiled_z + i) or (floating_z + i)
+    vv.api.window_set_z_index(id, z)
   end
 
   local master_width = #stack > 0 and math.floor(term.width * mfact) or term.width
@@ -201,13 +207,15 @@ local function arrange()
   if not ok then dbg({ arrange_error = err }) end
 end
 
-local function add_window(win)
+local function add_window(win, init)
   if vv.api.window_is_lua(win) then return end
   layers[win] = dwm.layers.tiled
   table.insert(windows, 1, win)
   tags[win] = table.move(view, 1, #view, 1, {})
-  set_focus(win)
-  arrange()
+  if not init then
+    set_focus(win)
+    arrange()
+  end
 end
 
 local function remove_window(win)
@@ -268,6 +276,7 @@ function dwm.toggle_tag(win, tag)
 end
 
 local e = vv.events
+local window = require('velvet.window')
 function dwm.activate()
   tags = {}
   windows = {}
@@ -277,18 +286,16 @@ function dwm.activate()
   local lst = vv.api.get_windows()
   focus_order = table.move(lst, 1, #lst, 1, {})
   for _, id in ipairs(lst) do
-    table.insert(windows, id)
-    tags[id] = view
-    layers[id] = dwm.layers.tiled
+    add_window(id, true)
   end
   local event_handler = e.create_group(vv.arrange_group_name, true)
-  taskbar = vv.api.window_create()
+  taskbar = window.create()
   -- taskbar is below tiled windows, but the tiling
   -- area does not overlap with the taskar area.
-  vv.api.window_set_z_index(taskbar, floating_z - 1)
+  taskbar:set_z_index(floating_z - 1)
   dwm.reserve(0, 0, 1, 0)
   event_handler.screen_resized = arrange
-  event_handler.window_created = function(args) add_window(args.id) end
+  event_handler.window_created = function(args) add_window(args.id, false) end
   event_handler.window_closed = function(args) remove_window(args.id) end
   event_handler.window_focus_changed = arrange
   if #windows > 0 then
