@@ -82,7 +82,7 @@ struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_
 
 static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_window *w) {
   int win_id = w->id;
-  int initial_focus = velvet_scene_get_focus(m)->id;
+  int initial_focus = m->focus;
   ssize_t index = vec_index(&m->windows, w);
   assert(index >= 0);
   vec_remove(&m->windows, w);
@@ -1147,42 +1147,32 @@ static bool rect_same_size(struct rect b1, struct rect b2) {
   return b1.w == b2.w && b1.h == b2.h;
 }
 
-void velvet_window_resize(struct velvet_window *win, struct rect outer, struct velvet *v) {
+void velvet_window_resize(struct velvet_window *win, struct rect geom, struct velvet *v) {
   // Refuse to go below a minimum size
   int min_size = 1;
-  if (outer.w < min_size) outer.w = min_size;
-  if (outer.h < min_size) outer.h = min_size;
+  if (geom.w < min_size) geom.w = min_size;
+  if (geom.h < min_size) geom.h = min_size;
 
-  int pixels_per_column = (int)((float)outer.x_pixel / (float)outer.w);
-  int pixels_per_row = (int)((float)outer.y_pixel / (float)outer.h);
+  bool resized = !rect_same_size(win->geometry, geom);
+  bool moved = !rect_same_position(win->geometry, geom);
 
-  struct rect inner = {
-      .x = outer.x,
-      .y = outer.y,
-      .w = outer.w,
-      .h = outer.h,
-      .x_pixel = inner.w * pixels_per_column,
-      .y_pixel = inner.h * pixels_per_row,
-  };
-
-  if (!rect_same_size(win->geometry, inner)) {
-    struct winsize ws = {.ws_col = inner.w, .ws_row = inner.h, .ws_xpixel = inner.x_pixel, .ws_ypixel = inner.y_pixel};
+  if (resized) {
+    struct winsize ws = {.ws_col = geom.w, .ws_row = geom.h, .ws_xpixel = geom.x_pixel, .ws_ypixel = geom.y_pixel};
     if (win->pty) ioctl(win->pty, TIOCSWINSZ, &ws);
     if (win->pid) kill(win->pid, SIGWINCH);
   }
 
   struct velvet_api_window_geometry old = { .left = win->geometry.x, .top = win->geometry.y, .width = win->geometry.w, .height = win->geometry.h };
-  struct velvet_api_window_geometry new = { .left = outer.x, .top = outer.y, .width = outer.w, .height = outer.h };
+  struct velvet_api_window_geometry new = { .left = geom.x, .top = geom.y, .width = geom.w, .height = geom.h };
 
-  win->geometry = outer;
-  win->geometry = inner;
-  vte_set_size(&win->emulator, inner);
+  win->geometry = geom;
+  vte_set_size(&win->emulator, geom);
 
-  if (!rect_same_size(win->geometry, outer)) {
+  if (resized) {
     struct velvet_api_window_resized_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_resized(v, event_args);
   }
-  if (!rect_same_position(win->geometry, outer)) {
+  if (moved) {
     struct velvet_api_window_moved_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_moved(v, event_args);
   }
