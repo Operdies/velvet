@@ -108,9 +108,19 @@ local nmaster = 1
 local mfact = 0.5
 
 local function status_update()
-  local status = "\x1b[?25l\x1b[?7l\x1b[H\x1b[2J"
+  if not vv.api.window_is_lua(taskbar) then return end
+  local palette = vv.options.color_palette
+  local active = palette.red
+  local inactive = palette.blue
+
+  local text_color = palette.black
+  local fg = ('\x1b[38;2;%d;%d;%dm'):format(text_color.red, text_color.green, text_color.blue)
+  local active_csi = ('\x1b[48;2;%d;%d;%dm'):format(active.red, active.green, active.blue)
+  local inactive_csi = ('\x1b[48;2;%d;%d;%dm'):format(inactive.red, inactive.green, inactive.blue)
+
+  local status = fg .. "\x1b[?25l\x1b[?7l\x1b[H\x1b[2J"
   for i=1,9 do 
-    local bg = view[i] and "\x1b[48;2;255;0;0m" or "\x1b[48;2;0;0;255m"
+    local bg = view[i] and active_csi or inactive_csi
     status = status .. ("%s %d "):format(bg, i)
   end
   status = status .. "\x1b[m"

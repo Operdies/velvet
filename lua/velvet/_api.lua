@@ -35,6 +35,29 @@ api.key_modifiers = {
   num_lock = 128,
 }
 
+--- @class velvet.api.rgb_color
+--- @field red integer nil
+--- @field green integer nil
+--- @field blue integer nil
+
+--- @class velvet.api.color_palette
+--- @field black velvet.api.rgb_color|string Palette color 0
+--- @field red velvet.api.rgb_color|string Palette color 1
+--- @field green velvet.api.rgb_color|string Palette color 2
+--- @field yellow velvet.api.rgb_color|string Palette color 3
+--- @field blue velvet.api.rgb_color|string Palette color 4
+--- @field magenta velvet.api.rgb_color|string Palette color 5
+--- @field cyan velvet.api.rgb_color|string Palette color 6
+--- @field white velvet.api.rgb_color|string Palette color 7
+--- @field bright_black velvet.api.rgb_color|string Palette color 8
+--- @field bright_red velvet.api.rgb_color|string Palette color 9
+--- @field bright_green velvet.api.rgb_color|string Palette color 10
+--- @field bright_yellow velvet.api.rgb_color|string Palette color 11
+--- @field bright_blue velvet.api.rgb_color|string Palette color 12
+--- @field bright_magenta velvet.api.rgb_color|string Palette color 13
+--- @field bright_cyan velvet.api.rgb_color|string Palette color 14
+--- @field bright_white velvet.api.rgb_color|string Palette color 15
+
 --- @class velvet.api.window.geometry
 --- @field left integer The leftmost cell of the window.
 --- @field top integer The topmost cell of the window.
@@ -290,6 +313,15 @@ function api.get_display_damage() end
 --- @param new_value boolean Enable damage tracking when the screen is updated. (debugging feature)
 --- @return boolean The value after the update
 function api.set_display_damage(new_value) end
+
+--- Get color_palette
+--- @return velvet.api.color_palette The current value
+function api.get_color_palette() end
+
+--- Set color_palette. Returns the new value.
+--- @param new_value velvet.api.color_palette The 16 numbered terminal colors.
+--- @return velvet.api.color_palette The value after the update
+function api.set_color_palette(new_value) end
 
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler

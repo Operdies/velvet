@@ -156,6 +156,7 @@ void vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func
   luaL_checktype(v->L, func, LUA_TFUNCTION);
   lua_pushvalue(v->L, func);
   lua_Integer ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
+  /* TODO: allocation-less schedule (add aux data to schedules?) */
   struct schedule_object *o = velvet_calloc(1, sizeof(*o));
   o->func = ref;
   o->v = v;
@@ -370,4 +371,51 @@ void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win, enum
   }
 
   velvet_ensure_render_scheduled(v);
+}
+
+static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
+  return (struct color) { .cmd = COLOR_RGB, .r = pal.red, .g = pal.green, .b = pal.blue };
+}
+static struct velvet_api_rgb_color palette_from_rgb(struct color col) {
+  return (struct velvet_api_rgb_color) { .red = col.r, .blue = col.b, .green = col.g };
+}
+
+struct velvet_api_color_palette vv_api_get_color_palette(struct velvet *v) {
+  struct velvet_api_color_palette p = {0};
+  p.black = palette_from_rgb(v->scene.theme.palette[0]);
+  p.red = palette_from_rgb(v->scene.theme.palette[1]);
+  p.green = palette_from_rgb(v->scene.theme.palette[2]);
+  p.yellow = palette_from_rgb(v->scene.theme.palette[3]);
+  p.blue = palette_from_rgb(v->scene.theme.palette[4]);
+  p.magenta = palette_from_rgb(v->scene.theme.palette[5]);
+  p.cyan = palette_from_rgb(v->scene.theme.palette[6]);
+  p.white = palette_from_rgb(v->scene.theme.palette[7]);
+  p.bright_black = palette_from_rgb(v->scene.theme.palette[8]);
+  p.bright_red = palette_from_rgb(v->scene.theme.palette[9]);
+  p.bright_green = palette_from_rgb(v->scene.theme.palette[10]);
+  p.bright_yellow = palette_from_rgb(v->scene.theme.palette[11]);
+  p.bright_blue = palette_from_rgb(v->scene.theme.palette[12]);
+  p.bright_magenta = palette_from_rgb(v->scene.theme.palette[13]);
+  p.bright_cyan = palette_from_rgb(v->scene.theme.palette[14]);
+  p.bright_white = palette_from_rgb(v->scene.theme.palette[15]);
+  return p;
+}
+struct velvet_api_color_palette vv_api_set_color_palette(struct velvet *v, struct velvet_api_color_palette new_value) {
+  v->scene.theme.palette[0] = rgb_from_palette(new_value.black);
+  v->scene.theme.palette[1] = rgb_from_palette(new_value.red);
+  v->scene.theme.palette[2] = rgb_from_palette(new_value.green);
+  v->scene.theme.palette[3] = rgb_from_palette(new_value.yellow);
+  v->scene.theme.palette[4] = rgb_from_palette(new_value.blue);
+  v->scene.theme.palette[5] = rgb_from_palette(new_value.magenta);
+  v->scene.theme.palette[6] = rgb_from_palette(new_value.cyan);
+  v->scene.theme.palette[7] = rgb_from_palette(new_value.white);
+  v->scene.theme.palette[8] = rgb_from_palette(new_value.bright_black);
+  v->scene.theme.palette[9] = rgb_from_palette(new_value.bright_red);
+  v->scene.theme.palette[10] = rgb_from_palette(new_value.bright_green);
+  v->scene.theme.palette[11] = rgb_from_palette(new_value.bright_yellow);
+  v->scene.theme.palette[12] = rgb_from_palette(new_value.bright_blue);
+  v->scene.theme.palette[13] = rgb_from_palette(new_value.bright_magenta);
+  v->scene.theme.palette[14] = rgb_from_palette(new_value.bright_cyan);
+  v->scene.theme.palette[15] = rgb_from_palette(new_value.bright_white);
+  return vv_api_get_color_palette(v);
 }

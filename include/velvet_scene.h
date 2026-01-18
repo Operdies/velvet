@@ -231,28 +231,6 @@ static const struct velvet_theme velvet_theme_default = {
             .visible = RGB("#f38ba8"),
             .not_visible = RGB("#b4befe"),
         },
-    .palette =
-        {
-            /* catppuccin-mocha inspired palette */
-            /* 30-37 / 40-47 */
-            RGB("#45475a"), /* black */
-            RGB("#f38ba8"), /* red */
-            RGB("#a6e3a1"), /* green */
-            RGB("#f9e2af"), /* yellow */
-            RGB("#89b4fa"), /* blue */
-            RGB("#f5c2e7"), /* magenta */
-            RGB("#94e2d5"), /* cyan */
-            RGB("#bac2de"), /* white */
-            /* 90-97 / 100-107 */
-            RGB("#585b70"), /* bright black (gray) */
-            RGB("#f38ba8"), /* bright red */
-            RGB("#a6e3a1"), /* bright green */
-            RGB("#f9e2af"), /* bright yellow */
-            RGB("#89b4fa"), /* bright blue */
-            RGB("#f5c2e7"), /* bright magenta */
-            RGB("#94e2d5"), /* bright cyan */
-            RGB("#a6adc8"), /* bright white */
-        },
 };
 
 static const struct velvet_render_state_cache render_state_cache_invalidated = {

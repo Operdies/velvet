@@ -26,6 +26,29 @@ return {
       default = false,
       doc = "Enable damage tracking when the screen is updated. (debugging feature)",
     },
+    {
+      name = 'color_palette',
+      type = 'color_palette',
+      doc = 'The 16 numbered terminal colors.',
+      default = {
+        black          = "#45475a",
+        red            = "#f38ba8",
+        green          = "#a6e3a1",
+        yellow         = "#f9e2af",
+        blue           = "#89b4fa",
+        magenta        = "#f5c2e7",
+        cyan           = "#94e2d5",
+        white          = "#bac2de",
+        bright_black   = "#585b70",
+        bright_red     = "#f38ba8",
+        bright_green   = "#a6e3a1",
+        bright_yellow  = "#f9e2af",
+        bright_blue    = "#89b4fa",
+        bright_magenta = "#f5c2e7",
+        bright_cyan    = "#94e2d5",
+        bright_white   = "#a6adc8",
+      },
+    },
   },
 
   enums = {
@@ -62,6 +85,37 @@ return {
 
   --- types {{{1
   types = {
+    {
+      name = "rgb_color",
+      fields = {
+        { name = "red",   type = "int" },
+        { name = "green", type = "int" },
+        { name = "blue",  type = "int" },
+      },
+    },
+    {
+      name = "color_palette",
+      fields = {
+        -- 30-37 / 40-47
+        { name = "black",          type = "rgb_color", doc = "Palette color 0" },
+        { name = "red",            type = "rgb_color", doc = "Palette color 1" },
+        { name = "green",          type = "rgb_color", doc = "Palette color 2" },
+        { name = "yellow",         type = "rgb_color", doc = "Palette color 3" },
+        { name = "blue",           type = "rgb_color", doc = "Palette color 4" },
+        { name = "magenta",        type = "rgb_color", doc = "Palette color 5" },
+        { name = "cyan",           type = "rgb_color", doc = "Palette color 6" },
+        { name = "white",          type = "rgb_color", doc = "Palette color 7" },
+        --  90-97 / 100-107
+        { name = "bright_black",   type = "rgb_color", doc = "Palette color 8" },
+        { name = "bright_red",     type = "rgb_color", doc = "Palette color 9" },
+        { name = "bright_green",   type = "rgb_color", doc = "Palette color 10" },
+        { name = "bright_yellow",  type = "rgb_color", doc = "Palette color 11" },
+        { name = "bright_blue",    type = "rgb_color", doc = "Palette color 12" },
+        { name = "bright_magenta", type = "rgb_color", doc = "Palette color 13" },
+        { name = "bright_cyan",    type = "rgb_color", doc = "Palette color 14" },
+        { name = "bright_white",   type = "rgb_color", doc = "Palette color 15" },
+      },
+    },
     {
       name = "window.geometry",
       fields = {

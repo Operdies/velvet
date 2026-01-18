@@ -145,6 +145,10 @@ for _, type in ipairs(spec.enums) do
   type_lookup[type.name] = { c_type = "enum " .. get_cname(type.name), lua_type = get_luaname(type.name), enum = true, push = type_lookup.int.push, check = type_lookup.int.check }
 end
 
+-- hack to avoid errors when assigning `palette.x = '#rrggbb'
+-- TODO: Extend spec to allow optional types and either handle that in C or in lua adapters
+type_lookup['rgb_color'].lua_type = type_lookup['rgb_color'].lua_type .. '|string'
+
 local function lua_type(t)
   if t == nil then return "nil" end
   return type_lookup[t].lua_type
@@ -163,6 +167,51 @@ end
 local function lua_push(t, var)
   if not type_lookup[t].push then error(("lua type '%s' not defined."):format(var)) end
   return type_lookup[t].push(var)
+end
+
+-- recursively marshal a C struct into a lua table
+-- The marshalling code is written as a string to tbl
+local function push_field(tbl, type, path)
+  if is_complex(type) then
+    local complex = complex_index[type]
+    table.insert(tbl, ([[
+  lua_newtable(L); /* %s */
+]]):format(path, complex.name))
+    for _, mem in ipairs(complex.fields) do
+      local mem_path = path .. "." .. mem.name
+      push_field(tbl, mem.type, mem_path)
+      table.insert(tbl, ([[
+  lua_setfield(L, -2, "%s"); /* %s = %s */
+]]):format(mem.name, mem_path, mem.name))
+    end
+  else
+    table.insert(tbl, ([[
+  %s;
+]]):format(lua_push(type, path)))
+  end
+end
+
+local function check_field(tbl, type, path)
+  if is_complex(type) then
+    local complex = complex_index[type]
+    table.insert(tbl, [[
+  luaL_checktype(L, -1, LUA_TTABLE);
+]])
+    for _, mem in ipairs(complex.fields) do
+      local mem_path = path .. "." .. mem.name
+      table.insert(tbl, ([[
+  lua_getfield(L, -1, "%s"); /* get %s */
+]]):format(mem.name, mem_path))
+      check_field(tbl, mem.type, mem_path)
+      table.insert(tbl, [[
+  lua_pop(L, 1);
+]])
+    end
+  else
+    table.insert(tbl, ([[
+  %s = %s;
+]]):format(path, lua_check(type, -1)))
+  end
 end
 
 -- C Emitters {{{1
@@ -310,17 +359,12 @@ static int l_vv_api_%s(lua_State *L){
       table.insert(c, ([[
   luaL_checktype(L, %d, LUA_TTABLE);
   %s %s = {0};
-]]):format(idx, c_type(p.type), p.name))
-
-      local typedef = complex_index[p.type]
-      for _, member in ipairs(typedef.fields) do
-        table.insert(c, ([[
-  lua_getfield(L, %d, "%s");
-  %s.%s = %s;
-  lua_pop(L, 1);
-]]):format(idx, member.name, p.name, member.name, lua_check(member.type, -1)))
-      end
-
+  lua_pushvalue(L, %d); /* push table to the top of the stack */
+]]):format(idx, c_type(p.type), p.name, idx))
+      check_field(c, p.type, p.name)
+      table.insert(c, [[
+  lua_pop(L, 1); /* pop pushed table */
+]])
     else
       table.insert(c,
         ("  %s %s = %s;\n")
@@ -374,15 +418,8 @@ static int l_vv_api_%s(lua_State *L){
   elseif is_complex(fn.returns.type) then
     table.insert(c, ([[
   %s ret = vv_api_%s(v%s);
-  lua_newtable(L);
 ]]):format(c_type(fn.returns.type), fn.name, argsstring))
-    local typedef = complex_index[fn.returns.type]
-    for _, member in ipairs(typedef.fields) do
-      table.insert(c, ([[
-  %s;
-  lua_setfield(L, -2, "%s");
-]]):format(lua_push(member.type, "ret." .. member.name), member.name))
-    end
+    push_field(c, fn.returns.type, "ret")
     table.insert(c, [[
   return 1;
 }
@@ -439,27 +476,7 @@ void velvet_api_raise_%s(struct velvet *v, struct %s args) {
   lua_pushstring(L, "%s"); /* event name */
 ]]):format(event_name, event_arg_name, evt.name))
 
-  local function push_field(type, path)
-    if is_complex(type) then
-      local complex = complex_index[type]
-      table.insert(c, ([[
-  lua_newtable(L); /* %s */
-]]):format(path, complex.name))
-      for _, mem in ipairs(complex.fields) do
-        local mem_path = path .. "." .. mem.name
-        push_field(mem.type, mem_path)
-        table.insert(c, ([[
-  lua_setfield(L, -2, "%s"); /* %s = %s */
-]]):format(mem.name, mem_path, mem.name))
-      end
-    else
-      table.insert(c, ([[
-  %s;
-]]):format(lua_push(type, path)))
-    end
-  end
-
-  push_field(evt.args, "args")
+  push_field(c, evt.args, "args")
 
   table.insert(c, [[
   /* vv.events.emit_event(args) */
@@ -622,7 +639,7 @@ for _, fn in ipairs(spec.options) do
 --- @type %s
 options.%s = %s
 
-]]):format(string_concatenate(fn.doc, "\n--- "), luatype, fn.name, fn.default))
+]]):format(string_concatenate(fn.doc, "\n--- "), luatype, fn.name, inspect(fn.default)))
 end
 
 table.insert(options, "return options\n")
@@ -644,7 +661,7 @@ table.insert(default_options, [[
 for _, fn in ipairs(spec.options) do
   table.insert(default_options, ([[
 vv.options.%s = %s
-]]):format(fn.name, fn.default))
+]]):format(fn.name, inspect(fn.default)))
 end
 
 --- Populate enum values {{{3
