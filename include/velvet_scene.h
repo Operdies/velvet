@@ -31,6 +31,7 @@ struct velvet_window {
   uint64_t exited_at;
   struct vte emulator;
   struct pseudotransparency_options transparency;
+  float dim_factor;
 };
 
 void velvet_window_resize(struct velvet_window *velvet_window, struct rect window, struct velvet *v);
@@ -74,16 +75,7 @@ struct velvet_theme {
     struct color foreground;
     struct color background;
   } cursor;
-  struct {
-    bool enabled;
-    float magnitude;
-  } dim_inactive;
   struct color palette[16];
-  struct {
-    struct color visible;
-    struct color not_visible;
-  } status;
-  struct color mantle;
 };
 
 struct velvet_render_state_cache {
@@ -185,28 +177,6 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
     .g = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])), .b = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))       \
   }
 
-/* XTERM palette */
-// static const struct color ansi16[16] = {
-//     /* 30–37 */
-//     RGB("#000000"), // black
-//     RGB("#cd0000"), // red
-//     RGB("#00cd00"), // green
-//     RGB("#cdcd00"), // yellow
-//     RGB("#0000ee"), // blue
-//     RGB("#cd00cd"), // magenta
-//     RGB("#00cdcd"), // cyan
-//     RGB("#e5e5e5"), // white (light gray)
-//     /* 90–97 */
-//     RGB("#7f7f7f"), // bright black (dark gray)
-//     RGB("#ff0000"), // bright red
-//     RGB("#00ff00"), // bright green
-//     RGB("#ffff00"), // bright yellow
-//     RGB("#5c5cff"), // bright blue
-//     RGB("#ff00ff"), // bright magenta
-//     RGB("#00ffff"), // bright cyan
-//     RGB("#ffffff"), // bright white
-// };
-
 static const struct velvet_theme velvet_theme_default = {
     .background = RGB("#1e1e2e"),
     .foreground = RGB("#cdd6f4"),
@@ -219,17 +189,6 @@ static const struct velvet_theme velvet_theme_default = {
         {
             .active = RGB("#f38ba8"),
             .inactive = RGB("#b4befe"),
-        },
-    .dim_inactive =
-        {
-            .enabled = false,
-            .magnitude = 0.9f,
-        },
-    .mantle = RGB("#181825"),
-    .status =
-        {
-            .visible = RGB("#f38ba8"),
-            .not_visible = RGB("#b4befe"),
         },
 };
 

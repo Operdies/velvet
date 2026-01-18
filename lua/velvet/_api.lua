@@ -214,6 +214,17 @@ function api.window_get_transparency_mode(win) end
 --- @return nil 
 function api.window_set_transparency_mode(win, mode) end
 
+--- Get the current dim factor for |win|
+--- @param win integer Window id
+--- @return number Dim factor between 0.0 and 1.0
+function api.window_get_dim_factor(win) end
+
+--- Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)
+--- @param win integer Window id
+--- @param factor number Dim factor between 0.0 and 1.0
+--- @return nil 
+function api.window_set_dim_factor(win, factor) end
+
 --- Get the id of the currently focused window.
 --- @return integer TThe id of the currently focused window.
 function api.get_focused_window() end

@@ -158,14 +158,14 @@ return {
     },
     {
       name = "window.focus_changed.event_args",
-      fields = { 
+      fields = {
         { name = "old_focus", type = "int", doc = "The previous focused window." },
         { name = "new_focus", type = "int", doc = "The new focused window." },
       }
     },
     {
       name = "screen.resized.event_args",
-      fields = { 
+      fields = {
         { name = "old_size", type = "screen.geometry", doc = "The old screen size" },
         { name = "new_size", type = "screen.geometry", doc = "The new screen size" },
       }
@@ -183,20 +183,20 @@ return {
     {
       name = "window.on_key.event_args",
       fields = {
-        { name = "win_id", type = "int", doc = "The id of the window the keys were sent to." },
-        { name = "key", type = "window.key_event", doc = "The key which generated the event." },
+        { name = "win_id", type = "int",              doc = "The id of the window the keys were sent to." },
+        { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
       },
     },
   },
 
   events = {
-    { name = "window_created",       doc = "Raised after a new window is created.",       args = "window.created.event_args" },
+    { name = "window_created",       doc = "Raised after a new window is created.",      args = "window.created.event_args" },
     { name = "window_closed",        doc = "Raised after a window is closed.",           args = "window.closed.event_args" },
-    { name = "window_moved",         doc = "Raised after a window is moved.",             args = "window.moved.event_args" },
-    { name = "window_resized",       doc = "Raised after a window is resized.",           args = "window.resized.event_args" },
+    { name = "window_moved",         doc = "Raised after a window is moved.",            args = "window.moved.event_args" },
+    { name = "window_resized",       doc = "Raised after a window is resized.",          args = "window.resized.event_args" },
     { name = "window_on_key",        doc = "Raised when a key is sent to a lua window.", args = "window.on_key.event_args" },
-    { name = "window_focus_changed", doc = "Raised after focus changes.",                 args = "window.focus_changed.event_args" },
-    { name = "screen_resized",       doc = "Raised after the screen is resized.",         args = "screen.resized.event_args" },
+    { name = "window_focus_changed", doc = "Raised after focus changes.",                args = "window.focus_changed.event_args" },
+    { name = "screen_resized",       doc = "Raised after the screen is resized.",        args = "screen.resized.event_args" },
   },
 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
@@ -347,8 +347,26 @@ return {
       name = "window_set_transparency_mode",
       doc = "Set window transparency mode.",
       params =
-      { { name = "win", type = "int",   doc = "Window id" },
+      {
+        { name = "win",  type = "int",               doc = "Window id" },
         { name = "mode", type = "transparency_mode", doc = "Set transparency mode." },
+      },
+    },
+    {
+      name = "window_get_dim_factor",
+      doc = "Get the current dim factor for |win|",
+      params = {
+        { name = "win", type = "int", doc = "Window id" },
+      },
+      returns = { name = "factor", type = "float", doc = "Dim factor between 0.0 and 1.0" },
+
+    },
+    {
+      name = "window_set_dim_factor",
+      doc = "Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)",
+      params = {
+        { name = "win",    type = "int",    doc = "Window id" },
+        { name = "factor", type = "float", doc = "Dim factor between 0.0 and 1.0" },
       },
     },
     {
@@ -424,9 +442,9 @@ return {
       name = "window_write",
       doc =
       "Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \\r, \\n, color escapes, cursor movement, etc.",
-      params = { 
-        { name = "win_id", type = "int", doc = "Window id" },
-        { name = "text", type = "string", doc = "String which can embed any VT compatible ansi escape." },
+      params = {
+        { name = "win_id", type = "int",    doc = "Window id" },
+        { name = "text",   type = "string", doc = "String which can embed any VT compatible ansi escape." },
       },
     },
     {

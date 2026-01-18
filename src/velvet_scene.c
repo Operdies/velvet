@@ -702,10 +702,8 @@ static bool is_cell_bg_clear(struct screen_cell c) {
 static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win, struct velvet_theme t) {
   struct velvet_render *r = &m->renderer;
   bool is_focused = velvet_scene_get_focus(m) == win;
-  struct composite_options o = {
-      .transparency = win->transparency,
-      .dim = !is_focused && t.dim_inactive.enabled ? t.dim_inactive.magnitude : 0,
-  };
+  struct pseudotransparency_options trns = win->transparency;
+  float dim = win->dim_factor;
 
   int block_blend_index = -1;
 
@@ -735,8 +733,8 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         struct screen_cell above = staging->cells[cell_index];
         struct screen_cell below = composite->cells[cell_index];
 
-        bool blend = cell_index != block_blend_index && o.transparency.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
-                     (o.transparency.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
+        bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
+                     (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
 
         if (blend) {
           above = normalize_cell(t, above);
@@ -752,15 +750,15 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
           if (blend_fg) {
             above.cp = below.cp;
             above.style.attr = below.style.attr;
-            above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, o.transparency.alpha);
+            above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.alpha);
           }
-          above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, o.transparency.alpha);
+          above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, trns.alpha);
         }
 
-        if (o.dim > 0) {
+        if (dim) {
           above = normalize_cell(t, above);
-          above.style.bg = rgb_mult(above.style.bg, o.dim);
-          above.style.fg = rgb_mult(above.style.fg, o.dim);
+          above.style.bg = rgb_mult(above.style.bg, 1.0 - dim);
+          above.style.fg = rgb_mult(above.style.fg, 1.0 - dim);
         }
 
         /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,

@@ -419,3 +419,15 @@ struct velvet_api_color_palette vv_api_set_color_palette(struct velvet *v, struc
   v->scene.theme.palette[15] = rgb_from_palette(new_value.bright_white);
   return vv_api_get_color_palette(v);
 }
+
+float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
+  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+  return w->dim_factor;
+}
+void vv_api_window_set_dim_factor(struct velvet *v, lua_Integer win, float factor) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
+  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+  w->dim_factor = CLAMP(factor, 0, 1);
+  velvet_ensure_render_scheduled(v);
+}
