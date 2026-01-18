@@ -100,12 +100,13 @@ local function tiled(win)
   return layers[win] == dwm.layers.tiled
 end
 
--- arbitrarily decide tiled windows begin at z 10 and floating windows begin at z 100
-local tiled_z = 10
-local floating_z = 100
+-- arbitrarily decide where floating and tiled windows begin
+local tiled_z = 100
+local floating_z = 1000
 
 local nmaster = 1
 local mfact = 0.5
+local dim_inactive = 0
 
 local function status_update()
   if not vv.api.window_is_lua(taskbar) then return end
@@ -141,6 +142,7 @@ local function arrange2()
   term.width = term.width - (r_left + r_right)
   term.height = term.height - (r_top + r_bottom)
 
+  focused_id = vv.api.get_focused_window()
   local master = {}
   local stack = {}
   for _, id in ipairs(windows) do
@@ -156,6 +158,11 @@ local function arrange2()
       vv.api.window_set_opacity(id, 0.8)
     end
     if vis then
+      if id == focused_id then
+        vv.api.window_set_dim_factor(id, 0)
+      else
+        vv.api.window_set_dim_factor(id, dim_inactive)
+      end
       if not floating then
         vv.api.window_set_z_index(id, tiled_z)
         if #master < nmaster then
@@ -278,7 +285,7 @@ function dwm.activate()
   taskbar = vv.api.window_create()
   -- taskbar is below tiled windows, but the tiling
   -- area does not overlap with the taskar area.
-  vv.api.window_set_z_index(taskbar, tiled_z - 1)
+  vv.api.window_set_z_index(taskbar, floating_z - 1)
   dwm.reserve(0, 0, 1, 0)
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args) add_window(args.id) end
@@ -421,6 +428,16 @@ end
 
 function dwm.set_animation_duration(v, dur)
   move_duration = dur
+end
+
+function dwm.inc_inactive_dim(inc)
+  dim_inactive = clamp(dim_inactive + inc, 0, 1)
+  arrange()
+end
+
+function dwm.set_inactive_dim(v)
+  dim_inactive = clamp(v, 0, 1)
+  arrange()
 end
 
 return dwm
