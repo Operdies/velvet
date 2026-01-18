@@ -4,6 +4,7 @@ local dwm = {
   },
 }
 local vv = require('velvet')
+local window = require('velvet.window')
 
 --- @type velvet.window
 local taskbar = nil
@@ -13,25 +14,42 @@ local r_bottom = 0
 local r_right = 0
 
 local move_duration = 0
+
+--- @param win velvet.window
+--- @param to velvet.api.window.geometry
 local function win_move(win, to)
   local client_area = to
+  if win:get_frame_enabled() then
+    -- if this window has a frame, shrink the client area to accomodate it
+    client_area = {
+      left = to.left + 1,
+      top = to.top + 1,
+      width = to.width - 2,
+      height = to.height - 2,
+    }
+  end
   if move_duration > 0 then
     local a = require('velvet.stdlib.animation')
-    a.animate(win, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
+    a.animate(win.id, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
   else
-    vv.api.window_set_geometry(win, client_area)
+    win:set_geometry(client_area)
   end
 end
 
+--- @param left integer leftmost column of stacking area
+--- @param top integer topmost row of stacking area
+--- @param width integer width of stacking area
+--- @param height integer height of stacking area
+--- @param lst velvet.window[] windows to stack
 local function win_stack(left, top, width, height, lst)
   local offset = top
-  for i, id in ipairs(lst) do
+  for i, win in ipairs(lst) do
     local height_left = height - offset
     local num_items_left = 1 + #lst - i
     local win_height = math.floor(height_left / num_items_left)
     if win_height < 3 then win_height = 3 end
     local geom = { width = width, height = win_height, left = left, top = offset }
-    win_move(id, geom)
+    win_move(win, geom)
     offset = offset + geom.height
   end
 end
@@ -45,12 +63,16 @@ local function get_tagsset()
 end
 
 
+--- @type velvet.window[]
 local windows = {}
+--- @type velvet.window[]
+local focus_order = {}
+
 local view = get_tagsset()
 view[1] = true
 local tags = {}
+
 local layers = {}
-local focus_order = {}
 
 local function table_swap(tbl, i1, i2)
   if i1 and i2 and i1 ~= i2 then
@@ -65,20 +87,22 @@ local function table_index(tbl, val)
   return nil
 end
 
-local function visible(win)
+--- @param win velvet.window
+local function visibleontags(win)
   local win_tags = tags[win] or {}
   for i, v in ipairs(view) do
     if v and win_tags[i] then return true end
   end
 end
 
+--- @param win velvet.window
 local function set_focus(win)
-  if win == 0 then return end
+  if win == nil then return end
   if win == taskbar.id then return end
   local current_index = table_index(focus_order, win)
   if current_index ~= nil then table.remove(focus_order, current_index) end
   table.insert(focus_order, win)
-  vv.api.set_focused_window(win)
+  win:focus()
 end
 
 local function get_focus()
@@ -89,8 +113,8 @@ end
 -- Set the focus to the most recently focused visible item
 local function ensure_focus_visible()
   for i=#focus_order,1,-1 do
-    if visible(focus_order[i]) then
-      vv.api.set_focused_window(focus_order[i])
+    if visibleontags(focus_order[i]) then
+      focus_order[i]:focus()
       local rem = table.remove(focus_order, i)
       table.insert(focus_order, rem)
       return
@@ -98,8 +122,9 @@ local function ensure_focus_visible()
   end
 end
 
-local function tiled(win)
-  return layers[win] == dwm.layers.tiled
+--- @param id velvet.window
+local function tiled(id)
+  return layers[id] == dwm.layers.tiled
 end
 
 -- arbitrarily decide where floating and tiled windows begin
@@ -143,9 +168,9 @@ local function arrange2()
 
   local focused_id = vv.api.get_focused_window()
   if vv.api.window_is_lua(focused_id) then return end
-  if focused_id ~= nil and focused_id ~= get_focus() then
+  if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
     -- if focus was changed outside of this module, update internal focus order tracking
-    set_focus(focused_id)
+    set_focus(window.from_handle(focused_id))
   end
 
   term.width = term.width - (r_left + r_right)
@@ -154,38 +179,40 @@ local function arrange2()
   focused_id = vv.api.get_focused_window()
   local master = {}
   local stack = {}
-  for _, id in ipairs(windows) do
-    local vis = visible(id)
-    vv.api.window_set_hidden(id, not vis)
-    local floating = layers[id] == dwm.layers.floating
+  for _, win in ipairs(windows) do
+    local vis = visibleontags(win)
+    win:set_visibility(vis)
+    local floating = layers[win] == dwm.layers.floating
     local t = vv.api.transparency_mode
     if floating then
-      vv.api.window_set_transparency_mode(id, t.all)
-      vv.api.window_set_opacity(id, 0.8)
+      win:set_transparency_mode(t.all)
+      win:set_opacity(0.8)
     else
-      vv.api.window_set_transparency_mode(id, t.clear)
-      vv.api.window_set_opacity(id, 0.8)
+      win:set_transparency_mode(t.clear)
+      win:set_opacity(0.8)
     end
     if vis then
-      if id == focused_id then
-        vv.api.window_set_dim_factor(id, 0)
+      if win.id == focused_id then
+        win:set_dimming(0)
+        win:set_frame_color('red')
       else
-        vv.api.window_set_dim_factor(id, dim_inactive)
+        win:set_dimming(dim_inactive)
+        win:set_frame_color('blue')
       end
       if not floating then
-        vv.api.window_set_z_index(id, tiled_z)
+        win:set_z_index(tiled_z)
         if #master < nmaster then
-          table.insert(master, id)
+          table.insert(master, win)
         else
-          table.insert(stack, id)
+          table.insert(stack, win)
         end
       end
     end
   end
 
-  for i, id in ipairs(focus_order) do
-    local z = tiled(id) and (tiled_z + i) or (floating_z + i)
-    vv.api.window_set_z_index(id, z)
+  for i, win in ipairs(focus_order) do
+    local z = tiled(win) and (tiled_z + i) or (floating_z + i)
+    win:set_z_index(z)
   end
 
   local master_width = #stack > 0 and math.floor(term.width * mfact) or term.width
@@ -207,8 +234,10 @@ local function arrange()
   if not ok then dbg({ arrange_error = err }) end
 end
 
-local function add_window(win, init)
-  if vv.api.window_is_lua(win) then return end
+local function add_window(id, init)
+  if vv.api.window_is_lua(id) then return end
+  local win = window.from_handle(id)
+  win:set_frame_enabled(true)
   layers[win] = dwm.layers.tiled
   table.insert(windows, 1, win)
   tags[win] = table.move(view, 1, #view, 1, {})
@@ -218,20 +247,18 @@ local function add_window(win, init)
   end
 end
 
-local function remove_window(win)
-  layers[win] = nil
-  for i, id in ipairs(windows) do
-    if id == win then
-      table.remove(windows, i)
-      tags[id] = nil
-      break
-    end
+local function remove_window()
+  for i, win in ipairs(windows) do
+    if not win:valid() then table.remove(windows, i) end
   end
-  for i, id in ipairs(focus_order) do
-    if id == win then
-      table.remove(focus_order, i)
-      break
-    end
+  for i, win in ipairs(focus_order) do
+    if not win:valid() then table.remove(focus_order, i) end
+  end
+  for win, _ in pairs(layers) do
+    if not win:valid() then layers[win] = nil end
+  end
+  for win, _ in pairs(tags) do
+    if not win:valid() then tags[win] = nil end
   end
   arrange()
 end
@@ -257,7 +284,8 @@ function dwm.set_view(view_tags)
 end
 
 --- Set tag |win_tags| on window |win|.
-function dwm.set_tags(win, win_tags)
+function dwm.set_tags(id, win_tags)
+  local win = window.from_handle(id)
   local tagset = get_tagsset()
   if type(win_tags) == 'table' then
     for _, t in ipairs(win_tags) do
@@ -270,13 +298,13 @@ function dwm.set_tags(win, win_tags)
   arrange()
 end
 
-function dwm.toggle_tag(win, tag)
+function dwm.toggle_tag(id, tag)
+  local win = window.from_handle(id)
   if tags[win][tag] then tags[win][tag] = false else tags[win][tag] = true end
   arrange()
 end
 
 local e = vv.events
-local window = require('velvet.window')
 function dwm.activate()
   tags = {}
   windows = {}
@@ -284,8 +312,9 @@ function dwm.activate()
   view = get_tagsset()
   view[1] = true
   local lst = vv.api.get_windows()
-  focus_order = table.move(lst, 1, #lst, 1, {})
+  focus_order = {}
   for _, id in ipairs(lst) do
+    focus_order[#focus_order + 1] = window.from_handle(id)
     add_window(id, true)
   end
   local event_handler = e.create_group(vv.arrange_group_name, true)
@@ -296,10 +325,13 @@ function dwm.activate()
   dwm.reserve(0, 0, 1, 0)
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args) add_window(args.id, false) end
-  event_handler.window_closed = function(args) remove_window(args.id) end
+  event_handler.window_closed = function(args) 
+    remove_window() 
+  end
   event_handler.window_focus_changed = arrange
   if #windows > 0 then
-    set_focus(lst[1])
+    local f = window.from_handle(lst[1])
+    set_focus(f)
   end
   arrange()
 end
@@ -320,7 +352,8 @@ function dwm.incnmaster(v)
   arrange()
 end
 
-function dwm.set_layer(win, layer)
+function dwm.set_layer(id, layer)
+  local win = window.from_handle(id)
   layers[win] = layer
   arrange()
 end
@@ -340,8 +373,8 @@ local function get_prev_matching(id, match)
   return nil
 end
 
-local function get_next_matching(id, match)
-  local pivot = table_index(windows, id)
+local function get_next_matching(win, match)
+  local pivot = table_index(windows, win)
   if pivot == nil then
     pivot = 0
   else
@@ -356,7 +389,7 @@ local function get_next_matching(id, match)
 end
 
 local function get_first_matching(tbl, match)
-  for i, id in ipairs(tbl) do 
+  for i, id in ipairs(tbl) do
     if match(id) then return i end
   end
   return nil
@@ -366,25 +399,28 @@ end
 
 --- Focus the previous visible window
 function dwm.focus_prev()
-  local focus = vv.api.get_focused_window()
-  local p = get_prev_matching(focus, visible)
+  local fid = vv.api.get_focused_window()
+  local focus = window.from_handle(fid)
+  local p = get_prev_matching(focus, visibleontags)
   if p then set_focus(p) end
   arrange()
 end
 
 --- Focus the next visible window
 function dwm.focus_next()
-  local focus = vv.api.get_focused_window()
-  local n = get_next_matching(focus, visible)
+  local fid = vv.api.get_focused_window()
+  local focus = window.from_handle(fid)
+  local n = get_next_matching(focus, visibleontags)
   if n then set_focus(n) end
   arrange()
 end
 
 --- Swap the focused window with the next visible tiled window
 function dwm.swap_next() 
-  local focus = vv.api.get_focused_window()
+  local fid = vv.api.get_focused_window()
+  local focus = window.from_handle(fid)
   if not tiled(focus) then return end
-  local n = get_next_matching(focus, function(id) return visible(id) and tiled(id) end)
+  local n = get_next_matching(focus, function(id) return visibleontags(id) and tiled(id) end)
   if n and n ~= focus then
     local i1 = table_index(windows, focus)
     local i2 = table_index(windows, n)
@@ -395,9 +431,10 @@ end
 
 --- Swap the focused window with the previous visible tiled window
 function dwm.swap_prev() 
-  local focus = vv.api.get_focused_window()
+  local fid = vv.api.get_focused_window()
+  local focus = window.from_handle(fid)
   if not tiled(focus) then return end
-  local n = get_prev_matching(focus, function(id) return visible(id) and tiled(id) end)
+  local n = get_prev_matching(focus, function(id) return visibleontags(id) and tiled(id) end)
   if n and n ~= focus then
     local i1 = table_index(windows, focus)
     local i2 = table_index(windows, n)
@@ -412,7 +449,7 @@ function dwm.zoom()
   local focus_id = vv.api.get_focused_window()
   if focus_id == 0 then return end
   local focus_index = table_index(windows, focus_id)
-  local next_index = get_first_matching(windows, function(id) return id ~= focus_id and visible(id) and tiled(id) end)
+  local next_index = get_first_matching(windows, function(id) return id ~= focus_id and visibleontags(id) and tiled(id) end)
   if next_index then
     local next_id = windows[next_index]
     table_swap(windows, focus_index, next_index)

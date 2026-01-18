@@ -38,7 +38,8 @@ local function move_and_resize(x, y, dx, dy)
   local win = vv.api.get_focused_window()
   local geom = translate(scale(vv.api.window_get_geometry(win), dx, dy), x, y)
   dwm.set_layer(win, dwm.layers.floating) 
-  vv.api.window_set_geometry(win, geom)
+  local w = require('velvet.window').from_handle(win)
+  w:set_geometry(geom)
 end
 
 local function resize(dx, dy)
