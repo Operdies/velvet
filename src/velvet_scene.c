@@ -733,6 +733,16 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         struct screen_cell above = staging->cells[cell_index];
         struct screen_cell below = composite->cells[cell_index];
 
+        /* dim before blending. This looks a bit more like what you would expect in cases
+         * where a dimmed window is covering a non-dimmed window. The dimming effect still
+         * dims the content below, but if the cell below is very bright it still appears to shine through.
+         */
+        if (dim) {
+          above = normalize_cell(t, above);
+          above.style.bg = rgb_mult(above.style.bg, 1.0 - dim);
+          above.style.fg = rgb_mult(above.style.fg, 1.0 - dim);
+        }
+
         bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
                      (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
 
@@ -753,12 +763,6 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
             above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.alpha);
           }
           above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, trns.alpha);
-        }
-
-        if (dim) {
-          above = normalize_cell(t, above);
-          above.style.bg = rgb_mult(above.style.bg, 1.0 - dim);
-          above.style.fg = rgb_mult(above.style.fg, 1.0 - dim);
         }
 
         /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
