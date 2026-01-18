@@ -179,6 +179,26 @@ static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg)
   return c;
 }
 
+#include "color_utils.c"
+
+/* Natural color dimming is not exactly obvious.
+ * From a bit of experimentation it feels like HSV scaling
+ * gives a decent perceived brightness change. */
+static struct color rgb_dim(struct color a, float f) {
+  float r, g, b, h, s, v;
+  r = (float)a.r / 255;
+  g = (float)a.g / 255;
+  b = (float)a.b / 255;
+  rgb_to_hsv(r, g, b, &h, &s, &v);
+  v *= f;
+  hsv_to_rgb(h, s, v, &r, &g, &b);
+  a.r = r * 255;
+  a.g = g * 255;
+  a.b = b * 255;
+  return a;
+}
+
+/* literal multiplication */
 static struct color rgb_mult(struct color a, float m) {
   assert(a.cmd == COLOR_RGB);
   a.r = CLAMP((float)a.r * m, 0, 255);
@@ -739,8 +759,8 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
          */
         if (dim) {
           above = normalize_cell(t, above);
-          above.style.bg = rgb_mult(above.style.bg, 1.0 - dim);
-          above.style.fg = rgb_mult(above.style.fg, 1.0 - dim);
+          above.style.bg = rgb_dim(above.style.bg, 1.0 - dim);
+          above.style.fg = rgb_dim(above.style.fg, 1.0 - dim);
         }
 
         bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
