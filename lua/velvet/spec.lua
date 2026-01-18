@@ -80,7 +80,32 @@ return {
         { name = "caps_lock", value = 1 << 6 },
         { name = "num_lock",  value = 1 << 7 },
       }
-    }
+    },
+    {
+      name = "scroll_direction",
+      values = {
+        { name = "up",   value = 0 },
+        { name = "down", value = 1 },
+        { name = "left",  value = 2 },
+        { name = "right",   value = 3 },
+      },
+    },
+    {
+      name = "mouse_button",
+      values = {
+        { name = "left",   value = 0 },
+        { name = "middle", value = 1 },
+        { name = "right",  value = 2 },
+        { name = "none",   value = 3 },
+      },
+    },
+    {
+      name = "mouse_event_type",
+      values = {
+        { name = "mouse_down", value = 1 },
+        { name = "mouse_up", value = 2 },
+      },
+    },
   },
 
   --- types {{{1
@@ -187,6 +212,42 @@ return {
         { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
       },
     },
+    {
+      name = "coordinate",
+      doc = "1-indexed screen coordinate",
+      fields = {
+        { name = "row", type = "int", doc = "row" },
+        { name = "col", type = "int", doc = "column" },
+      },
+    },
+    {
+      name = "mouse.move.event_args",
+      fields = {
+        { name = "win_id",       type = "int",           doc = "The id of the topmost visible window at the coordinates." },
+        { name = "pos",          type = "coordinate",    doc = "1-indexed screen coordinate of the mouse when the event was raised." },
+        { name = "mouse_button", type = "mouse_button",  doc = "Mouse button state when the event was raised." },
+        { name = "modifiers",    type = "key_modifiers", doc = "The keyboard modifiers which were held when the event was raised." },
+      },
+    },
+    {
+      name = "mouse.click.event_args",
+      fields = {
+        { name = "win_id",       type = "int",              doc = "The id of the topmost visible window at the coordinates." },
+        { name = "pos",          type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
+        { name = "mouse_button", type = "mouse_button",     doc = "The mouse button which was clicked." },
+        { name = "event_type",   type = "mouse_event_type", doc = "Flag indicating if the button was pressed or released." },
+        { name = "modifiers",    type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
+      },
+    },
+    {
+      name = "mouse.scroll.event_args",
+      fields = {
+        { name = "win_id",       type = "int",              doc = "The id of the topmost visible window at the coordinates." },
+        { name = "pos",          type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
+        { name = "direction",    type = "scroll_direction", doc = "The scroll direction which raised the event." },
+        { name = "modifiers",    type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
+      },
+    },
   },
 
   events = {
@@ -197,6 +258,9 @@ return {
     { name = "window_on_key",        doc = "Raised when a key is sent to a lua window.", args = "window.on_key.event_args" },
     { name = "window_focus_changed", doc = "Raised after focus changes.",                args = "window.focus_changed.event_args" },
     { name = "screen_resized",       doc = "Raised after the screen is resized.",        args = "screen.resized.event_args" },
+    { name = "mouse_move",           doc = "Raised when the mouse moves.",               args = "mouse.move.event_args" },
+    { name = "mouse_click",          doc = "Raised when the mouse is clicked.",          args = "mouse.click.event_args" },
+    { name = "mouse_scroll",         doc = "Raised when the mouse scrolls.",             args = "mouse.scroll.event_args" },
   },
 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.

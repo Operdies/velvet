@@ -35,6 +35,28 @@ api.key_modifiers = {
   num_lock = 128,
 }
 
+--- @enum velvet.api.scroll_direction
+api.scroll_direction = {
+  up = 0,
+  down = 1,
+  left = 2,
+  right = 3,
+}
+
+--- @enum velvet.api.mouse_button
+api.mouse_button = {
+  left = 0,
+  middle = 1,
+  right = 2,
+  none = 3,
+}
+
+--- @enum velvet.api.mouse_event_type
+api.mouse_event_type = {
+  mouse_down = 1,
+  mouse_up = 2,
+}
+
 --- @class velvet.api.rgb_color
 --- @field red integer nil
 --- @field green integer nil
@@ -102,6 +124,29 @@ api.key_modifiers = {
 --- @class velvet.api.window.on_key.event_args
 --- @field win_id integer The id of the window the keys were sent to.
 --- @field key velvet.api.window.key_event The key which generated the event.
+
+--- @class velvet.api.coordinate
+--- @field row integer row
+--- @field col integer column
+
+--- @class velvet.api.mouse.move.event_args
+--- @field win_id integer The id of the topmost visible window at the coordinates.
+--- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
+--- @field mouse_button velvet.api.mouse_button Mouse button state when the event was raised.
+--- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
+
+--- @class velvet.api.mouse.click.event_args
+--- @field win_id integer The id of the topmost visible window at the coordinates.
+--- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
+--- @field mouse_button velvet.api.mouse_button The mouse button which was clicked.
+--- @field event_type velvet.api.mouse_event_type Flag indicating if the button was pressed or released.
+--- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
+
+--- @class velvet.api.mouse.scroll.event_args
+--- @field win_id integer The id of the topmost visible window at the coordinates.
+--- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
+--- @field direction velvet.api.scroll_direction The scroll direction which raised the event.
+--- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
 
 --- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.
 --- @param from velvet.api.key_modifiers The modifier to remap.
@@ -344,4 +389,7 @@ function api.set_color_palette(new_value) end
 --- @field window_on_key? fun(event_args: velvet.api.window.on_key.event_args): nil Raised when a key is sent to a lua window.
 --- @field window_focus_changed? fun(event_args: velvet.api.window.focus_changed.event_args): nil Raised after focus changes.
 --- @field screen_resized? fun(event_args: velvet.api.screen.resized.event_args): nil Raised after the screen is resized.
+--- @field mouse_move? fun(event_args: velvet.api.mouse.move.event_args): nil Raised when the mouse moves.
+--- @field mouse_click? fun(event_args: velvet.api.mouse.click.event_args): nil Raised when the mouse is clicked.
+--- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
 

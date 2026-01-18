@@ -5,6 +5,7 @@
 #include "velvet_keyboard.h"
 #include "virtual_terminal_sequences.h"
 #include <string.h>
+#include "platform.h"
 
 #define ESC 0x1b
 #define BRACKETED_PASTE_MAX (1 << 20)
@@ -17,20 +18,21 @@
 static const struct u8_slice bracketed_paste_start = STRING_SLICE(u8"\x1b[200~");
 static const struct u8_slice bracketed_paste_end = STRING_SLICE(u8"\x1b[201~");
 
-enum scroll_direction { scroll_up = 0, scroll_down = 1, scroll_left = 2, scroll_right = 3 };
 enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
-enum mouse_state { mouse_left = 0, mouse_middle = 1, mouse_right = 2, mouse_none = 3 };
 enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
-enum mouse_trigger { mouse_down = 1, mouse_up = 2 };
+
+constexpr int scroll_up = VELVET_API_SCROLL_DIRECTION_UP;
+constexpr int scroll_down = VELVET_API_SCROLL_DIRECTION_DOWN;
+constexpr int mouse_none = VELVET_API_MOUSE_BUTTON_NONE;
 
 struct mouse_sgr {
   union {
-    enum scroll_direction scroll_direction;
-    enum mouse_state button_state;
+    enum velvet_api_scroll_direction scroll_direction;
+    enum velvet_api_mouse_button button_state;
   };
   enum mouse_modifiers modifiers;
   enum mouse_event event_type;
-  enum mouse_trigger trigger;
+  enum velvet_api_mouse_event_type trigger;
   int row, column;
 };
 
@@ -114,12 +116,15 @@ static void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c);
 static void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c);
 static void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c);
 
+constexpr int mouse_up = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_UP;
+constexpr int mouse_down = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN;
+
 static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
   int btn = c.params[0].primary;
   int col = c.params[1].primary;
   int row = c.params[2].primary;
 
-  enum mouse_state mouse_button = btn & 0x03;
+  enum velvet_api_mouse_button mouse_button = btn & 0x03;
   enum mouse_modifiers modifiers = btn & (0x04 | 0x08 | 0x10);
   enum mouse_event event_type = btn & (0x20 | 0x40);
 
@@ -802,6 +807,7 @@ void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c) {
 void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c) {
   dispatch_focus(v, c);
 }
+
 void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   struct velvet_input *in = &v->input;
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
@@ -810,7 +816,34 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   struct velvet_window *target = hit.win;
 
   if (hit.win && hit.win->is_lua_window) {
-    TODO("Lua mouse event");
+    struct velvet_api_coordinate pos = {.col = sgr.column, .row = sgr.row};
+    enum velvet_api_mouse_event_type evt = sgr.trigger;
+    enum velvet_api_mouse_button btn = sgr.button_state;
+    enum velvet_api_scroll_direction sd = sgr.scroll_direction;
+    int id = hit.win->id;
+
+    enum velvet_api_key_modifiers mods = {0};
+    if (sgr.modifiers & modifier_shift) mods |= VELVET_API_KEY_MODIFIERS_SHIFT;
+    if (sgr.modifiers & modifier_alt) mods |= VELVET_API_KEY_MODIFIERS_ALT;
+    if (sgr.modifiers & modifier_ctrl) mods |= VELVET_API_KEY_MODIFIERS_CTRL;
+
+    switch (sgr.event_type) {
+    case mouse_click: {
+      struct velvet_api_mouse_click_event_args event_args = {
+          .event_type = evt, .modifiers = mods, .mouse_button = btn, .pos = pos, .win_id = id};
+      velvet_api_raise_mouse_click(v, event_args);
+    } break;
+    case mouse_move: {
+      struct velvet_api_mouse_move_event_args event_args = {
+          .mouse_button = btn, .modifiers = mods, .pos = pos, .win_id = id};
+      velvet_api_raise_mouse_move(v, event_args);
+    } break;
+    case mouse_scroll: {
+      struct velvet_api_mouse_scroll_event_args event_args = {
+          .direction = sd, .modifiers = mods, .pos = pos, .win_id = id};
+      velvet_api_raise_mouse_scroll(v, event_args);
+    } break;
+    }
     return;
   }
 
@@ -823,8 +856,8 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   if (!target) return;
 
   struct mouse_sgr trans = sgr;
-  trans.row = sgr.row - target->rect.client.y;
-  trans.column = sgr.column - target->rect.client.x;
+  trans.row = sgr.row - target->geometry.y;
+  trans.column = sgr.column - target->geometry.x;
 
   struct mouse_options m = target->emulator.options.mouse;
 
@@ -835,8 +868,7 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
       (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none) ||
       (m.tracking && sgr.event_type == mouse_scroll);
 
-  if (!(trans.row > 0 && trans.column > 0 && trans.column <= target->rect.client.w &&
-        trans.row <= target->rect.client.h)) {
+  if (!(trans.row > 0 && trans.column > 0 && trans.column <= target->geometry.w && trans.row <= target->geometry.h)) {
     /* verify the event is actually within the client area */
     do_send = false;
   }

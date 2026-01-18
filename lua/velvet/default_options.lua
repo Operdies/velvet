@@ -49,3 +49,22 @@ vv.api.key_modifiers = {
   num_lock = 128,
 }
 
+vv.api.scroll_direction = {
+  up = 0,
+  down = 1,
+  left = 2,
+  right = 3,
+}
+
+vv.api.mouse_button = {
+  left = 0,
+  middle = 1,
+  right = 2,
+  none = 3,
+}
+
+vv.api.mouse_event_type = {
+  mouse_down = 1,
+  mouse_up = 2,
+}
+
