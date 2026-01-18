@@ -402,7 +402,7 @@ static bool is_modifier(uint32_t codepoint);
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   assert(v);
   assert(v->input.keymap);
-  struct velvet_keymap *k, *root, *current;
+  struct velvet_keymap *root, *current;
   if (!e.type) e.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
   current = v->input.keymap;
   root = current->root;
@@ -418,7 +418,7 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   io_schedule_cancel(&v->event_loop, v->input.unwind_callback_token);
 
   // First check if this key matches a keybind in the current keymap
-  for (k = current->first_child; k; k = k->next_sibling) {
+  for (struct velvet_keymap *k = current->first_child; k; k = k->next_sibling) {
     if (key_event_equals(k->key, e)) {
       if (k->first_child) {
         v->input.keymap = k;
@@ -445,10 +445,11 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
         /* update the repeat timer */
         if (k->is_repeatable) v->input.last_repeat = now;
 
-        k->on_key(k, e);
-
         /* reset the keymap unless the key is repeatable */
         if (!k->is_repeatable) v->input.keymap = k->root;
+        k->on_key(k, e);
+        /* NOTE: It is not safe to access `k` after on_key() because
+         * it is possible for a keymap to unmap itself */
       }
       return;
     }
@@ -1065,6 +1066,12 @@ void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequenc
   for (; to_remove && velvet_key_iterator_next(&it);) {
     for (to_remove = to_remove->first_child; to_remove && !key_event_equals(to_remove->key, it.current);
          to_remove = to_remove->next_sibling);
+  }
+
+  struct velvet *v = root->data;
+  /* special case when a keymap removes itself */
+  if (to_remove == v->input.keymap) {
+    v->input.keymap = root;
   }
   if (to_remove) velvet_keymap_remove_internal(to_remove);
 }

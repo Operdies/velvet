@@ -49,6 +49,7 @@ bool vv_api_window_is_lua(struct velvet *v, lua_Integer win_id) {
 void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win_id);
   if (w && w->is_lua_window) {
+    if (w->geometry.h == 0 || w->geometry.w == 0) lua_bail(v->L, "Cannot write to window: size is 0");
     struct u8_slice s = u8_slice_from_cstr(text);
     velvet_window_process_output(w, s);
   } else {

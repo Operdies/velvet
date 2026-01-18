@@ -29,9 +29,9 @@ local events = {
   end,
 
   --- Delete the event group |group|
-  --- @param group event_group
-  delete_group = function(group)
-    event_handlers[group.id] = nil
+  --- @param event_handler velvet.api.event_handler
+  delete_group = function(event_handler)
+    event_handlers[event_handler.id] = nil
   end,
 
   --- don't use this

@@ -1136,6 +1136,7 @@ void velvet_window_update_title(struct velvet_window *p) {
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
   assert(velvet_window->emulator.ws.h == velvet_window->geometry.h);
   assert(velvet_window->emulator.ws.w == velvet_window->geometry.w);
+  assert(velvet_window->geometry.h && velvet_window->geometry.w);
   vte_process(&velvet_window->emulator, str);
 }
 
