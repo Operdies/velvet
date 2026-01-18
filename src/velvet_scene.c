@@ -60,16 +60,20 @@ static int next_id() {
 
 struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_window template) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
+  int win_id = next_id();
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
-  host->id = next_id();
+  host->id = win_id;
 
   // void velvet_api_raise_window_created(struct velvet *v, struct velvet_api_window_created_event_args args);
   struct velvet_api_window_created_event_args event_args = { .id = host->id };
   if (m->v) velvet_api_raise_window_created(m->v, event_args);
 
+  /* anything can happen after the window created event is raised since it calls into lua.
+   * We need to check that the window we just created still exists and is valid. */
+  vec_find(host, m->windows, host->id == win_id);
   /* if the window was not sized during the created event, set an initial size */
-  if (host->geometry.w <= 0 || host->geometry.h <= 0) {
+  if (host && (host->geometry.w <= 0 || host->geometry.h <= 0)) {
     struct rect default_size = { .w = m->ws.w, .h = m->ws.h };
     velvet_window_resize(host, default_size, m->v);
   }
@@ -110,12 +114,14 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
 int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template) {
   assert(scene->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = velvet_scene_manage(scene, template);
-  bool started = velvet_window_start(host);
-  if (!started) {
-    velvet_scene_remove_window(scene, host);
-    return 0;
+  if (host) {
+    bool started = velvet_window_start(host);
+    if (!started) {
+      velvet_scene_remove_window(scene, host);
+      return 0;
+    }
   }
-  return host->id;
+  return host ? host->id : 0;
 }
 
 int velvet_scene_spawn_process(struct velvet_scene *scene, struct u8_slice cmdline) {
