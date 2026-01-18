@@ -851,10 +851,10 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     /* 2. Clear everything below the draw area */
     velvet_render_position_cursor(r, r->h, 0);
     string_push_slice(&r->draw_buffer, ED);
-  } else {
-    struct screen_cell space = {.cp = codepoint_space, .style.bg = m->theme.background};
-    velvet_render_clear_buffer(r, get_current_buffer(r), space);
   }
+
+  struct screen_cell space = {.cp = codepoint_space, .style.bg = m->theme.background};
+  velvet_render_clear_buffer(r, get_current_buffer(r), space);
 
   struct velvet_window *win;
   vec_foreach(win, m->windows) {
