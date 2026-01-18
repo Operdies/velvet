@@ -376,6 +376,7 @@ end
 --- Swap the focused window with the next visible tiled window
 function dwm.swap_next() 
   local focus = vv.api.get_focused_window()
+  if not tiled(focus) then return end
   local n = get_next_matching(focus, function(id) return visible(id) and tiled(id) end)
   if n and n ~= focus then
     local i1 = table_index(windows, focus)
@@ -388,6 +389,7 @@ end
 --- Swap the focused window with the previous visible tiled window
 function dwm.swap_prev() 
   local focus = vv.api.get_focused_window()
+  if not tiled(focus) then return end
   local n = get_prev_matching(focus, function(id) return visible(id) and tiled(id) end)
   if n and n ~= focus then
     local i1 = table_index(windows, focus)
