@@ -44,7 +44,8 @@ static void velvet_lua_init_api(struct velvet *v) {
 
 static void velvet_lua_set_default_options(struct velvet *v) {
   lua_State *L = v->L;
-  luaL_dostring(L, "require('velvet.default_options')");
+  if (luaL_dostring(L, "require('velvet.default_options')") != LUA_OK)
+    lua_die(L);
   lua_pop(L, lua_gettop(L));
 }
 

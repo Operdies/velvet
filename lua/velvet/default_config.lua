@@ -67,7 +67,13 @@ rmap("<C-x><C-k>", dwm.focus_prev)
 rmap("<C-x>j", dwm.swap_next)
 rmap("<C-x>k", dwm.swap_prev)
 map("<C-x>g", dwm.zoom)
+map("<M-[>", apply(dwm.incmfact, -0.05))
+map("<M-]>", apply(dwm.incmfact, 0.05))
+map("<M-i>", apply(dwm.incnmaster, 1))
+map("<M-o>", apply(dwm.incnmaster, -1))
 
+if #vv.api.get_windows() == 0 then
+  vv.api.window_create_process(default_shell)
+end
 local ok, err = pcall(dwm.activate)
-vv.api.window_create_process(default_shell)
 if not ok then dbg({ dwm_activate = err }) end

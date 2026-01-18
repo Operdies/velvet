@@ -11,8 +11,14 @@ local r_top = 0
 local r_bottom = 0
 local r_right = 0
 
+local move_duration = 0
 local function win_move(win, new_geom)
-  vv.api.window_set_geometry(win, new_geom)
+  if move_duration > 0 then
+    local a = require('velvet.stdlib.animation')
+    a.animate(win, new_geom, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
+  else
+    vv.api.window_set_geometry(win, new_geom)
+  end
 end
 
 local function win_stack(left, top, width, height, lst)
@@ -99,6 +105,7 @@ local tiled_z = 10
 local floating_z = 100
 
 local nmaster = 1
+local mfact = 0.5
 
 local function status_update()
   local status = "\x1b[?25l\x1b[?7l\x1b[H\x1b[2J"
@@ -135,8 +142,8 @@ local function arrange2()
       vv.api.window_set_transparency_mode(id, t.all)
       vv.api.window_set_opacity(id, 0.8)
     else
-      vv.api.window_set_transparency_mode(id, t.none)
-      vv.api.window_set_opacity(id, 1.0)
+      vv.api.window_set_transparency_mode(id, t.clear)
+      vv.api.window_set_opacity(id, 0.8)
     end
     if vis then
       if not floating then
@@ -153,10 +160,13 @@ local function arrange2()
   for i, id in ipairs(focus_order) do
     if not tiled(id) then
       vv.api.window_set_z_index(id, floating_z + i)
+    else
+      vv.api.window_set_z_index(id, tiled_z + i)
     end
   end
 
-  local master_width = #stack > 0 and math.floor(term.width / 2) or term.width
+  local master_width = #stack > 0 and math.floor(term.width * mfact) or term.width
+  if #master == 0 then master_width = 0 end
 
   local left = r_left
   local top = r_top
@@ -178,8 +188,8 @@ local function add_window(win)
   if vv.api.window_is_lua(win) then return end
   layers[win] = dwm.layers.tiled
   table.insert(windows, 1, win)
-  vv.api.set_focused_window(win)
   tags[win] = table.move(view, 1, #view, 1, {})
+  set_focus(win)
   arrange()
 end
 
@@ -267,6 +277,22 @@ function dwm.activate()
   if #windows > 0 then
     set_focus(lst[1])
   end
+  arrange()
+end
+
+local function clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+function dwm.incmfact(v)
+  mfact = clamp(mfact + v, 0.10, 0.90)
+  arrange()
+end
+
+function dwm.incnmaster(v)
+  nmaster = clamp(nmaster + v, 0, 10)
   arrange()
 end
 
@@ -381,6 +407,10 @@ end
 function dwm.reserve(top, left, bottom, right)
   r_top, r_left, r_bottom, r_right = top, left, bottom, right
   arrange()
+end
+
+function dwm.set_animation_duration(v, dur)
+  move_duration = dur
 end
 
 return dwm
