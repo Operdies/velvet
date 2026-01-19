@@ -1,8 +1,9 @@
-local dwm = {
-  layers = {
-    tiled = 1, floating = 2,
-  },
+local dwm = { }
+--- @enum dwm.layer
+dwm.layers = {
+  tiled = 1, floating = 2,
 }
+
 local vv = require('velvet')
 local window = require('velvet.window')
 
@@ -54,6 +55,7 @@ local function win_stack(left, top, width, height, lst)
   end
 end
 
+--- @return boolean[]
 local function get_tagsset()
   local tags = {}
   for i = 1, 9 do
@@ -70,16 +72,23 @@ local focus_order = {}
 
 local view = get_tagsset()
 view[1] = true
+
+--- @type table<velvet.window, boolean[]> 
 local tags = {}
 
+--- @type table<velvet.window, dwm.layer> 
 local layers = {}
 
+--- @return nil
 local function table_swap(tbl, i1, i2)
   if i1 and i2 and i1 ~= i2 then
     tbl[i1], tbl[i2] = tbl[i2], tbl[i1]
   end
 end
 
+--- @param tbl velvet.window[]
+--- @param val velvet.window
+--- @return integer?
 local function table_index(tbl, val)
   for i, v in ipairs(tbl) do
     if v == val then return i end
@@ -88,11 +97,13 @@ local function table_index(tbl, val)
 end
 
 --- @param win velvet.window
+--- @return boolean
 local function visibleontags(win)
   local win_tags = tags[win] or {}
   for i, v in ipairs(view) do
     if v and win_tags[i] then return true end
   end
+  return false
 end
 
 --- @param win velvet.window
@@ -105,12 +116,14 @@ local function set_focus(win)
   win:focus()
 end
 
+--- @return velvet.window?
 local function get_focus()
   if #focus_order == 0 then return nil end
   return focus_order[#focus_order]
 end
 
--- Set the focus to the most recently focused visible item
+--- Set the focus to the most recently focused visible item
+--- @return nil
 local function ensure_focus_visible()
   for i=#focus_order,1,-1 do
     if visibleontags(focus_order[i]) then
@@ -146,6 +159,7 @@ local function create_status_window()
   return taskbar
 end
 
+--- @return nil
 local function status_update()
   local sz = vv.api.get_screen_geometry()
   taskbar:set_geometry({ left = 0, top = sz.height - 1, width = sz.width, height = 1 })
@@ -199,7 +213,7 @@ local function arrange2()
       win:set_transparency_mode(t.all)
       win:set_opacity(0.8)
     else
-      win:set_transparency_mode(t.clear)
+      win:set_transparency_mode(t.all)
       win:set_opacity(0.8)
     end
     if vis then
@@ -343,6 +357,10 @@ function dwm.activate()
   arrange()
 end
 
+--- @param v number
+--- @param lo number
+--- @param hi number
+--- @return number
 local function clamp(v, lo, hi)
   if v < lo then return lo end
   if v > hi then return hi end
