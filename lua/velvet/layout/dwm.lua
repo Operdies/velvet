@@ -6,8 +6,6 @@ local dwm = {
 local vv = require('velvet')
 local window = require('velvet.window')
 
---- @type velvet.window
-local taskbar = nil
 local r_left = 0
 local r_top = 0
 local r_bottom = 0
@@ -36,6 +34,8 @@ local function win_move(win, to)
   end
 end
 
+--- @type velvet.window
+local taskbar = nil
 --- @param left integer leftmost column of stacking area
 --- @param top integer topmost row of stacking area
 --- @param width integer width of stacking area
@@ -135,10 +135,19 @@ local nmaster = 1
 local mfact = 0.5
 local dim_inactive = 0
 
-local function status_update()
-  local sz = vv.api.get_screen_geometry()
+--- @return velvet.window
+local function create_status_window()
+  taskbar = window.create()
+  -- taskbar is below tiled windows, but the tiling
+  -- area does not overlap with the taskar area.
+  taskbar:set_z_index(floating_z - 1)
   taskbar:set_cursor_visible(false)
   taskbar:set_line_wrapping(false)
+  return taskbar
+end
+
+local function status_update()
+  local sz = vv.api.get_screen_geometry()
   taskbar:set_geometry({ left = 0, top = sz.height - 1, width = sz.width, height = 1 })
   taskbar:clear_background_color()
   taskbar:clear()
@@ -164,6 +173,8 @@ local function status_update()
 end
 
 local function arrange2()
+  local ok, err = pcall(status_update)
+  if not ok then dbg({ status_update = err }) end
   local term = vv.api.get_screen_geometry()
 
   local focused_id = vv.api.get_focused_window()
@@ -226,7 +237,6 @@ local function arrange2()
   end
 
   ensure_focus_visible()
-  status_update()
 end
 
 local function arrange()
@@ -318,10 +328,7 @@ function dwm.activate()
     add_window(id, true)
   end
   local event_handler = e.create_group(vv.arrange_group_name, true)
-  taskbar = window.create()
-  -- taskbar is below tiled windows, but the tiling
-  -- area does not overlap with the taskar area.
-  taskbar:set_z_index(floating_z - 1)
+  taskbar = create_status_window()
   dwm.reserve(0, 0, 1, 0)
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args) add_window(args.id, false) end
@@ -448,12 +455,13 @@ end
 function dwm.zoom()
   local focus_id = vv.api.get_focused_window()
   if focus_id == 0 then return end
-  local focus_index = table_index(windows, focus_id)
-  local next_index = get_first_matching(windows, function(id) return id ~= focus_id and visibleontags(id) and tiled(id) end)
+  local focus = window.from_handle(focus_id)
+  local focus_index = table_index(windows, focus)
+  local next_index = get_first_matching(windows, function(win) return win ~= focus and visibleontags(win) and tiled(win) end)
   if next_index then
-    local next_id = windows[next_index]
+    local next_win = windows[next_index]
     table_swap(windows, focus_index, next_index)
-    local new_focus = get_first_matching(windows, function(id) return id == focus_id or id == next_id end)
+    local new_focus = get_first_matching(windows, function(win) return win == focus or win == next_win end)
     if new_focus then set_focus(windows[new_focus]) end
     arrange()
   end
