@@ -606,8 +606,8 @@ static void vv_attach(struct velvet_args args) {
   terminal_reset();
 
   if (ctx.detach) {
-    velvet_log("[Detached]");
+    printf("[Detached]\n");
   } else {
-    velvet_log("[Shutdown]");
+    printf("[Shutdown]\n");
   }
 }
