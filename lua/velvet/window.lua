@@ -136,7 +136,7 @@ hooks.window_closed = function(win)
   local w = win_registry[win.id]
   if w then
     for _, child in ipairs(w.child_windows) do 
-      child:close()
+      pcall(Window.close, child)
     end
     win_registry[win.id] = nil
   end
@@ -244,6 +244,10 @@ local function set_decmode(self, mode, on)
   self:draw(('\x1b[?%d%s'):format(mode, on and 'h' or 'l'))
 end
 
+local function set_ansimode(self, mode, on)
+  self:draw(('\x1b[%d%s'):format(mode, on and 'h' or 'l'))
+end
+
 --- @param visible boolean if true, the cursor will be visible when the window is focused. This is useful for text-based windows
 function Window:set_cursor_visible(visible)
   set_decmode(self, 25, visible)
@@ -252,6 +256,11 @@ end
 --- @param line_wrapping boolean if true, the line will automatically wrap when text is written at the end of a line. This is useful for text, but bad for drawing.
 function Window:set_line_wrapping(line_wrapping)
   set_decmode(self, 7, line_wrapping)
+end
+
+--- @param auto_return boolean if true, a newline will automatically insert a carriage return
+function Window:set_auto_return(auto_return)
+  set_ansimode(self, 20, auto_return)
 end
 
 --- @param x integer the new cursor column
