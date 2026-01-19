@@ -1195,14 +1195,17 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   pid_t pid = forkpty(&velvet_window->pty, nullptr, nullptr, &velvet_windowsize);
 
   if (pid != 0) {
-    /* restore all default handlers in the child process */
+    /* restore default handlers for a couple of terminating signals.
+     * This is needed because their signal handlers would otherwise
+     * deliver signals to the parent process via a pipe until exec() is called.
+     * Now, if these signals are delivered before exec(), the child process should
+     * hopefully be reaped by the parent instead.
+     * */
+    int restore[] = { SIGTERM, SIGINT, SIGHUP };
     struct sigaction sa = {0};
     sa.sa_handler = SIG_DFL;
-
-    for (int sig = 1; sig < NSIG; sig++) {
-      if (sig == SIGKILL || sig == SIGSTOP) continue; /* cannot be set */
-      sigaction(sig, &sa, nullptr);
-    }
+    for (int i = 0; i < LENGTH(restore); i++)
+      sigaction(restore[i], &sa, nullptr);
   }
 
   /* restore signal generation in both child and parent */
