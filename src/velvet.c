@@ -324,16 +324,25 @@ static bool file_exists(const char *path) {
 }
 
 static void velvet_source_config(struct velvet *v) {
-  char path[PATH_MAX] = {0};
+  struct string scratch = {0};
   char *home = getenv("HOME");
   if (home) {
-    snprintf(path, PATH_MAX - 1, "%s/.config/velvet/init.lua", home);
+    string_push_format_slow(&scratch, "%s/.config/velvet/init.lua", home);
+    /* preserve 0 terminator */
+    scratch.len++;
   }
-  if (file_exists(path)) {
-    velvet_lua_source(v, path);
+  if (file_exists((char*)scratch.content)) {
+    size_t offset = scratch.len;
+    /* lua code to add the user's config folder to the module search path */
+    string_push_format_slow(&scratch, "package.path = package.path .. ';%s/.config/velvet/?/init.lua;%s/.config/velvet/?.lua'", home, home);
+    struct u8_slice search_path = string_range(&scratch, offset, -1);
+    luaL_dostring(v->L, (char*)search_path.content);
+    velvet_lua_source(v, (char*)scratch.content);
   } else {
+    /* if the user does not have a config file, source the default config */
     luaL_dostring(v->L, "require('velvet.default_config')");
   }
+  string_destroy(&scratch);
 }
 
 void velvet_loop(struct velvet *velvet) {
