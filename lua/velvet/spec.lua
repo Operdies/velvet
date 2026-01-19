@@ -320,6 +320,7 @@ return {
       doc = "Get the number of milliseconds elapsed since startup",
       returns = { type = "int", doc = "milliseconds elapsed since startup" }
     },
+    --- system {{{2
     {
       name = "get_sessions",
       doc = "Get the IDs of all sessions.",
@@ -341,8 +342,8 @@ return {
       params = { { name = "session_id", type = "int", doc = "Session id" } },
     },
     {
-      name = "server_kill",
-      doc = "Kill the velvet instance. All child processes will be killed."
+      name = "quit",
+      doc = "Quit velvet with no warning"
     },
     --- Windows {{{2
     {

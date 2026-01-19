@@ -201,9 +201,9 @@ function api.get_active_session() end
 --- @return nil 
 function api.session_detach(session_id) end
 
---- Kill the velvet instance. All child processes will be killed.
+--- Quit velvet with no warning
 --- @return nil 
-function api.server_kill() end
+function api.quit() end
 
 --- Get the IDs of all windows.
 --- @return integer[] List of window IDs
