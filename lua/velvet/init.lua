@@ -95,7 +95,18 @@ vv.options = setmetatable(vv.options, {
 function dbg(x) 
   local text = vv.inspect(x)
   print(text) 
-  vv.events.emit_event('debug_log', x)
+  ---@diagnostic disable-next-line: invisible
+  vv.events.emit_event('debug_log', x, 'debug')
+end
+
+local global_error = error
+error = function(message, level)
+  -- level: set the call stack position to generate debug information from
+  level = (level or 1) + 2
+  local _, err = pcall(global_error, message, level)
+  ---@diagnostic disable-next-line: invisible
+  vv.events.emit_event('debug_log', err, 'error')
+  global_error(message, level)
 end
 
 return vv

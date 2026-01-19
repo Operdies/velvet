@@ -259,7 +259,6 @@ end
 
 local function arrange()
   local ok, err = pcall(arrange2)
-  if not ok then dbg({ arrange_error = err }) end
 end
 
 local function add_window(id, init)

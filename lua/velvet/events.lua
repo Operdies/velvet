@@ -38,8 +38,9 @@ local events = {
   --- @package
   --- don't use this
   --- @param event_name string the raised event
-  --- @param data any depends on the event
-  emit_event = function(event_name, data)
+  --- @param ... any depends on the event
+  emit_event = function(event_name, ...)
+    local data = ...
     if event_name == 'window_on_key' then 
       -- The C api does not set a name for regular characters, such as latin letters or
       -- normal letters from other scripts. For ease of use, we convert the codepoints
@@ -57,7 +58,7 @@ local events = {
     for name, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
       if group_func_table[event_name] then 
-        local ok, err = pcall(group_func_table[event_name], data)
+        local ok, err = pcall(group_func_table[event_name], ...)
         if not ok then 
           -- enrich the error event with detailed information about the handler
           error(vv.inspect({
