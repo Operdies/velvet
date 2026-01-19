@@ -227,7 +227,6 @@ table.insert(h, ([[#ifndef %s
 #define %s
 #include "lua.h"
 struct velvet;
-extern struct velvet *VELVET;
 typedef struct lua_State lua_State;
 
 ]]):format("VELVET_API_H", "VELVET_API_H"))

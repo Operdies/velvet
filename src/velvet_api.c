@@ -138,27 +138,20 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   }
 }
 
-struct schedule_object {
-  struct velvet *v;
-  lua_Integer func;
-};
-
+static struct velvet *VELVET;
 void schedule_execute(void *data) {
-  struct schedule_object *o = data;
-  pcall_func_ref(o->v->L, o->func);
-  luaL_unref(o->v->L, LUA_REGISTRYINDEX, o->func);
-  free(o);
+  assert(VELVET);
+  lua_Integer func = (lua_Integer)data;
+  pcall_func_ref(VELVET->L, func);
+  luaL_unref(VELVET->L, LUA_REGISTRYINDEX, func);
 }
 
 void vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func) {
+  VELVET = v;
   luaL_checktype(v->L, func, LUA_TFUNCTION);
   lua_pushvalue(v->L, func);
   lua_Integer ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
-  /* TODO: allocation-less schedule (add aux data to schedules?) */
-  struct schedule_object *o = velvet_calloc(1, sizeof(*o));
-  o->func = ref;
-  o->v = v;
-  io_schedule(&v->event_loop, delay, schedule_execute, o);
+  io_schedule(&v->event_loop, delay, schedule_execute, (void*)(lua_Integer)ref);
 }
 
 static void keymap_execute(struct velvet_keymap *k, struct velvet_key_event evt) {
