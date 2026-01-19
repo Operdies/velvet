@@ -192,10 +192,12 @@ local function arrange2()
   local term = vv.api.get_screen_geometry()
 
   local focused_id = vv.api.get_focused_window()
-  if vv.api.window_is_lua(focused_id) then return end
-  if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
-    -- if focus was changed outside of this module, update internal focus order tracking
-    set_focus(window.from_handle(focused_id))
+  -- don't steal focus from lua windows since they are not managed here
+  if not vv.api.window_is_lua(focused_id) then
+    if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
+      -- if focus was changed outside of this module, update internal focus order tracking
+      set_focus(window.from_handle(focused_id))
+    end
   end
 
   term.width = term.width - (r_left + r_right)
