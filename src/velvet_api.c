@@ -408,6 +408,7 @@ struct velvet_api_color_palette vv_api_set_color_palette(struct velvet *v, struc
   v->scene.theme.palette[13] = rgb_from_palette(new_value.bright_magenta);
   v->scene.theme.palette[14] = rgb_from_palette(new_value.bright_cyan);
   v->scene.theme.palette[15] = rgb_from_palette(new_value.bright_white);
+  velvet_ensure_render_scheduled(v);
   return vv_api_get_color_palette(v);
 }
 
