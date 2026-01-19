@@ -141,8 +141,8 @@ local function tiled(id)
 end
 
 -- arbitrarily decide where floating and tiled windows begin
-local tiled_z = -1000
-local floating_z = -100
+local tiled_z = vv.layers.tiled
+local floating_z = vv.layers.floating
 
 local nmaster = 1
 local mfact = 0.5

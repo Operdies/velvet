@@ -1,6 +1,18 @@
 ---@class vv
 local vv = {
   arrange_group_name = 'velvet.arrange',
+  --- This is mostly a hint for managiging z indices
+  layers = {
+    --- windows which should appear behind other windows,
+    --- such as wallpapers and desktop elements
+    background = -10000,
+    --- tiled windows, if a tiling layout scheme is used
+    tiled = -1000,
+    --- floating windows, if a layout scheme with stacking capabilities is used
+    floating = 0,
+    --- elements which require user attention
+    popup = 1000,
+  },
   -- stolen directly from vim.inspect
   inspect = require('velvet.inspect'),
   --- @type velvet.api
