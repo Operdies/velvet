@@ -9,6 +9,7 @@ static int num_lines(const struct screen *g) { return g->h + g->scroll.max; }
 
 struct screen_line *screen_get_line(const struct screen *g, int n) {
   int line = (num_lines(g) + g->scroll.offset + n) % num_lines(g);
+  assert(line < g->scroll.capacity);
   return &g->lines[line];
 }
 
@@ -517,9 +518,9 @@ void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom) {
 
   if (top == 0 && bottom == g->h - 1) {
     g->scroll.offset += count;
-    int new_height = CLAMP(g->scroll.height + count + g->h, 0, g->scroll.max + g->h);
-    if (new_height > g->scroll.capacity) scrollback_init(g, new_height);
-    g->scroll.height = new_height - g->h;
+    g->scroll.height += count;
+    int required_capacity = CLAMP(g->scroll.offset + g->h, 0, g->scroll.max + g->h);
+    if (required_capacity > g->scroll.capacity) scrollback_init(g, required_capacity);
   } else {
     for (int row = top; row <= bottom - count; row++) {
       screen_swap_rows(g, row, row + count);
