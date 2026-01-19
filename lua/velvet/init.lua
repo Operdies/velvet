@@ -92,6 +92,10 @@ vv.options = setmetatable(vv.options, {
 })
 
 --- global debug print function
-function dbg(x) print(vv.inspect(x)) end
+function dbg(x) 
+  local text = vv.inspect(x)
+  print(text) 
+  vv.events.emit_event('debug_log', x)
+end
 
 return vv
