@@ -15,6 +15,7 @@ local events = {
   ---@param group_name string the name of the new group.
   ---@param clear boolean if true, existing event handlers with the same key will be cleared. This is useful for automatically unregistering a handler when reloading your config.
   ---@return velvet.api.event_handler
+  ---@nodiscard
   create_group = function(group_name, clear)
     local id = event_groups[group_name] or next_id()
     event_groups[group_name] = id
@@ -34,7 +35,10 @@ local events = {
     event_handlers[event_handler.id] = nil
   end,
 
+  --- @package
   --- don't use this
+  --- @param event_name string the raised event
+  --- @param data any depends on the event
   emit_event = function(event_name, data)
     if event_name == 'window_on_key' then 
       -- The C api does not set a name for regular characters, such as latin letters or
