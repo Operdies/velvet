@@ -175,6 +175,11 @@ end
 hooks.window_moved = function(evt) route_window_events('on_window_moved_handler', evt) end
 hooks.window_resized = function(evt) route_window_events('on_window_resized_handler', evt) end
 hooks.window_on_key = function(evt) route_window_events('on_window_on_key_handler', evt) end
+hooks.pre_render = function() 
+  for _, win in pairs(win_registry) do
+    update_borders(win)
+  end
+end
 
 --- @alias mouse_event
 --- | 'mouse_click'
@@ -197,9 +202,6 @@ local function route_mouse_events(event, args)
       else
         vv.api['window_send_' .. event](args)
       end
-    if event == 'mouse_scroll' then 
-      update_borders(win)
-    end
   end
 end
 
@@ -217,7 +219,6 @@ end
 --- @param geom velvet.api.window.geometry
 function Window:set_geometry(geom)
   a.window_set_geometry(self.id, geom)
-  update_borders(self)
 end
 
 --- Close the window. The instance wi
@@ -247,7 +248,6 @@ end
 --- @param visible boolean window visibility
 function Window:set_visibility(visible)
   a.window_set_hidden(self.id, not visible)
-  update_borders(self)
 end
 
 --- @return boolean window 
@@ -338,14 +338,12 @@ function Window:set_frame_enabled(enabled)
       end)
     end
   end
-  update_borders(self)
 end
 
 --- @param color velvet.api.rgb_color|string the new foreground color
 function Window:set_frame_color(color)
   if type(color) == 'string' then color = color_from_string(color) end
   self.frame_color = color
-  update_borders(self)
 end
 
 --- @return boolean
@@ -378,7 +376,6 @@ end
 --- @param z integer new z index
 function Window:set_z_index(z)
   a.window_set_z_index(self.id, z)
-  update_borders(self)
 end
 
 function Window:get_z_index()
