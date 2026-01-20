@@ -60,10 +60,6 @@ struct velvet_render_buffer {
 };
 
 struct velvet_theme {
-  struct {
-    struct color active;
-    struct color inactive;
-  } title;
   struct color background;
   struct color foreground;
   struct {
@@ -153,23 +149,15 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 #define HEX_TO_NUM(x) (((x) >= '0' && (x) <= '9') ? (x) - '0' : (x) - 'a' + 10)
 #define RGB(rgb)                                                                                                       \
   (struct color) {                                                                                                     \
-    .cmd = COLOR_RGB, .r = (HEX_TO_NUM(rgb[1]) << 4) | (HEX_TO_NUM(rgb[2])),                                           \
-    .g = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])), .b = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))       \
+    .kind = COLOR_RGB, .red = (HEX_TO_NUM(rgb[1]) << 4) | (HEX_TO_NUM(rgb[2])),                                        \
+    .green = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])),                                                         \
+    .blue = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))                                                           \
   }
 
 static const struct velvet_theme velvet_theme_default = {
     .background = RGB("#1e1e2e"),
     .foreground = RGB("#cdd6f4"),
-    .cursor =
-        {
-            .background = RGB("#f5e0dc"),
-            .foreground = RGB("#1e1e2e"),
-        },
-    .title =
-        {
-            .active = RGB("#f38ba8"),
-            .inactive = RGB("#b4befe"),
-        },
+    .cursor = { .background = RGB("#f5e0dc"), .foreground = RGB("#1e1e2e") },
 };
 
 static const struct velvet_render_state_cache render_state_cache_invalidated = {

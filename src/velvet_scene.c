@@ -189,16 +189,16 @@ static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg)
  * From a bit of experimentation it feels like HSV scaling
  * gives a decent perceived brightness change. */
 static struct color rgb_dim(struct color a, float f) {
-  float r, g, b, h, s, v;
-  red = (float)a.r / 255;
-  g = (float)a.green / 255;
-  b = (float)a.blue / 255;
-  rgb_to_hsv(r, g, b, &h, &s, &v);
-  v *= f;
-  hsv_to_rgb(h, s, v, &r, &g, &b);
-  a.red = r * 255;
-  a.green = g * 255;
-  a.blue = b * 255;
+  float red, green, blue, hue, saturation, value;
+  red = (float)a.red / 255;
+  green = (float)a.green / 255;
+  blue = (float)a.blue / 255;
+  rgb_to_hsv(red, green, blue, &hue, &saturation, &value);
+  value *= f;
+  hsv_to_rgb(hue, saturation, value, &red, &green, &blue);
+  a.red = red * 255;
+  a.green = green * 255;
+  a.blue = blue * 255;
   return a;
 }
 
@@ -1045,9 +1045,8 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
 
 static bool color_equals(struct color a, struct color b) {
   if (a.kind != b.kind) return false;
-  switch (a.cmd) {
+  switch (a.kind) {
   case COLOR_RESET: return true;
-  case COLOR_RGBA:
   case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue;
   case COLOR_TABLE: return a.table == b.table;
   }
