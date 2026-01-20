@@ -91,18 +91,18 @@ api.mouse_event_type = {
 --- @field height integer The height of the screen
 
 --- @class velvet.api.window.created.event_args
---- @field id integer The id of the newly created window.
+--- @field win_id integer The id of the newly created window.
 
 --- @class velvet.api.window.closed.event_args
---- @field id integer The id of the closed window.
+--- @field win_id integer The id of the closed window.
 
 --- @class velvet.api.window.moved.event_args
---- @field id integer The id of the resized window.
+--- @field win_id integer The id of the resized window.
 --- @field old_size velvet.api.window.geometry The old geometry of |id|.
 --- @field new_size velvet.api.window.geometry The new geometry of |id|.
 
 --- @class velvet.api.window.resized.event_args
---- @field id integer The id of the resized window.
+--- @field win_id integer The id of the resized window.
 --- @field old_size velvet.api.window.geometry The old geometry of |id|.
 --- @field new_size velvet.api.window.geometry The new geometry of |id|.
 
@@ -216,15 +216,15 @@ function api.get_windows() end
 function api.swap_windows(first, second) end
 
 --- Set the z index of |win| to |z|
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @param z integer New z index of |win|
 --- @return nil 
-function api.window_set_z_index(win, z) end
+function api.window_set_z_index(win_id, z) end
 
 --- Get the z index of |win|
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @return integer The z index of |win|
-function api.window_get_z_index(win) end
+function api.window_get_z_index(win_id) end
 
 --- Set window hidden flag. A hidden window will not be rendered.
 --- @param win_id integer Window id
@@ -238,37 +238,37 @@ function api.window_set_hidden(win_id, hidden) end
 function api.window_get_hidden(win_id) end
 
 --- Get window opacity
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @return number The new window opacity.
-function api.window_get_opacity(win) end
+function api.window_get_opacity(win_id) end
 
 --- Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @param opacity number The new window opacity.
 --- @return nil 
-function api.window_set_opacity(win, opacity) end
+function api.window_set_opacity(win_id, opacity) end
 
 --- Get window transparency mode.
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @return velvet.api.transparency_mode Set transparency mode.
-function api.window_get_transparency_mode(win) end
+function api.window_get_transparency_mode(win_id) end
 
 --- Set window transparency mode.
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @param mode velvet.api.transparency_mode Set transparency mode.
 --- @return nil 
-function api.window_set_transparency_mode(win, mode) end
+function api.window_set_transparency_mode(win_id, mode) end
 
 --- Get the current dim factor for |win|
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @return number Dim factor between 0.0 and 1.0
-function api.window_get_dim_factor(win) end
+function api.window_get_dim_factor(win_id) end
 
 --- Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)
---- @param win integer Window id
+--- @param win_id integer Window id
 --- @param factor number Dim factor between 0.0 and 1.0
 --- @return nil 
-function api.window_set_dim_factor(win, factor) end
+function api.window_set_dim_factor(win_id, factor) end
 
 --- Get the id of the currently focused window.
 --- @return integer TThe id of the currently focused window.
@@ -317,6 +317,21 @@ function api.window_send_keys(win_id, keys) end
 --- @param text string The text to send
 --- @return nil 
 function api.window_send_text(win_id, text) end
+
+--- Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
+--- @param mouse_move velvet.api.mouse.move.event_args Mouse move event args
+--- @return nil 
+function api.window_send_mouse_move(mouse_move) end
+
+--- Send mouse click event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
+--- @param mouse_click velvet.api.mouse.click.event_args Mouse click event args
+--- @return nil 
+function api.window_send_mouse_click(mouse_click) end
+
+--- Send mouse scroll event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable. If the window does not handle scrolling, and it has content in its scrollback buffer, this scrolls the window content.
+--- @param mouse_scroll velvet.api.mouse.scroll.event_args Mouse scroll event args
+--- @return nil 
+function api.window_send_mouse_scroll(mouse_scroll) end
 
 --- Create a naked window with no backing process. This window can be controlled through the lua API. Returns the window id.
 --- @return integer The id of the new window

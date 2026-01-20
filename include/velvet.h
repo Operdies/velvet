@@ -52,30 +52,12 @@ struct velvet_keymap_deferred_action {
   struct velvet_key_event key;
 };
 
-enum velvet_input_drag_event_type {
-  DRAG_MOVE,
-  DRAG_RESIZE,
-};
-
-struct velvet_input_drag_event {
-  struct {
-    /* the initial position of the mosue */
-    int x, y;
-    /* the initial position of the dragged client */
-    struct rect win;
-  } drag_start;
-  /* the id of the client being dragged */
-  uint64_t id;
-  enum velvet_input_drag_event_type type;
-};
-
 struct velvet_input {
   enum velvet_input_state state;
   struct string command_buffer;
   struct velvet_input_options options;
   struct velvet_keymap *keymap;
   uint64_t last_repeat;
-  struct velvet_input_drag_event dragging;
   int input_socket;
   io_schedule_id unwind_callback_token;
 };
@@ -122,8 +104,11 @@ void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
  * This input will not be parsed for CSI sequences or any current keymap. */
-void velvet_input_put_keys(struct velvet *in, struct u8_slice str, int win_id);
-void velvet_input_put_text(struct velvet *in, struct u8_slice str, int win_id);
+void velvet_input_send_keys(struct velvet *v, struct u8_slice str, int win_id);
+void velvet_input_send_text(struct velvet *v, struct u8_slice str, int win_id);
+void velvet_input_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args move);
+void velvet_input_send_mouse_click(struct velvet *v, struct velvet_api_mouse_click_event_args click);
+void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_scroll_event_args scroll);
 /* Process e.g. standard input from the keyboard. This input will be parsed for CSI sequences and matched against the
  * current keymap. */
 void velvet_input_process(struct velvet *in, struct u8_slice str);

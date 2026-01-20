@@ -84,10 +84,10 @@ return {
     {
       name = "scroll_direction",
       values = {
-        { name = "up",   value = 0 },
-        { name = "down", value = 1 },
+        { name = "up",    value = 0 },
+        { name = "down",  value = 1 },
         { name = "left",  value = 2 },
-        { name = "right",   value = 3 },
+        { name = "right", value = 3 },
       },
     },
     {
@@ -103,7 +103,7 @@ return {
       name = "mouse_event_type",
       values = {
         { name = "mouse_down", value = 1 },
-        { name = "mouse_up", value = 2 },
+        { name = "mouse_up",   value = 2 },
       },
     },
   },
@@ -159,16 +159,16 @@ return {
     },
     {
       name = "window.created.event_args",
-      fields = { { name = "id", type = "int", doc = "The id of the newly created window." } }
+      fields = { { name = "win_id", type = "int", doc = "The id of the newly created window." } }
     },
     {
       name = "window.closed.event_args",
-      fields = { { name = "id", type = "int", doc = "The id of the closed window." } }
+      fields = { { name = "win_id", type = "int", doc = "The id of the closed window." } }
     },
     {
       name = "window.moved.event_args",
       fields = {
-        { name = "id",       type = "int",             doc = "The id of the resized window." },
+        { name = "win_id",   type = "int",             doc = "The id of the resized window." },
         { name = "old_size", type = "window.geometry", doc = "The old geometry of |id|." },
         { name = "new_size", type = "window.geometry", doc = "The new geometry of |id|." },
       }
@@ -176,7 +176,7 @@ return {
     {
       name = "window.resized.event_args",
       fields = {
-        { name = "id",       type = "int",             doc = "The id of the resized window." },
+        { name = "win_id",   type = "int",             doc = "The id of the resized window." },
         { name = "old_size", type = "window.geometry", doc = "The old geometry of |id|." },
         { name = "new_size", type = "window.geometry", doc = "The new geometry of |id|." },
       }
@@ -242,10 +242,10 @@ return {
     {
       name = "mouse.scroll.event_args",
       fields = {
-        { name = "win_id",       type = "int",              doc = "The id of the topmost visible window at the coordinates." },
-        { name = "pos",          type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
-        { name = "direction",    type = "scroll_direction", doc = "The scroll direction which raised the event." },
-        { name = "modifiers",    type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
+        { name = "win_id",    type = "int",              doc = "The id of the topmost visible window at the coordinates." },
+        { name = "pos",       type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
+        { name = "direction", type = "scroll_direction", doc = "The scroll direction which raised the event." },
+        { name = "modifiers", type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
       },
     },
   },
@@ -364,14 +364,14 @@ return {
       name = "window_set_z_index",
       doc = "Set the z index of |win| to |z|",
       params = {
-        { name = "win", type = "int", doc = "Window id" },
+        { name = "win_id", type = "int", doc = "Window id" },
         { name = "z",   type = "int", doc = "New z index of |win|" }
       },
     },
     {
       name = "window_get_z_index",
       doc = "Get the z index of |win|",
-      params = { { name = "win", type = "int", doc = "Window id" } },
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
       returns = { type = "int", doc = "The z index of |win|" }
     },
     {
@@ -391,21 +391,21 @@ return {
     {
       name = "window_get_opacity",
       doc = "Get window opacity",
-      params = { { name = "win", type = "int", doc = "Window id" } },
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
       returns = { type = "float", doc = "The new window opacity." },
     },
     {
       name = "window_set_opacity",
       doc = "Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|",
       params = {
-        { name = "win",     type = "int",   doc = "Window id" },
+        { name = "win_id",     type = "int",   doc = "Window id" },
         { name = "opacity", type = "float", doc = "The new window opacity." },
       },
     },
     {
       name = "window_get_transparency_mode",
       doc = "Get window transparency mode.",
-      params = { { name = "win", type = "int", doc = "Window id" } },
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
       returns = { type = "transparency_mode", doc = "Set transparency mode." },
     },
     {
@@ -413,7 +413,7 @@ return {
       doc = "Set window transparency mode.",
       params =
       {
-        { name = "win",  type = "int",               doc = "Window id" },
+        { name = "win_id",  type = "int",               doc = "Window id" },
         { name = "mode", type = "transparency_mode", doc = "Set transparency mode." },
       },
     },
@@ -421,7 +421,7 @@ return {
       name = "window_get_dim_factor",
       doc = "Get the current dim factor for |win|",
       params = {
-        { name = "win", type = "int", doc = "Window id" },
+        { name = "win_id", type = "int", doc = "Window id" },
       },
       returns = { name = "factor", type = "float", doc = "Dim factor between 0.0 and 1.0" },
 
@@ -430,7 +430,7 @@ return {
       name = "window_set_dim_factor",
       doc = "Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)",
       params = {
-        { name = "win",    type = "int",    doc = "Window id" },
+        { name = "win_id",    type = "int",   doc = "Window id" },
         { name = "factor", type = "float", doc = "Dim factor between 0.0 and 1.0" },
       },
     },
@@ -496,6 +496,24 @@ return {
         { name = "win_id", type = "int",    doc = "The window receiving the text" },
         { name = "text",   type = "string", doc = "The text to send" },
       },
+    },
+    {
+      name = "window_send_mouse_move",
+      doc =
+      "Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.",
+      params = { { name = "mouse_move", doc = "Mouse move event args", type = "mouse.move.event_args" } }
+    },
+    {
+      name = "window_send_mouse_click",
+      doc =
+      "Send mouse click event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.",
+      params = { { name = "mouse_click", doc = "Mouse click event args", type = "mouse.click.event_args" } }
+    },
+    {
+      name = "window_send_mouse_scroll",
+      doc =
+      "Send mouse scroll event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable. If the window does not handle scrolling, and it has content in its scrollback buffer, this scrolls the window content.",
+      params = { { name = "mouse_scroll", doc = "Mouse scroll event args", type = "mouse.scroll.event_args" } }
     },
     {
       name = "window_create",

@@ -64,16 +64,6 @@ local function color_from_string(color)
   end
 end
 
-
---- @param evt any
---- @param win velvet.window
-local function make_coords_local(evt, win)
-  local geom = win:get_geometry()
-  evt.pos.col = evt.pos.col - geom.left
-  evt.pos.row = evt.pos.row - geom.top
-  return evt
-end
-
 --- @param self velvet.window
 local function update_borders(self)
   if not self.frame_visible then return end
@@ -129,41 +119,57 @@ end
 local hooks = require('velvet.events').create_group('velvet_window_callback_manager', true)
 
 hooks.window_created = function(win)
-  win_registry[win.id] = Window.from_handle(win.id)
+  win_registry[win.win_id] = Window.from_handle(win.win_id)
 end
 
 hooks.window_closed = function(win)
-  local w = win_registry[win.id]
+  local w = win_registry[win.win_id]
   if w then
-    for _, child in ipairs(w.child_windows) do 
+    for _, child in ipairs(w.child_windows) do
       pcall(Window.close, child)
     end
-    win_registry[win.id] = nil
+    win_registry[win.win_id] = nil
   end
 end
 
-local mappings = {
-  mouse_click = 'on_mouse_click_handler',
-  mouse_move = 'on_mouse_move_handler',
-  mouse_scroll = 'on_mouse_scroll_handler',
-  window_moved = 'on_window_moved_handler',
-  window_resized = 'on_window_resized_handler',
-  window_on_key = 'on_window_key_handler',
-}
+--- @param event string event name
+--- @param args velvet.api.window.resized.event_args|velvet.api.window.on_key.event_args|velvet.api.window.moved.event_args
+local function route_window_events(event, args)
+  local win = win_registry[args.win_id]
+  if win[event] then win[event](args) end
+end
 
-for event_name, callback_name in pairs(mappings) do
-  hooks[event_name] = function(args)
-    local win = win_registry[args.win_id]
-    if win then
-      if args.pos and win then
-        args = make_coords_local(args, win)
+hooks.window_moved = function(evt) route_window_events('on_window_moved_handler', evt) end
+hooks.window_resized = function(evt) route_window_events('on_window_resized_handler', evt) end
+hooks.window_on_key = function(evt) route_window_events('on_window_on_key_handler', evt) end
+
+--- @alias mouse_event
+--- | 'mouse_click'
+--- | 'mouse_move'
+--- | 'mouse_scroll'
+
+--- @param event mouse_event event name
+--- @param args velvet.api.mouse.click.event_args | velvet.api.mouse.move.event_args | velvet.api.mouse.scroll.event_args
+local function route_mouse_events(event, args)
+  local win = args.win_id and args.win_id > 0 and win_registry[args.win_id]
+  if win then
+    if event == 'mouse_click' or vv.options.focus_follows_mouse then win:focus() end
+      local geom = win:get_geometry()
+      args.pos.col = args.pos.col - geom.left
+      args.pos.row = args.pos.row - geom.top
+
+      local window_func = 'on_' .. event .. '_handler'
+      if win[window_func] then
+        win[window_func](win, args)
+      else
+        vv.api['window_send_' .. event](args)
       end
-      if win and win[callback_name] then
-        win[callback_name](win, args)
-      end
-    end
   end
 end
+
+hooks.mouse_click = function(args) route_mouse_events('mouse_click', args) end
+hooks.mouse_move = function(args) route_mouse_events('mouse_move', args) end
+hooks.mouse_scroll = function(args) route_mouse_events('mouse_scroll', args) end
 
 --- get window geometry
 --- @return velvet.api.window.geometry

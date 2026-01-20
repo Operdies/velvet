@@ -348,7 +348,7 @@ function dwm.activate()
   taskbar = create_status_window()
   dwm.reserve(0, 0, 1, 0)
   event_handler.screen_resized = arrange
-  event_handler.window_created = function(args) add_window(args.id, false) end
+  event_handler.window_created = function(args) add_window(args.win_id, false) end
   event_handler.window_closed = function(args) 
     remove_window() 
   end

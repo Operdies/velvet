@@ -23,6 +23,12 @@ _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   assert(!"Unreachable");
 }
 
+struct velvet_window *check_window(struct velvet *v, int win) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
+  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+  return w;
+}
+
 lua_Integer vv_api_window_create_process(struct velvet *v, const char* cmd) {
   struct velvet_window template = { .emulator = vte_default };
   string_push_cstr(&template.cmdline, cmd);
@@ -47,13 +53,11 @@ bool vv_api_window_is_lua(struct velvet *v, lua_Integer win_id) {
 }
 
 void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win_id);
+  struct velvet_window *w = check_window(v, win_id);
   if (w && w->is_lua_window) {
     if (w->geometry.h == 0 || w->geometry.w == 0) lua_bail(v->L, "Cannot write to window: size is 0");
     struct u8_slice s = u8_slice_from_cstr(text);
     velvet_window_process_output(w, s);
-  } else {
-    lua_bail(v->L, "Window %I is not a valid lua window.", win_id);
   }
 }
 
@@ -195,12 +199,12 @@ bool vv_api_set_display_damage(struct velvet *v, bool new_value) {
 
 void vv_api_window_send_text(struct velvet *v, lua_Integer winid, const char* text) {
   struct u8_slice t = u8_slice_from_cstr(text);
-  velvet_input_put_text(v, t, winid);
+  velvet_input_send_text(v, t, winid);
 }
 
 void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, const char* keys) {
   struct u8_slice t = u8_slice_from_cstr(keys);
-  velvet_input_put_keys(v, t, winid);
+  velvet_input_send_keys(v, t, winid);
 }
 
 void vv_api_set_focused_window(struct velvet *v, lua_Integer winid){
@@ -255,17 +259,15 @@ lua_Integer vv_api_get_current_tick(struct velvet *v) {
   return get_ms_since_startup();
 }
 
-const char* vv_api_window_get_title(struct velvet *v, lua_Integer winid) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", winid);
+const char* vv_api_window_get_title(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
   velvet_window_update_title(w);
   string_ensure_null_terminated(&w->title);
   return (char *)w->title.content;
 }
 
-void vv_api_window_set_title(struct velvet *v, lua_Integer winid, const char* title) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", winid);
+void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, const char* title) {
+  struct velvet_window *w = check_window(v, win_id);
   string_clear(&w->emulator.osc.title);
   string_push_cstr(&w->emulator.osc.title, title);
 }
@@ -302,57 +304,49 @@ void vv_api_quit(struct velvet *v) {
   v->quit = true;
 }
 
-void vv_api_window_set_hidden(struct velvet *v, lua_Integer winid, bool hidden) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", winid);
+void vv_api_window_set_hidden(struct velvet *v, lua_Integer win_id, bool hidden) {
+  struct velvet_window *w = check_window(v, win_id);
   if (w->hidden != hidden) {
     w->hidden = hidden;
     velvet_ensure_render_scheduled(v);
   }
 }
 
-bool vv_api_window_get_hidden(struct velvet *v, lua_Integer winid) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", winid);
+bool vv_api_window_get_hidden(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
   return w->hidden;
 }
 
-void vv_api_window_set_z_index(struct velvet *v, lua_Integer win, lua_Integer z) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+void vv_api_window_set_z_index(struct velvet *v, lua_Integer win_id, lua_Integer z) {
+  struct velvet_window *w = check_window(v, win_id);
   if (w->z_index != z) {
     w->z_index = z;
     velvet_ensure_render_scheduled(v);
   }
 }
-lua_Integer vv_api_window_get_z_index(struct velvet *v, lua_Integer win) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+lua_Integer vv_api_window_get_z_index(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
   return w->z_index;
 }
 
-float vv_api_window_get_opacity(struct velvet *v, lua_Integer win) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+float vv_api_window_get_opacity(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
   return 1.0 - w->transparency.alpha;
 }
-void vv_api_window_set_opacity(struct velvet *v, lua_Integer win, float opacity) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+void vv_api_window_set_opacity(struct velvet *v, lua_Integer win_id, float opacity) {
+  struct velvet_window *w = check_window(v, win_id);
   opacity = CLAMP(opacity, 0, 1);
   w->transparency.alpha = 1.0 - opacity;
   velvet_ensure_render_scheduled(v);
 }
 
-enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(struct velvet *v, lua_Integer win) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
   return w->transparency.mode;
 }
 
-void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win, enum velvet_api_transparency_mode mode) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win_id, enum velvet_api_transparency_mode mode) {
+  struct velvet_window *w = check_window(v, win_id);
 
   switch (mode) {
   case VELVET_API_TRANSPARENCY_MODE_NONE:
@@ -412,14 +406,27 @@ struct velvet_api_color_palette vv_api_set_color_palette(struct velvet *v, struc
   return vv_api_get_color_palette(v);
 }
 
-float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
   return w->dim_factor;
 }
-void vv_api_window_set_dim_factor(struct velvet *v, lua_Integer win, float factor) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+void vv_api_window_set_dim_factor(struct velvet *v, lua_Integer win_id, float factor) {
+  struct velvet_window *w = check_window(v, win_id);
   w->dim_factor = CLAMP(factor, 0, 1);
   velvet_ensure_render_scheduled(v);
+}
+
+void vv_api_window_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args mouse_move) {
+  check_window(v, mouse_move.win_id);
+  velvet_input_send_mouse_move(v, mouse_move);
+}
+
+void vv_api_window_send_mouse_click(struct velvet *v, struct velvet_api_mouse_click_event_args mouse_click) {
+  check_window(v, mouse_click.win_id);
+  velvet_input_send_mouse_click(v, mouse_click);
+}
+
+void vv_api_window_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_scroll_event_args mouse_scroll) {
+  check_window(v, mouse_scroll.win_id);
+  velvet_input_send_mouse_scroll(v, mouse_scroll);
 }

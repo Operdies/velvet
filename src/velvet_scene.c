@@ -66,7 +66,7 @@ struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_
   host->id = win_id;
 
   // void velvet_api_raise_window_created(struct velvet *v, struct velvet_api_window_created_event_args args);
-  struct velvet_api_window_created_event_args event_args = { .id = host->id };
+  struct velvet_api_window_created_event_args event_args = { .win_id = host->id };
   if (m->v) velvet_api_raise_window_created(m->v, event_args);
 
   /* anything can happen after the window created event is raised since it calls into lua.
@@ -90,7 +90,7 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
   struct velvet_window *new_focus = velvet_scene_get_focus(m);
   if (new_focus && new_focus->id != initial_focus) velvet_window_notify_focus(new_focus, true);
 
-  struct velvet_api_window_closed_event_args event_args = {.id = win_id};
+  struct velvet_api_window_closed_event_args event_args = {.win_id = win_id};
 
   /* if the focused window was closed, give lua handlers an opportunity to set the new focus */
   /* 1. first by raising an event stating the focused window was closed.  */
@@ -1170,11 +1170,11 @@ void velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
   vte_set_size(&win->emulator, geom);
 
   if (resized) {
-    struct velvet_api_window_resized_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
+    struct velvet_api_window_resized_event_args event_args = { .win_id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_resized(v, event_args);
   }
   if (moved) {
-    struct velvet_api_window_moved_event_args event_args = { .id = win->id, .new_size = new, .old_size = old };
+    struct velvet_api_window_moved_event_args event_args = { .win_id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_moved(v, event_args);
   }
 }
