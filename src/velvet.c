@@ -299,6 +299,8 @@ static void velvet_dispatch_frame(void *data) {
   if (focus) {
     velvet_align_and_arrange(v, focus);
     v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_wide_chars;
+    struct velvet_api_pre_render_event_args event_args = { .time = get_ms_since_startup() };
+    velvet_api_raise_pre_render(v, event_args);
     velvet_scene_render_damage(&v->scene, velvet_render, v);
   }
   io_schedule_cancel(&v->event_loop, v->active_render_token);

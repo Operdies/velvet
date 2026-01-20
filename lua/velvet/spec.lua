@@ -248,6 +248,10 @@ return {
         { name = "modifiers", type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
       },
     },
+    {
+      name = "pre_render.event_args",
+      fields = { { name = "time", type = "int", doc = "The number of miliseconds elapsed since startup" } },
+    },
   },
 
   events = {
@@ -261,6 +265,11 @@ return {
     { name = "mouse_move",           doc = "Raised when the mouse moves.",               args = "mouse.move.event_args" },
     { name = "mouse_click",          doc = "Raised when the mouse is clicked.",          args = "mouse.click.event_args" },
     { name = "mouse_scroll",         doc = "Raised when the mouse scrolls.",             args = "mouse.scroll.event_args" },
+    {
+      name = "pre_render",
+      doc = "Raised right before content is rendered. This is useful for applying updates just-in-time.",
+      args = "pre_render.event_args",
+    },
   },
 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
