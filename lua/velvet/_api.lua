@@ -148,6 +148,9 @@ api.mouse_event_type = {
 --- @field direction velvet.api.scroll_direction The scroll direction which raised the event.
 --- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
 
+--- @class velvet.api.pre_render.event_args
+--- @field time integer The number of miliseconds elapsed since startup
+
 --- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.
 --- @param from velvet.api.key_modifiers The modifier to remap.
 --- @param to velvet.api.key_modifiers The new modifier emitted when the remapped modifier is used.
@@ -417,4 +420,5 @@ function api.set_color_palette(new_value) end
 --- @field mouse_move? fun(event_args: velvet.api.mouse.move.event_args): nil Raised when the mouse moves.
 --- @field mouse_click? fun(event_args: velvet.api.mouse.click.event_args): nil Raised when the mouse is clicked.
 --- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
+--- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
 

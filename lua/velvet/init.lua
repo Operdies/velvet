@@ -14,7 +14,7 @@ local vv = {
     popup = 1000,
   },
   -- stolen directly from vim.inspect
-  inspect = require('velvet.inspect'),
+  inspect = require('velvet.inspect').inspect,
   --- @type velvet.api
   api = {},
   --- @type velvet.options
@@ -91,12 +91,20 @@ vv.options = setmetatable(vv.options, {
   end,
 })
 
+--- @class inspect.format_options
+--- @field depth? integer max recursion depth
+--- @field newline? string newline separator
+--- @field indent? string indent expression
+--- @field process? fun(item: any, path: string[]): any processing function recursively applied to |x|
+
 --- global debug print function
-function dbg(x) 
-  local text = vv.inspect(x)
+--- @param x any the object to log
+--- @param options inspect.format_options|nil formatting options
+function dbg(x, options) 
+  local text = vv.inspect(x, options)
   print(text) 
   ---@diagnostic disable-next-line: invisible
-  vv.events.emit_event('debug_log', x, 'debug')
+  vv.events.emit_event('debug_log', text, 'debug')
 end
 
 local global_error = error
