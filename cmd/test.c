@@ -1139,7 +1139,7 @@ static void lua_assert(lua_State *L, char *cmd) {
 }
 
 void test_lua() {
-  struct velvet v = {0};
+  struct velvet v = { .event_loop = io_default };
   velvet_lua_init(&v);
   lua_State *L = v.L;
 
