@@ -520,8 +520,15 @@ void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom) {
   if (top == 0 && bottom == g->h - 1) {
     g->scroll.offset += count;
     g->scroll.height = MIN(g->scroll.height + count, g->scroll.max);
-    int required_capacity = CLAMP(g->scroll.offset + g->h, 0, g->scroll.max + g->h);
+    int required_capacity = CLAMP(g->scroll.offset + g->h, 0, num_lines(g));
     if (required_capacity > g->scroll.capacity) scrollback_init(g, required_capacity);
+
+
+    /* adjust scroll view if set */
+    if (g->scroll.view_offset > 0) {
+      g->scroll.view_offset = MIN(g->scroll.height, g->scroll.view_offset + count);
+    }
+
   } else {
     for (int row = top; row <= bottom - count; row++) {
       screen_swap_rows(g, row, row + count);
