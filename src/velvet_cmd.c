@@ -217,7 +217,6 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
 }
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
-  velvet_ensure_render_scheduled(v);
   struct velvet_session *sender = nullptr;
   velvet_log("velvet_cmd: %.*s", (int)cmd.len, cmd.content);
   if (source_socket) vec_find(sender, v->sessions, sender->socket == source_socket);

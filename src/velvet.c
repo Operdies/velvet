@@ -241,8 +241,6 @@ static void on_session_input(struct io_source *src, struct u8_slice str) {
   if (session) v->input.input_socket = session->socket;
   velvet_input_process(v, str);
   v->input.input_socket = 0;
-
-  velvet_ensure_render_scheduled(v);
 }
 
 static void on_session_writable(struct io_source *src) {
@@ -289,6 +287,7 @@ static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *fo
   if (focus->ws.w && focus->ws.h && (focus->ws.w != v->scene.ws.w || focus->ws.h != v->scene.ws.h)) {
     velvet_scene_resize(&v->scene, focus->ws);
     resized = true;
+    velvet_ensure_render_scheduled(v);
   }
   return resized;
 }
