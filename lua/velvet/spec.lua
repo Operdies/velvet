@@ -250,7 +250,10 @@ return {
     },
     {
       name = "pre_render.event_args",
-      fields = { { name = "time", type = "int", doc = "The number of miliseconds elapsed since startup" } },
+      fields = { 
+        { name = "time", type = "int", doc = "The number of miliseconds elapsed since startup" },
+        { name = "cause", type = "string", doc = "The reason for the render, such as 'io_idle' or 'io_max_exceeded'" },
+      },
     },
   },
 

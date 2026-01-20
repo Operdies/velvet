@@ -150,6 +150,7 @@ api.mouse_event_type = {
 
 --- @class velvet.api.pre_render.event_args
 --- @field time integer The number of miliseconds elapsed since startup
+--- @field cause string The reason for the render, such as 'io_idle' or 'io_max_exceeded'
 
 --- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.
 --- @param from velvet.api.key_modifiers The modifier to remap.
