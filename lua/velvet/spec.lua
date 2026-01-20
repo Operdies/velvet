@@ -550,6 +550,18 @@ return {
       params = { { name = "win_id", type = "int", doc = "Window id" } },
       returns = { type = "bool", doc = "Bool indicating whether the window id is valid." }
     },
+    {
+      name = "window_get_scrollback_size",
+      doc = "Get the number of lines in the scrollback of the window with id |win_id|.",
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
+      returns = { type = "int", doc = "The number of lines in scrollback, not counting the current screen buffer." }
+    },
+    {
+      name = "window_get_scroll_offset",
+      doc = "Get the scroll offset of the window with id |win_id|",
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
+      returns = { type = "int", doc = "The number of lines below the bottom line of the window." }
+    },
   },
 }
 

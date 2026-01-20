@@ -107,8 +107,41 @@ local function update_borders(self)
   t:set_cursor(geom.width + 2, 1)
   t:draw('┐')
 
-  t:set_cursor(3, 1)
-  t:draw(self:get_title())
+
+  do
+    local title_geom = t:get_geometry()
+    local title_budget = title_geom.width - 4
+
+    local scroll_height = vv.api.window_get_scrollback_size(self.id)
+    local scroll_offset = vv.api.window_get_scroll_offset(self.id)
+
+    if scroll_height > 0 and scroll_offset > 0 then
+      local text = ('[%d of %d]'):format(scroll_offset, scroll_height)
+      local start = title_geom.width - string.len(text) - 1
+      if start > 0 then 
+        title_budget = start - 3
+        t:set_cursor(start, 1)
+        t:draw(text)
+      end
+    end
+
+    t:set_cursor(3, 1)
+    local trunc = '…'
+    local title = self:get_title()
+    local codes = {}
+    if title_budget > 0 then
+      for p, c in utf8.codes(title) do
+        if #codes + 1 >= title_budget then
+          table.insert(codes, utf8.codepoint(trunc))
+          break
+        end
+        table.insert(codes, c)
+      end
+      if #codes > 0 then
+        t:draw(utf8.char(table.unpack(codes)))
+      end
+    end
+  end
 
   b:set_cursor(1, 1)
   b:draw('└')
@@ -164,6 +197,9 @@ local function route_mouse_events(event, args)
       else
         vv.api['window_send_' .. event](args)
       end
+    if event == 'mouse_scroll' then 
+      update_borders(win)
+    end
   end
 end
 

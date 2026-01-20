@@ -358,6 +358,16 @@ function api.window_is_lua(win_id) end
 --- @return boolean Bool indicating whether the window id is valid.
 function api.window_is_valid(win_id) end
 
+--- Get the number of lines in the scrollback of the window with id |win_id|.
+--- @param win_id integer Window id
+--- @return integer The number of lines in scrollback, not counting the current screen buffer.
+function api.window_get_scrollback_size(win_id) end
+
+--- Get the scroll offset of the window with id |win_id|
+--- @param win_id integer Window id
+--- @return integer The number of lines below the bottom line of the window.
+function api.window_get_scroll_offset(win_id) end
+
 --- Get focus_follows_mouse
 --- @return boolean The current value
 function api.get_focus_follows_mouse() end

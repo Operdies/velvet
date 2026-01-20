@@ -430,3 +430,14 @@ void vv_api_window_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_s
   check_window(v, mouse_scroll.win_id);
   velvet_input_send_mouse_scroll(v, mouse_scroll);
 }
+
+lua_Integer vv_api_window_get_scrollback_size(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
+  struct screen *active = vte_get_current_screen(&w->emulator);
+  return active->scroll.height;
+}
+lua_Integer vv_api_window_get_scroll_offset(struct velvet *v, lua_Integer win_id){
+  struct velvet_window *w = check_window(v, win_id);
+  struct screen *active = vte_get_current_screen(&w->emulator);
+  return active->scroll.view_offset;
+}
