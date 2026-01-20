@@ -294,6 +294,7 @@ static void scrollback_init(struct screen *g, int min_cap) {
   int initial_size = g->scroll.capacity;
   int new_size = CLAMP(g->scroll.capacity * 2, min_cap, num_lines(g));
   assert(new_size > initial_size);
+  assert(new_size <= num_lines(g));
   g->cells = velvet_erealloc(g->cells, new_size * g->w, sizeof(*g->cells));
   g->lines = velvet_erealloc(g->lines, new_size, sizeof(*g->lines));
   g->scroll.capacity = new_size;
@@ -518,7 +519,7 @@ void screen_shuffle_rows_up(struct screen *g, int count, int top, int bottom) {
 
   if (top == 0 && bottom == g->h - 1) {
     g->scroll.offset += count;
-    g->scroll.height += count;
+    g->scroll.height = MIN(g->scroll.height + count, g->scroll.max);
     int required_capacity = CLAMP(g->scroll.offset + g->h, 0, g->scroll.max + g->h);
     if (required_capacity > g->scroll.capacity) scrollback_init(g, required_capacity);
   } else {
