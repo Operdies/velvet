@@ -100,13 +100,6 @@ struct velvet_render {
   struct velvet_render_state_cache state;
 };
 
-struct velvet_scene_layout {
-  int nmaster;
-  float mfact;
-  int notification_width;
-  int notification_height;
-};
-
 struct velvet_scene {
   struct vec /*velvet_window*/ windows;
   /* id of window in `windows`. Window can be retrieved with id2win */
@@ -114,7 +107,6 @@ struct velvet_scene {
   struct rect ws;
   struct velvet_render renderer;
   struct velvet_theme theme;
-  struct velvet_scene_layout layout;
   /* needed to raise window creation events. It is a bit spaghetty, but the alternative is just a lot of fuzz for */
   struct velvet *v;
 };
@@ -178,13 +170,6 @@ static const struct velvet_scene velvet_scene_default = {
                 },
             .state = render_state_cache_invalidated,
 
-        },
-    .layout =
-        {
-            .nmaster = 1,
-            .mfact = 0.5f,
-            .notification_height = 5,
-            .notification_width = 40,
         },
 };
 
