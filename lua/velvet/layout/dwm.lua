@@ -159,6 +159,15 @@ local function create_status_window()
   return taskbar
 end
 
+--- @param tag integer
+--- @return boolean
+local function tag_occupied(tag)
+  for _, set in pairs(tags) do
+    if set[tag] then return true end
+  end
+  return false
+end
+
 --- @return nil
 local function status_update()
   local sz = vv.api.get_screen_geometry()
@@ -171,8 +180,10 @@ local function status_update()
   taskbar:set_cursor(1, 1)
 
   for i=1,9 do 
-    taskbar:set_background_color(view[i] and 'red' or 'blue')
-    taskbar:draw((" %d "):format(i))
+    if view[i] or tag_occupied(i) then
+      taskbar:set_background_color(view[i] and 'red' or 'blue')
+      taskbar:draw((" %d "):format(i))
+    end
   end
 
   local function view_mouse_hit(_, args)
