@@ -174,7 +174,7 @@ static const struct velvet_theme velvet_theme_default = {
 
 static const struct velvet_render_state_cache render_state_cache_invalidated = {
     .cursor.position = {.column = -1, .line = -1},
-    .cell.style = {.attr = -1, .bg = {.cmd = -1}, .fg = {.cmd = -1}},
+    .cell.style = {.attr = -1, .bg = {.kind = -1}, .fg = {.kind = -1}},
     .cursor.options = {.style = -1, .visible = false},
 };
 

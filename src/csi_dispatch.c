@@ -276,7 +276,7 @@ static char *csi_apply_sgr_from_params(struct screen_cell_style *style, int n, s
         int type = attribute->sub[0];
         if (type == 5) { /* color from 256 color table */
           int color = attribute->sub[1];
-          *target = (struct color){.table = color, .cmd = COLOR_TABLE};
+          *target = (struct color){.table = color, .kind = COLOR_TABLE};
         } else if (type == 2) {
           // if n_sub > 4, that means colorspace was specified. We always ignore colorspace, but because it preceedes
           // the rgb values, the indices are shifted if it is present.
@@ -284,19 +284,19 @@ static char *csi_apply_sgr_from_params(struct screen_cell_style *style, int n, s
           int red = attribute->sub[start];
           int green = attribute->sub[start + 1];
           int blue = attribute->sub[start + 2];
-          *target = (struct color){.r = red, .g = green, .b = blue, .cmd = COLOR_RGB};
+          *target = (struct color){.red = red, .green = green, .blue = blue, .kind = COLOR_RGB};
         }
       } else if (color == 9) { /* reset */
         *target = color_default;
       } else { /* This is a normal indexed color from 0-8 in the table */
-        *target = (struct color){.table = attribute->primary % 10, .cmd = COLOR_TABLE};
+        *target = (struct color){.table = attribute->primary % 10, .kind = COLOR_TABLE};
       }
     } else if (attribute->primary >= 90 && attribute->primary <= 97) {
       int bright = 8 + attribute->primary - 90;
-      style->fg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+      style->fg = (struct color){.table = bright, .kind = COLOR_TABLE};
     } else if (attribute->primary >= 100 && attribute->primary <= 107) {
       int bright = 8 + attribute->primary - 100;
-      style->bg = (struct color){.table = bright, .cmd = COLOR_TABLE};
+      style->bg = (struct color){.table = bright, .kind = COLOR_TABLE};
     }
   }
   return NULL;

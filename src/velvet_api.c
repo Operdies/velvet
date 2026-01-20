@@ -361,10 +361,10 @@ void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win_id, e
 }
 
 static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
-  return (struct color) { .cmd = COLOR_RGB, .r = pal.red, .g = pal.green, .b = pal.blue };
+  return (struct color) { .kind = COLOR_RGB, .red = pal.red, .green = pal.green, .blue = pal.blue };
 }
 static struct velvet_api_rgb_color palette_from_rgb(struct color col) {
-  return (struct velvet_api_rgb_color) { .red = col.r, .blue = col.b, .green = col.g };
+  return (struct velvet_api_rgb_color) { .red = col.red, .blue = col.blue, .green = col.green };
 }
 
 struct velvet_api_color_palette vv_api_get_color_palette(struct velvet *v) {

@@ -165,21 +165,21 @@ static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
 
     static const uint8_t levels[6] = {0, 95, 135, 175, 215, 255};
 
-    return (struct color){.cmd = COLOR_RGB, .r = levels[r], .g = levels[g], .b = levels[b]};
+    return (struct color){.kind = COLOR_RGB, .red = levels[r], .green = levels[g], .blue = levels[b]};
   }
 
   /* Grayscale ramp */
   if (n >= 232) {
     uint8_t v = 8 + (n - 232) * 10;
-    return (struct color){.cmd = COLOR_RGB, .r = v, .g = v, .b = v};
+    return (struct color){.kind = COLOR_RGB, .red = v, .green = v, .blue = v};
   }
 
   return RGB("#000000");
 }
 
 static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg) {
-  if (c.cmd == COLOR_RESET) return fg ? t.foreground : t.background;
-  if (c.cmd == COLOR_TABLE) return xterm256_to_rgb(t, c.table);
+  if (c.kind == COLOR_RESET) return fg ? t.foreground : t.background;
+  if (c.kind == COLOR_TABLE) return xterm256_to_rgb(t, c.table);
   return c;
 }
 
@@ -190,40 +190,40 @@ static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg)
  * gives a decent perceived brightness change. */
 static struct color rgb_dim(struct color a, float f) {
   float r, g, b, h, s, v;
-  r = (float)a.r / 255;
-  g = (float)a.g / 255;
-  b = (float)a.b / 255;
+  red = (float)a.r / 255;
+  g = (float)a.green / 255;
+  b = (float)a.blue / 255;
   rgb_to_hsv(r, g, b, &h, &s, &v);
   v *= f;
   hsv_to_rgb(h, s, v, &r, &g, &b);
-  a.r = r * 255;
-  a.g = g * 255;
-  a.b = b * 255;
+  a.red = r * 255;
+  a.green = g * 255;
+  a.blue = b * 255;
   return a;
 }
 
 /* literal multiplication */
 static struct color rgb_mult(struct color a, float m) {
-  assert(a.cmd == COLOR_RGB);
-  a.r = CLAMP((float)a.r * m, 0, 255);
-  a.g = CLAMP((float)a.g * m, 0, 255);
-  a.b = CLAMP((float)a.b * m, 0, 255);
+  assert(a.kind == COLOR_RGB);
+  a.red = CLAMP((float)a.red * m, 0, 255);
+  a.green = CLAMP((float)a.green * m, 0, 255);
+  a.blue = CLAMP((float)a.blue * m, 0, 255);
   return a;
 }
 
 static struct color rgb_add(struct color a, struct color b) {
-  assert(a.cmd == COLOR_RGB);
-  assert(b.cmd == COLOR_RGB);
-  a.r = CLAMP(a.r + b.r, 0, 255);
-  a.g = CLAMP(a.g + b.g, 0, 255);
-  a.b = CLAMP(a.b + b.b, 0, 255);
+  assert(a.kind == COLOR_RGB);
+  assert(b.kind == COLOR_RGB);
+  a.red = CLAMP(a.red + b.red, 0, 255);
+  a.green = CLAMP(a.green + b.green, 0, 255);
+  a.blue = CLAMP(a.blue + b.blue, 0, 255);
   return a;
 }
 
 /* blend colors such that out == a * frac + b * (1.0f-frac) */
 static struct color color_alpha_blend(struct color a, struct color b, float frac) {
-  assert(a.cmd == COLOR_RGB);
-  assert(b.cmd == COLOR_RGB);
+  assert(a.kind == COLOR_RGB);
+  assert(b.kind == COLOR_RGB);
   return rgb_add(rgb_mult(a, frac), rgb_mult(b, 1.0f - frac));
 }
 
@@ -709,8 +709,8 @@ struct composite_options {
 };
 
 static bool is_cell_bg_clear(struct screen_cell c) {
-  if (c.style.attr & ATTR_REVERSE) return c.style.fg.cmd == COLOR_RESET;
-  else return c.style.bg.cmd == COLOR_RESET;
+  if (c.style.attr & ATTR_REVERSE) return c.style.fg.kind == COLOR_RESET;
+  else return c.style.bg.kind == COLOR_RESET;
 }
 
 static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win, struct velvet_theme t) {
@@ -942,9 +942,9 @@ static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
 }
 
 static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
-  if (col.cmd == COLOR_RESET) {
+  if (col.kind == COLOR_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
-  } else if (col.cmd == COLOR_TABLE) {
+  } else if (col.kind == COLOR_TABLE) {
     if (col.table <= 7) {
       sgr_buffer_push(sgr, (fg ? 30 : 40) + col.table);
     } else if (col.table <= 15) {
@@ -954,12 +954,12 @@ static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
       sgr_buffer_add_param(sgr, 5);
       sgr_buffer_add_param(sgr, col.table);
     }
-  } else if (col.cmd == COLOR_RGB) {
+  } else if (col.kind == COLOR_RGB) {
     sgr_buffer_push(sgr, fg ? 38 : 48);
     sgr_buffer_add_param(sgr, 2);
-    sgr_buffer_add_param(sgr, col.r);
-    sgr_buffer_add_param(sgr, col.g);
-    sgr_buffer_add_param(sgr, col.b);
+    sgr_buffer_add_param(sgr, col.red);
+    sgr_buffer_add_param(sgr, col.green);
+    sgr_buffer_add_param(sgr, col.blue);
   }
 }
 
@@ -1044,10 +1044,11 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
 }
 
 static bool color_equals(struct color a, struct color b) {
-  if (a.cmd != b.cmd) return false;
+  if (a.kind != b.kind) return false;
   switch (a.cmd) {
   case COLOR_RESET: return true;
-  case COLOR_RGB: return a.r == b.r && a.g == b.g && a.b == b.b;
+  case COLOR_RGBA:
+  case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue;
   case COLOR_TABLE: return a.table == b.table;
   }
   return false;

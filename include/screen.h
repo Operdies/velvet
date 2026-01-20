@@ -41,23 +41,26 @@ struct rect {
   int x, y, h, w, x_pixel, y_pixel;
 };
 
-enum PACK color_command {
+enum PACK color_kind {
+/* no color -- defaults to terminal background */
   COLOR_RESET,
+  /* full rgb color */
   COLOR_RGB,
+  /* one of the 16 pre-defined ansi colors OR xterm-256color */
   COLOR_TABLE,
 };
 
 struct color {
-  enum color_command cmd;
+  enum color_kind kind;
   union {
     uint8_t table;
     struct {
-      uint8_t r, g, b;
+      uint8_t red, green, blue;
     };
   };
 };
 
-static const struct color color_default = {.cmd = COLOR_RESET};
+static const struct color color_default = {.kind = COLOR_RESET};
 
 struct screen_cell_style {
   enum cell_attributes attr;
