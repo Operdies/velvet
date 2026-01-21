@@ -369,7 +369,11 @@ void velvet_loop(struct velvet *velvet) {
   velvet_source_config(velvet);
   velvet_scene_resize(&velvet->scene, ws);
 
-  velvet->min_ms_per_frame = 10;
+  /* arbitrarily set a minimum update rate of 40 fps
+   * Setting a higher update rate reduces throughput in extreme scenarios.
+   * For most updates, this timeout will not be hit at all since IO will normally be idle at some point.
+   * */
+  velvet->min_ms_per_frame = 1000 * (1.0 / 40);
   velvet_ensure_render_scheduled(velvet);
 
   for (;;) {
