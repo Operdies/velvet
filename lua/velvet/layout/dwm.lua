@@ -173,7 +173,7 @@ local function status_update()
   local sz = vv.api.get_screen_geometry()
   taskbar:set_geometry({ left = 0, top = sz.height - 1, width = sz.width, height = 1 })
   taskbar:clear_background_color()
-  taskbar:set_transparency_mode(vv.api.transparency_mode.clear)
+  taskbar:set_transparency_mode('clear')
   taskbar:set_opacity(0)
   taskbar:clear()
   taskbar:set_foreground_color('black')
@@ -223,12 +223,11 @@ local function arrange2()
     local vis = visibleontags(win)
     win:set_visibility(vis)
     local floating = layers[win] == dwm.layers.floating
-    local t = vv.api.transparency_mode
     if floating then
-      win:set_transparency_mode(t.all)
+      win:set_transparency_mode('all')
       win:set_opacity(0.8)
     else
-      win:set_transparency_mode(t.all)
+      win:set_transparency_mode('all')
       win:set_opacity(0.8)
     end
     if vis then

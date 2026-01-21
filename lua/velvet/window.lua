@@ -392,9 +392,11 @@ local function clamp(v, lo, hi)
   return v
 end
 
---- @param mode velvet.api.transparency_mode
+--- @param mode 'none'|'clear'|'all'
 function Window:set_transparency_mode(mode)
-  a.window_set_transparency_mode(self.id, mode)
+  local modes = { none = vv.api.transparency_mode.none, clear = vv.api.transparency_mode.clear, all = vv.api.transparency_mode.all }
+  local integer = type(mode) == 'number' and mode or modes[mode]
+  a.window_set_transparency_mode(self.id, integer)
 end
 
 --- @param dim number new dim factor. Highter dim means more dimming (0.0 - 1.0)
@@ -413,7 +415,7 @@ function Window:set_opacity(opacity)
   if opacity < 1 then
     local mode = a.window_get_transparency_mode(self.id)
     if mode == a.transparency_mode.none then 
-      self:set_transparency_mode(a.transparency_mode.all)
+      self:set_transparency_mode('all')
     end
   end
   a.window_set_opacity(self.id, opacity)
