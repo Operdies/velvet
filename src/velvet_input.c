@@ -861,6 +861,7 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
     } else if (sgr.scroll_direction == scroll_down) {
       screen_set_scroll_offset(screen, MAX(0, current_offset - in->options.scroll_multiplier));
     }
+    if (current_offset != screen_get_scroll_offset(screen)) velvet_ensure_render_scheduled(v);
   }
 }
 
