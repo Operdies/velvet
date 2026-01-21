@@ -338,11 +338,11 @@ static void velvet_source_config(struct velvet *v) {
     /* lua code to add the user's config folder to the module search path */
     string_push_format_slow(&scratch, "package.path = package.path .. ';%s/.config/velvet/?/init.lua;%s/.config/velvet/?.lua'", home, home);
     struct u8_slice search_path = string_range(&scratch, offset, -1);
-    luaL_dostring(v->L, (char*)search_path.content);
+    if (luaL_dostring(v->L, (char*)search_path.content) != LUA_OK) lua_die(v->L);
     velvet_lua_source(v, (char*)scratch.content);
   } else {
     /* if the user does not have a config file, source the default config */
-    luaL_dostring(v->L, "require('velvet.default_config')");
+    if (luaL_dostring(v->L, "require('velvet.default_config')") != LUA_OK) lua_die(v->L);
   }
   string_destroy(&scratch);
 }
