@@ -530,115 +530,6 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
   }
 }
 
-// static void velvet_render_calculate_borders(struct velvet_scene *m, struct velvet_window *host) {
-//   static const int hard = 0;
-//   // static const int rounded = 1;
-//   // static const int dragging = 2;
-//   int style = hard;
-//   char *borders[3][4] = {
-//       {"┌", "┘", "┐", "└"},
-//       {"╭", "╯", "╮", "╰"},
-//       {"╔", "╝", "╗", "╚"},
-//   };
-//
-//   struct velvet_render *r = &m->renderer;
-//
-//   struct codepoint topleft = codepoint_from_cstr(borders[style][0]);
-//   struct codepoint bottomright = codepoint_from_cstr(borders[style][1]);
-//   struct codepoint topright = codepoint_from_cstr(borders[style][2]);
-//   struct codepoint bottomleft = codepoint_from_cstr(borders[style][3]);
-//
-//   struct codepoint pipe = codepoint_from_cstr("│");
-//   struct codepoint dash = codepoint_from_cstr("─");
-//   // struct utf8 top_connector = utf8_from_cstr("┬");
-//   // struct utf8 left_connector = utf8_from_cstr("├");
-//   // struct utf8 right_connector = utf8_from_cstr("┤");
-//   // struct utf8 cross_connector = utf8_from_cstr("┼");
-//   struct codepoint elipsis = codepoint_from_cstr("…");
-//   bool is_focused = host == velvet_scene_get_focus(m);
-//   struct rect w = host->geometry;
-//   struct rect c = host->geometry;
-//   int bw = host->border_width;
-//
-//   if (!bw) return;
-//
-//   struct velvet_theme theme = m->theme;
-//   struct color chrome_color = is_focused ? theme.title.active : theme.title.inactive;
-//   struct screen_cell_style chrome = { .fg = chrome_color, .bg = theme.background };
-//   {
-//     struct screen_cell vert = {.cp = dash, .style = chrome};
-//     struct screen_cell horz = {.cp = pipe, .style = chrome};
-//
-//     /* title chrome */
-//     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y - 1, column, vert);
-//
-//     /* bottom chrome */
-//     for (int column = w.x + bw; column < w.x + w.w - bw; column++) velvet_render_set_cell(r, c.y + c.h, column, vert);
-//
-//     /* left chrome */
-//     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x - 1, horz);
-//
-//     /* right chrome */
-//     for (int line = c.y; line < c.y + c.h; line++) velvet_render_set_cell(r, line, c.x + c.w, horz);
-//
-//     struct screen_cell corner = {.style = chrome };
-//     corner.cp = topleft;
-//     velvet_render_set_cell(r, c.y - 1, c.x - 1, corner);
-//     corner.cp = topright;
-//     velvet_render_set_cell(r, c.y - 1, c.x + c.w, corner);
-//     corner.cp = bottomleft;
-//     velvet_render_set_cell(r, c.y + c.h, c.x - 1, corner);
-//     corner.cp = bottomright;
-//     velvet_render_set_cell(r, c.y + c.h, c.x + c.w, corner);
-//   }
-//
-//   {
-//     struct screen_cell truncation_symbol = {.cp = elipsis, .style = chrome};
-//
-//     int title_end = c.x + c.w;
-//
-//     /* draw scroll offset */
-//     struct screen *active = vte_get_current_screen(&host->emulator);
-//     if (screen_get_scroll_offset(active)) {
-//       int scroll_height = screen_get_scroll_height(active);
-//       char buf[40] = {0};
-//       struct string tmp = { .content = (uint8_t*)buf, .len = 0, .cap = sizeof(buf) };
-//       string_push_char(&tmp, '[');
-//       string_push_int(&tmp, screen_get_scroll_offset(active));
-//       string_push_char(&tmp, '/');
-//       string_push_int(&tmp, scroll_height);
-//       string_push_char(&tmp, ']');
-//       struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(tmp)};
-//       int start = c.x + c.w - tmp.len;
-//       if (start > c.x) {
-//         while (u8_slice_codepoint_iterator_next(&it)) {
-//           struct screen_cell chr = {.style = chrome, .cp = it.current};
-//           velvet_render_set_cell(r, c.y - 1, start++, chr);
-//         }
-//       }
-//       title_end -= tmp.len;
-//     }
-//
-//     int i = c.x + 1;
-//     /* draw the title */
-//     struct rect title_box = { .x = i, .h = 1, .y = c.y - 1 };
-//     struct u8_slice_codepoint_iterator it = {.src = string_as_u8_slice(host->title)};
-//     for (; i < title_end - 2 && u8_slice_codepoint_iterator_next(&it); i++) {
-//       struct screen_cell chr = {.style = chrome, .cp = it.current};
-//       velvet_render_set_cell(r, c.y - 1, i, chr);
-//     }
-//
-//     /* add a space or truncation symbol */
-//     if (i < title_end - 1 && u8_slice_codepoint_iterator_next(&it)) {
-//       /* title was truncated */
-//       velvet_render_set_cell(r, c.y - 1, i, truncation_symbol);
-//       i++;
-//     }
-//     title_box.w = i - title_box.x;
-//     host->rect.title = title_box;
-//   }
-// }
-
 static void velvet_render_reset_staged_region(struct velvet_render *r) {
   r->staged.bottom = -1;
   r->staged.left = r->w;
@@ -1102,6 +993,7 @@ void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_
     velvet_scene_remove_window(s, w);
 }
 
+/* TODO: Delete this. This should be managed from lua. */
 void velvet_window_update_title(struct velvet_window *p) {
   if (p->emulator.osc.title.len > 0) {
     string_clear(&p->title);
