@@ -72,6 +72,7 @@ map("<M-[>", apply(dwm.incmfact, -0.05))
 map("<M-]>", apply(dwm.incmfact, 0.05))
 map("<M-i>", apply(dwm.incnmaster, 1))
 map("<M-o>", apply(dwm.incnmaster, -1))
+map("<M-`>", dwm.select_previous_view)
 
 if #vv.api.get_windows() == 0 then
   vv.api.window_create_process(default_shell)

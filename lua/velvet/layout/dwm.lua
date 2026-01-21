@@ -72,6 +72,7 @@ local focus_order = {}
 
 local view = get_tagsset()
 view[1] = true
+local prev_view = view
 
 --- @type table<velvet.window, boolean[]> 
 local tags = {}
@@ -300,14 +301,17 @@ local function remove_window()
   arrange()
 end
 
+
 --- Toggle visibility of workspace #num. Multiple workspaces can be visible
 function dwm.toggle_view(num)
+  prev_view = table.move(view, 1, #view, 1, {})
   if view[num] then view[num] = false else view[num] = true end
   arrange()
 end
 
 --- Set the currently visible workspaces to |view_tags| (table) or { view_tags } (integer)
 function dwm.set_view(view_tags)
+  prev_view = table.move(view, 1, #view, 1, {})
   local new_view = get_tagsset()
   if type(view_tags) == 'table' then
     for _, t in ipairs(view_tags) do
@@ -316,6 +320,13 @@ function dwm.set_view(view_tags)
   else
     new_view[view_tags] = true
   end
+  view = new_view
+  arrange()
+end
+
+function dwm.select_previous_view()
+  local new_view = table.move(prev_view, 1, #prev_view, 1, {})
+  prev_view = view
   view = new_view
   arrange()
 end
