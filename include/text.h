@@ -2,6 +2,7 @@
 #define TEXT_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 struct utf8 {
   uint8_t utf8[4];

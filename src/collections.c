@@ -19,7 +19,7 @@ void *vec_nth_unchecked(struct vec v, size_t i) {
 }
 
 static void string_ensure_capacity(struct string *str, size_t required) {
-  if (str->content == nullptr || str->cap < required) {
+  if (str->content == NULL || str->cap < required) {
     uint8_t *prev = str->content;
     size_t newsize = next_size(required);
     str->content = velvet_calloc(newsize, 1);
@@ -46,7 +46,7 @@ void string_push_int(struct string *str, int n) {
 }
 
 void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const char *const final) {
-  const uint8_t *csi = u8"\x1b[";
+  const uint8_t *csi = "\x1b[";
   string_push(str, csi);
   if (leading) string_push_char(str, leading);
   for (size_t i = 0; i < params.n; i++) {
@@ -140,7 +140,7 @@ void string_clear(struct string *str) {
 void string_destroy(struct string *str) {
   str->cap = str->len = 0;
   free(str->content);
-  str->content = nullptr;
+  str->content = NULL;
 }
 
 void vec_ensure_capacity(struct vec *v, size_t c) {
@@ -189,7 +189,7 @@ void vec_swap_remove(struct vec *v, void *e) {
 }
 
 void *vec_pop(struct vec *v) {
-  if (v->length == 0) return nullptr;
+  if (v->length == 0) return NULL;
   v->length--;
   return vec_nth_unchecked(*v, v->length);
 }
@@ -268,11 +268,11 @@ void vec_clear(struct vec *v) {
 void vec_destroy(struct vec *v) {
   v->length = v->capacity = 0;
   free(v->content);
-  v->content = nullptr;
+  v->content = NULL;
 }
 
 void *vec_new_element(struct vec *v) {
-  vec_push(v, nullptr);
+  vec_push(v, NULL);
   return vec_nth(*v, v->length - 1);
 }
 
@@ -384,7 +384,7 @@ bool hashmap_add(struct hashmap *h, uint32_t key, void *value) {
 
 void *hashmap_set(struct hashmap *h, uint32_t key, void *value) {
   uint32_t slot;
-  void *ret = nullptr;
+  void *ret = NULL;
   if (hashmap_find_key(h, key, &slot)) {
     void *removed = h->values[slot];
     h->values[slot] = value;
@@ -401,7 +401,7 @@ void *hashmap_get(const struct hashmap *h, uint32_t key) {
   if (hashmap_find_key(h, key, &slot)) {
     return h->values[slot];
   }
-  return nullptr;
+  return NULL;
 }
 
 bool hashmap_contains(const struct hashmap *h, uint32_t key) {
@@ -620,7 +620,7 @@ void hashmap_destroy(struct hashmap *h) {
 void string_push_vformat_slow(struct string *s, char *fmt, va_list ap) {
   va_list copy;
   va_copy(copy, ap);
-  size_t required = vsnprintf(nullptr, 0, fmt, copy);
+  size_t required = vsnprintf(NULL, 0, fmt, copy);
   string_ensure_capacity(s, s->len + required + 1);
   s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
 }

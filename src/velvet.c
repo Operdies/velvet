@@ -41,7 +41,7 @@ void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
   }
   velvet_session_destroy(velvet, s);
   if (sock && velvet->focused_socket == sock) {
-    struct velvet_session *fst = nullptr;
+    struct velvet_session *fst = NULL;
     vec_find(fst, velvet->sessions, fst->socket && fst->input);
     velvet->focused_socket = fst ? fst->socket : 0;
   }
@@ -59,7 +59,7 @@ struct velvet_session *velvet_get_focused_session(struct velvet *v) {
     vec_find(f, v->sessions, f->socket == v->focused_socket);
     return f;
   }
-  return nullptr;
+  return NULL;
 }
 
 static void session_handle_command_buffer(struct velvet *v, struct velvet_session *src) {
@@ -145,7 +145,7 @@ static void session_socket_callback(struct io_source *src) {
 static void socket_accept(struct io_source *src) {
   struct velvet *velvet = src->data;
 
-  int client_fd = accept(src->fd, nullptr, nullptr);
+  int client_fd = accept(src->fd, NULL, NULL);
   if (client_fd == -1) {
     ERROR("accept:");
     return;

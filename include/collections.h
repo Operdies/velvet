@@ -169,7 +169,7 @@ bool u8_match(struct u8_slice s, char *opt);
 #define vec_rforeach(item, vec)                                                                                        \
   assert(sizeof(*(item)) == (vec).element_size);                                                                       \
   for ((item) = ((vec).length == 0)                                                                                    \
-                    ? nullptr                                                                                          \
+                    ? NULL                                                                                          \
                     : (void *)((char *)(vec).content + (vec).length * (vec).element_size - (vec).element_size);        \
        ((vec).length) && (((char *)(item)) >= (char *)(vec).content);                                                  \
        (item)--)
@@ -186,12 +186,12 @@ bool u8_match(struct u8_slice s, char *opt);
 #define vec_find(item, vec, cond)                                                                                      \
   do {                                                                                                                 \
     assert(sizeof(*(item)) == (vec).element_size);                                                                     \
-    item = nullptr;                                                                                                    \
+    item = NULL;                                                                                                    \
     if ((vec).length == 0) break;                                                                                      \
     for ((item) = vec.content; (item) && !(cond);) {                                                                   \
       item++; /* go next */                                                                                            \
       if (!(((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size))) {                         \
-        item = nullptr; /* set item to nullptr if not found */                                                         \
+        item = NULL; /* set item to NULL if not found */                                                         \
         break;                                                                                                         \
       }                                                                                                                \
     }                                                                                                                  \

@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include "velvet_api.h"
 #include "platform.h"
+#include <stdarg.h>
 
 lua_Integer vv_api_get_key_repeat_timeout(struct velvet *v) {
   return v->input.options.key_repeat_timeout_ms;
@@ -15,7 +16,7 @@ lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_valu
 
 _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   va_list ap;
-  va_start(ap);
+  va_start(ap, fmt);
   lua_pushvfstring(L, fmt, ap);
   va_end(ap);
   lua_error(L);
@@ -290,7 +291,7 @@ lua_Integer vv_api_get_sessions(lua_State *L) {
 void vv_api_set_active_session(struct velvet *v, lua_Integer session_id) {
   struct velvet_session *s;
   vec_find(s, v->sessions, s->socket == session_id);
-  if (s == nullptr || !s->output)
+  if (s == NULL || !s->output)
     lua_bail(v->L, "Session %I is not a valid session.", session_id);
   velvet_set_focused_session(v, session_id);
 }

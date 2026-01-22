@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "collections.h"
 
-#define ESC u8"\x1b"
+#define ESC "\x1b"
 #define CSI ESC "["
 
 #define VT(name, command) static const struct u8_slice vt_##name = {.content = command, .len = sizeof(command) - 1}

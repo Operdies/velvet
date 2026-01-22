@@ -37,12 +37,12 @@ struct velvet_window *velvet_scene_get_window_from_id(struct velvet_scene *m, in
 
 struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m) {
   if (m->focus) return velvet_scene_get_window_from_id(m, m->focus);
-  return nullptr;
+  return NULL;
 }
 
 void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_focus) {
   struct velvet_window *current_focus = velvet_scene_get_focus(m);
-  if (new_focus != current_focus || new_focus == nullptr) {
+  if (new_focus != current_focus || new_focus == NULL) {
     if (current_focus) velvet_window_notify_focus(current_focus, false);
     if (new_focus) velvet_window_notify_focus(new_focus, true);
 
@@ -243,8 +243,8 @@ static struct screen_cell normalize_cell(struct velvet_theme t, struct screen_ce
 }
 
 static struct screen_cell *velvet_render_get_staged_cell(struct velvet_render *r, int line, int column) {
-  if (!(line >= 0 && line < r->h)) return nullptr;
-  if (!(column >= 0 && column < r->w)) return nullptr;
+  if (!(line >= 0 && line < r->h)) return NULL;
+  if (!(column >= 0 && column < r->w)) return NULL;
 
   struct velvet_render_buffer *b = &r->staged.buffer;
   struct velvet_render_buffer_line *l = &b->lines[line];
@@ -654,7 +654,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         if (blend) {
           above = normalize_cell(t, above);
           below = normalize_cell(t, below);
-          struct screen_cell *before = column ? &composite->cells[cell_index - 1] : nullptr;
+          struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
           bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
 
           /* if the top cell is blank, draw the glyph from the cell below, but tint it
@@ -777,7 +777,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
       bool cursor_obscured = false;
       /* if a window is above the current window and obscures the cursor, we should not show it */
       struct velvet_window_hit hit;
-      if (velvet_scene_hit(m, col, line, &hit, nullptr, nullptr) && hit.win != focused) {
+      if (velvet_scene_hit(m, col, line, &hit, NULL, NULL) && hit.win != focused) {
         if (hit.win->transparency.mode == VELVET_API_TRANSPARENCY_MODE_NONE)
           cursor_obscured = true;
       }
@@ -928,14 +928,14 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
 
   if (sgr.n) {
     struct string *w = &r->draw_buffer;
-    string_push(w, u8"\x1b[");
+    string_push(w, "\x1b[");
     int current_load = 0;
     for (int i = 0; i < sgr.n; i++) {
       struct sgr_param *p = &sgr.params[i];
       int this_load = 1 + p->n_sub;
       if (current_load + this_load > MAX_LOAD) {
         w->content[w->len - 1] = 'm';
-        string_push(w, u8"\x1b[");
+        string_push(w, "\x1b[");
         current_load = 0;
       }
       current_load += this_load;
@@ -1103,7 +1103,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   /* forward declare forkpty since it's the only thing we need from its header,
    * and the header is different on Mac and Linux. On Mac it is <util.h> (????????) */
   extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-  pid_t pid = forkpty(&velvet_window->pty, nullptr, nullptr, &velvet_windowsize);
+  pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
 
   if (pid != 0) {
     /* restore default handlers for a couple of terminating signals.
@@ -1116,7 +1116,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
     struct sigaction sa = {0};
     sa.sa_handler = SIG_DFL;
     for (int i = 0; i < LENGTH(restore); i++)
-      sigaction(restore[i], &sa, nullptr);
+      sigaction(restore[i], &sa, NULL);
   }
 
   /* restore signal generation in both child and parent */

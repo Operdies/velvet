@@ -182,19 +182,19 @@ static void test_screen_input_output(const char *const outer_test_name, const ch
   struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
 
   velvet_scene_resize(&v, blarge);
-  velvet_window_resize(p, blarge, nullptr);
+  velvet_window_resize(p, blarge, NULL);
 
   {
     // 1. Write the input and verify the output
     velvet_window_process_output(p, u8_slice_from_cstr(input));
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     assert_screen_equals(expected, vte_get_current_screen(&p->emulator), testname2);
 
     // 1.b Feed the render buffer back to the vte and verify the output is clear
     velvet_window_process_output(p, string_as_u8_slice(v.renderer.draw_buffer));
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     snprintf(testname2, sizeof(testname2), "%s: initial replay", outer_test_name);
     assert_screen_equals(expected, vte_get_current_screen(&p->emulator), testname2);
   }
@@ -210,28 +210,28 @@ test_screen_reflow_grow(const char *const test_name, const char *const input, sc
   struct velvet_scene v = velvet_scene_default;
   struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
   velvet_scene_resize(&v, bsmall);
-  velvet_window_resize(p, bsmall, nullptr);
+  velvet_window_resize(p, bsmall, NULL);
 
   velvet_window_process_output(p, u8_slice_from_cstr(input));
   struct string output = {0};
   {
     string_clear(&output);
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
   }
   {
     string_clear(&output);
-    velvet_window_resize(p, blarge, nullptr);
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_window_resize(p, blarge, NULL);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     assert_screen_equals(large, vte_get_current_screen(&p->emulator), test_name);
   }
   {
     string_clear(&output);
-    velvet_window_resize(p, bsmall, nullptr);
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_window_resize(p, bsmall, NULL);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     // It is always possibly to losslessly convert back to the initial screen, so let's verify that
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
   }
@@ -248,17 +248,17 @@ test_screen_reflow_shrink(const char *const test_name, const char *const input, 
   struct velvet_scene v = velvet_scene_default;
   struct velvet_window *p = velvet_scene_manage(&v, (struct velvet_window){.emulator = vte_default});
   velvet_scene_resize(&v, blarge);
-  velvet_window_resize(p, blarge, nullptr);
+  velvet_window_resize(p, blarge, NULL);
   velvet_window_process_output(p, u8_slice_from_cstr(input));
   {
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     assert_screen_equals(large, vte_get_current_screen(&p->emulator), test_name);
   }
   {
-    velvet_window_resize(p, bsmall, nullptr);
-    velvet_scene_render_damage(&v, render_func, nullptr);
-    velvet_scene_render_full(&v, render_func, nullptr);
+    velvet_window_resize(p, bsmall, NULL);
+    velvet_scene_render_damage(&v, render_func, NULL);
+    velvet_scene_render_full(&v, render_func, NULL);
     assert_screen_equals(small, vte_get_current_screen(&p->emulator), test_name);
   }
   velvet_scene_destroy(&v);
@@ -724,7 +724,7 @@ void assert_csi_equals(const char *testname, struct csi *expected, struct csi *a
   }
 }
 
-void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected) {
+void test_csi_testcase(const char *testname, char *input, struct csi expected) {
   struct u8_slice input_slice = u8_slice_from_cstr((char *)input);
   struct csi actual = {0};
   size_t count = csi_parse(&actual, input_slice);
@@ -733,13 +733,13 @@ void test_csi_testcase(const char *testname, uint8_t *input, struct csi expected
 }
 
 void test_csi_parsing(void) {
-  test_csi_testcase("Reject Empty", u8"", (struct csi){.state = CSI_REJECT});
+  test_csi_testcase("Reject Empty", "", (struct csi){.state = CSI_REJECT});
   test_csi_testcase(
-      "Reset 1", u8"0m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
+      "Reset 1", "0m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
   test_csi_testcase(
-      "Reset 0", u8"m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
+      "Reset 0", "m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
   test_csi_testcase("Basic Parameter List",
-                    u8"1;2;33;444m",
+                    "1;2;33;444m",
                     (struct csi){
                         .final = 'm',
                         .n_params = 4,
@@ -748,37 +748,37 @@ void test_csi_parsing(void) {
                     });
   test_csi_testcase(
       "RGB Modern Syntax",
-      u8"38:2:100:100:100m",
+      "38:2:100:100:100m",
       (struct csi){
           .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
   test_csi_testcase(
       "RGB Modern Syntax + colorspace",
-      u8"38:2::100:100:100m",
+      "38:2::100:100:100m",
       (struct csi){
           .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 0, 100, 100, 100}}}});
   test_csi_testcase(
       "RGB Legacy Syntax",
-      u8"38;2;100;100;100m",
+      "38;2;100;100;100m",
       (struct csi){
           .final = 'm', .n_params = 1, .state = CSI_ACCEPT, .params = {{.primary = 38, .sub = {2, 100, 100, 100}}}});
   test_csi_testcase(
       "RGB Legacy Syntax 2",
-      u8"48;2;118;159;240;38;2;235;160;172m",
+      "48;2;118;159;240;38;2;235;160;172m",
       (struct csi){
           .final = 'm', .n_params = 2, .state = CSI_ACCEPT, .params = {{.primary = 48, .sub = {2, 118, 159, 240}}, {.primary = 38, .sub = {2, 235, 160, 172}}}});
   test_csi_testcase(
     "Test leading / intermediate parsing 1",
-    u8">c",
+    ">c",
     (struct csi) {
       .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 1 });
   test_csi_testcase(
     "Test leading / intermediate parsing 1",
-    u8">?c",
+    ">?c",
     (struct csi) {
       .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .intermediate = '?' });
   test_csi_testcase(
     "Test leading / intermediate parsing 1",
-    u8"4?c",
+    "4?c",
     (struct csi) {
       .leading = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
 }
@@ -794,9 +794,9 @@ void test_csi_parsing(void) {
 static void test_hashmap() {
   #define stress (1 << 15)
   struct hashmap h = {0};
-  assert(hashmap_add(&h, 0, nullptr));
-  assert(hashmap_get(&h, 0) == nullptr);
-  assert(!hashmap_add(&h, 0, nullptr));
+  assert(hashmap_add(&h, 0, NULL));
+  assert(hashmap_get(&h, 0) == NULL);
+  assert(!hashmap_add(&h, 0, NULL));
   assert(!hashmap_get(&h, 1));
   assert(hashmap_add(&h, 1, "Hello"));
   char *str;
@@ -804,10 +804,10 @@ static void test_hashmap() {
 
   char *strings[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
   int n_strings = LENGTH(strings);
-  assert(hashmap_remove(&h, 0, nullptr));
-  assert(!hashmap_remove(&h, 0, nullptr));
-  assert(hashmap_remove(&h, 1, nullptr));
-  assert(!hashmap_remove(&h, 1, nullptr));
+  assert(hashmap_remove(&h, 0, NULL));
+  assert(!hashmap_remove(&h, 0, NULL));
+  assert(hashmap_remove(&h, 1, NULL));
+  assert(!hashmap_remove(&h, 1, NULL));
   for (int i = 0; i < n_strings; i++) {
     assert(hashmap_add(&h, i, strings[i]));
     for (int j = 0; j <= i; j++) {
@@ -821,7 +821,7 @@ static void test_hashmap() {
   }
   assert((int)h.count == n_strings);
   for (int i = 0; i < n_strings; i++) {
-    assert(hashmap_remove(&h, i, nullptr));
+    assert(hashmap_remove(&h, i, NULL));
   }
   assert(h.count == 0);
 
@@ -837,7 +837,7 @@ static void test_hashmap() {
   }
   assert(h.count == stress);
   for (int i = stress - 1; i >= 0; i--) {
-    assert(hashmap_remove(&h, i, nullptr));
+    assert(hashmap_remove(&h, i, NULL));
   }
   assert(h.count == 0);
   for (int i = 0; i < stress; i++) {
@@ -847,11 +847,11 @@ static void test_hashmap() {
   }
   assert(h.count == stress);
   for (int i = 0; i < stress; i += 2) {
-    assert(hashmap_remove(&h, i, nullptr));
+    assert(hashmap_remove(&h, i, NULL));
   }
   assert(h.count == stress / 2);
   for (int i = 0; i < stress; i += 2) {
-    assert(!hashmap_remove(&h, i, nullptr));
+    assert(!hashmap_remove(&h, i, NULL));
   }
   assert(h.count == stress / 2);
   for (int i = 0; i < stress; i++) {
@@ -877,7 +877,7 @@ void test_hashmap_collisions() {
   }
   for (int i = 2; i < 10; i++) {
     uint32_t k = (i % 8) * 13;
-    assertf(hashmap_remove(&h, k, nullptr), "Error removing element at index %d", k);
+    assertf(hashmap_remove(&h, k, NULL), "Error removing element at index %d", k);
   }
   for (int i = 0; i < 8; i++) {
     uint32_t k = i * 13;
@@ -886,14 +886,14 @@ void test_hashmap_collisions() {
   }
   for (int i = 7; i >= 0; i--) {
     uint32_t k = i * 13;
-    assertf(hashmap_remove(&h, k, nullptr), "Error removing element at index %d", k);
+    assertf(hashmap_remove(&h, k, NULL), "Error removing element at index %d", k);
   }
   hashmap_destroy(&h);
 }
 
 void test_string() {
   struct string s = {0};
-  string_push(&s, u8"Hello!");
+  string_push(&s, "Hello!");
   struct u8_slice middle = string_range(&s, 1, -2);
   struct u8_slice start = string_range(&s, 0, 3);
   struct u8_slice end = string_range(&s, 2, s.len);
@@ -912,7 +912,7 @@ void test_string() {
 }
 
 void test_vec() {
-  int *item = nullptr;
+  int *item = NULL;
   struct vec v = vec(int);
   assert(vec_index(&v, &item) == -1);
   vec_foreach(item, v) {
@@ -922,7 +922,7 @@ void test_vec() {
     assert(!"rforeach: Vec should be empty!");
   }
   vec_find(item, v, *item == 1);
-  assert(item == nullptr);
+  assert(item == NULL);
   int push[] = {3, 6, 7, 8, 0, 1, 3, 5, 1};
   for (int i = 0; i < LENGTH(push); i++) {
     vec_push(&v, push + i);
@@ -934,11 +934,11 @@ void test_vec() {
   vec_insert(&v, 4, &(int){9});
   vec_insert(&v, 4, &(int){4});
   vec_find(item, v, *item == 1);
-  assert(item != nullptr);
+  assert(item != NULL);
   assert(*item == 1);
   assert(vec_index(&v, item) == 8);
   vec_find(item, v, *item == 99);
-  assert(item == nullptr);
+  assert(item == NULL);
   ssize_t index = 0;
   vec_foreach(item, v) {
     int actual = *item;
@@ -976,7 +976,7 @@ void test_vec() {
     assert(!"rforeach: Vec should be empty!");
   }
   vec_find(item, v, *item == 1);
-  assert(item == nullptr);
+  assert(item == NULL);
   assert(v.length == 0);
 
   vec_set(&v, 5, &(int){7});
@@ -998,8 +998,8 @@ void test_vec() {
   for (int i = 0; i < 5; i++) {
     assert(*(int*)vec_pop(&v) == 0);
   }
-  assert(vec_pop(&v) == nullptr);
-  assert(vec_pop(&v) == nullptr);
+  assert(vec_pop(&v) == NULL);
+  assert(vec_pop(&v) == NULL);
 
   vec_destroy(&v);
 }

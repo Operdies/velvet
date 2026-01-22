@@ -11,7 +11,7 @@ static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)ud;
   if (nsize == 0) {
     free(ptr);
-    ptr = nullptr;
+    ptr = NULL;
   } else {
     ptr = realloc(ptr, nsize);
   }
@@ -51,7 +51,7 @@ static void velvet_lua_set_default_options(struct velvet *v) {
 }
 
 void velvet_lua_init(struct velvet *v) {
-  lua_State *L = lua_newstate(lua_allocator, nullptr, 0);
+  lua_State *L = lua_newstate(lua_allocator, NULL, 0);
   v->L = L;
   luaL_openselectedlibs(v->L, ~(LUA_IOLIBK), 0);
   struct velvet **extra = lua_getextraspace(v->L);

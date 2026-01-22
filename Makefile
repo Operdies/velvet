@@ -40,7 +40,7 @@ PROFILE_TARGET ?= profile
 RELEASE_LTO_TARGET ?= release_lto
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps -I$(LUA_INCLUDE) -I$(abspath .)/$(GEN_DIR)
 OUT_DIR ?= bin
-COMMANDS = vv test statusbar keyboard
+COMMANDS = vv test keyboard
 CMD_DIR = cmd
 
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
@@ -56,7 +56,7 @@ OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
 
-CFLAGS = -std=c23 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
+CFLAGS = -std=c99 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = -lm
 
 DEBUG_CFLAGS = -O0 -g -fsanitize=address

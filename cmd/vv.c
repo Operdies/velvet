@@ -166,7 +166,7 @@ static void usage(char *arg0) {
 
 struct velvet_args velvet_parse_args(int argc, char **argv) {
   #define F(name) (strcmp(arg, #name) == 0)
-  #define NEXT() ((++i) < argc ? argv[i] : nullptr)
+  #define NEXT() ((++i) < argc ? argv[i] : NULL)
   #define EXPECT(value, arg) if (!(value)) velvet_fatal("Option %s expected argument.", arg)
   #define GET(target) target = NEXT(); EXPECT(target, arg)
   struct velvet_args a = {0};
@@ -409,7 +409,7 @@ struct vv_source {
 };
 
 
-static void vv_source_exit(void*) {
+static void vv_source_exit(void* _) {
   exit(0);
 }
 
@@ -425,7 +425,7 @@ static void vv_source_input(struct io_source *src, struct u8_slice data) {
   struct vv_source *s = src->data;
   if (data.len == 0) {
     // give the server a bit of time to respond with error messages
-    io_schedule(&s->loop, 10, vv_source_exit, nullptr);
+    io_schedule(&s->loop, 10, vv_source_exit, NULL);
     return;
   }
   io_write(s->sock, data);
@@ -458,7 +458,7 @@ static void vv_set(int sockfd, char *setting, char *value) {
 static void vv_configure(struct velvet_args args) {
   int sockfd = vv_connect(args.socket);
 
-  char *wd = getcwd(nullptr, 0);
+  char *wd = getcwd(NULL, 0);
   if (wd) {
     vv_set(sockfd, "cwd", wd);
     free(wd);

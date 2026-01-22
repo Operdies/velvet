@@ -55,7 +55,7 @@ void io_dispatch(struct io *io) {
   }
 
   /* TODO: Switch to epoll / kqueue based implementation */
-  struct io_schedule *next_schedule = nullptr;
+  struct io_schedule *next_schedule = NULL;
   struct io_schedule *schedule;
   vec_foreach(schedule, io->scheduled_actions) {
     if (!next_schedule)

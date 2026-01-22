@@ -203,7 +203,7 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
                           cmd.content,
                           source_socket);
 
-  if (luaL_loadbuffer(v->L, (char*)S.content, S.len, nullptr) != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK) {
+  if (luaL_loadbuffer(v->L, (char*)S.content, S.len, NULL) != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK) {
     size_t len = 0;
     const char *err = lua_tolstring(L, -1, &len);
     if (source_socket) {
@@ -217,7 +217,7 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
 }
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
-  struct velvet_session *sender = nullptr;
+  struct velvet_session *sender = NULL;
   velvet_log("velvet_cmd: %.*s", (int)cmd.len, cmd.content);
   if (source_socket) vec_find(sender, v->sessions, sender->socket == source_socket);
 

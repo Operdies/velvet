@@ -529,7 +529,7 @@ bool DA_SECONDARY(struct vte *vte, struct csi *csi) {
       // Pp = terminal type, where '1' means VT220
       // Pv = firmware version. Ghostty responds with 10, so it must be good.
       // Pc indicates the ROM cartridge registration number and is always zero
-    string_push(&vte->pending_input, u8"\x1b[>1;10;0c");
+    string_push(&vte->pending_input, "\x1b[>1;10;0c");
     return true;
   } break;
   default: return csi_dispatch_todo(vte, csi);
@@ -842,7 +842,7 @@ static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi) {
   int pop_count = csi->params[0].primary;
   if (pop_count < 0) return true;
   if (!pop_count) pop_count = 1;
-  void *popped = nullptr;
+  void *popped = NULL;
 
   while (pop_count && (popped = vec_pop(&o->kitty[o->alternate_screen].stack))) {
     new_flags = *(enum kitty_keyboard_options *)popped;

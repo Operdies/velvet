@@ -47,7 +47,7 @@ void vte_send_device_attributes(struct vte *vte) {
   // Advertise VT102 support (same as alacritty)
   // TODO: Figure out how to advertise exact supported features here.
   // Step 0: find good documentation.
-  string_push(&vte->pending_input, u8"\x1b[?6c");
+  string_push(&vte->pending_input, "\x1b[?6c");
 }
 
 void vte_send_status_report(struct vte *vte, enum vte_dsr n) {
@@ -422,8 +422,8 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
   // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands
   // OSC commands can be terminated with either BEL or ST. Although ST is preferred, we respond to the query with the
   // same terminator as the one we received for maximum compatibility
-  static const uint8_t *BEL = u8"\a";
-  static const uint8_t *ST = u8"\x1b\\";
+  static const uint8_t *BEL = "\a";
+  static const uint8_t *ST = "\x1b\\";
   char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
   string_push_char(&vte->command_buffer, ch);
   if (ch == BELL || (ch == '\\' && prev == ESC)) {
@@ -458,8 +458,8 @@ static bool apc_dispatch(struct vte *vte, struct u8_slice cmd) {
 }
 
 static void vte_dispatch_apc(struct vte *vte, uint8_t ch) {
-  static const uint8_t *BEL = u8"\a";
-  static const uint8_t *ST = u8"\x1b\\";
+  static const uint8_t *BEL = "\a";
+  static const uint8_t *ST = "\x1b\\";
 
   char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
   string_push_char(&vte->command_buffer, ch);
@@ -541,7 +541,7 @@ void vte_enter_primary_screen(struct vte *vte) {
 void vte_set_size(struct vte *vte, struct rect sz) {
   struct screen *g = vte_get_current_screen(vte);
   vte->ws = sz;
-  if (g->cells == nullptr || g->w != sz.w || g->h != sz.h) {
+  if (g->cells == NULL || g->w != sz.w || g->h != sz.h) {
     if (vte->options.alternate_screen) {
       vte_init_alternate_screen(vte);
     } else {

@@ -100,7 +100,7 @@ local type_lookup = {
     c_type = "const char*",
     lua_type = "string",
     check = function(idx)
-      return ("luaL_checklstring(L, %d, nullptr)"):format(idx)
+      return ("luaL_checklstring(L, %d, NULL)"):format(idx)
     end,
     push = function(var) return ("lua_pushstring(L, %s)"):format(var) end
   },
@@ -241,7 +241,6 @@ table.insert(h, ([[#ifndef %s
 #define %s
 #include "lua.h"
 struct velvet;
-typedef struct lua_State lua_State;
 
 ]]):format("VELVET_API_H", "VELVET_API_H"))
 
@@ -392,7 +391,7 @@ static int l_vv_api_%s(lua_State *L){
     for _, o in ipairs(fn.optional) do
       table.insert(c, ([[
   %s %s;
-  %s* p_%s = nullptr;
+  %s* p_%s = NULL;
 ]]):format(c_type(o.type), o.name, c_type(o.type), o.name))
       table.insert(args, "p_" .. o.name)
     end

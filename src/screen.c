@@ -416,8 +416,8 @@ void screen_carriage_return(struct screen *g) {
 void screen_destroy(struct screen *screen) {
   free(screen->cells);
   free(screen->lines);
-  screen->cells = nullptr;
-  screen->lines = nullptr;
+  screen->cells = NULL;
+  screen->lines = NULL;
 }
 
 void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src) {

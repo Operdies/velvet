@@ -15,15 +15,15 @@
 #define CTRL(x) ((x) & 037)
 #endif
 
-static const struct u8_slice bracketed_paste_start = STRING_SLICE(u8"\x1b[200~");
-static const struct u8_slice bracketed_paste_end = STRING_SLICE(u8"\x1b[201~");
+static const struct u8_slice bracketed_paste_start = STRING_SLICE("\x1b[200~");
+static const struct u8_slice bracketed_paste_end = STRING_SLICE("\x1b[201~");
 
 enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
 enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
 
-constexpr int scroll_up = VELVET_API_SCROLL_DIRECTION_UP;
-constexpr int scroll_down = VELVET_API_SCROLL_DIRECTION_DOWN;
-constexpr int mouse_none = VELVET_API_MOUSE_BUTTON_NONE;
+static const int scroll_up = VELVET_API_SCROLL_DIRECTION_UP;
+static const int scroll_down = VELVET_API_SCROLL_DIRECTION_DOWN;
+static const int mouse_none = VELVET_API_MOUSE_BUTTON_NONE;
 
 struct mouse_sgr {
   union {
@@ -116,8 +116,8 @@ static void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c);
 static void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c);
 static void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c);
 
-constexpr int mouse_up = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_UP;
-constexpr int mouse_down = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN;
+static const int mouse_up = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_UP;
+static const int mouse_down = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN;
 
 static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
   int btn = c.params[0].primary;
@@ -342,8 +342,7 @@ static bool is_modifier(uint32_t codepoint) {
 
 /* strip unsupported modifiers and collapse equivalent key states for easier comparisons */
 static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
-  constexpr uint32_t unused_modifiers =
-      VELVET_API_KEY_MODIFIERS_HYPER | VELVET_API_KEY_MODIFIERS_NUM_LOCK | VELVET_API_KEY_MODIFIERS_CAPS_LOCK;
+  static const uint32_t unused_modifiers = VELVET_API_KEY_MODIFIERS_HYPER | VELVET_API_KEY_MODIFIERS_NUM_LOCK | VELVET_API_KEY_MODIFIERS_CAPS_LOCK;
   uint32_t c = e.key.codepoint;
   /* treat alt the same as meta for all practical purposes */
   if ((e.modifiers & VELVET_API_KEY_MODIFIERS_ALT) || (e.modifiers & VELVET_API_KEY_MODIFIERS_META)) {
@@ -583,7 +582,7 @@ static void
 velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enum velvet_api_key_modifiers m) {
   int n = 0;
   struct utf8 buf = {0};
-  char *escape = nullptr;
+  char *escape = NULL;
   if (vk.kitty_terminator == 'u' && vk.codepoint && vk.codepoint < 255) {
     uint32_t send = vk.alternate_codepoint && vk.alternate_codepoint < 255 ? vk.alternate_codepoint : vk.codepoint;
     n = codepoint_to_utf8(send, &buf);
@@ -944,7 +943,7 @@ static void emit_mouse_event(struct velvet *v, struct mouse_sgr sgr, int win_id)
 void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   struct mouse_sgr sgr = mouse_sgr_from_csi(c);
   struct velvet_window_hit hit = {0};
-  velvet_scene_hit(&v->scene, sgr.column - 1, sgr.row - 1, &hit, nullptr, nullptr);
+  velvet_scene_hit(&v->scene, sgr.column - 1, sgr.row - 1, &hit, NULL, NULL);
   struct velvet_window *target = hit.win;
 
   emit_mouse_event(v, sgr, target ? target->id : 0);
@@ -956,8 +955,8 @@ static void velvet_keymap_remove_internal(struct velvet_keymap *const k) {
   // If the kd mapping has continuations, we need to keep the node in the tree.
   // However, we clear the associated action and data
   if (k->first_child) {
-    k->on_key = nullptr;
-    k->data = nullptr;
+    k->on_key = NULL;
+    k->data = NULL;
     return;
   }
 
@@ -1130,19 +1129,19 @@ struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_sl
                key_sequence.content,
                (int)test.current_range.len,
                test.current_range.content);
-    return nullptr;
+    return NULL;
   }
 
   parent = root;
   for (; velvet_key_iterator_next(&it);) {
     struct velvet_key_event k = it.current;
-    prev = nullptr;
+    prev = NULL;
     for (chain = parent->first_child; chain && !key_event_equals(chain->key, k);
          prev = chain, chain = chain->next_sibling);
     if (!chain) {
       chain = velvet_calloc(1, sizeof(*parent));
       chain->parent = parent;
-      chain->data = nullptr;
+      chain->data = NULL;
       chain->key = k;
       chain->root = root;
       if (prev) {
