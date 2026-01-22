@@ -860,27 +860,34 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
   uint32_t attr = r->state.cell.style.attr;
   struct sgr_buffer sgr = {.n = 0};
 
+  uint32_t features[] = {
+    [0] = ATTR_NONE,
+    [1] = ATTR_BOLD,
+    [2] = ATTR_FAINT,
+    [3] = ATTR_ITALIC,
+    [4] = ATTR_UNDERLINE,
+    [5] = ATTR_BLINK_SLOW,
+    [6] = ATTR_BLINK_RAPID,
+    [7] = ATTR_REVERSE,
+    [8] = ATTR_CONCEAL,
+    [9] = ATTR_CROSSED_OUT,
+  };
+
   // 1. Handle attributes
   if (attr != style.attr) {
     if (style.attr == 0) {
-      // Unfortunately this also resets colors, so we need to set those again
-      // Technically we could track what styles are active here and disable those specifically,
-      // but it is much simpler to just eat the color reset.
-      fg = bg = color_default;
-      sgr_buffer_push(&sgr, 0);
+      if (color_equals(fg, color_default) && color_equals(bg, color_default)) {
+        sgr_buffer_push(&sgr, 0);
+      } else {
+        /* disable all currently set styles */
+        if (features[1] & attr) // special case for bold again
+          sgr_buffer_push(&sgr, 22);
+        for (size_t i = 3; i < LENGTH(features); i++) {
+          uint32_t current = features[i] & attr;
+          if (current) sgr_buffer_push(&sgr, 20 + i);
+        }
+      }
     } else {
-      uint32_t features[] = {
-          [0] = ATTR_NONE,
-          [1] = ATTR_BOLD,
-          [2] = ATTR_FAINT,
-          [3] = ATTR_ITALIC,
-          [4] = ATTR_UNDERLINE,
-          [5] = ATTR_BLINK_SLOW,
-          [6] = ATTR_BLINK_RAPID,
-          [7] = ATTR_REVERSE,
-          [8] = ATTR_CONCEAL,
-          [9] = ATTR_CROSSED_OUT,
-      };
       for (size_t i = 1; i < LENGTH(features); i++) {
         uint32_t current = features[i] & attr;
         uint32_t next = features[i] & style.attr;
