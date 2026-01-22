@@ -675,7 +675,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         if (above.cp.value != ' ' && column && composite->cells[cell_index - 1].cp.is_wide)
           composite->cells[cell_index - 1].cp = codepoint_space;
 
-        composite->cells[cell_index] = above;
+        composite->cells[cell_index] = normalize_cell(t, above);
         staging->cells[cell_index] = empty;
       }
     }

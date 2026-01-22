@@ -396,10 +396,43 @@ function Window:get_frame_enabled()
   return self.frame_visible
 end
 
---- @param color velvet.api.rgb_color|string the new foreground color
+local indexed_colors = {
+  black = 0, red = 1, green = 2, yellow = 3, blue = 4, magenta = 5, cyan = 6, white = 7,
+  bright_black = 8, bright_red = 9, bright_green = 10, bright_yellow = 11, bright_blue = 12, bright_magenta = 13, bright_cyan = 14, bright_white = 15,
+}
+--- @alias indexed_color
+---| 'black'
+---| 'red'
+---| 'green'
+---| 'yellow'
+---| 'blue'
+---| 'magenta'
+---| 'cyan'
+---| 'white'
+---| 'bright_black'
+---| 'bright_red'
+---| 'bright_green'
+---| 'bright_yellow'
+---| 'bright_blue'
+---| 'bright_magenta'
+---| 'bright_cyan'
+---| 'bright_white'
+
+--- @alias rrggbb string
+
+--- @param color velvet.api.rgb_color|indexed_color|rrggbb the new foreground color
 function Window:set_foreground_color(color)
-  if type(color) == 'string' then color = color_from_string(color) end
-  self:draw(('\x1b[38;2;%d;%d;%dm'):format(color.red, color.green, color.blue))
+  if indexed_colors[color] then
+    local idx = indexed_colors[color]
+    if idx < 8 then
+      self:draw(('\x1b[3%dm'):format(idx))
+    else
+      self:draw(('\x1b[9%dm'):format(idx - 8))
+    end
+  else
+    if type(color) == 'string' then color = color_from_string(color) end
+    self:draw(('\x1b[38;2;%d;%d;%dm'):format(color.red, color.green, color.blue))
+  end
 end
 
 --- Set the current background color to the default terminal background
@@ -412,10 +445,19 @@ function Window:clear_foreground_color()
   self:draw('\x1b[39m')
 end
 
---- @param color velvet.api.rgb_color|string the new background color
+--- @param color velvet.api.rgb_color|indexed_color|rrggbb the new background color
 function Window:set_background_color(color)
-  if type(color) == 'string' then color = color_from_string(color) end
-  self:draw(('\x1b[48;2;%d;%d;%dm'):format(color.red, color.green, color.blue))
+  if indexed_colors[color] then
+    local idx = indexed_colors[color]
+    if idx < 8 then
+      self:draw(('\x1b[4%dm'):format(idx))
+    else
+      self:draw(('\x1b[10%dm'):format(idx - 8))
+    end
+  else
+    if type(color) == 'string' then color = color_from_string(color) end
+    self:draw(('\x1b[48;2;%d;%d;%dm'):format(color.red, color.green, color.blue))
+  end
 end
 
 --- @param z integer new z index
