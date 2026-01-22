@@ -15,8 +15,8 @@
 #define CTRL(x) ((x) & 037)
 #endif
 
-static const struct u8_slice bracketed_paste_start = STRING_SLICE("\x1b[200~");
-static const struct u8_slice bracketed_paste_end = STRING_SLICE("\x1b[201~");
+static const uint8_t bracketed_paste_start[] = { 0x1b, '[', '2', '0', '0', '~' };
+static const uint8_t bracketed_paste_end[] = { 0x1b, '[', '2', '0', '1', '~' };
 
 enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
 enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
@@ -174,8 +174,8 @@ static void send_bracketed_paste(struct velvet *v) {
     uint8_t *start = in->command_buffer.content;
     size_t len = in->command_buffer.len;
     if (!enclose) {
-      start += bracketed_paste_start.len;
-      len -= bracketed_paste_start.len + bracketed_paste_end.len;
+      start += sizeof(bracketed_paste_start);
+      len -= sizeof(bracketed_paste_start) + sizeof(bracketed_paste_end);
     }
     struct u8_slice s = {.content = start, .len = len};
     string_push_slice(&focus->emulator.pending_input, s);
@@ -189,8 +189,9 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
   struct velvet_input *in = &v->input;
   string_push_char(&v->input.command_buffer, ch);
 
-  if (string_starts_with(&v->input.command_buffer, bracketed_paste_start)) {
-    if (string_ends_with(&v->input.command_buffer, bracketed_paste_end)) {
+  struct string *b = &v->input.command_buffer;
+  if (0 == memcmp(b->content, bracketed_paste_start, sizeof(bracketed_paste_start))) {
+    if (0 == memcmp(b->content + b->len - sizeof(bracketed_paste_end), bracketed_paste_end, sizeof(bracketed_paste_end))) {
       send_bracketed_paste(v);
     }
 
@@ -225,7 +226,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
 #define CSI(l, i, f, fn, _)                                                                                            \
   case KEY(l, i, f): DISPATCH_##fn(v, c); break;
 #include "input_csi.def"
-      default:
+      default: {
         struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
         for (int i = 0; i < LENGTH(named_keys); i++) {
           struct velvet_key k = named_keys[i];
@@ -235,7 +236,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
             break;
           }
         }
-        break;
+      } break;
       }
     }
     string_clear(&v->input.command_buffer);

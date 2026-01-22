@@ -893,7 +893,7 @@ void test_hashmap_collisions() {
 
 void test_string() {
   struct string s = {0};
-  string_push(&s, "Hello!");
+  string_push(&s, (uint8_t*)"Hello!");
   struct u8_slice middle = string_range(&s, 1, -2);
   struct u8_slice start = string_range(&s, 0, 3);
   struct u8_slice end = string_range(&s, 2, s.len);

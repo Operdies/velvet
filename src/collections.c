@@ -46,7 +46,7 @@ void string_push_int(struct string *str, int n) {
 }
 
 void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const char *const final) {
-  const uint8_t *csi = "\x1b[";
+  const uint8_t *csi = (uint8_t*)"\x1b[";
   string_push(str, csi);
   if (leading) string_push_char(str, leading);
   for (size_t i = 0; i < params.n; i++) {

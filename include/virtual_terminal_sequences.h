@@ -6,17 +6,17 @@
 #define ESC "\x1b"
 #define CSI ESC "["
 
-#define VT(name, command) static const struct u8_slice vt_##name = {.content = command, .len = sizeof(command) - 1}
+#define VT(name, command) static const struct u8_slice vt_##name = {.content = (uint8_t*)command, .len = sizeof(command) - 1}
 
 #define VT_ANSI_MODE(name, mode)                                                                                            \
-  static const struct u8_slice vt_##name##_on = {.content = CSI #mode "h", .len = sizeof(CSI "?" #mode "h") - 1};    \
-  static const struct u8_slice vt_##name##_off = {.content = CSI #mode "l", .len = sizeof(CSI "?" #mode "l") - 1};   \
-  static const struct u8_slice vt_##name##_query = {.content = CSI #mode "$p", .len = sizeof(CSI "?" #mode "$p") - 1};
+  static const struct u8_slice vt_##name##_on = {.content = (uint8_t*)(CSI #mode "h"), .len = sizeof(CSI "?" #mode "h") - 1};    \
+  static const struct u8_slice vt_##name##_off = {.content = (uint8_t*)(CSI #mode "l"), .len = sizeof(CSI "?" #mode "l") - 1};   \
+  static const struct u8_slice vt_##name##_query = {.content = (uint8_t*)(CSI #mode "$p"), .len = sizeof(CSI "?" #mode "$p") - 1};
 
 #define VT_PRIVATE_MODE(name, mode)                                                                                            \
-  static const struct u8_slice vt_##name##_on = {.content = CSI "?" #mode "h", .len = sizeof(CSI "?" #mode "h") - 1};    \
-  static const struct u8_slice vt_##name##_off = {.content = CSI "?" #mode "l", .len = sizeof(CSI "?" #mode "l") - 1};   \
-  static const struct u8_slice vt_##name##_query = {.content = CSI "?" #mode "$p", .len = sizeof(CSI "?" #mode "$p") - 1};
+  static const struct u8_slice vt_##name##_on = {.content = (uint8_t*)(CSI "?" #mode "h"), .len = sizeof(CSI "?" #mode "h") - 1};    \
+  static const struct u8_slice vt_##name##_off = {.content = (uint8_t*)(CSI "?" #mode "l"), .len = sizeof(CSI "?" #mode "l") - 1};   \
+  static const struct u8_slice vt_##name##_query = {.content = (uint8_t*)(CSI "?" #mode "$p"), .len = sizeof(CSI "?" #mode "$p") - 1};
 
 VT(leave_alternate_screen, CSI "2J" CSI "H" CSI "?1049l");
 VT(enter_alternate_screen, CSI "?1049h" CSI "2J" CSI "H");

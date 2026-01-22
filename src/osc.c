@@ -12,7 +12,7 @@ static bool osc_dispatch_todo(struct vte *vte, struct osc *osc) {
 
 static bool osc_dispatch_foreground_color(struct vte *vte, struct osc *osc) {
   if (osc->pt.len && osc->pt.text[0] == '?') {
-    string_push(&vte->pending_input, "\x1b]10;rgb:ffff/ffff/ffff");
+    string_push(&vte->pending_input, (uint8_t*)"\x1b]10;rgb:ffff/ffff/ffff");
     string_push(&vte->pending_input, osc->st);
     return true;
   }
@@ -21,7 +21,7 @@ static bool osc_dispatch_foreground_color(struct vte *vte, struct osc *osc) {
 
 static bool osc_dispatch_background_color(struct vte *vte, struct osc *osc) {
   if (osc->pt.len && osc->pt.text[0] == '?') {
-    string_push(&vte->pending_input, "\x1b]11;rgb:0000/0000/0000");
+    string_push(&vte->pending_input, (uint8_t*)"\x1b]11;rgb:0000/0000/0000");
     string_push(&vte->pending_input, osc->st);
     return true;
   }

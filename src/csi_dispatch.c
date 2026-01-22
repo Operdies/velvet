@@ -529,7 +529,7 @@ bool DA_SECONDARY(struct vte *vte, struct csi *csi) {
       // Pp = terminal type, where '1' means VT220
       // Pv = firmware version. Ghostty responds with 10, so it must be good.
       // Pc indicates the ROM cartridge registration number and is always zero
-    string_push(&vte->pending_input, "\x1b[>1;10;0c");
+    string_push(&vte->pending_input, (uint8_t*)"\x1b[>1;10;0c");
     return true;
   } break;
   default: return csi_dispatch_todo(vte, csi);

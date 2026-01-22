@@ -928,14 +928,14 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
 
   if (sgr.n) {
     struct string *w = &r->draw_buffer;
-    string_push(w, "\x1b[");
+    string_push(w, (uint8_t*)"\x1b[");
     int current_load = 0;
     for (int i = 0; i < sgr.n; i++) {
       struct sgr_param *p = &sgr.params[i];
       int this_load = 1 + p->n_sub;
       if (current_load + this_load > MAX_LOAD) {
         w->content[w->len - 1] = 'm';
-        string_push(w, "\x1b[");
+        string_push(w, (uint8_t*)"\x1b[");
         current_load = 0;
       }
       current_load += this_load;
