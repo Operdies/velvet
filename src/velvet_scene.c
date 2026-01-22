@@ -300,7 +300,7 @@ static void velvet_render_set_cursor(struct velvet_render *r, struct cursor_opti
   velvet_render_set_cursor_visible(r, cursor.visible);
 }
 
-static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style);
+static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style, bool skip_fg);
 
 static void velvet_render_position_cursor(struct velvet_render *r, int line, int col) {
   line = CLAMP(line, 0, r->h - 1);
@@ -401,7 +401,7 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         if (highlight_damage) {
           cell_style = highlight;
         }
-        velvet_render_set_style(r, cell_style);
+        velvet_render_set_style(r, cell_style, c->cp.value == ' ');
 
         struct utf8 sym;
         uint8_t utf8_len = codepoint_to_utf8(c->cp.value, &sym);
@@ -731,7 +731,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
      * -- selectively erase everything outside of the draw region instead.
      * Note that DECERA (erase rectangle) exists, but it is not widely supported. */
     struct screen_cell_style clear = {.bg = m->theme.background};
-    velvet_render_set_style(r, clear);
+    velvet_render_set_style(r, clear, false);
     struct u8_slice EL = u8_slice_from_cstr("\x1b[K");
     struct u8_slice ED = u8_slice_from_cstr("\x1b[J");
     /* 1. clear everything to the right of the draw area */
@@ -854,11 +854,14 @@ static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
   }
 }
 
-static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style) {
+static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style, bool skip_fg) {
   struct color fg = r->state.cell.style.fg;
   struct color bg = r->state.cell.style.bg;
+
   uint32_t attr = r->state.cell.style.attr;
   struct sgr_buffer sgr = {.n = 0};
+  if (skip_fg) 
+    style.fg = fg;
 
   uint32_t features[] = {
     [0] = ATTR_NONE,
@@ -872,6 +875,15 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
     [8] = ATTR_CONCEAL,
     [9] = ATTR_CROSSED_OUT,
   };
+
+  /* if two adjacent cells have the same fg/bg colors, we can swap their 
+   * colors instead of rewriting both */
+  if ((skip_fg || color_equals(fg, style.bg)) && color_equals(bg, style.fg) && !color_equals(fg, bg)) {
+    struct color tmp = style.fg;
+    style.fg = style.bg;
+    style.bg = tmp;
+    style.attr ^= ATTR_REVERSE;
+  }
 
   // 1. Handle attributes
   if (attr != style.attr) {
@@ -905,7 +917,7 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
     }
   }
 
-  if (!color_equals(fg, style.fg)) {
+  if (!skip_fg && !color_equals(fg, style.fg)) {
     sgr_color_apply(&sgr, style.fg, true);
   }
   if (!color_equals(bg, style.bg)) {
