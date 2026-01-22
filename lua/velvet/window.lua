@@ -6,6 +6,7 @@
 
 --- @class velvet.window
 --- @field id integer window handle
+--- @field parent velvet.window handle of parent window
 --- @field borders velvet.window.border borders
 --- @field child_windows velvet.window[] child windows
 local Window = {}
@@ -186,22 +187,63 @@ end
 --- | 'mouse_move'
 --- | 'mouse_scroll'
 
+--- @class border_drag
+--- @field win velvet.window
+--- @field row integer
+--- @field col integer
+--- @field left integer
+--- @field top integer
+
+--- @type border_drag|nil
+local border_drag = nil
+
+--- @param brd velvet.window
+--- @param args velvet.api.mouse.click.event_args|velvet.api.mouse.move.event_args
+--- @param event_name string
+local function top_border_drag(brd, args, event_name)
+  local geom = brd:get_geometry()
+  local pg = brd.parent:get_geometry()
+  local gcol, grow = args.pos.col + geom.left, args.pos.row + geom.top
+  if vv.options.focus_follows_mouse then
+    brd.parent:focus()
+  end
+  if event_name == 'mouse_click' then
+    if args.event_type == vv.api.mouse_event_type.mouse_up then
+      border_drag = nil
+    else 
+      border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
+    end
+  end
+  if not border_drag then return end
+
+  local dcol = gcol - border_drag.col
+  local drow = grow - border_drag.row
+  brd.parent:set_geometry({ left = border_drag.left + dcol, top = border_drag.top + drow, width = pg.width, height = pg.height })
+end
+
 --- @param event mouse_event event name
 --- @param args velvet.api.mouse.click.event_args | velvet.api.mouse.move.event_args | velvet.api.mouse.scroll.event_args
 local function route_mouse_events(event, args)
   local win = args.win_id and args.win_id > 0 and win_registry[args.win_id]
+  if border_drag and border_drag.win:valid() then win = border_drag.win end
   if win then
     if event == 'mouse_click' or vv.options.focus_follows_mouse then win:focus() end
-      local geom = win:get_geometry()
-      args.pos.col = args.pos.col - geom.left
-      args.pos.row = args.pos.row - geom.top
+    -- Translate event coordinates to be window local
+    local geom = win:get_geometry()
+    args.pos.col = args.pos.col - geom.left
+    args.pos.row = args.pos.row - geom.top
 
+    if border_drag then
+      ---@diagnostic disable-next-line: param-type-mismatch
+      top_border_drag(border_drag.win, args, event)
+    else
       local window_func = 'on_' .. event .. '_handler'
       if win[window_func] then
         win[window_func](win, args)
       else
         vv.api['window_send_' .. event](args)
       end
+    end
   end
 end
 
@@ -228,11 +270,11 @@ end
 
 --- Create a new window whose lifetime is tied to the parent window. If the parent window is closed, the child window is also closed. Otherwise, the windows are completely independent.
 function Window:create_child_window()
-  local chld = Window.create()
+  local child = Window.create()
   ---@diagnostic disable-next-line: inject-field
-  chld.parent = self
-  table.insert(self.child_windows, chld)
-  return chld
+  child.parent = self
+  table.insert(self.child_windows, child)
+  return child
 end
 
 --- @param title string
@@ -327,6 +369,7 @@ function Window:set_frame_enabled(enabled)
       top = self:create_child_window(),
       bottom = self:create_child_window(),
     }
+
     for _, brd in pairs(self.borders) do
       brd:set_alternate_screen(true)
       brd:set_cursor_visible(false)
@@ -337,6 +380,8 @@ function Window:set_frame_enabled(enabled)
         end
       end)
     end
+    self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
+    self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse_move") end)
   end
 end
 
