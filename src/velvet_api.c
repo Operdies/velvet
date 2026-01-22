@@ -59,7 +59,8 @@ void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text)
     if (w->geometry.h == 0 || w->geometry.w == 0) lua_bail(v->L, "Cannot write to window: size is 0");
     struct u8_slice s = u8_slice_from_cstr(text);
     velvet_window_process_output(w, s);
-    velvet_ensure_render_scheduled(v);
+    if (window_visible(v, w))
+      velvet_ensure_render_scheduled(v);
   }
 }
 
@@ -74,7 +75,6 @@ void vv_api_window_close(struct velvet *v, lua_Integer winid) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
   if (w) {
     velvet_scene_close_and_remove_window(&v->scene, w);
-    velvet_ensure_render_scheduled(v);
   }
 }
 

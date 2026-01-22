@@ -269,6 +269,26 @@ static void on_window_writable(struct io_source *src) {
     src->events &= ~IO_SOURCE_POLLOUT;
 }
 
+static bool point_in_rect(struct rect r, int x, int y) {
+  return x >= r.x && x <= (r.x + r.w) && y >= r.y && y <= (r.y + r.h);
+}
+bool window_visible(struct velvet *v, struct velvet_window *w) {
+  if (!w->hidden) {
+    struct rect screen = v->scene.ws;
+    struct rect win = w->geometry;
+    int left, right, top, bottom;
+    left = win.x;
+    top = win.y;
+    right = win.x + win.w;
+    bottom = win.y + win.h;
+    if (point_in_rect(screen, left, top) || point_in_rect(screen, right, top) || point_in_rect(screen, left, bottom) ||
+        point_in_rect(screen, right, bottom)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static void on_window_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   if (str.len) {
@@ -276,10 +296,13 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     vec_find(vte, v->scene.windows, vte->pty == src->fd);
     assert(vte);
     velvet_window_process_output(vte, str);
+
+    if (window_visible(v, vte)) {
+      velvet_ensure_render_scheduled(v);
+    }
   } else {
     velvet_scene_remove_exited(v);
   }
-  velvet_ensure_render_scheduled(v);
 }
 
 static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {

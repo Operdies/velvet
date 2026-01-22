@@ -121,6 +121,7 @@ void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 void velvet_ensure_render_scheduled(struct velvet *velvet);
+bool window_visible(struct velvet *v, struct velvet_window *w);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {
     .options =
