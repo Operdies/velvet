@@ -289,7 +289,7 @@ function api.set_focused_window(win_id) end
 
 --- Get the geometry of the specified window.
 --- @param win_id integer Window id
---- @return velvet.api.window.geometry 
+--- @return velvet.api.window.geometry The geometry of the window with id |win_id|
 function api.window_get_geometry(win_id) end
 
 --- Set the geometry of the specified window.

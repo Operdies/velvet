@@ -1,6 +1,8 @@
 -- Setup {{{1
 local spec_path = assert(arg[1], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
 local out_dir = assert(arg[2], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
+
+--- @type spec
 local spec = dofile(spec_path)
 
 local inspect = dofile("lua/velvet/inspect.lua")
@@ -60,11 +62,11 @@ for _, fn in ipairs(spec.options) do
 end
 
 for _, fn in ipairs(spec.api) do
-  fn.parameters = fn.parameters or {}
+  fn.params = fn.params or {}
   fn.optional = fn.optional or {}
   fn.returns = fn.returns or { type = "void" }
 
-  for _, p in ipairs(fn.parameters) do
+  for _, p in ipairs(fn.params) do
     p.doc = string_lines(p.doc)
   end
   for _, o in ipairs(fn.optional) do
@@ -132,9 +134,15 @@ local function is_complex(name)
   if type_lookup[name] then return type_lookup[name].complex  end
   error(("is_complex: unknown type: %s"):format(name))
 end
-local function is_manual(name) return spec.manual_types[name] end
+
+local function is_manual(name) 
+  -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
+  local manual_types = { ["int[]"] = true }
+  return manual_types[name]
+end
 
 
+--- @type table<string,spec_type>
 local complex_index = {}
 for _, type in ipairs(spec.types) do
   type_lookup[type.name] = { c_type = "struct " .. get_cname(type.name), lua_type = get_luaname(type.name), complex = true }
@@ -171,6 +179,9 @@ end
 
 -- recursively marshal a C struct into a lua table
 -- The marshalling code is written as a string to tbl
+--- @param tbl table
+--- @param type string
+--- @param path string
 local function push_field(tbl, type, path)
   if is_complex(type) then
     local complex = complex_index[type]
@@ -191,6 +202,9 @@ local function push_field(tbl, type, path)
   end
 end
 
+--- @param tbl table
+--- @param type string
+--- @param path string
 local function check_field(tbl, type, path)
   if is_complex(type) then
     local complex = complex_index[type]

@@ -5,6 +5,62 @@
 --- An implementation file is generated with lua bindings, which will read the parameters specified in this document,
 --- and pass them as normal C parameters according to the generated header file.
 --- The C header is manually implemented elsewhere.
+
+--- @alias spec_doc string|string[]
+
+--- @class spec_option
+--- @field name string
+--- @field type string
+--- @field default any default value of the option. Automatically assigned at startup
+--- @field doc spec_doc
+
+--- @class spec_enum_value
+--- @field name string
+--- @field value integer
+
+--- @class spec_enum enumeration type
+--- @field name string
+--- @field values spec_enum_value[]
+
+--- @class struct_field
+--- @field name string member name
+--- @field type string the name of the member type
+--- @field doc? spec_doc member description
+--- @field optional? boolean if true, this member can be omitted
+
+--- @class spec_type
+--- @field name string the name of the type
+--- @field fields struct_field[] the members of the type
+
+--- @class spec_parameter
+--- @field name string
+--- @field type string
+--- @field doc spec_doc
+
+--- @class spec_return
+--- @field type string
+--- @field doc spec_doc
+
+--- @class spec_function
+--- @field name string function name
+--- @field doc spec_doc
+--- @field params? spec_parameter[]
+--- @field optional? spec_parameter[]
+--- @field returns? spec_return
+
+--- @class spec_event
+--- @field name string
+--- @field doc spec_doc
+--- @field args string
+
+--- @class spec
+--- @field options spec_option[]
+--- @field types spec_type[]
+--- @field enums spec_enum[]
+--- @field api spec_function[]
+--- @field events spec_event[]
+
+--- @type spec
 return {
   --- options {{{1
   options = {
@@ -55,6 +111,7 @@ return {
     },
   },
 
+  --- enums {{{1
   enums = {
     {
       name = "transparency_mode",
@@ -126,29 +183,29 @@ return {
       name = "theme",
       fields = {
         -- 30-37 / 40-47
-        { name = "black",          type = "rgb_color", doc = "Palette color 0" },
-        { name = "red",            type = "rgb_color", doc = "Palette color 1" },
-        { name = "green",          type = "rgb_color", doc = "Palette color 2" },
-        { name = "yellow",         type = "rgb_color", doc = "Palette color 3" },
-        { name = "blue",           type = "rgb_color", doc = "Palette color 4" },
-        { name = "magenta",        type = "rgb_color", doc = "Palette color 5" },
-        { name = "cyan",           type = "rgb_color", doc = "Palette color 6" },
-        { name = "white",          type = "rgb_color", doc = "Palette color 7" },
+        { name = "black",             type = "rgb_color", doc = "Palette color 0",                                         optional = true },
+        { name = "red",               type = "rgb_color", doc = "Palette color 1",                                         optional = true },
+        { name = "green",             type = "rgb_color", doc = "Palette color 2",                                         optional = true },
+        { name = "yellow",            type = "rgb_color", doc = "Palette color 3",                                         optional = true },
+        { name = "blue",              type = "rgb_color", doc = "Palette color 4",                                         optional = true },
+        { name = "magenta",           type = "rgb_color", doc = "Palette color 5",                                         optional = true },
+        { name = "cyan",              type = "rgb_color", doc = "Palette color 6",                                         optional = true },
+        { name = "white",             type = "rgb_color", doc = "Palette color 7",                                         optional = true },
         --  90-97 / 100-107
-        { name = "bright_black",   type = "rgb_color", doc = "Palette color 8" },
-        { name = "bright_red",     type = "rgb_color", doc = "Palette color 9" },
-        { name = "bright_green",   type = "rgb_color", doc = "Palette color 10" },
-        { name = "bright_yellow",  type = "rgb_color", doc = "Palette color 11" },
-        { name = "bright_blue",    type = "rgb_color", doc = "Palette color 12" },
-        { name = "bright_magenta", type = "rgb_color", doc = "Palette color 13" },
-        { name = "bright_cyan",    type = "rgb_color", doc = "Palette color 14" },
-        { name = "bright_white",   type = "rgb_color", doc = "Palette color 15" },
+        { name = "bright_black",      type = "rgb_color", doc = "Palette color 8",                                         optional = true },
+        { name = "bright_red",        type = "rgb_color", doc = "Palette color 9",                                         optional = true },
+        { name = "bright_green",      type = "rgb_color", doc = "Palette color 10",                                        optional = true },
+        { name = "bright_yellow",     type = "rgb_color", doc = "Palette color 11",                                        optional = true },
+        { name = "bright_blue",       type = "rgb_color", doc = "Palette color 12",                                        optional = true },
+        { name = "bright_magenta",    type = "rgb_color", doc = "Palette color 13",                                        optional = true },
+        { name = "bright_cyan",       type = "rgb_color", doc = "Palette color 14",                                        optional = true },
+        { name = "bright_white",      type = "rgb_color", doc = "Palette color 15",                                        optional = true },
 
         -- Additional named colors
-        { name = "foreground",              type = "rgb_color", doc = "The default text color" },
-        { name = "background",        type = "rgb_color", doc = "The default background color" },
-        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor" },
-        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor" },
+        { name = "foreground",        type = "rgb_color", doc = "The default text color",                                  optional = true },
+        { name = "background",        type = "rgb_color", doc = "The default background color",                            optional = true },
+        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor",  optional = true },
+        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor",  optional = true },
       },
     },
     {
@@ -267,6 +324,7 @@ return {
     },
   },
 
+  --- {{{1 events
   events = {
     { name = "window_created",       doc = "Raised after a new window is created.",      args = "window.created.event_args" },
     { name = "window_closed",        doc = "Raised after a window is closed.",           args = "window.closed.event_args" },
@@ -284,9 +342,6 @@ return {
       args = "pre_render.event_args",
     },
   },
-
-  -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
-  manual_types = { ["int[]"] = true },
 
   --- api {{{1
   api = {
@@ -470,7 +525,7 @@ return {
       name = "window_get_geometry",
       doc = "Get the geometry of the specified window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { name = "geometry", type = "window.geometry", "Window geometry" },
+      returns = { name = "geometry", type = "window.geometry", "Window geometry", doc = "The geometry of the window with id |win_id|" },
     },
     {
       name = "window_set_geometry",
