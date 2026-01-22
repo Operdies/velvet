@@ -53,7 +53,7 @@ end
 --- @param color string
 --- @return velvet.api.rgb_color
 local function color_from_string(color)
-  local palette = a.get_color_palette()
+  local palette = a.get_theme()
   if palette[color] then
     return palette[color]
   elseif type(color) == 'string' then

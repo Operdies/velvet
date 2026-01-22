@@ -62,7 +62,7 @@ api.mouse_event_type = {
 --- @field green integer nil
 --- @field blue integer nil
 
---- @class velvet.api.color_palette
+--- @class velvet.api.theme
 --- @field black velvet.api.rgb_color|string Palette color 0
 --- @field red velvet.api.rgb_color|string Palette color 1
 --- @field green velvet.api.rgb_color|string Palette color 2
@@ -79,6 +79,10 @@ api.mouse_event_type = {
 --- @field bright_magenta velvet.api.rgb_color|string Palette color 13
 --- @field bright_cyan velvet.api.rgb_color|string Palette color 14
 --- @field bright_white velvet.api.rgb_color|string Palette color 15
+--- @field foreground velvet.api.rgb_color|string The default text color
+--- @field background velvet.api.rgb_color|string The default background color
+--- @field cursor_foreground velvet.api.rgb_color|string The foreground color of the cell containing the cursor
+--- @field cursor_background velvet.api.rgb_color|string The background color of the cell containing the cursor
 
 --- @class velvet.api.window.geometry
 --- @field left integer The leftmost cell of the window.
@@ -399,14 +403,14 @@ function api.get_display_damage() end
 --- @return boolean The value after the update
 function api.set_display_damage(new_value) end
 
---- Get color_palette
---- @return velvet.api.color_palette The current value
-function api.get_color_palette() end
+--- Get theme
+--- @return velvet.api.theme The current value
+function api.get_theme() end
 
---- Set color_palette. Returns the new value.
---- @param new_value velvet.api.color_palette The 16 numbered terminal colors.
---- @return velvet.api.color_palette The value after the update
-function api.set_color_palette(new_value) end
+--- Set theme. Returns the new value.
+--- @param new_value velvet.api.theme The 16 numbered terminal colors.
+--- @return velvet.api.theme The value after the update
+function api.set_theme(new_value) end
 
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler

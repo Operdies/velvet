@@ -25,10 +25,14 @@ local vv = {
   events = require('velvet.events'),
 }
 
-local function hex_to_rgb(hex)
+local function string_to_rgb(hex)
   if type(hex) ~= "string" then
     return nil, "expected string"
   end
+
+  -- allow recursively looking up a color. This allows patterns such as setting 
+  -- theme.cursor = 'red', where 'red' is automatically inferred as theme.red
+  if vv.options.theme[hex] then return vv.options.theme[hex] end
 
   -- Must be exactly "#rrggbb"
   if #hex ~= 7 or hex:sub(1, 1) ~= "#" then
@@ -54,15 +58,15 @@ local function hex_to_rgb(hex)
   }
 end
 
-local color_palette = setmetatable({}, {
+local theme = setmetatable({}, {
   __index = function(_, k)
-    local tbl = vv.api.get_color_palette()
+    local tbl = vv.api.get_theme()
     return tbl[k]
   end,
   __newindex = function(_, k, v)
-    local tbl = vv.api.get_color_palette()
+    local tbl = vv.api.get_theme()
     tbl[k] = v
-    vv.options.color_palette = tbl
+    vv.options.theme = tbl
   end,
 })
 
@@ -70,18 +74,18 @@ local color_palette = setmetatable({}, {
 -- vv.options reads and assignments to the vv_api accessors
 vv.options = setmetatable(vv.options, {
   __index = function(_, k)
-    if k == 'color_palette' then
+    if k == 'theme' then
       -- return a special meta table for color palettes to allow
-      -- setting individual colors directly, such as vv.options.color_palette.black = '#1e1e2e'
-      return color_palette
+      -- setting individual colors directly, such as vv.options.theme.black = '#1e1e2e'
+      return theme
     end
     return vv.api["get_" .. k]({})
   end,
   __newindex = function(_, k, v)
-    if k == 'color_palette' then
+    if k == 'theme' then
       for key, col in pairs(v) do
         if type(col) == 'string' then
-          local color, err = hex_to_rgb(col)
+          local color, err = string_to_rgb(col)
           if not color then error(err) end
           v[key] = color
         end

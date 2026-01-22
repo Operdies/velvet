@@ -146,10 +146,12 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
     .blue = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))                                                           \
   }
 
+/* these values must be set to rgb colors to satisfy some rendering invariants,
+* but these values are not used. The real default values are set in lua. */
 static const struct velvet_theme velvet_theme_default = {
-    .background = RGB("#1e1e2e"),
-    .foreground = RGB("#cdd6f4"),
-    .cursor = { .background = RGB("#f5e0dc"), .foreground = RGB("#1e1e2e") },
+    .background = RGB("#000000"),
+    .foreground = RGB("#ffffff"),
+    .cursor = {.background = RGB("#ffffff"), .foreground = RGB("#000000")},
 };
 
 static const struct velvet_render_state_cache render_state_cache_invalidated = {

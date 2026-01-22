@@ -367,8 +367,8 @@ static struct velvet_api_rgb_color palette_from_rgb(struct color col) {
   return (struct velvet_api_rgb_color) { .red = col.red, .blue = col.blue, .green = col.green };
 }
 
-struct velvet_api_color_palette vv_api_get_color_palette(struct velvet *v) {
-  struct velvet_api_color_palette p = {0};
+struct velvet_api_theme vv_api_get_theme(struct velvet *v) {
+  struct velvet_api_theme p = {0};
   p.black = palette_from_rgb(v->scene.theme.palette[0]);
   p.red = palette_from_rgb(v->scene.theme.palette[1]);
   p.green = palette_from_rgb(v->scene.theme.palette[2]);
@@ -385,9 +385,14 @@ struct velvet_api_color_palette vv_api_get_color_palette(struct velvet *v) {
   p.bright_magenta = palette_from_rgb(v->scene.theme.palette[13]);
   p.bright_cyan = palette_from_rgb(v->scene.theme.palette[14]);
   p.bright_white = palette_from_rgb(v->scene.theme.palette[15]);
+  p.foreground = palette_from_rgb(v->scene.theme.foreground);
+  p.background = palette_from_rgb(v->scene.theme.background);
+  p.cursor_foreground = palette_from_rgb(v->scene.theme.cursor.foreground);
+  p.cursor_background = palette_from_rgb(v->scene.theme.cursor.background);
   return p;
 }
-struct velvet_api_color_palette vv_api_set_color_palette(struct velvet *v, struct velvet_api_color_palette new_value) {
+
+struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_theme new_value) {
   v->scene.theme.palette[0] = rgb_from_palette(new_value.black);
   v->scene.theme.palette[1] = rgb_from_palette(new_value.red);
   v->scene.theme.palette[2] = rgb_from_palette(new_value.green);
@@ -404,8 +409,12 @@ struct velvet_api_color_palette vv_api_set_color_palette(struct velvet *v, struc
   v->scene.theme.palette[13] = rgb_from_palette(new_value.bright_magenta);
   v->scene.theme.palette[14] = rgb_from_palette(new_value.bright_cyan);
   v->scene.theme.palette[15] = rgb_from_palette(new_value.bright_white);
+  v->scene.theme.foreground = rgb_from_palette(new_value.foreground);
+  v->scene.theme.background = rgb_from_palette(new_value.background);
+  v->scene.theme.cursor.foreground = rgb_from_palette(new_value.cursor_foreground);
+  v->scene.theme.cursor.background = rgb_from_palette(new_value.cursor_background);
   velvet_ensure_render_scheduled(v);
-  return vv_api_get_color_palette(v);
+  return vv_api_get_theme(v);
 }
 
 float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win_id) {
