@@ -277,10 +277,10 @@ local function add_window(id, init)
   local win = window.from_handle(id)
   win:set_frame_enabled(true)
   layers[win] = dwm.layers.tiled
-  table.insert(windows, 1, win)
+  table.insert(windows, win)
+  table.insert(focus_order, 1, win)
   tags[win] = table.move(view, 1, #view, 1, {})
   if not init then
-    set_focus(win)
     arrange()
   end
 end
