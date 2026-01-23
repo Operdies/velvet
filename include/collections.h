@@ -40,13 +40,6 @@ struct u8_slice_codepoint_iterator {
   struct codepoint current;
 };
 
-// A view into a vector
-struct vec_slice {
-  const size_t length;
-  const void *content;
-  const size_t element_size;
-};
-
 // generically sized vector
 struct vec {
   size_t length;
@@ -58,35 +51,6 @@ struct vec {
 #endif
 };
 
-enum [[gnu::packed]] hashmap_slot_state {
-  // Never used
-  HASHMAP_SLOT_PRISTINE,
-  // Currently used
-  HASHMAP_SLOT_OCCUPIED,
-  // Previously used
-  HASHMAP_SLOT_TOMBSTONE
-};
-
-struct hashmap {
-  uint32_t capacity;
-  uint32_t count;
-  uint32_t *keys;
-  void **values;
-  enum hashmap_slot_state *metadata;
-};
-
-// Destroy
-void hashmap_destroy(struct hashmap *h);
-// Add an item if the specified key does not exist.
-bool hashmap_add(struct hashmap *h, uint32_t key, void *item);
-// Set the item with the specified key, returning the existing item.
-void *hashmap_set(struct hashmap *h, uint32_t key, void *item);
-// Return a bool indicating if a given key exists.
-bool hashmap_contains(const struct hashmap *h, uint32_t key);
-// Get the item with the specified key, if it exists.
-void *hashmap_get(const struct hashmap *h, uint32_t key);
-// Return the item with the specified key, if it exists, returning it.
-bool hashmap_remove(struct hashmap *h, uint32_t key, void **value);
 int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
 void string_push_cstr(struct string *str, const char *cstr);
 void string_push_string(struct string *dest, struct string src);
