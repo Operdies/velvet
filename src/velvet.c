@@ -374,6 +374,12 @@ void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
   struct io *const loop = &velvet->event_loop;
+  velvet_scene_resize(&velvet->scene, ws);
+  /* We need to pass in a velvet reference to the scene so it can raise events.
+   * TODO: Get rid of `velvet_scene` and store windows directly in `velvet`.
+   * Scene initially made sense because it managed and arranged windows.
+   * Not it's just a dumb container. */
+  velvet->scene.v = velvet;
 
   {
     struct velvet_keymap *root = calloc(1, sizeof(*velvet->input.keymap));
@@ -387,10 +393,7 @@ void velvet_loop(struct velvet *velvet) {
 
   velvet_lua_init(velvet);
 
-  /* We need to pass in a velvet reference to the scene so it can raise events */
-  velvet->scene.v = velvet;
   velvet_source_config(velvet);
-  velvet_scene_resize(&velvet->scene, ws);
 
   /* arbitrarily set a minimum update rate of 40 fps
    * Setting a higher update rate reduces throughput in extreme scenarios.
