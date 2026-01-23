@@ -142,7 +142,6 @@ struct velvet_args {
   bool attach;
   bool foreground;
   char *socket;
-  char *source;
   char **rest;
   int n_rest;
 };
@@ -152,14 +151,10 @@ static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
   printf("Usage:\n  %s [<options>] [<arguments> ...]\n\nOptions:\n"
-         "  attach                Attach to the server at <socket> if present.\n"
-         "  map <keys> <action>     Map <keys> to the action <action>.\n"
-         "  unmap <keys>            Clear any mapping associated with <keys>.\n"
-         "  --foreground            Start a server as a foreground process.\n"
-         "  source -              Read newline separated mapings from stdin\n"
-         "  source <FILE>         Read newline-separated mappings from a file\n"
+         "  attach                  Attach to the server at <socket> if present.\n"
+         "  lua <code>              Execute <code> as a lua chunk. A file can be sourced by calling `dofile(<filename>)`\n"
+         "  foreground            Start a server as a foreground process.\n"
          "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
-         "  set <option> <value>  Set the <option> to <value>.\n"
          "  -h, --help              Show this help text and exit.\n"
          , arg0);
 }
@@ -181,18 +176,15 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
-    } else if (F(--foreground)) {
+    } else if (F(foreground)) {
       n_commands++;
-      if (a.foreground) velvet_fatal("--foreground specified multiple times.");
+      if (a.foreground) velvet_fatal("foreground specified multiple times.");
       a.foreground = true;
     } else if (F(attach)) {
       if (nested) velvet_fatal("Nesting velvet sessions is not supported.");
       n_commands++;
       if (a.attach) velvet_fatal("attach specified multiple times.");
       a.attach = true;
-    } else if (F(source)) {
-      if (a.source) velvet_fatal("source specified multiple times.");
-      GET(a.source);
     } else {
       // unnamed positional arguments at the end are sent to the server. Any errors are hnadled server-side.
       // This is meant to keep the client as simple as possible and keep complexity in the server.
@@ -206,12 +198,12 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
 
   if (n_commands > 1) velvet_fatal("Multiple commands specified.");
 
-  if (a.source || a.rest) {
+  if (a.rest) {
     if (!a.socket) a.socket = getenv("VELVET");
     if (!a.socket) velvet_fatal("Unable to send command; Either specify the --socket or set $VELVET to a socket path.");
   }
 
-  if (a.socket && !file_is_socket(a.socket) && (a.rest || a.attach || a.source)) {
+  if (a.socket && !file_is_socket(a.socket) && (a.rest || a.attach)) {
     velvet_fatal("Socket '%s' is not a unix domain socket.", a.socket);
   }
 
@@ -237,7 +229,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (args.rest || args.source) {
+  if (args.rest) {
     vv_configure(args);
     return 0;
   }
@@ -409,49 +401,6 @@ struct vv_source {
 };
 
 
-static void vv_source_exit(void* _) {
-  (void)_;
-  exit(0);
-}
-
-static void vv_source_output(struct io_source *src, struct u8_slice data) {
-  (void)src;
-  if (data.len == 0) {
-    exit(0);
-    return;
-  }
-  printf("%.*s", (int)data.len, data.content);
-}
-static void vv_source_input(struct io_source *src, struct u8_slice data) {
-  struct vv_source *s = src->data;
-  if (data.len == 0) {
-    // give the server a bit of time to respond with error messages
-    io_schedule(&s->loop, 10, vv_source_exit, NULL);
-    return;
-  }
-  io_write(s->sock, data);
-}
-
-static void vv_source(struct velvet_args args, int sock) {
-  int source;
-  if (strcmp(args.source, "-") == 0) {
-    source = STDIN_FILENO;
-  } else {
-    source = open(args.source, O_RDONLY);
-  }
-  if (source == -1) velvet_fatal("cannot open %s:", args.source);
-
-  struct vv_source context = {.source = source, .sock = sock, .loop = io_default};
-  struct io_source input = {.fd = source, .events = POLLIN, .on_read = vv_source_input, .data = &context};
-  io_add_source(&context.loop, input);
-  struct io_source output = {.fd = sock, .events = POLLIN, .on_read = vv_source_output, .data = &context};
-  io_add_source(&context.loop, output);
-
-  for (;;) {
-    io_dispatch(&context.loop);
-  }
-}
-
 static void vv_set(int sockfd, char *setting, char *value) {
   io_write_format_slow(sockfd, "set '%s' '%s'\n", setting, value);
 }
@@ -466,37 +415,33 @@ static void vv_configure(struct velvet_args args) {
   }
 
 
-  if (args.source) {
-    vv_source(args, sockfd);
-  } else if (args.n_rest) {
-    struct string payload = {0};
-    for (int i = 0; i < args.n_rest; i++) {
-      if (i) string_push_char(&payload, ' ');
-      bool has_space = strchr(args.rest[i], ' ');
-      bool has_squot = strchr(args.rest[i], '\'');
-      bool has_dquot = strchr(args.rest[i], '"');
-      if (has_squot && has_dquot) {
-        string_push_char(&payload, '"');
-        for (char *ch = args.rest[i]; *ch; ch++) {
-          if (*ch == '\\' || *ch == '"') {
-            string_push_char(&payload, '\\');
-          }
-          string_push_char(&payload, *ch);
+  struct string payload = {0};
+  for (int i = 0; i < args.n_rest; i++) {
+    if (i) string_push_char(&payload, ' ');
+    bool has_space = strchr(args.rest[i], ' ');
+    bool has_squot = strchr(args.rest[i], '\'');
+    bool has_dquot = strchr(args.rest[i], '"');
+    if (has_squot && has_dquot) {
+      string_push_char(&payload, '"');
+      for (char *ch = args.rest[i]; *ch; ch++) {
+        if (*ch == '\\' || *ch == '"') {
+          string_push_char(&payload, '\\');
         }
-        string_push_char(&payload, '"');
+        string_push_char(&payload, *ch);
+      }
+      string_push_char(&payload, '"');
+    } else {
+      if (has_space || has_squot || has_dquot) {
+        char quote = has_squot ? '"' : '\'';
+        string_push_format_slow(&payload, "%c%s%c", quote, args.rest[i], quote);
       } else {
-        if (has_space || has_squot || has_dquot) {
-          char quote = has_squot ? '"' : '\'';
-          string_push_format_slow(&payload, "%c%s%c", quote, args.rest[i], quote);
-        } else {
-          string_push_format_slow(&payload, "%s", args.rest[i]);
-        }
+        string_push_format_slow(&payload, "%s", args.rest[i]);
       }
     }
-    string_push_char(&payload, '\n');
-    io_write(sockfd, string_as_u8_slice(payload));
-    string_destroy(&payload);
-  } 
+  }
+  string_push_char(&payload, '\n');
+  io_write(sockfd, string_as_u8_slice(payload));
+  string_destroy(&payload);
 
   int n = 0;
   do {

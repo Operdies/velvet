@@ -1,96 +1,39 @@
 #compdef vv
 
-_vv_map_actions=(
-  split-horizontal
-  split-vertical
-  new-tab
-  close
-  detach
-  focus-next
-  focus-prev
-  noop
-)
-
-typeset -A _vv_set_defaults=(
-  key_repeat_timeout      1000
-  focus_follows_mouse     true
-)
-
-_vv_set_actions=(
-  key_repeat_timeout
-  focus_follows_mouse
-)
-
-_vv_set_key_repeat_timeout() {
-  _numbers
-}
-
-_vv_set_focus_follows_mouse() {
-  _describe -V 'lazy focus' 'wheee'
-  _values 'boolean' true false
-}
-
-_vv_map() {
-  _arguments \
-    '1:keys:( )' \
-    '2:action:->map_action'
-}
-
-_vv_set() {
-  _arguments \
-    "1:options:()"
-}
-
-_arguments -s -S \
-  \
-  '-h[Show help]'\
-  '--help[Print usage and exit]'\
+_arguments -C \
   '-S[Specify the socket to use]:socket path:->socket' \
   '--socket[Specify the socket to use]:socket path:->socket' \
-  \
-  '1:command:(map set attach foreground source)' \
-  '*::arg:->args'
+  '-h[Show help and exit]' \
+  '--help[Show help and exit]' \
+  '1:mode:->mode' \
+  '*:argument:' \
+  && return
 
 case $state in
-  command)
-    _values 'command' map
+  mode)
+    local -a modes
+    modes=(
+      'attach:Attach to a velvet session'
+      'lua:Execute lua code in a velvet session'
+      'foreground:Start a velvet session without daemonizing'
+    )
+    _describe 'mode' modes
     ;;
   args)
     case $words[1] in
-      map) 
-        _vv_map 
+      lua)
+        _arguments \
+          '1:lua code:'
         ;;
-      set) 
-        _vv_set 
+      attach)
+        _arguments \
+          '*:arguments:'
+        ;;
+      *)
+        _arguments \
+          '*:arguments:'
         ;;
     esac
     ;;
-  socket)
-    _path_files -f -s,w
-    ;;
-  map_action)
-    _describe 'map action' _vv_map_actions
-    ;;
-  set_key)
-    local -a desc
-    for key in $_vv_set_actions; do
-      desc+=("$key:default=${_vv_set_defaults[$key]}")
-    done
-    _describe -V 'set option' desc
-    ;;
-  set_value)
-    # The key is the previous word
-    local key=${words[CURRENT-1]}
-
-    # Call per-key completion function if it exists
-    if (( $+functions[_vv_set_$key] )); then
-      _vv_set_$key
-    else
-      _message 'value'
-    fi
-    ;;
-  source)
-    compadd -
-    _files
-    ;;
 esac
+

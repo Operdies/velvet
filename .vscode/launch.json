@@ -19,7 +19,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/vv",
-      "args": [ "--foreground", "--socket", "/tmp/velvet-debug" ],
+      "args": [ "foreground", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "console": "integratedTerminal",
