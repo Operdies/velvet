@@ -190,7 +190,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
   string_push_char(&v->input.command_buffer, ch);
 
   struct string *b = &v->input.command_buffer;
-  if (0 == memcmp(b->content, bracketed_paste_start, sizeof(bracketed_paste_start))) {
+  if (b->len == sizeof(bracketed_paste_start) && 0 == memcmp(b->content, bracketed_paste_start, sizeof(bracketed_paste_start))) {
     if (0 == memcmp(b->content + b->len - sizeof(bracketed_paste_end), bracketed_paste_end, sizeof(bracketed_paste_end))) {
       send_bracketed_paste(v);
     }
