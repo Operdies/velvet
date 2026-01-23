@@ -9,6 +9,12 @@ error("Cannot require meta file")
 --- @class velvet.api
 local api = {}
 
+--- @enum velvet.api.brush
+api.brush = {
+  background = 1,
+  foreground = 2,
+}
+
 --- @enum velvet.api.transparency_mode
 api.transparency_mode = {
   none = 1,
@@ -345,12 +351,6 @@ function api.window_send_mouse_scroll(mouse_scroll) end
 --- @return integer The id of the new window
 function api.window_create() end
 
---- Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \r, \n, color escapes, cursor movement, etc.
---- @param win_id integer Window id
---- @param text string String which can embed any VT compatible ansi escape.
---- @return nil 
-function api.window_write(win_id, text) end
-
 --- Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window id.
 --- @param cmd string The process to spawn.
 --- @return integer The id of the new window
@@ -375,6 +375,25 @@ function api.window_get_scrollback_size(win_id) end
 --- @param win_id integer Window id
 --- @return integer The number of lines below the bottom line of the window.
 function api.window_get_scroll_offset(win_id) end
+
+--- Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \r, \n, color escapes, cursor movement, etc.
+--- @param win_id integer Window id
+--- @param text string String which can embed any VT compatible ansi escape.
+--- @return nil 
+function api.window_write(win_id, text) end
+
+--- Set the drawing color of |win_id|. This is equivalent to setting an rgb color with SGR 38/48, but is much faster because it skips formatting and parsing. Useful for tight render loops.
+--- @param win_id integer Window id
+--- @param brush velvet.api.brush Foreground or background brush
+--- @param color velvet.api.rgb_color|string The new color
+--- @return nil 
+function api.window_set_drawing_color(win_id, brush, color) end
+
+--- Set the cursor position of |win_id|. This is equivalent to moving the cursor with CUP, but is much faster because it skips formatting and parsing. Useful for tight render loops.
+--- @param win_id integer Window id
+--- @param pos velvet.api.coordinate The new cursor position
+--- @return nil 
+function api.window_set_cursor_position(win_id, pos) end
 
 --- Get focus_follows_mouse
 --- @return boolean The current value

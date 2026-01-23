@@ -19,6 +19,13 @@ Window.__index = Window
 --- @type velvet.window[]
 local win_registry = {}
 
+local function clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+
 --- @param hex string
 --- @return velvet.api.rgb_color|nil,string|nil
 local function hex_to_rgb(hex)
@@ -350,19 +357,10 @@ function Window:set_auto_return(auto_return)
   set_ansimode(self, 20, auto_return)
 end
 
-local function clamp(x, lo, hi) 
-  if x < lo then return lo end
-  if x > hi then return hi end
-  return x
-end
-
 --- @param x integer the new cursor column
 --- @param y integer the new cursor row
 function Window:set_cursor(x, y)
-  local g = self:get_geometry()
-  x = clamp(x, 1, g.width)
-  y = clamp(y, 1, g.height)
-  self:draw(('\x1b[%d;%dH'):format(y, x))
+  vv.api.window_set_cursor_position(self.id, { col = x, row = y })
 end
 
 --- @param alternate boolean if true, enter the alternate screen. Otherwise leave it
@@ -443,7 +441,7 @@ function Window:set_foreground_color(color)
     end
   else
     if type(color) == 'string' then color = color_from_string(color) end
-    self:draw(('\x1b[38;2;%d;%d;%dm'):format(color.red, color.green, color.blue))
+    vv.api.window_set_drawing_color(self.id, vv.api.brush.foreground, color)
   end
 end
 
@@ -468,7 +466,7 @@ function Window:set_background_color(color)
     end
   else
     if type(color) == 'string' then color = color_from_string(color) end
-    self:draw(('\x1b[48;2;%d;%d;%dm'):format(color.red, color.green, color.blue))
+    vv.api.window_set_drawing_color(self.id, vv.api.brush.background, color)
   end
 end
 
@@ -483,12 +481,6 @@ end
 
 function Window:draw(str)
   a.window_write(self.id, str)
-end
-
-local function clamp(v, lo, hi)
-  if v < lo then return lo end
-  if v > hi then return hi end
-  return v
 end
 
 --- @param mode 'none'|'clear'|'all'

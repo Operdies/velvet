@@ -30,6 +30,11 @@ vv.options.theme = {
 
 --- Populate all enum tables. These enums are used for interfacing with API functions
 
+vv.api.brush = {
+  background = 1,
+  foreground = 2,
+}
+
 vv.api.transparency_mode = {
   none = 1,
   clear = 2,

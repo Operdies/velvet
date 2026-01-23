@@ -240,6 +240,7 @@ table.insert(h, ([[#ifndef %s
 
 #define %s
 #include "lua.h"
+#include <stdbool.h>
 struct velvet;
 
 ]]):format("VELVET_API_H", "VELVET_API_H"))

@@ -976,7 +976,8 @@ static bool cell_equals(struct screen_cell a, struct screen_cell b) {
   /* ATTR_REVERSE has been normalized out at this point */
   assert(!(a.style.attr & ATTR_REVERSE));
   assert(!(b.style.attr & ATTR_REVERSE));
-  if (a.cp.value == ' ' && b.cp.value == ' ') return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr;
+  if (a.cp.value == ' ' && b.cp.value == ' ') 
+    return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr;
   return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style);
 }
 

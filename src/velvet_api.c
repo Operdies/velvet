@@ -27,6 +27,7 @@ _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
 struct velvet_window *check_window(struct velvet *v, int win) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
   if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+  assert(w);
   return w;
 }
 
@@ -451,4 +452,29 @@ lua_Integer vv_api_window_get_scroll_offset(struct velvet *v, lua_Integer win_id
   struct velvet_window *w = check_window(v, win_id);
   struct screen *active = vte_get_current_screen(&w->emulator);
   return active->scroll.view_offset;
+}
+
+void vv_api_window_set_drawing_color(struct velvet *v, lua_Integer win_id, enum velvet_api_brush brush, struct velvet_api_rgb_color color) {
+  struct velvet_window *w = check_window(v, win_id);
+  struct color col = {.kind = COLOR_RGB,
+                      .red = CLAMP(color.red, 0, 255),
+                      .green = CLAMP(color.green, 0, 255),
+                      .blue = CLAMP(color.blue, 0, 255)};
+  struct screen *g = vte_get_current_screen(&w->emulator);
+  switch (brush) {
+  case VELVET_API_BRUSH_BACKGROUND: g->cursor.brush.bg = col; break;
+  case VELVET_API_BRUSH_FOREGROUND: g->cursor.brush.fg = col; break;
+  }
+}
+
+void vv_api_window_set_cursor_position(struct velvet *v, lua_Integer win_id, struct velvet_api_coordinate pos) {
+  struct velvet_window *w = check_window(v, win_id);
+  struct screen *g = vte_get_current_screen(&w->emulator);
+  pos.col = CLAMP(pos.col, 1, w->geometry.w);
+  pos.row = CLAMP(pos.row, 1, w->geometry.h);
+
+  if (w->emulator.options.cursor.visible && (pos.col != g->cursor.column || pos.row != g->cursor.line))
+    velvet_ensure_render_scheduled(v);
+
+  screen_set_cursor_position(g, pos.col - 1, pos.row - 1);
 }

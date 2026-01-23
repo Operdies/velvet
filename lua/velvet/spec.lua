@@ -114,6 +114,13 @@ return {
   --- enums {{{1
   enums = {
     {
+      name = "brush",
+      values = {
+        { name = "background", value = 1 },
+        { name = "foreground", value = 2 },
+      },
+    },
+    {
       name = "transparency_mode",
       values = {
         { name = "none",  value = 1 },
@@ -183,29 +190,29 @@ return {
       name = "theme",
       fields = {
         -- 30-37 / 40-47
-        { name = "black",             type = "rgb_color", doc = "Palette color 0",                                         optional = true },
-        { name = "red",               type = "rgb_color", doc = "Palette color 1",                                         optional = true },
-        { name = "green",             type = "rgb_color", doc = "Palette color 2",                                         optional = true },
-        { name = "yellow",            type = "rgb_color", doc = "Palette color 3",                                         optional = true },
-        { name = "blue",              type = "rgb_color", doc = "Palette color 4",                                         optional = true },
-        { name = "magenta",           type = "rgb_color", doc = "Palette color 5",                                         optional = true },
-        { name = "cyan",              type = "rgb_color", doc = "Palette color 6",                                         optional = true },
-        { name = "white",             type = "rgb_color", doc = "Palette color 7",                                         optional = true },
+        { name = "black",             type = "rgb_color", doc = "Palette color 0",                                        optional = true },
+        { name = "red",               type = "rgb_color", doc = "Palette color 1",                                        optional = true },
+        { name = "green",             type = "rgb_color", doc = "Palette color 2",                                        optional = true },
+        { name = "yellow",            type = "rgb_color", doc = "Palette color 3",                                        optional = true },
+        { name = "blue",              type = "rgb_color", doc = "Palette color 4",                                        optional = true },
+        { name = "magenta",           type = "rgb_color", doc = "Palette color 5",                                        optional = true },
+        { name = "cyan",              type = "rgb_color", doc = "Palette color 6",                                        optional = true },
+        { name = "white",             type = "rgb_color", doc = "Palette color 7",                                        optional = true },
         --  90-97 / 100-107
-        { name = "bright_black",      type = "rgb_color", doc = "Palette color 8",                                         optional = true },
-        { name = "bright_red",        type = "rgb_color", doc = "Palette color 9",                                         optional = true },
-        { name = "bright_green",      type = "rgb_color", doc = "Palette color 10",                                        optional = true },
-        { name = "bright_yellow",     type = "rgb_color", doc = "Palette color 11",                                        optional = true },
-        { name = "bright_blue",       type = "rgb_color", doc = "Palette color 12",                                        optional = true },
-        { name = "bright_magenta",    type = "rgb_color", doc = "Palette color 13",                                        optional = true },
-        { name = "bright_cyan",       type = "rgb_color", doc = "Palette color 14",                                        optional = true },
-        { name = "bright_white",      type = "rgb_color", doc = "Palette color 15",                                        optional = true },
+        { name = "bright_black",      type = "rgb_color", doc = "Palette color 8",                                        optional = true },
+        { name = "bright_red",        type = "rgb_color", doc = "Palette color 9",                                        optional = true },
+        { name = "bright_green",      type = "rgb_color", doc = "Palette color 10",                                       optional = true },
+        { name = "bright_yellow",     type = "rgb_color", doc = "Palette color 11",                                       optional = true },
+        { name = "bright_blue",       type = "rgb_color", doc = "Palette color 12",                                       optional = true },
+        { name = "bright_magenta",    type = "rgb_color", doc = "Palette color 13",                                       optional = true },
+        { name = "bright_cyan",       type = "rgb_color", doc = "Palette color 14",                                       optional = true },
+        { name = "bright_white",      type = "rgb_color", doc = "Palette color 15",                                       optional = true },
 
         -- Additional named colors
-        { name = "foreground",        type = "rgb_color", doc = "The default text color",                                  optional = true },
-        { name = "background",        type = "rgb_color", doc = "The default background color",                            optional = true },
-        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor",  optional = true },
-        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor",  optional = true },
+        { name = "foreground",        type = "rgb_color", doc = "The default text color",                                 optional = true },
+        { name = "background",        type = "rgb_color", doc = "The default background color",                           optional = true },
+        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor", optional = true },
+        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor", optional = true },
       },
     },
     {
@@ -317,8 +324,8 @@ return {
     },
     {
       name = "pre_render.event_args",
-      fields = { 
-        { name = "time", type = "int", doc = "The number of miliseconds elapsed since startup" },
+      fields = {
+        { name = "time",  type = "int",    doc = "The number of miliseconds elapsed since startup" },
         { name = "cause", type = "string", doc = "The reason for the render, such as 'io_idle' or 'io_max_exceeded'" },
       },
     },
@@ -442,7 +449,7 @@ return {
       doc = "Set the z index of |win| to |z|",
       params = {
         { name = "win_id", type = "int", doc = "Window id" },
-        { name = "z",   type = "int", doc = "New z index of |win|" }
+        { name = "z",      type = "int", doc = "New z index of |win|" }
       },
     },
     {
@@ -475,7 +482,7 @@ return {
       name = "window_set_opacity",
       doc = "Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|",
       params = {
-        { name = "win_id",     type = "int",   doc = "Window id" },
+        { name = "win_id",  type = "int",   doc = "Window id" },
         { name = "opacity", type = "float", doc = "The new window opacity." },
       },
     },
@@ -490,8 +497,8 @@ return {
       doc = "Set window transparency mode.",
       params =
       {
-        { name = "win_id",  type = "int",               doc = "Window id" },
-        { name = "mode", type = "transparency_mode", doc = "Set transparency mode." },
+        { name = "win_id", type = "int",               doc = "Window id" },
+        { name = "mode",   type = "transparency_mode", doc = "Set transparency mode." },
       },
     },
     {
@@ -507,7 +514,7 @@ return {
       name = "window_set_dim_factor",
       doc = "Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)",
       params = {
-        { name = "win_id",    type = "int",   doc = "Window id" },
+        { name = "win_id", type = "int",   doc = "Window id" },
         { name = "factor", type = "float", doc = "Dim factor between 0.0 and 1.0" },
       },
     },
@@ -599,15 +606,6 @@ return {
       returns = { type = "int", doc = "The id of the new window" }
     },
     {
-      name = "window_write",
-      doc =
-      "Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \\r, \\n, color escapes, cursor movement, etc.",
-      params = {
-        { name = "win_id", type = "int",    doc = "Window id" },
-        { name = "text",   type = "string", doc = "String which can embed any VT compatible ansi escape." },
-      },
-    },
-    {
       name = "window_create_process",
       doc = "Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window id.",
       params = {
@@ -638,6 +636,35 @@ return {
       doc = "Get the scroll offset of the window with id |win_id|",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
       returns = { type = "int", doc = "The number of lines below the bottom line of the window." }
+    },
+    --- drawing {{{1
+    {
+      name = "window_write",
+      doc =
+      "Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \\r, \\n, color escapes, cursor movement, etc.",
+      params = {
+        { name = "win_id", type = "int",    doc = "Window id" },
+        { name = "text",   type = "string", doc = "String which can embed any VT compatible ansi escape." },
+      },
+    },
+    {
+      name = "window_set_drawing_color",
+      doc =
+      "Set the drawing color of |win_id|. This is equivalent to setting an rgb color with SGR 38/48, but is much faster because it skips formatting and parsing. Useful for tight render loops.",
+      params = {
+        { name = "win_id", type = "int",       doc = "Window id" },
+        { name = "brush",  type = "brush",     doc = "Foreground or background brush" },
+        { name = "color",  type = "rgb_color", doc = "The new color" },
+      },
+    },
+    {
+      name = "window_set_cursor_position",
+      doc =
+      "Set the cursor position of |win_id|. This is equivalent to moving the cursor with CUP, but is much faster because it skips formatting and parsing. Useful for tight render loops.",
+      params = {
+        { name = "win_id", type = "int",        doc = "Window id" },
+        { name = "pos",    type = "coordinate", doc = "The new cursor position" },
+      },
     },
   },
 }
