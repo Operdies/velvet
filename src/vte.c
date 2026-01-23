@@ -1,6 +1,7 @@
 #include "vte.h"
 #include "collections.h"
 #include "csi.h"
+#include "dcs.h"
 #include "osc.h"
 #include "text.h"
 #include "utf8proc/utf8proc.h"
@@ -387,12 +388,18 @@ static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
   }
 }
 
+static const char *BEL = "\a";
+static const char *ST = "\x1b\\";
+
 void vte_dispatch_dcs(struct vte *vte, uint8_t ch) {
   char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
   string_push_char(&vte->command_buffer, ch);
   if (ch == BELL || (ch == '\\' && prev == ESC)) {
+    const char *st = ch == BELL ? BEL : ST;
+    uint8_t *buffer = vte->command_buffer.content + 2;
+    int len = vte->command_buffer.len - strlen(st) - 2;
+    dcs_dispatch(vte, (struct u8_slice) { .content = buffer, .len = len }, st);
     vte->state = vte_ground;
-    TODO("DCS sequence: '%.*s'", (int)vte->command_buffer.len - 2, vte->command_buffer.content + 1);
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
     vte->state = vte_ground;
     velvet_log("Abort DCS: max length exceeded");
@@ -422,14 +429,12 @@ static void vte_dispatch_osc(struct vte *vte, uint8_t ch) {
   // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands
   // OSC commands can be terminated with either BEL or ST. Although ST is preferred, we respond to the query with the
   // same terminator as the one we received for maximum compatibility
-  static const uint8_t *BEL = (uint8_t*)"\a";
-  static const uint8_t *ST = (uint8_t*)"\x1b\\";
   char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
   string_push_char(&vte->command_buffer, ch);
   if (ch == BELL || (ch == '\\' && prev == ESC)) {
-    const uint8_t *st = ch == BELL ? BEL : ST;
+    const char *st = ch == BELL ? BEL : ST;
     uint8_t *buffer = vte->command_buffer.content + 2;
-    int len = vte->command_buffer.len - strlen((char*)st) - 2;
+    int len = vte->command_buffer.len - strlen(st) - 2;
     struct osc osc = {0};
     osc_parse(&osc, (struct u8_slice) { .len = len, .content = buffer }, (uint8_t*)st);
     if (osc.state == OSC_ACCEPT) {
