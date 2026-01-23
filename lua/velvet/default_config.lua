@@ -80,7 +80,7 @@ end
 local ok, err = pcall(dwm.activate)
 if not ok then dbg({ dwm_activate = err }) end
 
-local event_manager = vv.events.create_group('close_if_all_exited', true)
+local event_manager = vv.events.create_group('default_config.close_if_all_exited', true)
 event_manager.window_closed = function()
   for _, id in ipairs(vv.api.get_windows()) do
     if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) then return end
