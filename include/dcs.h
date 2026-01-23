@@ -3,6 +3,6 @@
 
 #include "vte.h"
 
-void dcs_dispatch(struct vte *vte, struct u8_slice cmd, char *st);
+void dcs_dispatch(struct vte *vte, struct u8_slice cmd, const char *st);
 
 #endif /* DCS_H */

@@ -260,6 +260,13 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
   struct screen_cell *c = l->cells;
   int left, right;
   left = right = column;
+
+  if (value.style.attr & ATTR_REVERSE) {
+    struct color tmp = value.style.fg;
+    value.style.fg = value.style.bg;
+    value.style.bg = tmp;
+    value.style.attr &= ~ATTR_REVERSE;
+  }
   
   /* a wide char cannot start on the last column */
   if (value.cp.is_wide && column >= (r->w - 1)) 
@@ -758,11 +765,13 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     velvet_scene_stage_and_commit_window(m, win);
   }
 
+  /* damage: a rough estimate of the required screen update. Currently number of modified cells */
   int damage = velvet_render_calculate_damage(r);
+  static const int damage_threshold = 1024; // 1024 is guaranteed to not fit in a single write, but is otherwise arbitrary
   if (damage) {
-    if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_on);
+    if (damage > damage_threshold) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_on);
     velvet_render_render_damage_to_buffer(r);
-    if (damage > 200) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
+    if (damage > damage_threshold) string_push_slice(&r->draw_buffer, vt_synchronized_rendering_off);
   }
 
   if (focused && !focused->hidden) {
@@ -964,6 +973,10 @@ static bool color_equals(struct color a, struct color b) {
 }
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b) {
+  /* ATTR_REVERSE has been normalized out at this point */
+  assert(!(a.style.attr & ATTR_REVERSE));
+  assert(!(b.style.attr & ATTR_REVERSE));
+  if (a.cp.value == ' ' && b.cp.value == ' ') return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr;
   return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style);
 }
 

@@ -61,12 +61,12 @@ static void push_sgr(struct vte *vte) {
   push_color(vte, g->cursor.brush.bg, false);
 }
 
-static void push_unhandled(struct vte *vte, char *st) {
+static void push_unhandled(struct vte *vte, const char *st) {
   string_push_cstr(&vte->pending_input, ESC "P0$r");
   string_push_cstr(&vte->pending_input, st);
 }
 
-void dcs_dispatch(struct vte *vte, struct u8_slice cmd, char *st) {
+void dcs_dispatch(struct vte *vte, struct u8_slice cmd, const char *st) {
   struct screen *g = vte_get_current_screen(vte);
   if (u8_match(cmd, "$qm")) {
     /* sgr */
