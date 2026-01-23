@@ -221,28 +221,31 @@ local function top_border_drag(brd, args, event_name)
   brd.parent:set_geometry({ left = border_drag.left + dcol, top = border_drag.top + drow, width = pg.width, height = pg.height })
 end
 
+--- @type velvet.window | nil
+local dragged = nil
 --- @param event mouse_event event name
 --- @param args velvet.api.mouse.click.event_args | velvet.api.mouse.move.event_args | velvet.api.mouse.scroll.event_args
 local function route_mouse_events(event, args)
   local win = args.win_id and args.win_id > 0 and win_registry[args.win_id]
-  if border_drag and border_drag.win:valid() then win = border_drag.win end
+  if dragged and dragged:valid() then win = dragged end
+
   if win then
+    if args.event_type and args.event_type == vv.api.mouse_event_type.mouse_down then 
+      dragged = win
+    elseif args.event_type and args.event_type == vv.api.mouse_event_type.mouse_up then 
+      dragged = nil
+    end
     if event == 'mouse_click' or vv.options.focus_follows_mouse then win:focus() end
     -- Translate event coordinates to be window local
     local geom = win:get_geometry()
     args.pos.col = args.pos.col - geom.left
     args.pos.row = args.pos.row - geom.top
 
-    if border_drag then
-      ---@diagnostic disable-next-line: param-type-mismatch
-      top_border_drag(border_drag.win, args, event)
+    local window_func = 'on_' .. event .. '_handler'
+    if win[window_func] then
+      win[window_func](win, args)
     else
-      local window_func = 'on_' .. event .. '_handler'
-      if win[window_func] then
-        win[window_func](win, args)
-      else
-        vv.api['window_send_' .. event](args)
-      end
+      vv.api['window_send_' .. event](args)
     end
   end
 end
@@ -347,9 +350,18 @@ function Window:set_auto_return(auto_return)
   set_ansimode(self, 20, auto_return)
 end
 
+local function clamp(x, lo, hi) 
+  if x < lo then return lo end
+  if x > hi then return hi end
+  return x
+end
+
 --- @param x integer the new cursor column
 --- @param y integer the new cursor row
 function Window:set_cursor(x, y)
+  local g = self:get_geometry()
+  x = clamp(x, 1, g.width)
+  y = clamp(y, 1, g.height)
   self:draw(('\x1b[%d;%dH'):format(y, x))
 end
 
