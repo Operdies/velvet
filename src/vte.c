@@ -390,7 +390,7 @@ static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
 void vte_dispatch_dcs(struct vte *vte, uint8_t ch) {
   char prev = vte->command_buffer.len > 1 ? vte->command_buffer.content[vte->command_buffer.len - 1] : 0;
   string_push_char(&vte->command_buffer, ch);
-  if (ch == '\\' && prev == ESC) {
+  if (ch == BELL || (ch == '\\' && prev == ESC)) {
     vte->state = vte_ground;
     TODO("DCS sequence: '%.*s'", (int)vte->command_buffer.len - 2, vte->command_buffer.content + 1);
   } else if (vte->command_buffer.len >= MAX_ESC_SEQ_LEN) {
