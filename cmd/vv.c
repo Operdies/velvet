@@ -410,6 +410,7 @@ struct vv_source {
 
 
 static void vv_source_exit(void* _) {
+  (void)_;
   exit(0);
 }
 

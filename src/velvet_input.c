@@ -15,15 +15,11 @@
 #define CTRL(x) ((x) & 037)
 #endif
 
-static const uint8_t bracketed_paste_start[] = { 0x1b, '[', '2', '0', '0', '~' };
-static const uint8_t bracketed_paste_end[] = { 0x1b, '[', '2', '0', '1', '~' };
+static const uint8_t bracketed_paste_start[] = {0x1b, '[', '2', '0', '0', '~'};
+static const uint8_t bracketed_paste_end[] = {0x1b, '[', '2', '0', '1', '~'};
 
 enum mouse_modifiers { modifier_none = 0, modifier_shift = 4, modifier_alt = 8, modifier_ctrl = 16 };
 enum mouse_event { mouse_click = 0, mouse_move = 0x20, mouse_scroll = 0x40 };
-
-static const int scroll_up = VELVET_API_SCROLL_DIRECTION_UP;
-static const int scroll_down = VELVET_API_SCROLL_DIRECTION_DOWN;
-static const int mouse_none = VELVET_API_MOUSE_BUTTON_NONE;
 
 struct mouse_sgr {
   union {
@@ -116,9 +112,6 @@ static void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c);
 static void DISPATCH_FOCUS_IN(struct velvet *v, struct csi c);
 static void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c);
 
-static const int mouse_up = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_UP;
-static const int mouse_down = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN;
-
 static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
   int btn = c.params[0].primary;
   int col = c.params[1].primary;
@@ -134,7 +127,7 @@ static struct mouse_sgr mouse_sgr_from_csi(struct csi c) {
       .event_type = event_type,
       .row = row,
       .column = col,
-      .click_state = c.final == 'M' ? mouse_down : mouse_up,
+      .click_state = c.final == 'M' ? VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN : VELVET_API_MOUSE_EVENT_TYPE_MOUSE_UP,
   };
   return sgr;
 }
@@ -145,7 +138,7 @@ static void send_mouse_sgr(struct velvet_window *target, struct mouse_sgr trans)
     string_push_csi(&target->emulator.pending_input,
                     '<',
                     INT_SLICE(btn, trans.column, trans.row),
-                    trans.click_state == mouse_down ? "M" : "m");
+                    trans.click_state == VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN ? "M" : "m");
   } else if (target->emulator.options.mouse.mode == MOUSE_MODE_DEFAULT) {
     /* CSI M Cb Cx Cy */
     uint8_t Cb = btn | trans.modifiers;
@@ -190,8 +183,10 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
   string_push_char(&v->input.command_buffer, ch);
 
   struct string *b = &v->input.command_buffer;
-  if (b->len == sizeof(bracketed_paste_start) && 0 == memcmp(b->content, bracketed_paste_start, sizeof(bracketed_paste_start))) {
-    if (0 == memcmp(b->content + b->len - sizeof(bracketed_paste_end), bracketed_paste_end, sizeof(bracketed_paste_end))) {
+  if (b->len == sizeof(bracketed_paste_start) &&
+      memcmp(b->content, bracketed_paste_start, sizeof(bracketed_paste_start)) == 0) {
+    if (memcmp(b->content + b->len - sizeof(bracketed_paste_end), bracketed_paste_end, sizeof(bracketed_paste_end)) ==
+        0) {
       send_bracketed_paste(v);
     }
 
@@ -343,7 +338,8 @@ static bool is_modifier(uint32_t codepoint) {
 
 /* strip unsupported modifiers and collapse equivalent key states for easier comparisons */
 static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
-  static const uint32_t unused_modifiers = VELVET_API_KEY_MODIFIERS_HYPER | VELVET_API_KEY_MODIFIERS_NUM_LOCK | VELVET_API_KEY_MODIFIERS_CAPS_LOCK;
+  static const uint32_t unused_modifiers =
+      VELVET_API_KEY_MODIFIERS_HYPER | VELVET_API_KEY_MODIFIERS_NUM_LOCK | VELVET_API_KEY_MODIFIERS_CAPS_LOCK;
   uint32_t c = e.key.codepoint;
   /* treat alt the same as meta for all practical purposes */
   if ((e.modifiers & VELVET_API_KEY_MODIFIERS_ALT) || (e.modifiers & VELVET_API_KEY_MODIFIERS_META)) {
@@ -814,12 +810,12 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
   struct velvet_input *in = &v->input;
   struct mouse_options m = w->emulator.options.mouse;
 
-  bool do_send =
-      (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
-      ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
-       sgr.event_type == mouse_click) ||
-      (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move && sgr.button_state != mouse_none) ||
-      (m.tracking && sgr.event_type == mouse_scroll);
+  bool do_send = (m.tracking == MOUSE_TRACKING_ALL_MOTION) ||
+                 ((m.tracking == MOUSE_TRACKING_CLICK || m.tracking == MOUSE_TRACKING_CELL_MOTION) &&
+                  sgr.event_type == mouse_click) ||
+                 (m.tracking == MOUSE_TRACKING_CELL_MOTION && sgr.event_type == mouse_move &&
+                  sgr.button_state != VELVET_API_MOUSE_BUTTON_NONE) ||
+                 (m.tracking && sgr.event_type == mouse_scroll);
 
   if (!(sgr.row > 0 && sgr.column > 0 && sgr.column <= w->geometry.w && sgr.row <= w->geometry.h)) {
     /* verify the event is actually within the client area */
@@ -837,7 +833,7 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
   if (w->emulator.options.alternate_screen) {
     struct velvet_key k = {0};
     /* In the absence of mouse tracking, scroll up/down is treated as arrow keys in the alternate screen */
-    if (sgr.scroll_direction == scroll_up) {
+    if (sgr.scroll_direction == VELVET_API_SCROLL_DIRECTION_UP) {
       /* NOTE: When kitty keyhandling is enabled, kitty encodes scrolling
        * as successive key press and key release events using the kitty protocol encoding,
        * whereas ghostty and alacritty uses the same encoding regardless of kitty protocol settings.
@@ -846,7 +842,7 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
       find_key("SS3_UP", &k);
       struct velvet_key_event e = {.key = k, .type = VELVET_API_KEY_EVENT_TYPE_PRESS};
       velvet_input_send_vk(v, e);
-    } else if (sgr.scroll_direction == scroll_down) {
+    } else if (sgr.scroll_direction == VELVET_API_SCROLL_DIRECTION_DOWN) {
       find_key("SS3_DOWN", &k);
       struct velvet_key_event e = {.key = k, .type = VELVET_API_KEY_EVENT_TYPE_PRESS};
       velvet_input_send_vk(v, e);
@@ -855,10 +851,10 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
     struct screen *screen = vte_get_current_screen(&w->emulator);
     /* in the primary screen, scrolling affects the current view */
     int current_offset = screen_get_scroll_offset(screen);
-    if (sgr.scroll_direction == scroll_up) {
+    if (sgr.scroll_direction == VELVET_API_SCROLL_DIRECTION_UP) {
       int num_lines = screen_get_scroll_height(screen);
       screen_set_scroll_offset(screen, MIN(num_lines, current_offset + in->options.scroll_multiplier));
-    } else if (sgr.scroll_direction == scroll_down) {
+    } else if (sgr.scroll_direction == VELVET_API_SCROLL_DIRECTION_DOWN) {
       screen_set_scroll_offset(screen, MAX(0, current_offset - in->options.scroll_multiplier));
     }
     if (current_offset != screen_get_scroll_offset(screen)) velvet_ensure_render_scheduled(v);
@@ -885,7 +881,7 @@ void velvet_input_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move
   struct mouse_sgr sgr = {.event_type = mouse_move,
                           .button_state = move.mouse_button,
                           .column = move.pos.col,
-                          .click_state = mouse_down,
+                          .click_state = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN,
                           .row = move.pos.row,
                           .modifiers = sgr_mods_from_key_mods(move.modifiers)};
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, move.win_id);
@@ -908,7 +904,7 @@ void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_sc
                           .scroll_direction = scroll.direction,
                           .column = scroll.pos.col,
                           .row = scroll.pos.row,
-                          .click_state = mouse_down,
+                          .click_state = VELVET_API_MOUSE_EVENT_TYPE_MOUSE_DOWN,
                           .modifiers = sgr_mods_from_key_mods(scroll.modifiers)};
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, scroll.win_id);
   velvet_input_send_mouse_event(v, w, sgr);
