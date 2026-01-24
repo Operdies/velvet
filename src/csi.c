@@ -166,11 +166,6 @@ int csi_parse(struct csi *c, struct u8_slice str) {
       c->state = ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
     } break;
     case CSI_ACCEPT: {
-      // Special case for empty parameter lists
-      if (c->n_params == 0) {
-        c->n_params = 1;
-        c->params[0].primary = 0;
-      }
       c->final = ch;
       return i + 1;
     } break;

@@ -737,7 +737,7 @@ void test_csi_parsing(void) {
   test_csi_testcase(
       "Reset 1", "0m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
   test_csi_testcase(
-      "Reset 0", "m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 1, .params = {{.primary = 0}}});
+      "Reset 0", "m", (struct csi){.state = CSI_ACCEPT, .final = 'm', .n_params = 0, .params = {{.primary = 0}}});
   test_csi_testcase("Basic Parameter List",
                     "1;2;33;444m",
                     (struct csi){
@@ -770,17 +770,23 @@ void test_csi_parsing(void) {
     "Test leading / intermediate parsing 1",
     ">c",
     (struct csi) {
-      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 1 });
+      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 0 });
   test_csi_testcase(
     "Test leading / intermediate parsing 1",
     ">?c",
     (struct csi) {
-      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .intermediate = '?' });
+      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 0, .intermediate = '?' });
   test_csi_testcase(
     "Test leading / intermediate parsing 1",
     "4?c",
     (struct csi) {
       .leading = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
+  test_csi_testcase(
+    "Test n_params",
+    " q",
+    (struct csi) {
+      .leading = ' ', .final = 'q', .state = CSI_ACCEPT, .n_params = 0
+    });
 }
 
 #define assertf(cond, fmt, ...)                                                                                        \

@@ -323,7 +323,19 @@ bool csi_dispatch(struct vte *vte, struct csi *csi) {
   case KEY(l, i, f): return fn(vte, csi);
 #include "csi.def"
 #undef CSI
-  default: return csi_dispatch_todo(vte, csi);
+  default: {
+    /* This is the case for commands such as DECSCUSR (CSI Ps SP q) and
+     * e.g. DECSED (CSI ? Ps J) when the Ps parameter is omitted. In that case, we
+     * cannot determine if the identifying character refers to a leading or intermediate character.
+     * If we could not identify the command, swap and try again. */
+    bool ambiguous = csi->n_params == 0 && csi->leading && !csi->intermediate && csi->final;
+    if (ambiguous) {
+      csi->intermediate = csi->leading;
+      csi->leading = 0;
+      return csi_dispatch(vte, csi);
+    }
+    return csi_dispatch_todo(vte, csi);
+  }
   }
 }
 
