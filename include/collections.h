@@ -121,7 +121,7 @@ void string_ensure_null_terminated(struct string *s);
 bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s);
 int u8_slice_codepoint_iterator_length(struct u8_slice_codepoint_iterator s);
 void vec_shift_left(struct vec *v, size_t n);
-bool u8_slice_digit(struct u8_slice s, int *digit);
+bool u8_slice_to_int32(struct u8_slice s, int *i32);
 bool u8_match(struct u8_slice s, char *opt);
 
 #ifdef RELEASE_BUILD

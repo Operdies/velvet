@@ -78,6 +78,7 @@ struct velvet_render_state_cache {
   struct {
     struct screen_cell_style style;
   } cell;
+  hyperlink_handle link;
 };
 
 struct velvet_render {

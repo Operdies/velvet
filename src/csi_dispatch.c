@@ -515,7 +515,7 @@ bool HPR(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("HPR"); 
 static bool REP(struct vte *vte, struct csi *csi) {
   struct screen *g = vte_get_current_screen(vte);
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
-  struct screen_cell repeat = { .cp = vte->previous_symbol, .style = g->cursor.brush };
+  struct screen_cell repeat = { .cp = vte->previous_symbol, .style = g->cursor.brush, .link = osc_get_hyperlink_handle(vte->current_link) };
   if (repeat.cp.value == 0) repeat.cp = codepoint_space;
   for (int i = 0; i < count; i++) {
     screen_insert(g, repeat, vte->options.auto_wrap_mode);

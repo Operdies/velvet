@@ -522,7 +522,7 @@ int u8_slice_codepoint_iterator_length(struct u8_slice_codepoint_iterator s) {
   return i;
 }
 
-bool u8_slice_digit(struct u8_slice s, int *digit) {
+bool u8_slice_to_int32(struct u8_slice s, int *i32) {
   if (s.len == 0) return false;
   size_t i, v, sign;
   i = v = 0;
@@ -534,7 +534,7 @@ bool u8_slice_digit(struct u8_slice s, int *digit) {
     v *= 10;
     v += ch - '0';
   }
-  *digit = v * sign;
+  *i32 = v * sign;
   return true;
 }
 

@@ -5,6 +5,7 @@
 #include "text.h"
 #include "collections.h"
 #include <stdint.h>
+#include "osc.h"
 
 enum vte_state {
   vte_ground,
@@ -181,9 +182,12 @@ struct vte {
   struct {
     struct string title;
     struct string icon;
+    struct string link_id_prefix;
   } osc;
   struct utf8 pending_symbol;
   struct codepoint previous_symbol;
+  struct vec /* *hyperlink */ links;
+  struct osc_hyperlink *current_link;
 };
 
 static const struct emulator_options emulator_options_default = {
@@ -195,6 +199,7 @@ static const struct emulator_options emulator_options_default = {
 static const struct vte vte_default = {
     .options = emulator_options_default,
     .primary = { .scroll.max = 10000, },
+    .links = vec(struct osc_hyperlink*),
 };
 
 enum vte_dsr {

@@ -174,9 +174,9 @@ bool cell_wide(struct screen_cell c) {
   return c.cp.is_wide;
 }
 
-static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_cell_style brush, struct u8_slice run) {
+static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_cell_style brush, struct u8_slice run, hyperlink_handle link) {
   struct cursor *cur = &g->cursor;
-  struct screen_cell c = {.style = brush};
+  struct screen_cell c = {.style = brush, .link = link};
 
   struct screen_line *row = get_current_line(g);
   for (size_t i = 0; i < run.len; i++) {
@@ -192,17 +192,17 @@ static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_c
   cur->column = MIN(cur->column, screen_right(g));
 }
 
-void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap) {
+void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap, hyperlink_handle link) {
   if (run.len == 0) return;
 
   if (!wrap) {
     /* if wrapping is disabled, we can take even more shortcuts */
-    screen_insert_batch_ascii_wrapless(g, brush, run);
+    screen_insert_batch_ascii_wrapless(g, brush, run, link);
     return;
   }
 
   int column = g->cursor.column;
-  struct screen_cell c = {.style = brush};
+  struct screen_cell c = {.style = brush, .link = link};
   if (g->cursor.wrap_pending) {
     screen_move_or_scroll_down(g);
     column = 0;

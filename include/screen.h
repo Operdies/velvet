@@ -3,6 +3,7 @@
 
 #include "text.h"
 #include "collections.h"
+#include "osc.h"
 
 #define PACK __attribute__((packed))
 
@@ -72,6 +73,7 @@ static const struct screen_cell_style style_default = {0};
 struct screen_cell {
   struct codepoint cp;
   struct screen_cell_style style;
+  hyperlink_handle link;
 };
 
 struct screen_line {
@@ -128,7 +130,7 @@ struct screen {
   struct cursor saved_cursor;
 };
 
-void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap);
+void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, struct u8_slice run, bool wrap, hyperlink_handle link);
 void screen_move_or_scroll_down(struct screen *g);
 void screen_move_or_scroll_up(struct screen *g);
 void screen_backspace(struct screen *g);

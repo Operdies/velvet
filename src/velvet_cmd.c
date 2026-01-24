@@ -140,7 +140,7 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
   struct velvet_session *focus = velvet_get_focused_session(v);
 
   int digit = 0;
-  bool is_digit = u8_slice_digit(value, &digit);
+  bool is_digit = u8_slice_to_int32(value, &digit);
   bool boolean = digit || (value.len && value.content[0] == 't');
   if (u8_match(option, "lines")) {
     if (focus && is_digit) focus->ws.h = digit;

@@ -64,6 +64,8 @@ struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
   host->id = win_id;
+  string_push_int(&host->emulator.osc.link_id_prefix, host->id);
+  string_push_char(&host->emulator.osc.link_id_prefix, '_');
 
   // void velvet_api_raise_window_created(struct velvet *v, struct velvet_api_window_created_event_args args);
   struct velvet_api_window_created_event_args event_args = { .win_id = host->id };
@@ -309,6 +311,25 @@ static void velvet_render_set_cursor(struct velvet_render *r, struct cursor_opti
 
 static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style, bool skip_fg);
 
+static void velvet_render_set_hyperlink(struct velvet_render *r, struct osc_hyperlink *link) {
+  if (r->state.link != link) {
+    r->state.link = link;
+    if (link) {
+      struct u8_slice id, url;
+      id = hyperlink_get_id(link);
+      url = hyperlink_get_url(link);
+      string_push(&r->draw_buffer, (uint8_t*)"\x1b]8;id=");
+      string_push_slice(&r->draw_buffer, id);
+      string_push_char(&r->draw_buffer, ';');
+      string_push_slice(&r->draw_buffer, url);
+      string_push(&r->draw_buffer, (uint8_t*)"\x1b\\");
+    } else {
+      /* terminate link */
+      string_push(&r->draw_buffer, (uint8_t *)"\x1b]8;;\x1b\\");
+    }
+  }
+}
+
 static void velvet_render_position_cursor(struct velvet_render *r, int line, int col) {
   line = CLAMP(line, 0, r->h - 1);
   col = CLAMP(col, 0, r->w - 1);
@@ -408,7 +429,9 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         if (highlight_damage) {
           cell_style = highlight;
         }
+
         velvet_render_set_style(r, cell_style, c->cp.value == ' ');
+        velvet_render_set_hyperlink(r, c->link);
 
         struct utf8 sym;
         uint8_t utf8_len = codepoint_to_utf8(c->cp.value, &sym);

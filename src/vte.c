@@ -180,7 +180,7 @@ static void ground_tab(struct vte *vte, uint8_t ch) {
   int x = vte_get_current_screen(vte)->cursor.column;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
   int numSpaces = x2 - x;
-  struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .cp = codepoint_space };
+  struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .cp = codepoint_space, .link = osc_get_hyperlink_handle(vte->current_link) };
   screen_insert(vte_get_current_screen(vte), c, vte->options.auto_wrap_mode);
   for (int i = 1; i < numSpaces; i++) {
     screen_insert(vte_get_current_screen(vte), c, false);
@@ -211,7 +211,7 @@ static void ground_accept(struct vte *vte) {
     vte->pending_symbol = (struct utf8){0};
     return;
   }
-  struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush };
+  struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush, .link = osc_get_hyperlink_handle(vte->current_link) };
   screen_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = symbol;
   vte->pending_symbol = (struct utf8){0};
@@ -571,7 +571,7 @@ void vte_process(struct vte *vte, struct u8_slice str) {
         struct screen_cell_style style = s->cursor.brush;
         bool wrap = vte->options.auto_wrap_mode;
         struct u8_slice run = u8_slice_range(str, i, j);
-        screen_insert_ascii_run(s, style, run, wrap);
+        screen_insert_ascii_run(s, style, run, wrap, osc_get_hyperlink_handle(vte->current_link));
         vte->previous_symbol = (struct codepoint){.value = run.content[run.len - 1]};
         i = j;
       }
@@ -602,8 +602,13 @@ void vte_destroy(struct vte *vte) {
   string_destroy(&vte->command_buffer);
   string_destroy(&vte->osc.title);
   string_destroy(&vte->osc.icon);
+  string_destroy(&vte->osc.link_id_prefix);
   vec_destroy(&vte->options.kitty[0].stack);
   vec_destroy(&vte->options.kitty[1].stack);
+  struct osc_hyperlink **link;
+  vec_foreach(link, vte->links)
+    hyperlink_destroy(*link);
+  vec_destroy(&vte->links);
 }
 
 struct screen *vte_get_current_screen(struct vte *vte) {
