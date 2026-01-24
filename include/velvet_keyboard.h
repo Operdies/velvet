@@ -17,7 +17,7 @@ struct velvet_key {
 
 struct velvet_key_event {
   struct velvet_key key;
-  enum velvet_api_key_modifiers modifiers;
+  enum velvet_api_key_modifier modifiers;
   enum velvet_api_key_event_type type;
   struct {
     /* TODO: How long can this be ? */

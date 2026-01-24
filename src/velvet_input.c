@@ -66,7 +66,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
 
   // special case for <C-Space>
   if (cp == 0) {
-    struct velvet_key_event e = {.modifiers = VELVET_API_KEY_MODIFIERS_CTRL};
+    struct velvet_key_event e = {.modifiers = VELVET_API_KEY_MODIFIER_CONTROL};
     find_key("space", &e.key);
     return e;
   }
@@ -98,7 +98,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   }
 
   k.key.codepoint = cp;
-  k.modifiers = ((iscntrl * VELVET_API_KEY_MODIFIERS_CTRL) | (isshift * VELVET_API_KEY_MODIFIERS_SHIFT));
+  k.modifiers = ((iscntrl * VELVET_API_KEY_MODIFIER_CONTROL) | (isshift * VELVET_API_KEY_MODIFIER_SHIFT));
   k.key.kitty_terminator = 'u';
 
   uint32_t associated_text = k.key.alternate_codepoint ? k.key.alternate_codepoint : k.key.codepoint;
@@ -339,18 +339,18 @@ static bool is_modifier(uint32_t codepoint) {
 /* strip unsupported modifiers and collapse equivalent key states for easier comparisons */
 static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
   static const uint32_t unused_modifiers =
-      VELVET_API_KEY_MODIFIERS_HYPER | VELVET_API_KEY_MODIFIERS_NUM_LOCK | VELVET_API_KEY_MODIFIERS_CAPS_LOCK;
+      VELVET_API_KEY_MODIFIER_HYPER | VELVET_API_KEY_MODIFIER_NUM_LOCK | VELVET_API_KEY_MODIFIER_CAPS_LOCK;
   uint32_t c = e.key.codepoint;
   /* treat alt the same as meta for all practical purposes */
-  if ((e.modifiers & VELVET_API_KEY_MODIFIERS_ALT) || (e.modifiers & VELVET_API_KEY_MODIFIERS_META)) {
-    e.modifiers &= ~VELVET_API_KEY_MODIFIERS_ALT;
-    e.modifiers |= VELVET_API_KEY_MODIFIERS_META;
+  if ((e.modifiers & VELVET_API_KEY_MODIFIER_ALT) || (e.modifiers & VELVET_API_KEY_MODIFIER_META)) {
+    e.modifiers &= ~VELVET_API_KEY_MODIFIER_ALT;
+    e.modifiers |= VELVET_API_KEY_MODIFIER_META;
   }
   e.modifiers &= ~unused_modifiers;
   if (e.key.escape && e.key.escape[0] && !e.key.escape[1]) {
     uint8_t ch = e.key.escape[0];
-    if ((e.modifiers & VELVET_API_KEY_MODIFIERS_SHIFT) && ch >= 'a' && ch <= 'z') ch -= 32;
-    if ((e.modifiers & VELVET_API_KEY_MODIFIERS_CTRL)) ch = ch & 0x1f;
+    if ((e.modifiers & VELVET_API_KEY_MODIFIER_SHIFT) && ch >= 'a' && ch <= 'z') ch -= 32;
+    if ((e.modifiers & VELVET_API_KEY_MODIFIER_CONTROL)) ch = ch & 0x1f;
     e.key.codepoint = ch;
   }
   if (e.key.codepoint && e.key.codepoint < 255) {
@@ -359,14 +359,14 @@ static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
   if (c) {
     /* if the key is a literal modifier key, strip the corresponding modifier */
     uint32_t unmask = 0;
-    if (is_super(c)) unmask |= VELVET_API_KEY_MODIFIERS_SUPER;
-    if (is_shift(c)) unmask |= VELVET_API_KEY_MODIFIERS_SHIFT;
-    if (is_ctrl(c)) unmask |= VELVET_API_KEY_MODIFIERS_CTRL;
-    if (is_meta(c)) unmask |= VELVET_API_KEY_MODIFIERS_ALT;
-    if (is_alt(c)) unmask |= VELVET_API_KEY_MODIFIERS_ALT;
-    if (is_hyper(c)) unmask |= VELVET_API_KEY_MODIFIERS_HYPER;
-    if (is_caps_lock(c)) unmask |= VELVET_API_KEY_MODIFIERS_CAPS_LOCK;
-    if (is_num_lock(c)) unmask |= VELVET_API_KEY_MODIFIERS_NUM_LOCK;
+    if (is_super(c)) unmask |= VELVET_API_KEY_MODIFIER_SUPER;
+    if (is_shift(c)) unmask |= VELVET_API_KEY_MODIFIER_SHIFT;
+    if (is_ctrl(c)) unmask |= VELVET_API_KEY_MODIFIER_CONTROL;
+    if (is_meta(c)) unmask |= VELVET_API_KEY_MODIFIER_ALT;
+    if (is_alt(c)) unmask |= VELVET_API_KEY_MODIFIER_ALT;
+    if (is_hyper(c)) unmask |= VELVET_API_KEY_MODIFIER_HYPER;
+    if (is_caps_lock(c)) unmask |= VELVET_API_KEY_MODIFIER_CAPS_LOCK;
+    if (is_num_lock(c)) unmask |= VELVET_API_KEY_MODIFIER_NUM_LOCK;
     e.modifiers &= ~unmask;
   }
   return e;
@@ -491,10 +491,10 @@ static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
   if (modifiers) modifiers -= 1;
   if (!event) event = VELVET_API_KEY_EVENT_TYPE_PRESS;
 
-  enum velvet_api_key_modifiers *remap = v->input.options.modremap;
-  enum velvet_api_key_modifiers order[] = {
-      VELVET_API_KEY_MODIFIERS_ALT, VELVET_API_KEY_MODIFIERS_CTRL, VELVET_API_KEY_MODIFIERS_SUPER};
-  uint32_t unmask = ~(VELVET_API_KEY_MODIFIERS_ALT | VELVET_API_KEY_MODIFIERS_CTRL | VELVET_API_KEY_MODIFIERS_SUPER);
+  enum velvet_api_key_modifier *remap = v->input.options.modremap;
+  enum velvet_api_key_modifier order[] = {
+      VELVET_API_KEY_MODIFIER_ALT, VELVET_API_KEY_MODIFIER_CONTROL, VELVET_API_KEY_MODIFIER_SUPER};
+  uint32_t unmask = ~(VELVET_API_KEY_MODIFIER_ALT | VELVET_API_KEY_MODIFIER_CONTROL | VELVET_API_KEY_MODIFIER_SUPER);
   uint32_t remapped_modifiers = modifiers & unmask;
 
   for (int i = 0; i < LENGTH(order); i++) {
@@ -568,15 +568,15 @@ static void dispatch_esc(struct velvet *v, uint8_t ch) {
     /* ALT and META are different, but in VT environments they have historically
      * been collated. Since there is no way to distinguish them,
      * treat ESC as both. */
-    k.modifiers |= VELVET_API_KEY_MODIFIERS_ALT;
-    k.modifiers |= VELVET_API_KEY_MODIFIERS_META;
+    k.modifiers |= VELVET_API_KEY_MODIFIER_ALT;
+    k.modifiers |= VELVET_API_KEY_MODIFIER_META;
     k.legacy = true;
     dispatch_key_event(v, k);
   }
 }
 
 static void
-velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enum velvet_api_key_modifiers m) {
+velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enum velvet_api_key_modifier m) {
   int n = 0;
   struct utf8 buf = {0};
   char *escape = NULL;
@@ -594,8 +594,8 @@ velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enu
     if (vk.codepoint == ESC) {
       send_byte(sink, ESC);
     } else {
-      bool is_meta = m & VELVET_API_KEY_MODIFIERS_ALT;
-      bool is_cntrl = m & VELVET_API_KEY_MODIFIERS_CTRL;
+      bool is_meta = m & VELVET_API_KEY_MODIFIER_ALT;
+      bool is_cntrl = m & VELVET_API_KEY_MODIFIER_CONTROL;
 
       if (is_meta) send_byte(sink, ESC);
       bool is_byte = !escape[1];
@@ -660,7 +660,7 @@ velvet_input_send_kitty_encoding(struct velvet_window *f, struct velvet_key_even
       || (e.key.escape && e.key.escape[0] == ESC) /* encode any key which is otherwise encoded with a leading ESC */
       || (is_keypad(e.key) && !is_keypad_with_text(e.key)) /* all non-text keypad keys */
       || (e.modifiers &
-          (VELVET_API_KEY_MODIFIERS_CTRL | VELVET_API_KEY_MODIFIERS_ALT)); /* disambiguate ctrl / alt modifiers */
+          (VELVET_API_KEY_MODIFIER_CONTROL | VELVET_API_KEY_MODIFIER_ALT)); /* disambiguate ctrl / alt modifiers */
 
   if (!do_send_encoded) {
     /* send the base symbol. This applies to most pure-text keys */
@@ -861,19 +861,19 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
   }
 }
 
-static enum velvet_api_key_modifiers key_mods_from_sgr_mods(enum mouse_modifiers smods) {
-  enum velvet_api_key_modifiers mods = 0;
-  if (smods & modifier_shift) mods |= VELVET_API_KEY_MODIFIERS_SHIFT;
-  if (smods & modifier_alt) mods |= VELVET_API_KEY_MODIFIERS_ALT;
-  if (smods & modifier_ctrl) mods |= VELVET_API_KEY_MODIFIERS_CTRL;
+static enum velvet_api_key_modifier key_mods_from_sgr_mods(enum mouse_modifiers smods) {
+  enum velvet_api_key_modifier mods = 0;
+  if (smods & modifier_shift) mods |= VELVET_API_KEY_MODIFIER_SHIFT;
+  if (smods & modifier_alt) mods |= VELVET_API_KEY_MODIFIER_ALT;
+  if (smods & modifier_ctrl) mods |= VELVET_API_KEY_MODIFIER_CONTROL;
   return mods;
 }
 
-static enum mouse_modifiers sgr_mods_from_key_mods(enum velvet_api_key_modifiers mods) {
+static enum mouse_modifiers sgr_mods_from_key_mods(enum velvet_api_key_modifier mods) {
   enum mouse_modifiers smods = 0;
-  if (mods & VELVET_API_KEY_MODIFIERS_SHIFT) smods |= modifier_shift;
-  if (mods & VELVET_API_KEY_MODIFIERS_ALT) smods |= modifier_alt;
-  if (mods & VELVET_API_KEY_MODIFIERS_CTRL) smods |= modifier_ctrl;
+  if (mods & VELVET_API_KEY_MODIFIER_SHIFT) smods |= modifier_shift;
+  if (mods & VELVET_API_KEY_MODIFIER_ALT) smods |= modifier_alt;
+  if (mods & VELVET_API_KEY_MODIFIER_CONTROL) smods |= modifier_ctrl;
   return smods;
 }
 
@@ -916,7 +916,7 @@ static void emit_mouse_event(struct velvet *v, struct mouse_sgr sgr, int win_id)
   enum velvet_api_mouse_button btn = sgr.button_state;
   enum velvet_api_scroll_direction sd = sgr.scroll_direction;
 
-  enum velvet_api_key_modifiers mods = key_mods_from_sgr_mods(sgr.modifiers);
+  enum velvet_api_key_modifier mods = key_mods_from_sgr_mods(sgr.modifiers);
 
   switch (sgr.event_type) {
   case mouse_click: {

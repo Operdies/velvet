@@ -215,7 +215,7 @@ local function top_border_drag(brd, args, event_name)
     brd.parent:focus()
   end
   if event_name == 'mouse_click' then
-    if args.event_type == vv.api.mouse_event_type.mouse_up then
+    if args.event_type == 'mouse_up' then
       border_drag = nil
     else 
       border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
@@ -237,9 +237,9 @@ local function route_mouse_events(event, args)
   if dragged and dragged:valid() then win = dragged end
 
   if win then
-    if args.event_type and args.event_type == vv.api.mouse_event_type.mouse_down then 
+    if args.event_type and args.event_type == 'mouse_down' then 
       dragged = win
-    elseif args.event_type and args.event_type == vv.api.mouse_event_type.mouse_up then 
+    elseif args.event_type and args.event_type == 'mouse_up' then 
       dragged = nil
     end
     if event == 'mouse_click' or vv.options.focus_follows_mouse then win:focus() end
@@ -441,7 +441,7 @@ function Window:set_foreground_color(color)
     end
   else
     if type(color) == 'string' then color = color_from_string(color) end
-    vv.api.window_set_drawing_color(self.id, vv.api.brush.foreground, color)
+    vv.api.window_set_drawing_color(self.id, 'foreground', color)
   end
 end
 
@@ -466,7 +466,7 @@ function Window:set_background_color(color)
     end
   else
     if type(color) == 'string' then color = color_from_string(color) end
-    vv.api.window_set_drawing_color(self.id, vv.api.brush.background, color)
+    vv.api.window_set_drawing_color(self.id, 'background', color)
   end
 end
 
@@ -483,11 +483,9 @@ function Window:draw(str)
   a.window_write(self.id, str)
 end
 
---- @param mode 'none'|'clear'|'all'
+--- @param mode velvet.api.transparency_mode
 function Window:set_transparency_mode(mode)
-  local modes = { none = vv.api.transparency_mode.none, clear = vv.api.transparency_mode.clear, all = vv.api.transparency_mode.all }
-  local integer = type(mode) == 'number' and mode or modes[mode]
-  a.window_set_transparency_mode(self.id, integer)
+  a.window_set_transparency_mode(self.id, mode)
 end
 
 --- @param dim number new dim factor. Highter dim means more dimming (0.0 - 1.0)
@@ -505,7 +503,7 @@ function Window:set_opacity(opacity)
   opacity = clamp(opacity, 0, 1)
   if opacity < 1 then
     local mode = a.window_get_transparency_mode(self.id)
-    if mode == a.transparency_mode.none then 
+    if mode == 'none' then 
       self:set_transparency_mode('all')
     end
   end

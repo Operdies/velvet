@@ -6,14 +6,6 @@
 #include "platform.h"
 #include <stdarg.h>
 
-lua_Integer vv_api_get_key_repeat_timeout(struct velvet *v) {
-  return v->input.options.key_repeat_timeout_ms;
-}
-lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_value) {
-  v->input.options.key_repeat_timeout_ms = new_value;
-  return v->input.options.key_repeat_timeout_ms;
-}
-
 _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -22,6 +14,14 @@ _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   lua_error(L);
   /* lua_error longjumps back to lua call site */
   assert(!"Unreachable");
+}
+
+lua_Integer vv_api_get_key_repeat_timeout(struct velvet *v) {
+  return v->input.options.key_repeat_timeout_ms;
+}
+lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_value) {
+  v->input.options.key_repeat_timeout_ms = new_value;
+  return v->input.options.key_repeat_timeout_ms;
 }
 
 struct velvet_window *check_window(struct velvet *v, int win) {
@@ -74,10 +74,8 @@ void vv_api_session_detach(struct velvet *v, lua_Integer session_id) {
 }
 
 void vv_api_window_close(struct velvet *v, lua_Integer winid) {
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
-  if (w) {
-    velvet_scene_close_and_remove_window(&v->scene, w);
-  }
+  struct velvet_window *w = check_window(v, winid);
+  velvet_scene_close_and_remove_window(&v->scene, w);
 }
 
 lua_Integer vv_api_get_focused_window(struct velvet *v){
@@ -139,8 +137,13 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
 
   if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+    struct velvet *v = *(struct velvet **)lua_getextraspace(L);
     const char *err = lua_tostring(L, -1);
-    velvet_log("lua error: %s", err);
+    struct velvet_api_system_message_event_args event_args = {
+      .level = VELVET_API_SEVERITY_ERROR,
+      .message = err,
+    };
+    velvet_api_raise_system_message(v, event_args);
     lua_pop(L, 1);
   }
 }
@@ -211,30 +214,20 @@ void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, const char* ke
 }
 
 void vv_api_set_focused_window(struct velvet *v, lua_Integer winid){
-  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, winid);
+  struct velvet_window *w = check_window(v, winid);
   if (w) velvet_scene_set_focus(&v->scene, w);
 }
 
-void vv_api_swap_windows(struct velvet *v, lua_Integer first, lua_Integer second) {
-  struct velvet_window *w1 = velvet_scene_get_window_from_id(&v->scene, first);
-  struct velvet_window *w2 = velvet_scene_get_window_from_id(&v->scene, second);
-  if (w1 && w2) {
-    lua_Integer i1 = vec_index(&v->scene.windows, w1);
-    lua_Integer i2 = vec_index(&v->scene.windows, w2);
-    vec_swap(&v->scene.windows, i1, i2);
-  }
-}
-
-enum velvet_api_key_modifiers check_modifier(lua_State *L, enum velvet_api_key_modifiers m) {
+enum velvet_api_key_modifier check_modifier(lua_State *L, enum velvet_api_key_modifier m) {
   switch (m) {
-  case VELVET_API_KEY_MODIFIERS_ALT: return m;
-  case VELVET_API_KEY_MODIFIERS_CTRL: return m;
-  case VELVET_API_KEY_MODIFIERS_SUPER: return m;
-  case VELVET_API_KEY_MODIFIERS_SHIFT: lua_bail(L, "Shift cannot be remapped.");
-  case VELVET_API_KEY_MODIFIERS_HYPER: lua_bail(L, "Hyper cannot be remapped.");
-  case VELVET_API_KEY_MODIFIERS_META: return VELVET_API_KEY_MODIFIERS_ALT;
-  case VELVET_API_KEY_MODIFIERS_CAPS_LOCK: lua_bail(L, "Caps lock cannot be remapped.");
-  case VELVET_API_KEY_MODIFIERS_NUM_LOCK: lua_bail(L, "Num lock cannot be remapped."); break;
+  case VELVET_API_KEY_MODIFIER_ALT: return m;
+  case VELVET_API_KEY_MODIFIER_CONTROL: return m;
+  case VELVET_API_KEY_MODIFIER_SUPER: return m;
+  case VELVET_API_KEY_MODIFIER_SHIFT: lua_bail(L, "Shift cannot be remapped.");
+  case VELVET_API_KEY_MODIFIER_HYPER: lua_bail(L, "Hyper cannot be remapped.");
+  case VELVET_API_KEY_MODIFIER_META: return VELVET_API_KEY_MODIFIER_ALT;
+  case VELVET_API_KEY_MODIFIER_CAPS_LOCK: lua_bail(L, "Caps lock cannot be remapped.");
+  case VELVET_API_KEY_MODIFIER_NUM_LOCK: lua_bail(L, "Num lock cannot be remapped."); break;
   default: lua_bail(L, "Multiple modifiers specified. Please specify a single modifier.");
   }
 
@@ -242,8 +235,8 @@ enum velvet_api_key_modifiers check_modifier(lua_State *L, enum velvet_api_key_m
   assert(!"Unreachable");
 }
 
-void vv_api_keymap_remap_modifier(struct velvet *v, enum velvet_api_key_modifiers from, enum velvet_api_key_modifiers to) {
-  lua_Integer enum_index[] = { [VELVET_API_KEY_MODIFIERS_ALT] = 0, [VELVET_API_KEY_MODIFIERS_CTRL] = 1, [VELVET_API_KEY_MODIFIERS_SUPER] = 2 };
+void vv_api_keymap_remap_modifier(struct velvet *v, enum velvet_api_key_modifier from, enum velvet_api_key_modifier to) {
+  lua_Integer enum_index[] = { [VELVET_API_KEY_MODIFIER_ALT] = 0, [VELVET_API_KEY_MODIFIER_CONTROL] = 1, [VELVET_API_KEY_MODIFIER_SUPER] = 2 };
   from = check_modifier(v->L, from);
   to = check_modifier(v->L, to);
   v->input.options.modremap[enum_index[from]] = to;

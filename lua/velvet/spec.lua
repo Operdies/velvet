@@ -17,10 +17,13 @@
 --- @class spec_enum_value
 --- @field name string
 --- @field value integer
+--- @field doc? string
 
 --- @class spec_enum enumeration type
 --- @field name string
 --- @field values spec_enum_value[]
+--- @field doc? string
+--- @field flags boolean flag indicating if this is a discrete value or a list of flags
 
 --- @class struct_field
 --- @field name string member name
@@ -114,22 +117,38 @@ return {
   --- enums {{{1
   enums = {
     {
-      name = "brush",
+      name = "severity",
+      doc = "The severity level of a message",
+      flags = false,
       values = {
-        { name = "background", value = 1 },
-        { name = "foreground", value = 2 },
+        { name = "debug",   value = 0 },
+        { name = "info",    value = 1 },
+        { name = "warning", value = 2 },
+        { name = "error",   value = 3 },
+      },
+    },
+    {
+      name = "brush",
+      doc = "A named brush",
+      flags = false,
+      values = {
+        { name = "background", value = 0 },
+        { name = "foreground", value = 1 },
       },
     },
     {
       name = "transparency_mode",
+      flags = false,
+      doc = "The transparency mode of a window. This affects the behavior of the |opacity| setting.",
       values = {
-        { name = "none",  value = 1 },
-        { name = "clear", value = 2 },
-        { name = "all",   value = 3 },
+        { name = "none",  value = 0, doc = 'Completely disables opacity' },
+        { name = "clear", value = 1, doc = 'Opacity applies to cells with no background color' },
+        { name = "all",   value = 2, doc = 'Opacity applies to all cells' },
       }
     },
     {
       name = "key_event_type",
+      flags = false,
       values = {
         { name = "press",   value = 1 },
         { name = "repeat",  value = 2 },
@@ -137,11 +156,12 @@ return {
       },
     },
     {
-      name = "key_modifiers",
+      name = "key_modifier",
+      flags = true,
       values = {
         { name = "shift",     value = 1 << 0 },
         { name = "alt",       value = 1 << 1 },
-        { name = "ctrl",      value = 1 << 2 },
+        { name = "control",   value = 1 << 2 },
         { name = "super",     value = 1 << 3 },
         { name = "hyper",     value = 1 << 4 },
         { name = "meta",      value = 1 << 5 },
@@ -151,6 +171,7 @@ return {
     },
     {
       name = "scroll_direction",
+      flags = false,
       values = {
         { name = "up",    value = 0 },
         { name = "down",  value = 1 },
@@ -160,6 +181,7 @@ return {
     },
     {
       name = "mouse_button",
+      flags = false,
       values = {
         { name = "left",   value = 0 },
         { name = "middle", value = 1 },
@@ -169,6 +191,7 @@ return {
     },
     {
       name = "mouse_event_type",
+      flags = false,
       values = {
         { name = "mouse_down", value = 1 },
         { name = "mouse_up",   value = 2 },
@@ -190,29 +213,29 @@ return {
       name = "theme",
       fields = {
         -- 30-37 / 40-47
-        { name = "black",             type = "rgb_color", doc = "Palette color 0",                                        optional = true },
-        { name = "red",               type = "rgb_color", doc = "Palette color 1",                                        optional = true },
-        { name = "green",             type = "rgb_color", doc = "Palette color 2",                                        optional = true },
-        { name = "yellow",            type = "rgb_color", doc = "Palette color 3",                                        optional = true },
-        { name = "blue",              type = "rgb_color", doc = "Palette color 4",                                        optional = true },
-        { name = "magenta",           type = "rgb_color", doc = "Palette color 5",                                        optional = true },
-        { name = "cyan",              type = "rgb_color", doc = "Palette color 6",                                        optional = true },
-        { name = "white",             type = "rgb_color", doc = "Palette color 7",                                        optional = true },
+        { name = "black",             type = "rgb_color", doc = "Palette color 0" },
+        { name = "red",               type = "rgb_color", doc = "Palette color 1" },
+        { name = "green",             type = "rgb_color", doc = "Palette color 2" },
+        { name = "yellow",            type = "rgb_color", doc = "Palette color 3" },
+        { name = "blue",              type = "rgb_color", doc = "Palette color 4" },
+        { name = "magenta",           type = "rgb_color", doc = "Palette color 5" },
+        { name = "cyan",              type = "rgb_color", doc = "Palette color 6" },
+        { name = "white",             type = "rgb_color", doc = "Palette color 7" },
         --  90-97 / 100-107
-        { name = "bright_black",      type = "rgb_color", doc = "Palette color 8",                                        optional = true },
-        { name = "bright_red",        type = "rgb_color", doc = "Palette color 9",                                        optional = true },
-        { name = "bright_green",      type = "rgb_color", doc = "Palette color 10",                                       optional = true },
-        { name = "bright_yellow",     type = "rgb_color", doc = "Palette color 11",                                       optional = true },
-        { name = "bright_blue",       type = "rgb_color", doc = "Palette color 12",                                       optional = true },
-        { name = "bright_magenta",    type = "rgb_color", doc = "Palette color 13",                                       optional = true },
-        { name = "bright_cyan",       type = "rgb_color", doc = "Palette color 14",                                       optional = true },
-        { name = "bright_white",      type = "rgb_color", doc = "Palette color 15",                                       optional = true },
+        { name = "bright_black",      type = "rgb_color", doc = "Palette color 8" },
+        { name = "bright_red",        type = "rgb_color", doc = "Palette color 9" },
+        { name = "bright_green",      type = "rgb_color", doc = "Palette color 10" },
+        { name = "bright_yellow",     type = "rgb_color", doc = "Palette color 11" },
+        { name = "bright_blue",       type = "rgb_color", doc = "Palette color 12" },
+        { name = "bright_magenta",    type = "rgb_color", doc = "Palette color 13" },
+        { name = "bright_cyan",       type = "rgb_color", doc = "Palette color 14" },
+        { name = "bright_white",      type = "rgb_color", doc = "Palette color 15" },
 
         -- Additional named colors
-        { name = "foreground",        type = "rgb_color", doc = "The default text color",                                 optional = true },
-        { name = "background",        type = "rgb_color", doc = "The default background color",                           optional = true },
-        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor", optional = true },
-        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor", optional = true },
+        { name = "foreground",        type = "rgb_color", doc = "The default text color" },
+        { name = "background",        type = "rgb_color", doc = "The default background color" },
+        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor" },
+        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor" },
       },
     },
     {
@@ -276,7 +299,7 @@ return {
         { name = "alternate_codepoint", type = "int",            doc = "Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted." },
         { name = "name",                type = "string",         doc = "Key name, such as 'F1'" },
         { name = "event_type",          type = "key_event_type", doc = "Event type, such as key press, repeat, and release." },
-        { name = "modifiers",           type = "key_modifiers",  doc = "Key modifiers such as super, shift, ctrl, alt" },
+        { name = "modifiers",           type = "key_modifier",   doc = "Key modifier such as super, shift, control, alt" },
       },
     },
     {
@@ -297,10 +320,10 @@ return {
     {
       name = "mouse.move.event_args",
       fields = {
-        { name = "win_id",       type = "int",           doc = "The id of the topmost visible window at the coordinates." },
-        { name = "pos",          type = "coordinate",    doc = "1-indexed screen coordinate of the mouse when the event was raised." },
-        { name = "mouse_button", type = "mouse_button",  doc = "Mouse button state when the event was raised." },
-        { name = "modifiers",    type = "key_modifiers", doc = "The keyboard modifiers which were held when the event was raised." },
+        { name = "win_id",       type = "int",          doc = "The id of the topmost visible window at the coordinates." },
+        { name = "pos",          type = "coordinate",   doc = "1-indexed screen coordinate of the mouse when the event was raised." },
+        { name = "mouse_button", type = "mouse_button", doc = "Mouse button state when the event was raised." },
+        { name = "modifiers",    type = "key_modifier", doc = "The keyboard modifier which were held when the event was raised." },
       },
     },
     {
@@ -310,7 +333,7 @@ return {
         { name = "pos",          type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
         { name = "mouse_button", type = "mouse_button",     doc = "The mouse button which was clicked." },
         { name = "event_type",   type = "mouse_event_type", doc = "Flag indicating if the button was pressed or released." },
-        { name = "modifiers",    type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
+        { name = "modifiers",    type = "key_modifier",     doc = "The keyboard modifier which were held when the event was raised." },
       },
     },
     {
@@ -319,7 +342,7 @@ return {
         { name = "win_id",    type = "int",              doc = "The id of the topmost visible window at the coordinates." },
         { name = "pos",       type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
         { name = "direction", type = "scroll_direction", doc = "The scroll direction which raised the event." },
-        { name = "modifiers", type = "key_modifiers",    doc = "The keyboard modifiers which were held when the event was raised." },
+        { name = "modifiers", type = "key_modifier",     doc = "The keyboard modifier which were held when the event was raised." },
       },
     },
     {
@@ -329,20 +352,28 @@ return {
         { name = "cause", type = "string", doc = "The reason for the render, such as 'io_idle' or 'io_max_exceeded'" },
       },
     },
+    {
+      name = "system_message.event_args",
+      fields = {
+        { name = "message", type = "string",   doc = "The message" },
+        { name = "level",   type = "severity", doc = "Error level" },
+      },
+    },
   },
 
   --- {{{1 events
   events = {
-    { name = "window_created",       doc = "Raised after a new window is created.",      args = "window.created.event_args" },
-    { name = "window_closed",        doc = "Raised after a window is closed.",           args = "window.closed.event_args" },
-    { name = "window_moved",         doc = "Raised after a window is moved.",            args = "window.moved.event_args" },
-    { name = "window_resized",       doc = "Raised after a window is resized.",          args = "window.resized.event_args" },
-    { name = "window_on_key",        doc = "Raised when a key is sent to a lua window.", args = "window.on_key.event_args" },
-    { name = "window_focus_changed", doc = "Raised after focus changes.",                args = "window.focus_changed.event_args" },
-    { name = "screen_resized",       doc = "Raised after the screen is resized.",        args = "screen.resized.event_args" },
-    { name = "mouse_move",           doc = "Raised when the mouse moves.",               args = "mouse.move.event_args" },
-    { name = "mouse_click",          doc = "Raised when the mouse is clicked.",          args = "mouse.click.event_args" },
-    { name = "mouse_scroll",         doc = "Raised when the mouse scrolls.",             args = "mouse.scroll.event_args" },
+    { name = "window_created",       doc = "Raised after a new window is created.",        args = "window.created.event_args" },
+    { name = "window_closed",        doc = "Raised after a window is closed.",             args = "window.closed.event_args" },
+    { name = "window_moved",         doc = "Raised after a window is moved.",              args = "window.moved.event_args" },
+    { name = "window_resized",       doc = "Raised after a window is resized.",            args = "window.resized.event_args" },
+    { name = "window_on_key",        doc = "Raised when a key is sent to a lua window.",   args = "window.on_key.event_args" },
+    { name = "window_focus_changed", doc = "Raised after focus changes.",                  args = "window.focus_changed.event_args" },
+    { name = "screen_resized",       doc = "Raised after the screen is resized.",          args = "screen.resized.event_args" },
+    { name = "mouse_move",           doc = "Raised when the mouse moves.",                 args = "mouse.move.event_args" },
+    { name = "mouse_click",          doc = "Raised when the mouse is clicked.",            args = "mouse.click.event_args" },
+    { name = "mouse_scroll",         doc = "Raised when the mouse scrolls.",               args = "mouse.scroll.event_args" },
+    { name = "system_message",       doc = "Raised when the system logs an error message", args = "system_message.event_args", },
     {
       name = "pre_render",
       doc = "Raised right before content is rendered. This is useful for applying updates just-in-time.",
@@ -356,10 +387,10 @@ return {
     {
       name = "keymap_remap_modifier",
       doc =
-      "Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.",
+      "Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifier, you must also apply the inverse mapping. Shift is not supported.",
       params = {
-        { name = "from", type = "key_modifiers", doc = "The modifier to remap." },
-        { name = "to",   type = "key_modifiers", doc = "The new modifier emitted when the remapped modifier is used." },
+        { name = "from", type = "key_modifier", doc = "The modifier to remap." },
+        { name = "to",   type = "key_modifier", doc = "The new modifier emitted when the remapped modifier is used." },
       },
     },
     {
@@ -434,15 +465,6 @@ return {
       name = "get_windows",
       doc = "Get the IDs of all windows.",
       returns = { type = "int[]", doc = "List of window IDs" }
-    },
-    {
-      -- TODO: deprecate this
-      name = "swap_windows",
-      params = {
-        { name = "first",  type = "int", doc = "Window id" },
-        { name = "second", type = "int", doc = "Window id" },
-      },
-      doc = "Swap two windows. This affects the layout of tiled windows.",
     },
     {
       name = "window_set_z_index",

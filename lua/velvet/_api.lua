@@ -8,60 +8,62 @@ error("Cannot require meta file")
 --- @meta
 --- @class velvet.api
 local api = {}
+---@alias velvet.api.severity string The severity level of a message
+---| 'debug' 
+---| 'info' 
+---| 'warning' 
+---| 'error' 
 
---- @enum velvet.api.brush
-api.brush = {
-  background = 1,
-  foreground = 2,
-}
+---@alias velvet.api.brush string A named brush
+---| 'background' 
+---| 'foreground' 
 
---- @enum velvet.api.transparency_mode
-api.transparency_mode = {
-  none = 1,
-  clear = 2,
-  all = 3,
-}
+---@alias velvet.api.transparency_mode string The transparency mode of a window. This affects the behavior of the |opacity| setting.
+---| 'none' Completely disables opacity
+---| 'clear' Opacity applies to cells with no background color
+---| 'all' Opacity applies to all cells
 
---- @enum velvet.api.key_event_type
-api.key_event_type = {
-  press = 1,
-  ['repeat'] = 2,
-  release = 3,
-}
+---@alias velvet.api.key_event_type string 
+---| 'press' 
+---| 'repeat' 
+---| 'release' 
 
---- @enum velvet.api.key_modifiers
-api.key_modifiers = {
-  shift = 1,
-  alt = 2,
-  ctrl = 4,
-  super = 8,
-  hyper = 16,
-  meta = 32,
-  caps_lock = 64,
-  num_lock = 128,
-}
+---@alias velvet.api.key_modifier string 
+---| 'shift' 
+---| 'alt' 
+---| 'control' 
+---| 'super' 
+---| 'hyper' 
+---| 'meta' 
+---| 'caps_lock' 
+---| 'num_lock' 
 
---- @enum velvet.api.scroll_direction
-api.scroll_direction = {
-  up = 0,
-  down = 1,
-  left = 2,
-  right = 3,
-}
+--- @class velvet.api.key_modifiers Flags for velvet.api.key_modifier
+--- @field shift? boolean 
+--- @field alt? boolean 
+--- @field control? boolean 
+--- @field super? boolean 
+--- @field hyper? boolean 
+--- @field meta? boolean 
+--- @field caps_lock? boolean 
+--- @field num_lock? boolean 
 
---- @enum velvet.api.mouse_button
-api.mouse_button = {
-  left = 0,
-  middle = 1,
-  right = 2,
-  none = 3,
-}
+---@alias velvet.api.scroll_direction string 
+---| 'up' 
+---| 'down' 
+---| 'left' 
+---| 'right' 
 
---- @enum velvet.api.mouse_event_type
-api.mouse_event_type = {
-  mouse_down = 1,
-  mouse_up = 2,
-}
+---@alias velvet.api.mouse_button string 
+---| 'left' 
+---| 'middle' 
+---| 'right' 
+---| 'none' 
+
+---@alias velvet.api.mouse_event_type string 
+---| 'mouse_down' 
+---| 'mouse_up' 
+
 
 --- @class velvet.api.rgb_color
 --- @field red integer nil
@@ -129,7 +131,7 @@ api.mouse_event_type = {
 --- @field alternate_codepoint integer Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted.
 --- @field name string Key name, such as 'F1'
 --- @field event_type velvet.api.key_event_type Event type, such as key press, repeat, and release.
---- @field modifiers velvet.api.key_modifiers Key modifiers such as super, shift, ctrl, alt
+--- @field modifiers velvet.api.key_modifiers Key modifier such as super, shift, control, alt
 
 --- @class velvet.api.window.on_key.event_args
 --- @field win_id integer The id of the window the keys were sent to.
@@ -143,28 +145,32 @@ api.mouse_event_type = {
 --- @field win_id integer The id of the topmost visible window at the coordinates.
 --- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
 --- @field mouse_button velvet.api.mouse_button Mouse button state when the event was raised.
---- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
+--- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
 
 --- @class velvet.api.mouse.click.event_args
 --- @field win_id integer The id of the topmost visible window at the coordinates.
 --- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
 --- @field mouse_button velvet.api.mouse_button The mouse button which was clicked.
 --- @field event_type velvet.api.mouse_event_type Flag indicating if the button was pressed or released.
---- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
+--- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
 
 --- @class velvet.api.mouse.scroll.event_args
 --- @field win_id integer The id of the topmost visible window at the coordinates.
 --- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
 --- @field direction velvet.api.scroll_direction The scroll direction which raised the event.
---- @field modifiers velvet.api.key_modifiers The keyboard modifiers which were held when the event was raised.
+--- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
 
 --- @class velvet.api.pre_render.event_args
 --- @field time integer The number of miliseconds elapsed since startup
 --- @field cause string The reason for the render, such as 'io_idle' or 'io_max_exceeded'
 
---- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifiers, you must also apply the inverse mapping. Shift is not supported.
---- @param from velvet.api.key_modifiers The modifier to remap.
---- @param to velvet.api.key_modifiers The new modifier emitted when the remapped modifier is used.
+--- @class velvet.api.system_message.event_args
+--- @field message string The message
+--- @field level velvet.api.severity Error level
+
+--- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifier, you must also apply the inverse mapping. Shift is not supported.
+--- @param from velvet.api.key_modifier The modifier to remap.
+--- @param to velvet.api.key_modifier The new modifier emitted when the remapped modifier is used.
 --- @return nil 
 function api.keymap_remap_modifier(from, to) end
 
@@ -222,12 +228,6 @@ function api.quit() end
 --- Get the IDs of all windows.
 --- @return integer[] List of window IDs
 function api.get_windows() end
-
---- Swap two windows. This affects the layout of tiled windows.
---- @param first integer Window id
---- @param second integer Window id
---- @return nil 
-function api.swap_windows(first, second) end
 
 --- Set the z index of |win| to |z|
 --- @param win_id integer Window id
@@ -444,5 +444,6 @@ function api.set_theme(new_value) end
 --- @field mouse_move? fun(event_args: velvet.api.mouse.move.event_args): nil Raised when the mouse moves.
 --- @field mouse_click? fun(event_args: velvet.api.mouse.click.event_args): nil Raised when the mouse is clicked.
 --- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
+--- @field system_message? fun(event_args: velvet.api.system_message.event_args): nil Raised when the system logs an error message
 --- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
 

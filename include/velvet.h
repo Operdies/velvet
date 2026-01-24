@@ -43,8 +43,8 @@ struct velvet_input_options {
   uint64_t key_repeat_timeout_ms;
   /* how many lines are scrolled at a time */
   int scroll_multiplier;
-  /* remap modifiers */
-  enum velvet_api_key_modifiers modremap[3];
+  /* remap modifier */
+  enum velvet_api_key_modifier modremap[3];
 };
 
 struct velvet_keymap_deferred_action {

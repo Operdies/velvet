@@ -188,7 +188,7 @@ local function status_update()
   end
 
   local function view_mouse_hit(_, args)
-    if args.mouse_button == vv.api.mouse_button.left then
+    if args.mouse_button == 'left' then
       local col = args.pos.col
       local hit = 1 + ((col - 1) // 3)
       if hit >= 1 and hit <= 9 then

@@ -76,48 +76,47 @@ for _, fn in ipairs(spec.api) do
   fn.returns.doc = string_lines(fn.returns.doc)
 end
 
+--- @class gen_type
+--- @field c_type string c name of the type
+--- @field lua_type string lua name of the type
+--- @field check? fun(idx: integer): string c code for checking and retrieving the value at stack position |idx|
+--- @field push? fun(var: string): string c code for pushing a named variable to the stack
+--- @field complex? spec_type
+--- @field enumeration? spec_enum
+
 -- Type Utilities {{{1
 
+--- @type table<string,gen_type>
 local type_lookup = {
-  ["int[]"] = { lua_type = "integer[]" },
+  ["int[]"] = { lua_type = "integer[]", c_type = "int[]" },
   void = { c_type = "void", lua_type = "nil" },
   ["function"] = {
     c_type = "lua_Integer",
     lua_type = "fun(): nil",
-    check = function(idx)
-      return ("luaL_checkfunction(L, %d)"):format(idx)
-    end,
+    check = function(idx) return ("luaL_checkfunction(L, %d)"):format(idx) end,
   },
   int = {
     c_type = "lua_Integer",
     lua_type = "integer",
-    check = function(idx)
-      return ("luaL_checkinteger(L, %d)"):format(idx)
-    end,
+    check = function(idx) return ("luaL_checkinteger(L, %d)"):format(idx) end,
     push = function(var) return ("lua_pushinteger(L, %s)"):format(var) end
   },
   string = {
     c_type = "const char*",
     lua_type = "string",
-    check = function(idx)
-      return ("luaL_checklstring(L, %d, NULL)"):format(idx)
-    end,
+    check = function(idx) return ("luaL_checklstring(L, %d, NULL)"):format(idx) end,
     push = function(var) return ("lua_pushstring(L, %s)"):format(var) end
   },
   bool = {
     c_type = "bool",
     lua_type = "boolean",
-    check = function(idx)
-      return ("luaL_checkboolean(L, %d)"):format(idx)
-    end,
+    check = function(idx) return ("luaL_checkboolean(L, %d)"):format(idx) end,
     push = function(var) return ("lua_pushboolean(L, %s)"):format(var) end
   },
   float = {
     c_type = "float",
     lua_type = "number",
-    check = function(idx)
-      return ("luaL_checknumber(L, %d)"):format(idx)
-    end,
+    check = function(idx) return ("luaL_checknumber(L, %d)"):format(idx) end,
     push = function(var) return ("lua_pushnumber(L, %s)"):format(var) end
   },
 }
@@ -130,9 +129,8 @@ local function get_luaname(name)
   return "velvet.api." .. name
 end
 
-local function is_complex(name) 
-  if type_lookup[name] then return type_lookup[name].complex  end
-  error(("is_complex: unknown type: %s"):format(name))
+local function enum_value_c_name(enum, option)
+  return ("%s_%s"):format(enum, option):upper()
 end
 
 local function is_manual(name) 
@@ -142,15 +140,12 @@ local function is_manual(name)
 end
 
 
---- @type table<string,spec_type>
-local complex_index = {}
 for _, type in ipairs(spec.types) do
-  type_lookup[type.name] = { c_type = "struct " .. get_cname(type.name), lua_type = get_luaname(type.name), complex = true }
-  complex_index[type.name] = type
+  type_lookup[type.name] = { c_type = "struct " .. get_cname(type.name), lua_type = get_luaname(type.name), complex = type }
 end
 
 for _, type in ipairs(spec.enums) do
-  type_lookup[type.name] = { c_type = "enum " .. get_cname(type.name), lua_type = get_luaname(type.name), enum = true, push = type_lookup.int.push, check = type_lookup.int.check }
+  type_lookup[type.name] = { c_type = "enum " .. get_cname(type.name), lua_type = get_luaname(type.name), enumeration = type }
 end
 
 -- hack to avoid errors when assigning `palette.x = '#rrggbb'
@@ -183,17 +178,39 @@ end
 --- @param type string
 --- @param path string
 local function push_field(tbl, type, path)
-  if is_complex(type) then
-    local complex = complex_index[type]
+  local tp = type_lookup[type]
+  if tp.complex then
     table.insert(tbl, ([[
   lua_newtable(L); /* %s */
-]]):format(path, complex.name))
-    for _, mem in ipairs(complex.fields) do
+]]):format(path, tp.complex.name))
+    for _, mem in ipairs(tp.complex.fields) do
       local mem_path = path .. "." .. mem.name
       push_field(tbl, mem.type, mem_path)
       table.insert(tbl, ([[
   lua_setfield(L, -2, "%s"); /* %s = %s */
 ]]):format(mem.name, mem_path, mem.name))
+    end
+  elseif tp.enumeration then
+    if tp.enumeration.flags then 
+      table.insert(tbl, ([[
+  lua_newtable(L); /* %s flags */
+]]):format(path, tp.enumeration.name, tp.enumeration.name))
+      local enum_name = get_cname(type)
+
+      for _, flag in ipairs(tp.enumeration.values) do
+        local flag_name = enum_value_c_name(enum_name, flag.name)
+        table.insert(tbl, ([[
+  if (%s & %s) {
+    lua_pushstring(L, %s_to_string(%s));
+    lua_pushboolean(L, true);
+    lua_settable(L, -3);
+  }
+]]):format(path, flag_name, type, flag_name, tp.enumeration.name))
+      end
+    else
+      table.insert(tbl, ([[
+  lua_pushstring(L, %s_to_string(%s));
+]]):format(tp.enumeration.name, path))
     end
   else
     table.insert(tbl, ([[
@@ -203,15 +220,15 @@ local function push_field(tbl, type, path)
 end
 
 --- @param tbl table
---- @param type string
+--- @param type_name string
 --- @param path string
-local function check_field(tbl, type, path)
-  if is_complex(type) then
-    local complex = complex_index[type]
+local function check_field(tbl, type_name, path)
+  local type = type_lookup[type_name]
+  if type and type.complex then
     table.insert(tbl, [[
   luaL_checktype(L, -1, LUA_TTABLE);
 ]])
-    for _, mem in ipairs(complex.fields) do
+    for _, mem in ipairs(type.complex.fields) do
       local mem_path = path .. "." .. mem.name
       table.insert(tbl, ([[
   lua_getfield(L, -1, "%s"); /* get %s */
@@ -221,10 +238,37 @@ local function check_field(tbl, type, path)
   lua_pop(L, 1);
 ]])
     end
+  elseif type and type.enumeration then
+    if type.enumeration.flags then 
+      local enum_name = get_cname(type.enumeration.name)
+    table.insert(tbl, [[
+  luaL_checktype(L, -1, LUA_TTABLE);
+]])
+      for _, flag in ipairs(type.enumeration.values) do
+        local flag_name = enum_value_c_name(enum_name, flag.name)
+        table.insert(tbl, ([[
+  lua_getfield(L, -1, "%s");
+  if (!lua_isnoneornil(L, -1) && luaL_checkboolean(L, -1)) 
+    %s |= %s;
+  lua_pop(L, 1);
+]]):format(flag.name, path, flag_name))
+      end
+    else
+      local varname = path:gsub('[.]', '_') .. '_str'
+      table.insert(tbl, ([[
+  const char *%s = luaL_checklstring(L, -1, NULL);
+  %s = %s_string_to_enum(%s);
+  if (%s == 0xffffff) { 
+    lua_pushstring(L, " is not a valid %s value.");
+    lua_concat(L, 2);
+    lua_error(L); 
+  }
+]]):format(varname, path, type_name, varname, path, type_name))
+    end
   else
     table.insert(tbl, ([[
   %s = %s;
-]]):format(path, lua_check(type, -1)))
+]]):format(path, lua_check(type_name, -1)))
   end
 end
 
@@ -232,15 +276,19 @@ end
 
 -- C Header {{{2
 local h = {}
-table.insert(h, ([[#ifndef %s
+table.insert(h, ([[
 /***************************************************
 ************ DO NOT EDIT THIS BY HAND **************
 *** This file was auto generated by api_gen.lua ****
 ***************************************************/
 
+#ifndef %s
 #define %s
+
 #include "lua.h"
 #include <stdbool.h>
+#include "utils.h"
+
 struct velvet;
 
 ]]):format("VELVET_API_H", "VELVET_API_H"))
@@ -334,6 +382,8 @@ table.insert(c, [[
 #include "lauxlib.h"
 #include "velvet_api.h"
 #include "velvet.h"
+#include "utils.h"
+#include <string.h>
 
 /* Instead of creating a real gc handle, we only store a reference to the function.
 Cleaning up the handle in codegen is complicated, so instead the consumer must create its own handle. */
@@ -346,7 +396,45 @@ static bool luaL_checkboolean(lua_State *L, lua_Integer idx) {
   luaL_checktype(L, idx, LUA_TBOOLEAN);
   return lua_toboolean(L, idx);
 }
+
 ]])
+
+for _, enum in ipairs(spec.enums) do
+  local cname = get_cname(enum.name)
+  -- String to integer value {{{3
+  table.insert(c, ([[
+static %s %s_string_to_enum(const char *str) {
+]]):format(c_type(enum.name), enum.name))
+  for _, option in ipairs(enum.values) do
+    local field_name = enum_value_c_name(cname, option.name)
+    table.insert(c, ([[
+  if (strcmp(str, "%s") == 0) return %s;
+]]):format(option.name, field_name))
+  end
+  table.insert(c, '  return 0xffffffff;\n};\n\n')
+
+  -- Integer value to string {{{3
+  local table_name = enum.name .. "_idx_to_string"
+  table.insert(c, ([[
+static const char *%s_to_string(%s value) {
+]]):format(enum.name, c_type(enum.name)))
+  table.insert(c, ([[
+  switch (value) {
+]]):format(table_name))
+  for _, option in ipairs(enum.values) do
+    local field_name = ("%s_%s"):format(cname, option.name):upper()
+    table.insert(c, ([[
+  case %s: return "%s";
+]]):format(field_name, option.name))
+  end
+  table.insert(c, ([[
+  default: assert(!"%s value out of range");
+]]):format(enum.name));
+  table.insert(c, '  };\n')
+  table.insert(c, ([[
+]]):format(table_name, table_name, table_name))
+  table.insert(c, '}\n\n')
+end
 
 -- C API function marshalling {{{2
 
@@ -368,7 +456,8 @@ static int l_vv_api_%s(lua_State *L){
   local idx = 1
   local args = {}
   for _, p in ipairs(fn.params or {}) do
-    if is_complex(p.type) then
+    local t = type_lookup[p.type]
+    if t.complex then
       table.insert(c, ([[
   luaL_checktype(L, %d, LUA_TTABLE);
   %s %s = {0};
@@ -378,6 +467,11 @@ static int l_vv_api_%s(lua_State *L){
       table.insert(c, [[
   lua_pop(L, 1); /* pop pushed table */
 ]])
+    elseif t and t.enumeration then
+      table.insert(c, ([[
+  const char *%s_str = %s;
+  %s %s = %s_string_to_enum(%s_str);
+]]):format(p.name, lua_check('string', idx), c_type(p.type), p.name, p.type, p.name))
     else
       table.insert(c,
         ("  %s %s = %s;\n")
@@ -417,6 +511,7 @@ static int l_vv_api_%s(lua_State *L){
   end
 
   local argsstring = #args > 0 and ", " .. table.concat(args, ", ") or ""
+  local t = type_lookup[fn.returns.type]
   if fn.returns.type == 'void' then
     table.insert(c, ([[
   vv_api_%s(v%s);
@@ -428,7 +523,7 @@ static int l_vv_api_%s(lua_State *L){
   return vv_api_%s(L%s);
 }
 ]]):format(fn.name, argsstring))
-  elseif is_complex(fn.returns.type) then
+  else
     table.insert(c, ([[
   %s ret = vv_api_%s(v%s);
 ]]):format(c_type(fn.returns.type), fn.name, argsstring))
@@ -437,13 +532,6 @@ static int l_vv_api_%s(lua_State *L){
   return 1;
 }
 ]]);
-  else
-    table.insert(c, ([[
-  %s ret = vv_api_%s(v%s);
-  %s;
-  return 1;
-}
-]]):format(c_type(fn.returns.type), fn.name, argsstring, lua_push(fn.returns.type, "ret")))
   end
 end
 
@@ -528,32 +616,28 @@ local api = {}
 
 -- Generate enum specs {{{3
 
-local function need_quote(name)
-  local keywords = { ["return"] = true, ["repeat"] = true, ["break"] = true, ["end"] = true }
-  return name:match('[\'",. ]') or keywords[name] or false
-end
-
 for _, enum in ipairs(spec.enums) do
   local lua_name = get_luaname(enum.name)
   table.insert(lua, ([[
-
---- @enum %s
-api.%s = {
-]]):format(lua_name, enum.name))
+---@alias %s string %s
+]]):format(lua_name, enum.doc or ""))
   for _, v in ipairs(enum.values) do
-    if need_quote(v.name) then
+    table.insert(lua, ([[
+---| '%s' %s
+]]):format(v.name, v.doc or ""))
+  end
+  if enum.flags then
+    table.insert(lua, ([[
+
+--- @class %ss Flags for %s
+]]):format(lua_name, lua_name))
+    for _, value in ipairs(enum.values) do
       table.insert(lua, ([[
-  ['%s'] = %d,
-]]):format(v.name, v.value))
-    else
-      table.insert(lua, ([[
-  %s = %d,
-]]):format(v.name, v.value))
+--- @field %s? boolean %s
+]]):format(value.name, value.doc or ""))
     end
   end
-  table.insert(lua, [[
-}
-]])
+  table.insert(lua, '\n')
 end
 
 -- Generate type definitions for complex types {{{3
@@ -565,9 +649,14 @@ for _, type in ipairs(spec.types) do
 --- @class %s
 ]]):format(lua_name))
   for _, fld in ipairs(type.fields) do
+    local lt = lua_type(fld.type)
+    local t = type_lookup[fld.type]
+    if t.enumeration and t.enumeration.flags then
+      lt = ('%ss'):format(lt)
+    end
     table.insert(lua, ([[
 --- @field %s %s %s
-]]):format(fld.name, lua_type(fld.type), fld.doc))
+]]):format(fld.name, lt, fld.doc))
   end
 end
 
@@ -677,33 +766,6 @@ vv.options.%s = %s
 ]]):format(fn.name, inspect(fn.default)))
 end
 
---- Populate enum values {{{3
-
-table.insert(default_options, [[
-
---- Populate all enum tables. These enums are used for interfacing with API functions
-]])
-
-for _, enum in ipairs(spec.enums) do
-  table.insert(default_options, ([[
-
-vv.api.%s = {
-]]):format(enum.name))
-  for _, v in ipairs(enum.values) do
-    if need_quote(v.name) then
-      table.insert(default_options, ([[
-  ['%s'] = %d,
-]]):format(v.name, v.value))
-    else
-      table.insert(default_options, ([[
-  %s = %d,
-]]):format(v.name, v.value))
-    end
-  end
-  table.insert(default_options, [[
-}
-]])
-end
 
 --- write file {{{3
 

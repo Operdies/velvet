@@ -108,7 +108,7 @@ function dbg(x, options)
   local text = vv.inspect(x, options)
   print(text) 
   ---@diagnostic disable-next-line: invisible
-  vv.events.emit_event('debug_log', text, 'debug')
+  vv.events.emit_event('system_message', { message = text, level = 'debug' })
 end
 
 local global_error = error
@@ -116,8 +116,8 @@ error = function(message, level)
   -- level: set the call stack position to generate debug information from
   level = (level or 1) + 2
   local _, err = pcall(global_error, message, level)
-  ---@diagnostic disable-next-line: invisible
-  vv.events.emit_event('debug_log', err, 'error')
+---@diagnostic disable-next-line: invisible
+  vv.events.emit_event('system_message', { message = err, level = 'error' })
   global_error(message, level)
 end
 
