@@ -31,13 +31,13 @@ struct velvet_window *check_window(struct velvet *v, int win) {
   return w;
 }
 
-lua_Integer vv_api_window_create_process(struct velvet *v, const char* cmd) {
+lua_Integer vv_api_window_create_process(struct velvet *v, const char *cmd, struct velvet_api_window_create_options options) {
   struct velvet_window template = { .emulator = vte_default };
   string_push_cstr(&template.cmdline, cmd);
   return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template);
 }
 
-lua_Integer vv_api_window_create(struct velvet *v) {
+lua_Integer vv_api_window_create(struct velvet *v, struct velvet_api_window_create_options options) {
   struct velvet_window template = {
     .emulator = vte_default,
     .is_lua_window = true,

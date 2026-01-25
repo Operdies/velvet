@@ -92,6 +92,10 @@ local api = {}
 --- @field cursor_foreground velvet.api.rgb_color|string The foreground color of the cell containing the cursor
 --- @field cursor_background velvet.api.rgb_color|string The background color of the cell containing the cursor
 
+--- @class velvet.api.window.create_options
+--- @field working_directory? string The initial working directory of the new window.
+--- @field parent_window? integer The parent window of this window. If set, this window will close with the parent.
+
 --- @class velvet.api.window.geometry
 --- @field left integer The leftmost cell of the window.
 --- @field top integer The topmost cell of the window.
@@ -171,12 +175,12 @@ local api = {}
 --- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifier, you must also apply the inverse mapping. Shift is not supported.
 --- @param from velvet.api.key_modifier The modifier to remap.
 --- @param to velvet.api.key_modifier The new modifier emitted when the remapped modifier is used.
---- @return nil 
+--- @return nil ret 
 function api.keymap_remap_modifier(from, to) end
 
 --- Delete the mapping associated with |keys|
 --- @param keys string The mapping to remove
---- @return nil 
+--- @return nil ret 
 function api.keymap_del(keys) end
 
 --- @class velvet.api.keymap_set.Opts
@@ -186,249 +190,251 @@ function api.keymap_del(keys) end
 --- @param keys string Left hand side of the mapping
 --- @param func fun(): nil Right hand side of the mapping
 --- @param opts? velvet.api.keymap_set.Opts
---- @return nil 
+--- @return nil ret 
 function api.keymap_set(keys, func, opts) end
 
 --- Get the size of the screen.
---- @return velvet.api.screen.geometry The geometry of the screen window.
+--- @return velvet.api.screen.geometry ret The geometry of the screen window.
 function api.get_screen_geometry() end
 
 --- Schedule |function| to run after at least |delay| ms
 --- @param delay integer delay in miliseconds
 --- @param func fun(): nil function to run
---- @return nil 
+--- @return nil ret 
 function api.schedule_after(delay, func) end
 
 --- Get the number of milliseconds elapsed since startup
---- @return integer milliseconds elapsed since startup
+--- @return integer ret milliseconds elapsed since startup
 function api.get_current_tick() end
 
 --- Get the IDs of all sessions.
---- @return integer[] List of session IDs
+--- @return integer[] ret List of session IDs
 function api.get_sessions() end
 
 --- Get the id of the active session
 --- @param session_id integer Session id
---- @return nil 
+--- @return nil ret 
 function api.set_active_session(session_id) end
 
 --- Get the id of the active session
---- @return integer Session id
+--- @return integer ret Session id
 function api.get_active_session() end
 
 --- Detach |session| session from the server.
 --- @param session_id integer Session id
---- @return nil 
+--- @return nil ret 
 function api.session_detach(session_id) end
 
 --- Quit velvet with no warning
---- @return nil 
+--- @return nil ret 
 function api.quit() end
 
 --- Get the IDs of all windows.
---- @return integer[] List of window IDs
+--- @return integer[] ret List of window IDs
 function api.get_windows() end
 
 --- Set the z index of |win| to |z|
 --- @param win_id integer Window id
 --- @param z integer New z index of |win|
---- @return nil 
+--- @return nil ret 
 function api.window_set_z_index(win_id, z) end
 
 --- Get the z index of |win|
 --- @param win_id integer Window id
---- @return integer The z index of |win|
+--- @return integer ret The z index of |win|
 function api.window_get_z_index(win_id) end
 
 --- Set window hidden flag. A hidden window will not be rendered.
 --- @param win_id integer Window id
 --- @param hidden boolean New hidden state of |win_id|
---- @return nil 
+--- @return nil ret 
 function api.window_set_hidden(win_id, hidden) end
 
 --- Get window hidden flag. A hidden window will not be rendered.
 --- @param win_id integer Window id
---- @return boolean Bool indicating if the window is hidden.
+--- @return boolean ret Bool indicating if the window is hidden.
 function api.window_get_hidden(win_id) end
 
 --- Get window opacity
 --- @param win_id integer Window id
---- @return number The new window opacity.
+--- @return number ret The new window opacity.
 function api.window_get_opacity(win_id) end
 
 --- Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|
 --- @param win_id integer Window id
 --- @param opacity number The new window opacity.
---- @return nil 
+--- @return nil ret 
 function api.window_set_opacity(win_id, opacity) end
 
 --- Get window transparency mode.
 --- @param win_id integer Window id
---- @return velvet.api.transparency_mode Set transparency mode.
+--- @return velvet.api.transparency_mode ret Set transparency mode.
 function api.window_get_transparency_mode(win_id) end
 
 --- Set window transparency mode.
 --- @param win_id integer Window id
 --- @param mode velvet.api.transparency_mode Set transparency mode.
---- @return nil 
+--- @return nil ret 
 function api.window_set_transparency_mode(win_id, mode) end
 
 --- Get the current dim factor for |win|
 --- @param win_id integer Window id
---- @return number Dim factor between 0.0 and 1.0
+--- @return number ret Dim factor between 0.0 and 1.0
 function api.window_get_dim_factor(win_id) end
 
 --- Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)
 --- @param win_id integer Window id
 --- @param factor number Dim factor between 0.0 and 1.0
---- @return nil 
+--- @return nil ret 
 function api.window_set_dim_factor(win_id, factor) end
 
 --- Get the id of the currently focused window.
---- @return integer TThe id of the currently focused window.
+--- @return integer ret TThe id of the currently focused window.
 function api.get_focused_window() end
 
 --- Focus the window with id |win_id|
 --- @param win_id integer Window id
---- @return nil 
+--- @return nil ret 
 function api.set_focused_window(win_id) end
 
 --- Get the geometry of the specified window.
 --- @param win_id integer Window id
---- @return velvet.api.window.geometry The geometry of the window with id |win_id|
+--- @return velvet.api.window.geometry ret The geometry of the window with id |win_id|
 function api.window_get_geometry(win_id) end
 
 --- Set the geometry of the specified window.
 --- @param win_id integer Window id
 --- @param geometry velvet.api.window.geometry Window geometry
---- @return nil 
+--- @return nil ret 
 function api.window_set_geometry(win_id, geometry) end
 
 --- Close the specified window, killing the associated process.
 --- @param win_id integer The window to close
---- @return nil 
+--- @return nil ret 
 function api.window_close(win_id) end
 
 --- Get the title of the window with id |win_id|
 --- @param win_id integer Window id
---- @return string Window title
+--- @return string ret Window title
 function api.window_get_title(win_id) end
 
 --- Set the title of the window with id |win_id|
 --- @param win_id integer Window id
 --- @param title string New title
---- @return nil 
+--- @return nil ret 
 function api.window_set_title(win_id, title) end
 
 --- Send |keys| to the window with id |win_id|. Unlike |window_send_text|, keys such as <C-x> will be encoded .
 --- @param win_id integer The window receiving the keys
 --- @param keys string The keys to send
---- @return nil 
+--- @return nil ret 
 function api.window_send_keys(win_id, keys) end
 
 --- Send |text| to the window with id |win_id|
 --- @param win_id integer The window receiving the text
 --- @param text string The text to send
---- @return nil 
+--- @return nil ret 
 function api.window_send_text(win_id, text) end
 
 --- Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
 --- @param mouse_move velvet.api.mouse.move.event_args Mouse move event args
---- @return nil 
+--- @return nil ret 
 function api.window_send_mouse_move(mouse_move) end
 
 --- Send mouse click event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
 --- @param mouse_click velvet.api.mouse.click.event_args Mouse click event args
---- @return nil 
+--- @return nil ret 
 function api.window_send_mouse_click(mouse_click) end
 
 --- Send mouse scroll event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable. If the window does not handle scrolling, and it has content in its scrollback buffer, this scrolls the window content.
 --- @param mouse_scroll velvet.api.mouse.scroll.event_args Mouse scroll event args
---- @return nil 
+--- @return nil ret 
 function api.window_send_mouse_scroll(mouse_scroll) end
 
 --- Create a naked window with no backing process. This window can be controlled through the lua API. Returns the window id.
---- @return integer The id of the new window
-function api.window_create() end
+--- @param options? velvet.api.window.create_options Options for the created window.
+--- @return integer ret The id of the new window
+function api.window_create(options) end
 
 --- Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window id.
 --- @param cmd string The process to spawn.
---- @return integer The id of the new window
-function api.window_create_process(cmd) end
+--- @param options? velvet.api.window.create_options Options for the created window.
+--- @return integer ret The id of the new window
+function api.window_create_process(cmd, options) end
 
 --- Returns true if |win_id| exists and is a lua window.
 --- @param win_id integer Window id
---- @return boolean Bool indicating if |win_id| is naked.
+--- @return boolean ret Bool indicating if |win_id| is naked.
 function api.window_is_lua(win_id) end
 
 --- Returns true if a window exists with id |win_id|.
 --- @param win_id integer Window id
---- @return boolean Bool indicating whether the window id is valid.
+--- @return boolean ret Bool indicating whether the window id is valid.
 function api.window_is_valid(win_id) end
 
 --- Get the number of lines in the scrollback of the window with id |win_id|.
 --- @param win_id integer Window id
---- @return integer The number of lines in scrollback, not counting the current screen buffer.
+--- @return integer ret The number of lines in scrollback, not counting the current screen buffer.
 function api.window_get_scrollback_size(win_id) end
 
 --- Get the scroll offset of the window with id |win_id|
 --- @param win_id integer Window id
---- @return integer The number of lines below the bottom line of the window.
+--- @return integer ret The number of lines below the bottom line of the window.
 function api.window_get_scroll_offset(win_id) end
 
 --- Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \r, \n, color escapes, cursor movement, etc.
 --- @param win_id integer Window id
 --- @param text string String which can embed any VT compatible ansi escape.
---- @return nil 
+--- @return nil ret 
 function api.window_write(win_id, text) end
 
 --- Set the drawing color of |win_id|. This is equivalent to setting an rgb color with SGR 38/48, but is much faster because it skips formatting and parsing. Useful for tight render loops.
 --- @param win_id integer Window id
 --- @param brush velvet.api.brush Foreground or background brush
 --- @param color velvet.api.rgb_color|string The new color
---- @return nil 
+--- @return nil ret 
 function api.window_set_drawing_color(win_id, brush, color) end
 
 --- Set the cursor position of |win_id|. This is equivalent to moving the cursor with CUP, but is much faster because it skips formatting and parsing. Useful for tight render loops.
 --- @param win_id integer Window id
 --- @param pos velvet.api.coordinate The new cursor position
---- @return nil 
+--- @return nil ret 
 function api.window_set_cursor_position(win_id, pos) end
 
 --- Get focus_follows_mouse
---- @return boolean The current value
+--- @return boolean ret The current value
 function api.get_focus_follows_mouse() end
 
 --- Set focus_follows_mouse. Returns the new value.
 --- @param new_value boolean Automatically focus a window when the mouse moves over it.
---- @return boolean The value after the update
+--- @return boolean ret The value after the update
 function api.set_focus_follows_mouse(new_value) end
 
 --- Get key_repeat_timeout
---- @return integer The current value
+--- @return integer ret The current value
 function api.get_key_repeat_timeout() end
 
 --- Set key_repeat_timeout. Returns the new value.
 --- @param new_value integer Time in milliseconds before pending keybinds time out
---- @return integer The value after the update
+--- @return integer ret The value after the update
 function api.set_key_repeat_timeout(new_value) end
 
 --- Get display_damage
---- @return boolean The current value
+--- @return boolean ret The current value
 function api.get_display_damage() end
 
 --- Set display_damage. Returns the new value.
 --- @param new_value boolean Enable damage tracking when the screen is updated. (debugging feature)
---- @return boolean The value after the update
+--- @return boolean ret The value after the update
 function api.set_display_damage(new_value) end
 
 --- Get theme
---- @return velvet.api.theme The current value
+--- @return velvet.api.theme ret The current value
 function api.get_theme() end
 
 --- Set theme. Returns the new value.
 --- @param new_value velvet.api.theme The 16 numbered terminal colors.
---- @return velvet.api.theme The value after the update
+--- @return velvet.api.theme ret The value after the update
 function api.set_theme(new_value) end
 
 --- @class velvet.api.event_handler

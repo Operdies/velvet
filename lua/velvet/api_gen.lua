@@ -81,8 +81,9 @@ end
 --- @field lua_type string lua name of the type
 --- @field check? fun(idx: integer): string c code for checking and retrieving the value at stack position |idx|
 --- @field push? fun(var: string): string c code for pushing a named variable to the stack
---- @field complex? spec_type
+--- @field composite? spec_type
 --- @field enumeration? spec_enum
+--- @field optional? boolean
 
 -- Type Utilities {{{1
 
@@ -139,9 +140,19 @@ local function is_manual(name)
   return manual_types[name]
 end
 
+--- @param type spec_type
+--- @return boolean
+local function compute_is_optional(type)
+  for _, fld in pairs(type.fields) do
+    if fld.optional ~= true then return false end
+  end
+  return true
+end
 
 for _, type in ipairs(spec.types) do
-  type_lookup[type.name] = { c_type = "struct " .. get_cname(type.name), lua_type = get_luaname(type.name), complex = type }
+  local entry = { c_type = "struct " .. get_cname(type.name), lua_type = get_luaname(type.name), composite = type }
+  entry.optional = compute_is_optional(type)
+  type_lookup[type.name] = entry
 end
 
 for _, type in ipairs(spec.enums) do
@@ -179,11 +190,11 @@ end
 --- @param path string
 local function push_field(tbl, type, path)
   local tp = type_lookup[type]
-  if tp.complex then
+  if tp.composite then
     table.insert(tbl, ([[
   lua_newtable(L); /* %s */
-]]):format(path, tp.complex.name))
-    for _, mem in ipairs(tp.complex.fields) do
+]]):format(path, tp.composite.name))
+    for _, mem in ipairs(tp.composite.fields) do
       local mem_path = path .. "." .. mem.name
       push_field(tbl, mem.type, mem_path)
       table.insert(tbl, ([[
@@ -222,53 +233,73 @@ end
 --- @param tbl table
 --- @param type_name string
 --- @param path string
-local function check_field(tbl, type_name, path)
+--- @param indent integer
+local function check_field(tbl, type_name, path, indent)
+  local result = {}
+  indent = indent or 2
   local type = type_lookup[type_name]
-  if type and type.complex then
-    table.insert(tbl, [[
-  luaL_checktype(L, -1, LUA_TTABLE);
+  if type and type.composite then
+    if not type.optional then
+      table.insert(result, [[
+luaL_checktype(L, -1, LUA_TTABLE);
 ]])
-    for _, mem in ipairs(type.complex.fields) do
+    end
+    for _, mem in ipairs(type.composite.fields) do
       local mem_path = path .. "." .. mem.name
-      table.insert(tbl, ([[
-  lua_getfield(L, -1, "%s"); /* get %s */
+      table.insert(result, ([[
+lua_getfield(L, -1, "%s"); /* get %s */
 ]]):format(mem.name, mem_path))
-      check_field(tbl, mem.type, mem_path)
-      table.insert(tbl, [[
-  lua_pop(L, 1);
-]])
+      if mem.optional then
+        table.insert(result, ([[
+if (!lua_isnoneornil(L, -1)) {
+  %s.set = true;
+]]):format(mem_path))
+        check_field(result, mem.type, mem_path .. '.value', 2)
+        table.insert(result, '}\n')
+      else
+        check_field(result, mem.type, mem_path, 0)
+      end
+      table.insert(result, ([[
+lua_pop(L, 1); /* pop %s */
+]]):format(mem_path))
     end
   elseif type and type.enumeration then
     if type.enumeration.flags then 
       local enum_name = get_cname(type.enumeration.name)
-    table.insert(tbl, [[
-  luaL_checktype(L, -1, LUA_TTABLE);
+    table.insert(result, [[
+luaL_checktype(L, -1, LUA_TTABLE);
 ]])
       for _, flag in ipairs(type.enumeration.values) do
         local flag_name = enum_value_c_name(enum_name, flag.name)
-        table.insert(tbl, ([[
-  lua_getfield(L, -1, "%s");
-  if (!lua_isnoneornil(L, -1) && luaL_checkboolean(L, -1)) 
-    %s |= %s;
-  lua_pop(L, 1);
+        table.insert(result, ([[
+lua_getfield(L, -1, "%s");
+if (!lua_isnoneornil(L, -1) && luaL_checkboolean(L, -1)) 
+  %s |= %s;
+lua_pop(L, 1);
 ]]):format(flag.name, path, flag_name))
       end
     else
       local varname = path:gsub('[.]', '_') .. '_str'
-      table.insert(tbl, ([[
-  const char *%s = luaL_checklstring(L, -1, NULL);
-  %s = %s_string_to_enum(%s);
-  if (%s == 0xffffff) { 
-    lua_pushstring(L, " is not a valid %s value.");
-    lua_concat(L, 2);
-    lua_error(L); 
-  }
+      table.insert(result, ([[
+const char *%s = luaL_checklstring(L, -1, NULL);
+%s = %s_string_to_enum(%s);
+if (%s == 0xffffff) { 
+  lua_pushstring(L, " is not a valid %s value.");
+  lua_concat(L, 2);
+  lua_error(L); 
+}
 ]]):format(varname, path, type_name, varname, path, type_name))
     end
   else
-    table.insert(tbl, ([[
-  %s = %s;
+    table.insert(result, ([[
+%s = %s;
 ]]):format(path, lua_check(type_name, -1)))
+  end
+  local ident = string.rep(' ', indent)
+  for _, str in ipairs(result) do
+    for line in str:gmatch("[^\r\n]+") do
+      table.insert(tbl, ident .. line .. '\n')
+    end
   end
 end
 
@@ -312,7 +343,7 @@ enum %s {
 end
 
 --- C structs {{{3
--- Create structs for complex types.
+-- Create structs for composite types.
 -- These structs will automatically be marshaled to and from lua
 for _, type in ipairs(spec.types) do
   local cname = get_cname(type.name)
@@ -320,9 +351,18 @@ for _, type in ipairs(spec.types) do
 struct %s {
 ]]):format(cname))
   for _, fld in ipairs(type.fields) do
+    if fld.optional then
+      table.insert(h, ([[
+  struct {
+    %s value;
+    bool set;
+  } %s; /* %s */
+]]):format(c_type(fld.type), fld.name, string_concatenate(fld.doc, "")))
+      else
     table.insert(h, ([[
   %s %s; /* %s */
 ]]):format(c_type(fld.type), fld.name, string_concatenate(fld.doc, "")))
+    end
   end
   table.insert(h, [[
 };
@@ -369,7 +409,9 @@ table.insert(h, ("#endif /* %s */\n"):format("VELVET_API_H"))
 
 write_file(out_dir .. "/velvet_api.h", table.concat(h))
 
--- C Lua Functions {{{2
+-- C Lua Marshalling {{{2
+
+-- C Lua Functions {{{3
 
 local c = {}
 table.insert(c, [[
@@ -401,7 +443,7 @@ static bool luaL_checkboolean(lua_State *L, lua_Integer idx) {
 
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
-  -- String to integer value {{{3
+  -- String to integer value {{{4
   table.insert(c, ([[
 static %s %s_string_to_enum(const char *str) {
 ]]):format(c_type(enum.name), enum.name))
@@ -413,7 +455,7 @@ static %s %s_string_to_enum(const char *str) {
   end
   table.insert(c, '  return 0xffffffff;\n};\n\n')
 
-  -- Integer value to string {{{3
+  -- Integer value to string {{{4
   local table_name = enum.name .. "_idx_to_string"
   table.insert(c, ([[
 static const char *%s_to_string(%s value) {
@@ -436,7 +478,7 @@ static const char *%s_to_string(%s value) {
   table.insert(c, '}\n\n')
 end
 
--- C API function marshalling {{{2
+-- C API function marshalling {{{3
 
 for _, fn in ipairs(spec.api) do
   local params = {}
@@ -446,26 +488,34 @@ for _, fn in ipairs(spec.api) do
 
   table.insert(c, ([[
 
-static int l_vv_api_%s(lua_State *L){
+static int l_vv_api_%s(lua_State *L) {
 ]])
     :format(fn.name))
   if not is_manual(fn.returns.type) then
-    table.insert(c, '  struct velvet *v = *(struct velvet**)lua_getextraspace(L);\n')
+    table.insert(c, '  struct velvet *v = *(struct velvet **)lua_getextraspace(L);\n')
   end
 
   local idx = 1
   local args = {}
   for _, p in ipairs(fn.params or {}) do
     local t = type_lookup[p.type]
-    if t.complex then
-      table.insert(c, ([[
+    if t.composite then
+      if not t.optional then
+        table.insert(c, ([[
   luaL_checktype(L, %d, LUA_TTABLE);
+]]):format(idx))
+      end
+      table.insert(c, ([[
   %s %s = {0};
-  lua_pushvalue(L, %d); /* push table to the top of the stack */
-]]):format(idx, c_type(p.type), p.name, idx))
-      check_field(c, p.type, p.name)
+  if (!lua_isnoneornil(L, %d)) {
+    luaL_checktype(L, %d, LUA_TTABLE);
+    lua_pushvalue(L, %d); /* push table to the top of the stack */
+]]):format(c_type(p.type), p.name, idx, idx, idx))
+
+      check_field(c, p.type, p.name, 4)
       table.insert(c, [[
-  lua_pop(L, 1); /* pop pushed table */
+    lua_pop(L, 1); /* pop pushed table */
+  }
 ]])
     elseif t and t.enumeration then
       table.insert(c, ([[
@@ -497,6 +547,7 @@ static int l_vv_api_%s(lua_State *L){
 ]]):format(idx, idx, idx))
 
     for _, o in ipairs(fn.optional) do
+      dbg(o)
       table.insert(c, ([[
     lua_getfield(L, %d, "%s");
     if (!lua_isnil(L, -1)) {
@@ -535,7 +586,7 @@ static int l_vv_api_%s(lua_State *L){
   end
 end
 
--- Generate lua function table {{{2
+-- Generate lua function table {{{3
 
 table.insert(c, [=[
 [[maybe_unused]] static const struct luaL_Reg velvet_lua_function_table[] = {
@@ -562,7 +613,7 @@ table.insert(c, [[
 };
 ]])
 
---- Event marshalling {{{2
+-- Event marshalling {{{3
 
 for _, evt in ipairs(spec.events) do
   local event_name = evt.name:gsub("[.]", "_")
@@ -590,7 +641,7 @@ void velvet_api_raise_%s(struct velvet *v, struct %s args) {
 ]])
 end
 
---- Write lua_autogen.c {{{2
+-- Write lua_autogen.c {{{3
 
 write_file(out_dir .. "/velvet_lua_autogen.c", table.concat(c))
 
@@ -640,7 +691,7 @@ for _, enum in ipairs(spec.enums) do
   table.insert(lua, '\n')
 end
 
--- Generate type definitions for complex types {{{3
+-- Generate type definitions for composite types {{{3
 
 for _, type in ipairs(spec.types) do
   local lua_name = get_luaname(type.name)
@@ -655,8 +706,8 @@ for _, type in ipairs(spec.types) do
       lt = ('%ss'):format(lt)
     end
     table.insert(lua, ([[
---- @field %s %s %s
-]]):format(fld.name, lt, fld.doc))
+--- @field %s%s %s %s
+]]):format(fld.name, fld.optional and '?' or '', lt, fld.doc))
   end
 end
 
@@ -680,9 +731,10 @@ for _, fn in ipairs(spec.api) do
 --- %s
 ]]):format(string_concatenate(fn.doc, "\n--- ")))
   for _, p in ipairs(fn.params or {}) do
+    local t = type_lookup[p.type]
     table.insert(lua, ([[
---- @param %s %s %s
-]]):format(p.name, lua_type(p.type), string_concatenate(p.doc, "\n--- ")))
+--- @param %s%s %s %s
+]]):format(p.name, t.optional and '?' or '', lua_type(p.type), string_concatenate(p.doc, "\n--- ")))
   end
 
   local params = {}
@@ -696,7 +748,7 @@ for _, fn in ipairs(spec.api) do
     table.insert(params, "opts")
   end
   table.insert(lua, ([[
---- @return %s %s
+--- @return %s ret %s
 ]]):format(lua_type(fn.returns.type), string_concatenate(fn.returns.doc, "\n--- ")))
 
   table.insert(lua,

@@ -239,6 +239,13 @@ return {
       },
     },
     {
+      name = "window.create_options",
+      fields = {
+        { name = "working_directory", type = "string", doc = "The initial working directory of the new window.", optional = true },
+        { name = "parent_window",     type = "int",    doc = "The parent window of this window. If set, this window will close with the parent.", optional = true },
+      },
+    },
+    {
       name = "window.geometry",
       fields = {
         { name = "left",   type = "int", doc = "The leftmost cell of the window." },
@@ -625,6 +632,9 @@ return {
       name = "window_create",
       doc =
       "Create a naked window with no backing process. This window can be controlled through the lua API. Returns the window id.",
+      params = {
+        { name = "options", type = "window.create_options", doc = "Options for the created window." },
+      },
       returns = { type = "int", doc = "The id of the new window" }
     },
     {
@@ -632,6 +642,7 @@ return {
       doc = "Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window id.",
       params = {
         { name = "cmd", type = "string", doc = "The process to spawn." },
+        { name = "options", type = "window.create_options", doc = "Options for the created window." },
       },
       returns = { type = "int", doc = "The id of the new window" }
     },

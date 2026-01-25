@@ -281,7 +281,6 @@ end
 --- Create a new window whose lifetime is tied to the parent window. If the parent window is closed, the child window is also closed. Otherwise, the windows are completely independent.
 function Window:create_child_window()
   local child = Window.create()
-  ---@diagnostic disable-next-line: inject-field
   child.parent = self
   table.insert(self.child_windows, child)
   return child
