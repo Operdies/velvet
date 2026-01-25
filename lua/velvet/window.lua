@@ -25,7 +25,6 @@ local function clamp(v, lo, hi)
   return v
 end
 
-
 --- @param hex string
 --- @return velvet.api.rgb_color|nil,string|nil
 local function hex_to_rgb(hex)
@@ -81,7 +80,17 @@ local function color_from_string(color)
 end
 
 local home = os.getenv('HOME') or '/'
-home = home:gsub('/$', '')
+local function set_real_home()
+  local f = io.popen('realpath ' .. home, 'r')
+  if f then
+    local res = f:read('*a')
+    f:close()
+    home = res:gsub('[/\r\n]*$', '')
+  end
+end
+
+local ok, err = pcall(set_real_home)
+if not ok then dbg { set_real_home = err } end
 
 --- @param self velvet.window
 local function update_borders(self)

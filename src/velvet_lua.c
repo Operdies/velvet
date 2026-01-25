@@ -53,7 +53,7 @@ static void velvet_lua_set_default_options(struct velvet *v) {
 void velvet_lua_init(struct velvet *v) {
   lua_State *L = lua_newstate(lua_allocator, NULL, 0);
   v->L = L;
-  luaL_openselectedlibs(v->L, ~(LUA_IOLIBK), 0);
+  luaL_openselectedlibs(v->L, ~0, 0);
   struct velvet **extra = lua_getextraspace(v->L);
   *extra = v;
 
