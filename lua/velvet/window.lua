@@ -72,6 +72,9 @@ local function color_from_string(color)
   end
 end
 
+local home = os.getenv('HOME') or '/'
+home = home:gsub('/$', '')
+
 --- @param self velvet.window
 local function update_borders(self)
   if not self.frame_visible then return end
@@ -136,6 +139,15 @@ local function update_borders(self)
     t:set_cursor(3, 1)
     local trunc = '…'
     local title = self:get_title()
+    if title:gmatch('^/') then
+      title = title:gsub('.*/', '')
+    end
+    local cwd = self:get_working_directory()
+    if cwd then
+      cwd = cwd:gsub('^' .. home .. '/', ' ')
+      cwd = cwd:gsub('^' .. home, ' ')
+      title = title .. ' in ' .. cwd
+    end
     local codes = {}
     if title_budget > 0 then
       for p, c in utf8.codes(title) do
@@ -294,6 +306,11 @@ end
 --- @return string
 function Window:get_title()
   return a.window_get_title(self.id)
+end
+
+--- @return string
+function Window:get_working_directory()
+  return a.window_get_working_directory(self.id)
 end
 
 --- @param visible boolean window visibility

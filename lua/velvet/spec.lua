@@ -647,6 +647,12 @@ return {
       returns = { type = "int", doc = "The id of the new window" }
     },
     {
+      name = "window_get_working_directory",
+      doc = "Get the current working directory of |win_id|. If |win_id| is hosting a process, the process may update the working directory.",
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
+      returns = { type = "string", doc = "The current working directory of the window" }
+    },
+    {
       name = "window_is_lua",
       doc = "Returns true if |win_id| exists and is a lua window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },

@@ -777,13 +777,10 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   struct screen_cell space = {.cp = codepoint_space, .style.bg = m->theme.background};
   velvet_render_clear_buffer(r, get_current_buffer(r), space);
 
-  struct velvet_window *win;
-  vec_foreach(win, m->windows) {
-    velvet_window_update_title(win);
-  }
 
   struct velvet_window *focused = velvet_scene_get_focus(m);
 
+  struct velvet_window *win;
   vec_where(win, m->windows, !win->hidden) {
     velvet_scene_stage_and_commit_window(m, win);
   }
@@ -1038,8 +1035,6 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
 
   vte_destroy(&velvet_window->emulator);
   string_destroy(&velvet_window->cmdline);
-  string_destroy(&velvet_window->title);
-  string_destroy(&velvet_window->icon);
   string_destroy(&velvet_window->cwd);
   velvet_window->pty = velvet_window->pid = 0;
 }
@@ -1048,38 +1043,6 @@ void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_
     velvet_window_destroy(w);
     velvet_scene_remove_window(s, w);
 }
-
-/* TODO: Delete this. This should be managed from lua. */
-void velvet_window_update_title(struct velvet_window *p) {
-  if (p->emulator.osc.title.len > 0) {
-    string_clear(&p->title);
-    string_push_string(&p->title, p->emulator.osc.title);
-    return;
-  }
-
-  if (p->pty && platform.get_cwd_from_pty) {
-    char buf[256] = {0};
-    if (platform.get_cwd_from_pty(p->pty, buf, sizeof(buf))) {
-      string_clear(&p->cwd);
-      string_push_cstr(&p->cwd, buf);
-      string_clear(&p->title);
-      string_push_string(&p->title, p->cmdline);
-      string_push_cstr(&p->title, " in ");
-      string_push_string(&p->title, p->cwd);
-
-      char *home = getenv("HOME");
-      if (home) { 
-        string_replace_inplace_slow(&p->title, home, "~/");
-        string_replace_inplace_slow(&p->title, "~//", "~/");
-      }
-    }
-  } else if (!p->title.len && p->cmdline.len) {
-    // fallback to using the process as title
-    string_clear(&p->title);
-    string_push_string(&p->title, p->cmdline);
-  }
-}
-
 
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
   assert(velvet_window->emulator.ws.h == velvet_window->geometry.h);

@@ -362,6 +362,11 @@ function api.window_create(options) end
 --- @return integer ret The id of the new window
 function api.window_create_process(cmd, options) end
 
+--- Get the current working directory of |win_id|. If |win_id| is hosting a process, the process may update the working directory.
+--- @param win_id integer Window id
+--- @return string ret The current working directory of the window
+function api.window_get_working_directory(win_id) end
+
 --- Returns true if |win_id| exists and is a lua window.
 --- @param win_id integer Window id
 --- @return boolean ret Bool indicating if |win_id| is naked.

@@ -14,12 +14,10 @@ struct pseudotransparency_options {
 
 struct velvet_window {
   struct string cmdline;
-  struct string title;
-  struct string icon;
   struct string cwd;
   bool is_lua_window;
   int pty, pid;
-  int id;
+  int id, parent_window_id;
   int z_index;
   bool hidden;
   struct rect geometry;
@@ -32,7 +30,6 @@ struct velvet_window {
 void velvet_window_resize(struct velvet_window *velvet_window, struct rect window, struct velvet *v);
 bool velvet_window_start(struct velvet_window *velvet_window);
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
-void velvet_window_update_title(struct velvet_window *p);
 
 struct velvet_render_option {
   /* unfortunately some emulators don't support repeating multi-byte characters.
