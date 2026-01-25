@@ -48,7 +48,6 @@
 --- @field name string function name
 --- @field doc spec_doc
 --- @field params? spec_parameter[]
---- @field optional? spec_parameter[]
 --- @field returns? spec_return
 
 --- @class spec_event
@@ -306,7 +305,7 @@ return {
       fields = {
         { name = "codepoint",           type = "int",            doc = "Unicode codepoint of the key generating the event." },
         { name = "alternate_codepoint", type = "int",            doc = "Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted." },
-        { name = "name",                type = "string",         doc = "Key name, such as 'F1'" },
+        { name = "name",                type = "string",         doc = "Key name, such as 'F1'", optional = true },
         { name = "event_type",          type = "key_event_type", doc = "Event type, such as key press, repeat, and release." },
         { name = "modifiers",           type = "key_modifier",   doc = "Key modifier such as super, shift, control, alt" },
       },
@@ -324,6 +323,12 @@ return {
       fields = {
         { name = "row", type = "int", doc = "row" },
         { name = "col", type = "int", doc = "column" },
+      },
+    },
+    {
+      name = "session.key.event_args",
+      fields = {
+        { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
       },
     },
     {
@@ -383,6 +388,7 @@ return {
 
   --- {{{1 events
   events = {
+    { name = "session_on_key",       doc = "Raised when a key is pressed.",                args = "session.key.event_args" },
     { name = "window_created",       doc = "Raised after a new window is created.",        args = "window.created.event_args" },
     { name = "window_closed",        doc = "Raised after a window is closed.",             args = "window.closed.event_args" },
     { name = "window_moved",         doc = "Raised after a window is moved.",              args = "window.moved.event_args" },
@@ -403,38 +409,6 @@ return {
 
   --- api {{{1
   api = {
-    --- keymap {{{2
-    {
-      name = "keymap_remap_modifier",
-      doc =
-      "Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifier, you must also apply the inverse mapping. Shift is not supported.",
-      params = {
-        { name = "from", type = "key_modifier", doc = "The modifier to remap." },
-        { name = "to",   type = "key_modifier", doc = "The new modifier emitted when the remapped modifier is used." },
-      },
-    },
-    {
-      name = "keymap_del",
-      doc = "Delete the mapping associated with |keys|",
-      params = {
-        { name = "keys", type = "string", doc = "The mapping to remove" },
-      },
-    },
-    {
-      name = "keymap_set",
-      doc = "Creates a mapping of |keys| to |function|",
-      params = {
-        { name = "keys", type = "string",   doc = "Left hand side of the mapping" },
-        { name = "func", type = "function", doc = "Right hand side of the mapping" },
-      },
-      optional = {
-        {
-          name = "repeatable",
-          type = "bool",
-          doc = "If set, this mapping may be repeated within the interval defined by |velvet.options.key_repeat_timeout|"
-        },
-      },
-    },
     --- screen {{{2
     {
       name = "get_screen_geometry",
@@ -618,6 +592,15 @@ return {
       params = {
         { name = "win_id", type = "int",    doc = "Window id" },
         { name = "title",  type = "string", doc = "New title" },
+      },
+    },
+    {
+      name = "window_send_raw_key",
+      doc =
+      "Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .",
+      params = {
+        { name = "win_id", type = "int",              doc = "The window receiving the keys" },
+        { name = "key",    type = "window.key_event", doc = "Low level key event" },
       },
     },
     {

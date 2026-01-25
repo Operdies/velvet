@@ -382,16 +382,6 @@ void velvet_loop(struct velvet *velvet) {
    * Not it's just a dumb container. */
   velvet->scene.v = velvet;
 
-  {
-    struct velvet_keymap *root = calloc(1, sizeof(*velvet->input.keymap));
-    *root = (struct velvet_keymap){
-        .root = root,
-        .data = velvet,
-        .on_key = velvet_input_send,
-    };
-    velvet->input.keymap = root;
-  }
-
   velvet_lua_init(velvet);
 
   velvet_source_config(velvet);

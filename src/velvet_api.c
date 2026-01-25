@@ -178,37 +178,6 @@ void vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func
   io_schedule(&v->event_loop, delay, schedule_execute, (void*)(lua_Integer)ref);
 }
 
-static void keymap_execute(struct velvet_keymap *k, struct velvet_key_event evt) {
-  struct velvet *v = k->root->data;
-  lua_State *L = v->L;
-  lua_Integer lua_function = (lua_Integer)(int64_t)k->data;
-  if (evt.removed) {
-    luaL_unref(L, LUA_REGISTRYINDEX, lua_function);
-  } else {
-    pcall_func_ref(L, lua_function);
-  }
-}
-
-void vv_api_keymap_set(struct velvet *v, const char *keys, lua_Integer function, bool *repeatable) {
-  struct u8_slice chords = u8_slice_from_cstr(keys);
-  struct velvet_keymap *added = velvet_keymap_map(v->input.keymap->root, chords);
-  if (added) {
-    bool rep = repeatable ? *repeatable : false;
-    added->is_repeatable = rep;
-    /* create a gc handle. This handle is cleared when the keymap is removed */
-    luaL_checktype(v->L, function, LUA_TFUNCTION);
-    lua_pushvalue(v->L, function);
-    lua_Integer ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
-    added->data = (void *)(int64_t)ref;
-    added->on_key = keymap_execute;
-  }
-}
-
-void vv_api_keymap_del(struct velvet *v, const char* keys) {
-  struct u8_slice chords = u8_slice_from_cstr(keys);
-  velvet_keymap_unmap(v->input.keymap->root, chords);
-}
-
 bool vv_api_get_display_damage(struct velvet *v) {
   return v->scene.renderer.options.display_damage;
 }
@@ -247,13 +216,6 @@ enum velvet_api_key_modifier check_modifier(lua_State *L, enum velvet_api_key_mo
 
   /* unreachable */
   assert(!"Unreachable");
-}
-
-void vv_api_keymap_remap_modifier(struct velvet *v, enum velvet_api_key_modifier from, enum velvet_api_key_modifier to) {
-  lua_Integer enum_index[] = { [VELVET_API_KEY_MODIFIER_ALT] = 0, [VELVET_API_KEY_MODIFIER_CONTROL] = 1, [VELVET_API_KEY_MODIFIER_SUPER] = 2 };
-  from = check_modifier(v->L, from);
-  to = check_modifier(v->L, to);
-  v->input.options.modremap[enum_index[from]] = to;
 }
 
 bool vv_api_get_focus_follows_mouse(struct velvet *v) {
@@ -563,4 +525,9 @@ void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct
   s->ws.x_pixel = options.x_pixel;
   s->ws.y_pixel = options.y_pixel;
   if (options.supports_repeating_multibyte_characters.set) s->features.no_repeat_wide_chars = !options.supports_repeating_multibyte_characters.value;
+}
+
+void vv_api_window_send_raw_key(struct velvet *v, lua_Integer win_id, struct velvet_api_window_key_event key) {
+  check_window(v, win_id);
+  velvet_input_send_key_event(v, key, win_id);
 }

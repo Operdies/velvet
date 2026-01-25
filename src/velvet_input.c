@@ -100,6 +100,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   k.key.codepoint = cp;
   k.modifiers = ((iscntrl * VELVET_API_KEY_MODIFIER_CONTROL) | (isshift * VELVET_API_KEY_MODIFIER_SHIFT));
   k.key.kitty_terminator = 'u';
+  k.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
 
   uint32_t associated_text = k.key.alternate_codepoint ? k.key.alternate_codepoint : k.key.codepoint;
   k.associated_text.n = 1;
@@ -244,48 +245,6 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
 #undef CSI
 }
 
-static void dispatch_tree_recursive(struct velvet *v, struct velvet_keymap *leaf, struct velvet_keymap *end_node) {
-  if (leaf == end_node) return;
-  dispatch_tree_recursive(v, leaf->parent, end_node);
-  dispatch_key_event(v, leaf->key);
-}
-
-void velvet_input_unwind(struct velvet *v) {
-  struct velvet_keymap *k, *current, *root;
-  current = v->input.keymap;
-  root = current->root;
-  // key not matched. Unwind the parent tree until we find a mapping to execute,
-  // and then replay the unmatched keys. Typically this means replaying
-  // the keys in the root mapping (e.g. inserting the characters),
-  // but it can also mean resolving a mapping which is a prefix of a longer mapping.
-  for (k = current; k && k != root; k = k->parent) {
-    if (k->on_key) {
-      k->on_key(k, k->key);
-      break;
-    }
-
-    // Ensure at least one key is consumed before reinsertion.
-    if (k->parent == root) {
-      /* simulate key press and release since a client using kitty keys may expect this. */
-      struct velvet_key_event e = k->key;
-      e.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
-      root->on_key(root, e);
-      e.type = VELVET_API_KEY_EVENT_TYPE_RELEASE;
-      root->on_key(root, e);
-      break;
-    }
-  }
-
-  // now replay the unresolved keys in the root mapping
-  v->input.keymap = root;
-  dispatch_tree_recursive(v, current, k);
-}
-
-void input_unwind_callback(void *data) {
-  struct velvet *v = data;
-  velvet_input_unwind(v);
-}
-
 /* keys such as altgr */
 static bool is_iso_shift(uint32_t codepoint) {
   return codepoint == 57453     /* iso level 3 shift */
@@ -339,149 +298,24 @@ static bool is_modifier(uint32_t codepoint) {
          is_scroll_lock(codepoint) || is_num_lock(codepoint);
 }
 
-/* strip unsupported modifiers and collapse equivalent key states for easier comparisons */
-static struct velvet_key_event key_cannonicalize(struct velvet_key_event e) {
-  static const uint32_t unused_modifiers =
-      VELVET_API_KEY_MODIFIER_HYPER | VELVET_API_KEY_MODIFIER_NUM_LOCK | VELVET_API_KEY_MODIFIER_CAPS_LOCK;
-  uint32_t c = e.key.codepoint;
-  /* treat alt the same as meta for all practical purposes */
-  if ((e.modifiers & VELVET_API_KEY_MODIFIER_ALT) || (e.modifiers & VELVET_API_KEY_MODIFIER_META)) {
-    e.modifiers &= ~VELVET_API_KEY_MODIFIER_ALT;
-    e.modifiers |= VELVET_API_KEY_MODIFIER_META;
-  }
-  e.modifiers &= ~unused_modifiers;
-  if (e.key.escape && e.key.escape[0] && !e.key.escape[1]) {
-    uint8_t ch = e.key.escape[0];
-    if ((e.modifiers & VELVET_API_KEY_MODIFIER_SHIFT) && ch >= 'a' && ch <= 'z') ch -= 32;
-    if ((e.modifiers & VELVET_API_KEY_MODIFIER_CONTROL)) ch = ch & 0x1f;
-    e.key.codepoint = ch;
-  }
-  if (e.key.codepoint && e.key.codepoint < 255) {
-    e.key.kitty_terminator = 'u';
-  }
-  if (c) {
-    /* if the key is a literal modifier key, strip the corresponding modifier */
-    uint32_t unmask = 0;
-    if (is_super(c)) unmask |= VELVET_API_KEY_MODIFIER_SUPER;
-    if (is_shift(c)) unmask |= VELVET_API_KEY_MODIFIER_SHIFT;
-    if (is_ctrl(c)) unmask |= VELVET_API_KEY_MODIFIER_CONTROL;
-    if (is_meta(c)) unmask |= VELVET_API_KEY_MODIFIER_ALT;
-    if (is_alt(c)) unmask |= VELVET_API_KEY_MODIFIER_ALT;
-    if (is_hyper(c)) unmask |= VELVET_API_KEY_MODIFIER_HYPER;
-    if (is_caps_lock(c)) unmask |= VELVET_API_KEY_MODIFIER_CAPS_LOCK;
-    if (is_num_lock(c)) unmask |= VELVET_API_KEY_MODIFIER_NUM_LOCK;
-    e.modifiers &= ~unmask;
-  }
-  return e;
-}
-
-/* TODO: How should meta/alt behave */
-static bool key_event_equals(struct velvet_key_event e1, struct velvet_key_event e2) {
-  e1 = key_cannonicalize(e1);
-  e2 = key_cannonicalize(e2);
-  struct velvet_key k1 = e1.key, k2 = e2.key;
-  if (e1.modifiers != e2.modifiers) return false;
-  if (k1.name || k2.name) return k1.name && k2.name && strcasecmp(k1.name, k2.name) == 0;
-  if ((k1.kitty_terminator || k2.kitty_terminator) && k1.kitty_terminator != k2.kitty_terminator) return false;
-
-  /* match alternating case if modifiers are equal. This allows us to match Shift+1 and Shift + ! for example */
-  uint32_t a1 = k1.alternate_codepoint, a2 = k2.alternate_codepoint, c1 = k1.codepoint, c2 = k2.codepoint;
-  if (a1 && (a1 == c2 || a1 == a2)) return true;
-  if (a2 && (a2 == c1 || a2 == a1)) return true;
-  if (c1 || c2) return c1 == c2;
-
-  if (k1.escape || k2.escape) return k1.escape && k2.escape && strcmp(k1.escape, k2.escape) == 0;
-
-  /* both zero ?*/
-  assert(!"trap");
-}
-
 static bool is_modifier(uint32_t codepoint);
+
+static void raise_key_event(struct velvet *v, struct velvet_key_event e) {
+  struct velvet_api_session_key_event_args event_args = {
+      .key = {.codepoint = e.key.codepoint,
+              .alternate_codepoint = e.key.alternate_codepoint,
+              .event_type = e.type,
+              .modifiers = e.modifiers,
+              .name = {.set = e.key.name, .value = e.key.name}},
+  };
+  velvet_api_raise_session_on_key(v, event_args);
+}
 
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   assert(v);
-  assert(v->input.keymap);
-  struct velvet_keymap *root, *current;
-  if (!e.type) e.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
-  current = v->input.keymap;
-  root = current->root;
-  assert(root);
-
-  /* key release events are only supported in the root context (passing through to clients) */
-  if (e.type == VELVET_API_KEY_EVENT_TYPE_RELEASE) {
-    if (current == root) root->on_key(root, e);
-    return;
-  }
-
-  // cancel any scheduled unwind
-  io_schedule_cancel(&v->event_loop, v->input.unwind_callback_token);
-
-  // First check if this key matches a keybind in the current keymap
-  for (struct velvet_keymap *k = current->first_child; k; k = k->next_sibling) {
-    if (key_event_equals(k->key, e)) {
-      if (k->first_child) {
-        v->input.keymap = k;
-        // If this sequence has both a mapping and a continuation,
-        // defer the mapping until the intended sequence can be determined.
-        v->input.unwind_callback_token =
-            io_schedule(&v->event_loop, v->input.options.key_chain_timeout_ms, input_unwind_callback, v);
-      } else {
-        // this choord is terminal so on_key must be set
-        assert(k->on_key);
-
-        /* If the current keymap is still active because of a repeat,
-         * only trigger a continuation if it allows repeating. */
-        if (v->input.last_repeat && !k->is_repeatable) break;
-
-        uint64_t now = get_ms_since_startup();
-        uint64_t last_repeat = v->input.last_repeat;
-        if (!last_repeat) last_repeat = now;
-        uint64_t timeout = v->input.options.key_repeat_timeout_ms;
-
-        /* if `timeout` has elapsed since the previous repeat, break */
-        if (k->is_repeatable && now - last_repeat > timeout) break;
-
-        /* update the repeat timer */
-        if (k->is_repeatable) v->input.last_repeat = now;
-
-        /* reset the keymap unless the key is repeatable */
-        if (!k->is_repeatable) v->input.keymap = k->root;
-        k->on_key(k, e);
-        /* NOTE: It is not safe to access `k` after on_key() because
-         * it is possible for a keymap to unmap itself */
-      }
-      return;
-    }
-  }
-
-  /* don't unwind or cancel chains if the processed key is a modifier */
-  if (is_modifier(e.key.codepoint)) {
-    root->on_key(root, e);
-    return;
-  }
-
-  bool did_repeat = v->input.last_repeat > 0;
-  v->input.last_repeat = 0;
-
-  // ESC cancels any pending keybind
-  if (e.key.codepoint == ESC && current != root) {
-    v->input.keymap = root;
-    return;
-  }
-
-  if (current == root) {
-    root->on_key(root, e);
-  } else if (did_repeat) {
-    /* don't unwind the unresolved stack if we are handling a repeat timeout */
-    v->input.keymap = root;
-    dispatch_key_event(v, e);
-  } else {
-    // Since the current key was not matched, we should match the longest
-    // prefix and then reinsert all pending keys
-    velvet_input_unwind(v);
-    dispatch_key_event(v, e);
-  }
+  assert(e.type);
+  raise_key_event(v, e);
 }
 
 static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
@@ -493,23 +327,6 @@ static void DISPATCH_KITTY_KEY(struct velvet *v, struct csi c) {
   if (!codepoint) codepoint = 1;
   if (modifiers) modifiers -= 1;
   if (!event) event = VELVET_API_KEY_EVENT_TYPE_PRESS;
-
-  enum velvet_api_key_modifier *remap = v->input.options.modremap;
-  enum velvet_api_key_modifier order[] = {
-      VELVET_API_KEY_MODIFIER_ALT, VELVET_API_KEY_MODIFIER_CONTROL, VELVET_API_KEY_MODIFIER_SUPER};
-  uint32_t unmask = ~(VELVET_API_KEY_MODIFIER_ALT | VELVET_API_KEY_MODIFIER_CONTROL | VELVET_API_KEY_MODIFIER_SUPER);
-  uint32_t remapped_modifiers = modifiers & unmask;
-
-  for (int i = 0; i < LENGTH(order); i++) {
-    if (modifiers & order[i]) {
-      if (remap[i])
-        remapped_modifiers |= remap[i];
-      else
-        remapped_modifiers |= order[i];
-    }
-  }
-
-  modifiers = remapped_modifiers;
 
   for (int i = 0; i < LENGTH(named_keys); i++) {
     struct velvet_key k = named_keys[i];
@@ -728,7 +545,7 @@ static void velvet_input_send_vk_to_window(struct velvet_key_event e, struct vel
                 .alternate_codepoint = e.key.alternate_codepoint,
                 .event_type = e.type,
                 .modifiers = e.modifiers,
-                .name = e.key.name,
+                .name = { .set = e.key.name, .value = e.key.name },
             },
     };
     velvet_api_raise_window_on_key(v, event_args);
@@ -751,11 +568,6 @@ static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
   if (f) velvet_input_send_vk_to_window(e, f, v);
 }
 
-void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e) {
-  if (e.removed) return;
-  velvet_input_send_vk(k->data, e);
-}
-
 static void dispatch_normal(struct velvet *v, uint8_t ch) {
   struct velvet_input *in = &v->input;
   assert(in->command_buffer.len == 0);
@@ -769,7 +581,6 @@ static void dispatch_normal(struct velvet *v, uint8_t ch) {
   struct velvet_key_event key = key_event_from_codepoint(ch);
   key.legacy = true;
   dispatch_key_event(v, key);
-  assert(v->input.keymap);
 }
 
 void velvet_input_process(struct velvet *v, struct u8_slice str) {
@@ -949,47 +760,8 @@ void DISPATCH_SGR_MOUSE(struct velvet *v, struct csi c) {
   emit_mouse_event(v, sgr, target ? target->id : 0);
 }
 
-static void velvet_keymap_remove_internal(struct velvet_keymap *const k) {
-  if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
-
-  // If the kd mapping has continuations, we need to keep the node in the tree.
-  // However, we clear the associated action and data
-  if (k->first_child) {
-    k->on_key = NULL;
-    k->data = NULL;
-    return;
-  }
-
-  struct velvet_keymap *p = k->parent;
-  if (p->first_child == k) {
-    p->first_child = k->next_sibling;
-  } else {
-    struct velvet_keymap *pre = p->first_child;
-    for (; pre->next_sibling != k; pre = pre->next_sibling);
-    assert(pre);
-    pre->next_sibling = k->next_sibling;
-  }
-  if (!p->on_key && !p->first_child) {
-    velvet_keymap_remove_internal(p);
-  }
-  free(k);
-}
-
-static void velvet_keymap_destroy(struct velvet_keymap *k) {
-  /* the remove event is needed to free resources associated with the event */
-  if (k->on_key) k->on_key(k, (struct velvet_key_event){.removed = true});
-  struct velvet_keymap *chld = k->first_child;
-  for (; chld;) {
-    struct velvet_keymap *next = chld->next_sibling;
-    velvet_keymap_destroy(chld);
-    chld = next;
-  }
-  free(k);
-}
-
 void velvet_input_destroy(struct velvet_input *in) {
   string_destroy(&in->command_buffer);
-  if (in->keymap) velvet_keymap_destroy(in->keymap->root);
 }
 
 static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
@@ -1098,69 +870,6 @@ static bool velvet_key_iterator_next(struct velvet_key_iterator *it) {
   return true;
 }
 
-void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence) {
-  struct velvet_key_iterator it = {.src = key_sequence};
-  struct velvet_keymap *to_remove = root;
-  for (; to_remove && velvet_key_iterator_next(&it);) {
-    for (to_remove = to_remove->first_child; to_remove && !key_event_equals(to_remove->key, it.current);
-         to_remove = to_remove->next_sibling);
-  }
-
-  struct velvet *v = root->data;
-  /* special case when a keymap removes itself */
-  if (to_remove == v->input.keymap) {
-    v->input.keymap = root;
-  }
-  if (to_remove) velvet_keymap_remove_internal(to_remove);
-}
-
-struct velvet_keymap *velvet_keymap_map(struct velvet_keymap *root, struct u8_slice key_sequence) {
-  struct velvet_keymap *prev, *chain, *parent;
-  assert(root);
-  assert(key_sequence.len);
-
-  struct velvet_key_iterator it = {.src = key_sequence};
-  struct velvet_key_iterator test = it;
-  for (; velvet_key_iterator_next(&test););
-
-  if (test.invalid) {
-    velvet_log("Rejecting keymap %.*s: The key %.*s was not recognized.",
-               (int)key_sequence.len,
-               key_sequence.content,
-               (int)test.current_range.len,
-               test.current_range.content);
-    return NULL;
-  }
-
-  parent = root;
-  for (; velvet_key_iterator_next(&it);) {
-    struct velvet_key_event k = it.current;
-    prev = NULL;
-    for (chain = parent->first_child; chain && !key_event_equals(chain->key, k);
-         prev = chain, chain = chain->next_sibling);
-    if (!chain) {
-      chain = velvet_calloc(1, sizeof(*parent));
-      chain->parent = parent;
-      chain->data = NULL;
-      chain->key = k;
-      chain->root = root;
-      if (prev) {
-        chain->next_sibling = prev->next_sibling;
-        prev->next_sibling = chain;
-      } else {
-        parent->first_child = chain;
-      }
-    }
-    parent = chain;
-  }
-  if (parent->on_key) {
-    struct velvet_key_event removed = {.removed = true};
-    parent->on_key(parent, removed);
-  }
-  parent->root = root->root ? root->root : root;
-  return parent;
-}
-
 void velvet_input_send_keys(struct velvet *in, struct u8_slice str, int win_id) {
   struct velvet_window *win = velvet_scene_get_window_from_id(&in->scene, win_id);
   if (!win) return;
@@ -1172,7 +881,11 @@ void velvet_input_send_keys(struct velvet *in, struct u8_slice str, int win_id) 
     }
   }
   for (; velvet_key_iterator_next(&it);) {
-    velvet_input_send_vk_to_window(it.current, win, in);
+    struct velvet_key_event evt = it.current;
+    evt.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
+    velvet_input_send_vk_to_window(evt, win, in);
+    evt.type = VELVET_API_KEY_EVENT_TYPE_RELEASE;
+    velvet_input_send_vk_to_window(evt, win, in);
   }
 }
 
@@ -1180,4 +893,30 @@ void velvet_input_paste_text(struct velvet *in, struct u8_slice str, int win_id)
   struct velvet_window *win = velvet_scene_get_window_from_id(&in->scene, win_id);
   if (win) window_paste(win, str);
   
+}
+
+static struct velvet_key_event key_event_from_api_key(struct velvet_api_window_key_event e) {
+  struct velvet_key_event k = {
+    .key = { .codepoint = e.codepoint, .alternate_codepoint = e.alternate_codepoint, .kitty_terminator = 'u' },
+    .type = e.event_type,
+    .modifiers = e.modifiers,
+  };
+
+  if (e.name.set && e.name.value) {
+    struct u8_slice name_slice = u8_slice_from_cstr(e.name.value);
+    struct velvet_key out;
+    if (key_from_slice(name_slice, &out)) {
+      k.key = out;
+    }
+  } else {
+    uint32_t associated_text = e.alternate_codepoint ? e.alternate_codepoint : e.codepoint;
+    k.associated_text.n = 1;
+    k.associated_text.codepoints[0] = associated_text;
+  }
+  return k;
+}
+
+void velvet_input_send_key_event(struct velvet *v, struct velvet_api_window_key_event key_event, int win_id) {
+  struct velvet_window *win = velvet_scene_get_window_from_id(&v->scene, win_id);
+  velvet_input_send_vk_to_window(key_event_from_api_key(key_event), win, v);
 }

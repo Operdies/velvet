@@ -37,7 +37,7 @@ PROFILE_TARGET ?= profile
 RELEASE_LTO_TARGET ?= release_lto
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/control_sequences -I$(abspath .)/deps -I$(LUA_INCLUDE) -I$(abspath .)/$(GEN_DIR)
 OUT_DIR ?= bin
-COMMANDS = vv test keyboard
+COMMANDS = vv test
 CMD_DIR = cmd
 
 CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(OUT_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
