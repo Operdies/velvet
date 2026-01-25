@@ -649,7 +649,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 
   int block_blend_index = -1;
 
-  if (is_focused) {
+  if (is_focused && should_emulate_cursor(win->emulator.options.cursor)) {
     switch (win->emulator.options.cursor.style) {
     case CURSOR_STYLE_DEFAULT:
     case CURSOR_STYLE_BLINKING_BLOCK:
