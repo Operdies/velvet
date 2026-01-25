@@ -398,6 +398,17 @@ static bool key_event_equals(struct velvet_key_event e1, struct velvet_key_event
 
 static bool is_modifier(uint32_t codepoint);
 
+static void raise_key_event(struct velvet *v, struct velvet_key_event e) {
+  struct velvet_api_session_key_event_args event_args = {
+      .key = {.codepoint = e.key.codepoint,
+              .alternate_codepoint = e.key.alternate_codepoint,
+              .event_type = e.type,
+              .modifiers = e.modifiers,
+              .name = e.key.name},
+  };
+  velvet_api_raise_session_on_key(v, event_args);
+}
+
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   assert(v);
@@ -407,6 +418,8 @@ static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   current = v->input.keymap;
   root = current->root;
   assert(root);
+
+  raise_key_event(v, e);
 
   /* key release events are only supported in the root context (passing through to clients) */
   if (e.type == VELVET_API_KEY_EVENT_TYPE_RELEASE) {

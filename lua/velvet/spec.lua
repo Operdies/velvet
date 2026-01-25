@@ -325,6 +325,12 @@ return {
       },
     },
     {
+      name = "session.key.event_args",
+      fields = {
+        { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
+      },
+    },
+    {
       name = "mouse.move.event_args",
       fields = {
         { name = "win_id",       type = "int",          doc = "The id of the topmost visible window at the coordinates." },
@@ -370,6 +376,7 @@ return {
 
   --- {{{1 events
   events = {
+    { name = "session_on_key",       doc = "Raised when a key is pressed.",                args = "session.key.event_args" },
     { name = "window_created",       doc = "Raised after a new window is created.",        args = "window.created.event_args" },
     { name = "window_closed",        doc = "Raised after a window is closed.",             args = "window.closed.event_args" },
     { name = "window_moved",         doc = "Raised after a window is moved.",              args = "window.moved.event_args" },
