@@ -105,7 +105,7 @@ void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
  * This input will not be parsed for CSI sequences or any current keymap. */
 void velvet_input_send_keys(struct velvet *v, struct u8_slice str, int win_id);
-void velvet_input_send_text(struct velvet *v, struct u8_slice str, int win_id);
+void velvet_input_paste_text(struct velvet *v, struct u8_slice str, int win_id);
 void velvet_input_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args move);
 void velvet_input_send_mouse_click(struct velvet *v, struct velvet_api_mouse_click_event_args click);
 void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_scroll_event_args scroll);

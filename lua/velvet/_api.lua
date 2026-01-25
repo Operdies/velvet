@@ -324,17 +324,17 @@ function api.window_get_title(win_id) end
 --- @return nil ret 
 function api.window_set_title(win_id, title) end
 
---- Send |keys| to the window with id |win_id|. Unlike |window_send_text|, keys such as <C-x> will be encoded .
+--- Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .
 --- @param win_id integer The window receiving the keys
 --- @param keys string The keys to send
 --- @return nil ret 
 function api.window_send_keys(win_id, keys) end
 
---- Send |text| to the window with id |win_id|
+--- Send |text| to the window with id |win_id|. If the recipeint has bracketed paste enabled (mode ?2004), the text will be escaped accordingly.
 --- @param win_id integer The window receiving the text
 --- @param text string The text to send
 --- @return nil ret 
-function api.window_send_text(win_id, text) end
+function api.window_paste_text(win_id, text) end
 
 --- Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
 --- @param mouse_move velvet.api.mouse.move.event_args Mouse move event args

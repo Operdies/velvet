@@ -548,7 +548,6 @@ static int l_vv_api_%s(lua_State *L) {
 ]]):format(idx, idx, idx))
 
     for _, o in ipairs(fn.optional) do
-      dbg(o)
       table.insert(c, ([[
     lua_getfield(L, %d, "%s");
     if (!lua_isnil(L, -1)) {

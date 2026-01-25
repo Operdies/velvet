@@ -596,15 +596,15 @@ return {
     },
     {
       name = "window_send_keys",
-      doc = "Send |keys| to the window with id |win_id|. Unlike |window_send_text|, keys such as <C-x> will be encoded .",
+      doc = "Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .",
       params = {
         { name = "win_id", type = "int",    doc = "The window receiving the keys" },
         { name = "keys",   type = "string", doc = "The keys to send" },
       },
     },
     {
-      name = "window_send_text",
-      doc = "Send |text| to the window with id |win_id|",
+      name = "window_paste_text",
+      doc = "Send |text| to the window with id |win_id|. If the recipeint has bracketed paste enabled (mode ?2004), the text will be escaped accordingly.",
       params = {
         { name = "win_id", type = "int",    doc = "The window receiving the text" },
         { name = "text",   type = "string", doc = "The text to send" },

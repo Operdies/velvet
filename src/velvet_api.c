@@ -208,9 +208,9 @@ bool vv_api_set_display_damage(struct velvet *v, bool new_value) {
   return v->scene.renderer.options.display_damage;
 }
 
-void vv_api_window_send_text(struct velvet *v, lua_Integer winid, const char* text) {
+void vv_api_window_paste_text(struct velvet *v, lua_Integer winid, const char* text) {
   struct u8_slice t = u8_slice_from_cstr(text);
-  velvet_input_send_text(v, t, winid);
+  velvet_input_paste_text(v, t, winid);
 }
 
 void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, const char* keys) {

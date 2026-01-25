@@ -159,19 +159,22 @@ static void scroll_to_bottom(struct velvet_window *focus) {
   if (focus) screen_set_scroll_offset(&focus->emulator.primary, 0);
 }
 
+static void window_paste(struct velvet_window *w, struct u8_slice text) {
+  bool enclose = w->emulator.options.bracketed_paste;
+  if (enclose) string_push_range(&w->emulator.pending_input, bracketed_paste_start, sizeof(bracketed_paste_start));
+  string_push_slice(&w->emulator.pending_input, text);
+  if (enclose) string_push_range(&w->emulator.pending_input, bracketed_paste_end, sizeof(bracketed_paste_end));
+}
+
 static void send_bracketed_paste(struct velvet *v) {
   struct velvet_input *in = &v->input;
   struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
   if (focus) {
-    bool enclose = focus->emulator.options.bracketed_paste;
     uint8_t *start = in->command_buffer.content;
     size_t len = in->command_buffer.len;
-    if (!enclose) {
-      start += sizeof(bracketed_paste_start);
-      len -= sizeof(bracketed_paste_start) + sizeof(bracketed_paste_end);
-    }
-    struct u8_slice s = {.content = start, .len = len};
-    string_push_slice(&focus->emulator.pending_input, s);
+    struct u8_slice paste = { .content=  start, .len = len };
+    paste = u8_slice_range(paste, sizeof(bracketed_paste_start), paste.len - sizeof(bracketed_paste_end));
+    window_paste(focus, paste);
   }
   string_clear(&v->input.command_buffer);
   in->state = VELVET_INPUT_STATE_NORMAL;
@@ -1173,7 +1176,8 @@ void velvet_input_send_keys(struct velvet *in, struct u8_slice str, int win_id) 
   }
 }
 
-void velvet_input_send_text(struct velvet *in, struct u8_slice str, int win_id) {
+void velvet_input_paste_text(struct velvet *in, struct u8_slice str, int win_id) {
   struct velvet_window *win = velvet_scene_get_window_from_id(&in->scene, win_id);
-  if (win) string_push_slice(&win->emulator.pending_input, str);
+  if (win) window_paste(win, str);
+  
 }
