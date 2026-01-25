@@ -146,7 +146,7 @@ local function update_borders(self)
 
     t:set_cursor(3, 1)
     local trunc = '…'
-    local title = self:get_title()
+    local title = vv.api.window_get_foreground_process(self.id) or self:get_title()
     if title:gmatch('^/') then
       title = title:gsub('.*/', '')
     end

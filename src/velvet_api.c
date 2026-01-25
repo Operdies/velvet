@@ -31,6 +31,14 @@ struct velvet_window *check_window(struct velvet *v, int win) {
   return w;
 }
 
+struct velvet_window *check_process_window(struct velvet *v, int win) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
+  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+  if (w->is_lua_window) lua_bail(v->L, "Window id %I is a lua window.", win);
+  assert(w);
+  return w;
+}
+
 lua_Integer vv_api_window_create_process(struct velvet *v, const char *cmd, struct velvet_api_window_create_options options) {
   struct velvet_window template = { .emulator = vte_default };
   string_push_cstr(&template.cmdline, cmd);
@@ -521,4 +529,15 @@ const char* vv_api_window_get_working_directory(struct velvet *v, lua_Integer wi
   if (w->cwd.len == 0) return NULL;
   string_ensure_null_terminated(&w->cwd);
   return (const char*)w->cwd.content;
+}
+
+static char get_process_foreground_buffer[256] = {0};
+const char* vv_api_window_get_foreground_process(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_process_window(v, win_id);
+  if (w->pty && platform.get_process_from_pty) {
+    if (platform.get_process_from_pty(w->pty, get_process_foreground_buffer, sizeof(get_process_foreground_buffer))) {
+      return get_process_foreground_buffer;
+    }
+  }
+  return NULL;
 }

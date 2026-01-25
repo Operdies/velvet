@@ -655,6 +655,12 @@ return {
       returns = { type = "string", doc = "The current working directory of the window" }
     },
     {
+      name = "window_get_foreground_process",
+      doc = "Get the current foreground_process of |win_id|. Does not apply to lua windows.",
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
+      returns = { type = "string", doc = "The current working directory of the window" }
+    },
+    {
       name = "window_is_lua",
       doc = "Returns true if |win_id| exists and is a lua window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },

@@ -2,6 +2,8 @@
 #include "utils.h"
 #include <linux/limits.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 bool get_cwd_from_pty(int pty, char *buffer, int len) {
   int pid = tcgetpgrp(pty);
@@ -23,8 +25,30 @@ char *platform_get_exe_path() {
   return buf;
 }
 
+bool get_process_from_pty(int pty, char *buf, int size) {
+  pid_t fgpid = tcgetpgrp(pty);
+  if (fgpid < 0) return false;
+
+  char path[256];
+  snprintf(path, sizeof(path), "/proc/%d/comm", fgpid);
+
+  FILE *f = fopen(path, "r");
+  if (!f) return false;
+
+  if (!fgets(buf, size, f)) {
+    fclose(f);
+    return -1;
+  }
+
+  fclose(f);
+
+  // Strip trailing newline
+  buf[strcspn(buf, "\n")] = 0;
+  return true;
+}
 
 const struct PLATFORM_IMPL platform = {
   .get_cwd_from_pty = get_cwd_from_pty,
+    .get_process_from_pty = get_process_from_pty,
 };
 

@@ -29,6 +29,19 @@ char *platform_get_exe_path() {
   return buf2;
 }
 
+bool get_process_from_pty(int pty, char *buffer, int len) {
+  pid_t fgpid = tcgetpgrp(pty);
+  if (fgpid == -1) return false;
+  char name[PROC_PIDPATHINFO_MAXSIZE];
+  int buflen = proc_name(fgpid, name, sizeof(name));
+  if (buflen > 0) {
+    strncpy(buffer, name, len);
+    return true;
+  }
+  return false;
+}
+
 const struct PLATFORM_IMPL platform = {
     .get_cwd_from_pty = get_cwd_from_pty,
+    .get_process_from_pty = get_process_from_pty,
 };

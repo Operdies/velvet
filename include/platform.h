@@ -9,6 +9,7 @@ uint64_t get_ms_since_startup(void);
 
 extern const struct PLATFORM_IMPL {
   bool (*const get_cwd_from_pty)(int pty, char *buffer, int len);
+  bool (*const get_process_from_pty)(int pty, char *buffer, int len);
 } platform;
 
 char *platform_get_exe_path();

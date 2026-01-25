@@ -368,6 +368,11 @@ function api.window_create_process(cmd, options) end
 --- @return string ret The current working directory of the window
 function api.window_get_working_directory(win_id) end
 
+--- Get the current foreground_process of |win_id|. Does not apply to lua windows.
+--- @param win_id integer Window id
+--- @return string ret The current working directory of the window
+function api.window_get_foreground_process(win_id) end
+
 --- Returns true if |win_id| exists and is a lua window.
 --- @param win_id integer Window id
 --- @return boolean ret Bool indicating if |win_id| is naked.
