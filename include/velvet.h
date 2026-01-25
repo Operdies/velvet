@@ -5,34 +5,12 @@
 #include "io.h"
 #include "lua.h"
 #include "velvet_scene.h"
-#include "velvet_keyboard.h"
 
 enum velvet_input_state {
   VELVET_INPUT_STATE_NORMAL,
   VELVET_INPUT_STATE_ESC,
   VELVET_INPUT_STATE_APPLICATION_KEYS,
   VELVET_INPUT_STATE_CSI,
-};
-
-struct velvet_keymap;
-typedef void (on_key)(struct velvet_keymap *k, struct velvet_key_event e);
-
-struct velvet_keymap {
-  /* the root keymap in this node */
-  struct velvet_keymap *root;
-  /* the parent keymap in this node */
-  struct velvet_keymap *parent;
-  /* the next sibling keymap */
-  struct velvet_keymap *next_sibling;
-  /* the new keymap after this keymap is activated. If null, this keymap remains active. */
-  struct velvet_keymap *first_child;
-  /* callback called when this keymap is activated, and on every subsequent keystroke.
-   * return true to reset the keymap to the root keymap.
-   */
-  on_key *on_key;
-  void *data;
-  bool is_repeatable;
-  struct velvet_key_event key;
 };
 
 struct velvet_input_options {
@@ -43,20 +21,12 @@ struct velvet_input_options {
   uint64_t key_repeat_timeout_ms;
   /* how many lines are scrolled at a time */
   int scroll_multiplier;
-  /* remap modifier */
-  enum velvet_api_key_modifier modremap[3];
-};
-
-struct velvet_keymap_deferred_action {
-  struct velvet_keymap *keymap;
-  struct velvet_key_event key;
 };
 
 struct velvet_input {
   enum velvet_input_state state;
   struct string command_buffer;
   struct velvet_input_options options;
-  struct velvet_keymap *keymap;
   uint64_t last_repeat;
   int input_socket;
   io_schedule_id unwind_callback_token;
@@ -102,11 +72,11 @@ struct velvet {
   bool render_invalidated;
 };
 
-void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e);
 void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
  * This input will not be parsed for CSI sequences or any current keymap. */
+void velvet_input_send_key_event(struct velvet *v, struct velvet_api_window_key_event key_event, int win_id);
 void velvet_input_send_keys(struct velvet *v, struct u8_slice str, int win_id);
 void velvet_input_paste_text(struct velvet *v, struct u8_slice str, int win_id);
 void velvet_input_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args move);
@@ -116,8 +86,6 @@ void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_sc
  * current keymap. */
 void velvet_input_process(struct velvet *in, struct u8_slice str);
 void velvet_input_destroy(struct velvet_input *v);
-void velvet_keymap_unmap(struct velvet_keymap *root, struct u8_slice key_sequence);
-struct velvet_keymap * velvet_keymap_map(struct velvet_keymap *root, struct u8_slice keys);
 void velvet_input_unwind(struct velvet *v);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_set_focused_session(struct velvet *v, int socket_fd);

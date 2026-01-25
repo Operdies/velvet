@@ -134,7 +134,7 @@ local api = {}
 --- @class velvet.api.window.key_event
 --- @field codepoint integer Unicode codepoint of the key generating the event.
 --- @field alternate_codepoint integer Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted.
---- @field name string Key name, such as 'F1'
+--- @field name? string Key name, such as 'F1'
 --- @field event_type velvet.api.key_event_type Event type, such as key press, repeat, and release.
 --- @field modifiers velvet.api.key_modifiers Key modifier such as super, shift, control, alt
 
@@ -145,6 +145,9 @@ local api = {}
 --- @class velvet.api.coordinate
 --- @field row integer row
 --- @field col integer column
+
+--- @class velvet.api.session.key.event_args
+--- @field key velvet.api.window.key_event The key which generated the event.
 
 --- @class velvet.api.mouse.move.event_args
 --- @field win_id integer The id of the topmost visible window at the coordinates.
@@ -179,27 +182,6 @@ local api = {}
 --- @field lines integer The number of lines.
 --- @field columns integer The number of columns.
 --- @field supports_repeating_multibyte_characters? boolean Some terminals do not support CSI REP for multibyte characters.
-
---- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifier, you must also apply the inverse mapping. Shift is not supported.
---- @param from velvet.api.key_modifier The modifier to remap.
---- @param to velvet.api.key_modifier The new modifier emitted when the remapped modifier is used.
---- @return nil ret 
-function api.keymap_remap_modifier(from, to) end
-
---- Delete the mapping associated with |keys|
---- @param keys string The mapping to remove
---- @return nil ret 
-function api.keymap_del(keys) end
-
---- @class velvet.api.keymap_set.Opts
---- @field repeatable? boolean If set, this mapping may be repeated within the interval defined by |velvet.options.key_repeat_timeout|
-
---- Creates a mapping of |keys| to |function|
---- @param keys string Left hand side of the mapping
---- @param func fun(): nil Right hand side of the mapping
---- @param opts? velvet.api.keymap_set.Opts
---- @return nil ret 
-function api.keymap_set(keys, func, opts) end
 
 --- Get the size of the screen.
 --- @return velvet.api.screen.geometry ret The geometry of the screen window.
@@ -344,6 +326,12 @@ function api.window_set_title(win_id, title) end
 
 --- Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .
 --- @param win_id integer The window receiving the keys
+--- @param key velvet.api.window.key_event Low level key event
+--- @return nil ret 
+function api.window_send_raw_key(win_id, key) end
+
+--- Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .
+--- @param win_id integer The window receiving the keys
 --- @param keys string The keys to send
 --- @return nil ret 
 function api.window_send_keys(win_id, keys) end
@@ -473,6 +461,7 @@ function api.set_theme(new_value) end
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler
 --- @field id integer The id of the handler
+--- @field session_on_key? fun(event_args: velvet.api.session.key.event_args): nil Raised when a key is pressed.
 --- @field window_created? fun(event_args: velvet.api.window.created.event_args): nil Raised after a new window is created.
 --- @field window_closed? fun(event_args: velvet.api.window.closed.event_args): nil Raised after a window is closed.
 --- @field window_moved? fun(event_args: velvet.api.window.moved.event_args): nil Raised after a window is moved.

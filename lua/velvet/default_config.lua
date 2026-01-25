@@ -1,8 +1,9 @@
 local vv = require('velvet')
+local keymap = require('velvet.keymap')
 local default_shell = os.getenv("SHELL") or "bash"
 
-local map = vv.api.keymap_set
-local rmap = function(keys, action) vv.api.keymap_set(keys, action, { repeatable = true }) end
+local map = keymap.set
+local rmap = function(keys, action) keymap.set(keys, action, { repeatable = true }) end
 
 map("<C-x>c", function()
   local focus = vv.api.get_focused_window()
