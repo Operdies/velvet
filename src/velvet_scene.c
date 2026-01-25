@@ -253,7 +253,7 @@ static struct screen_cell *velvet_render_get_staged_cell(struct velvet_render *r
   return &l->cells[column];
 }
 
-static void velvet_render_set_cell(struct velvet_render *r, int line, int column, struct screen_cell value) {
+static void velvet_render_set_cell(struct velvet_render *r, int line, int column, struct screen_cell value, struct velvet_theme t) {
   /* out of bounds writes here is not a bug. It is expected for controls which are partially off-screen. */
   if (!(line >= 0 && line < r->h)) return;
   if (!(column >= 0 && column < r->w)) return;
@@ -264,10 +264,10 @@ static void velvet_render_set_cell(struct velvet_render *r, int line, int column
   left = right = column;
 
   if (value.style.attr & ATTR_REVERSE) {
-    struct color tmp = value.style.fg;
-    value.style.fg = value.style.bg;
-    value.style.bg = tmp;
-    value.style.attr &= ~ATTR_REVERSE;
+    /* normalizing out ATTR_REVERSE simplifies damage tracking,
+     * but unfortunately also forces explicitly setting colors
+     * in cases where the cell color was explicitly unset */
+    value = normalize_cell(t, value);
   }
   
   /* a wide char cannot start on the last column */
@@ -528,7 +528,7 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
         }
       }
 
-      velvet_render_set_cell(r, render_line, render_column, cell);
+      velvet_render_set_cell(r, render_line, render_column, cell, t);
       if (cell.cp.is_wide) column++;
     }
   }
@@ -554,7 +554,7 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
             break;
         default: break;
         };
-        velvet_render_set_cell(r, y, x, cursor);
+        velvet_render_set_cell(r, y, x, cursor, t);
       }
     }
   }
