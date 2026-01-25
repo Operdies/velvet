@@ -9,6 +9,7 @@
 --- @field parent velvet.window handle of parent window
 --- @field borders velvet.window.border borders
 --- @field child_windows velvet.window[] child windows
+--- @field title? string user provided title
 local Window = {}
 
 local vv = require('velvet')
@@ -155,16 +156,7 @@ local function update_borders(self)
 
     t:set_cursor(3, 1)
     local trunc = '…'
-    local title = vv.api.window_get_foreground_process(self.id) or self:get_title()
-    if title:gmatch('^/') then
-      title = title:gsub('.*/', '')
-    end
-    local cwd = self:get_working_directory()
-    if cwd then
-      cwd = cwd:gsub('^' .. home .. '/', ' ')
-      cwd = cwd:gsub('^' .. home, ' ')
-      title = title .. ' in ' .. cwd
-    end
+    local title = self:get_friendly_title()
     local codes = {}
     if title_budget > 0 then
       for p, c in utf8.codes(title) do
@@ -266,12 +258,14 @@ local function route_mouse_events(event, args)
   if dragged and dragged:valid() then win = dragged end
 
   if win then
-    if args.event_type and args.event_type == 'mouse_down' then 
+    if args.event_type and args.event_type == 'mouse_down' then
       dragged = win
-    elseif args.event_type and args.event_type == 'mouse_up' then 
+    elseif args.event_type and args.event_type == 'mouse_up' then
       dragged = nil
     end
-    if event == 'mouse_click' or vv.options.focus_follows_mouse then win:focus() end
+    if event == 'mouse_click' or vv.options.focus_follows_mouse then 
+      win:focus() 
+    end
     -- Translate event coordinates to be window local
     local geom = win:get_geometry()
     args.pos.col = args.pos.col - geom.left
@@ -280,7 +274,7 @@ local function route_mouse_events(event, args)
     local window_func = 'on_' .. event .. '_handler'
     if win[window_func] then
       win[window_func](win, args)
-    else
+    elseif not win:is_lua() then
       vv.api['window_send_' .. event](args)
     end
   end
@@ -305,6 +299,7 @@ end
 --- Close the window. The instance wi
 function Window:close()
   a.window_close(self.id)
+  win_registry[self.id] = nil
 end
 
 --- Create a new window whose lifetime is tied to the parent window. If the parent window is closed, the child window is also closed. Otherwise, the windows are completely independent.
@@ -315,9 +310,27 @@ function Window:create_child_window()
   return child
 end
 
+function Window:get_friendly_title()
+  if self.title then return self.title end
+  -- lua windows do not have a process or a meaningful working directory
+  if vv.api.window_is_lua(self.id) then return ('lua window %d'):format(self.id) end
+  local title = vv.api.window_get_foreground_process(self.id) or self:get_title()
+  if title:gmatch('^/') then
+    title = title:gsub('.*/', '')
+  end
+  local cwd = self:get_working_directory()
+  if cwd then
+    cwd = cwd:gsub('^' .. home .. '/repos/', '󰊢 ')
+    cwd = cwd:gsub('^' .. home .. '/', ' ')
+    cwd = cwd:gsub('^' .. home, ' ')
+    title = title .. ' in ' .. cwd
+  end
+  return title
+end
+
 --- @param title string
 function Window:set_title(title)
-  return a.window_set_title(self.id, title)
+  self.title = title
 end
 
 --- @return string
@@ -340,7 +353,12 @@ function Window:get_visibility()
   return not a.window_get_hidden(self.id)
 end
 
---- @return boolean indicating whether this window is still valid.
+--- Return boolean valid flag indicating if this window is a lua window.
+function Window:is_lua()
+  return vv.api.window_is_lua(self.id)
+end
+
+--- @return boolean valid flag indicating if this window is valid.
 function Window:valid()
   return a.window_is_valid(self.id)
 end
@@ -419,7 +437,9 @@ function Window:set_frame_enabled(enabled)
       brd:on_mouse_move(function(_)
         -- focus parent when mouse hovers borders
         if vv.options.focus_follows_mouse then
-          self:focus()
+          if self:valid() then
+            self:focus()
+          end
         end
       end)
     end
@@ -565,27 +585,29 @@ end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.window.closed.event_args)
 function Window:on_window_closed(handler)
-  self.on_window_closed = handler
+  self.on_window_closed_handler = handler
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.window.moved.event_args)
 function Window:on_window_moved(handler)
-  self.on_window_moved = handler
+  self.on_window_moved_handler = handler
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.window.resized.event_args)
 function Window:on_window_resized(handler)
-  self.on_window_resized = handler
+  self.on_window_resized_handler = handler
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.window.on_key.event_args)
 function Window:on_window_on_key(handler)
-  self.on_window_on_key = handler
+  self.on_window_on_key_handler = handler
 end
 
 --- Focus this window
 function Window:focus()
-  a.set_focused_window(self.id)
+  if self:valid() then
+    a.set_focused_window(self.id)
+  end
 end
 
 function Window:clear()

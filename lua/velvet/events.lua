@@ -65,8 +65,6 @@ local events = {
             event = event_name,
             data = data,
             handler_name = name,
-            group_id = id,
-            func = group_func_table[event_name],
             error = err
           }))
         end
