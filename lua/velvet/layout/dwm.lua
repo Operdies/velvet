@@ -13,6 +13,7 @@ local r_bottom = 0
 local r_right = 0
 
 local move_duration = 0
+local single_monocle = true
 
 --- @alias arrange string arrange mode
 ---| 'monocle' single window visible at a time
@@ -116,6 +117,7 @@ end
 
 --- @param win velvet.window
 local function set_focus(win)
+  if vv.api.window_is_lua(vv.api.get_focused_window()) then return end
   if win == nil then return end
   if win == taskbar.id then return end
   local current_index = table_index(focus_order, win)
@@ -252,15 +254,18 @@ local function monocle()
   term.width = term.width - (r_left + r_right)
   term.height = term.height - (r_top + r_bottom)
   focused_id = vv.api.get_focused_window()
+  local focus_is_lua = vv.api.window_is_lua(focused_id)
+  local first = true
 
   for _, win in ipairs(windows) do
-    if win.id == focused_id and visibleontags(win) then
+    if visibleontags(win) and (win.id == focused_id or (focus_is_lua and first)) then
+      first = false
       win:set_visibility(true)
       win:set_dimming(0)
       win:set_frame_color('red')
       win:set_z_index(tiled_z)
       win_stack(r_left - 1, r_top - 1, term.width + 2, term.height, { win })
-    else 
+    else
       win:set_visibility(false)
     end
   end
@@ -274,7 +279,7 @@ local function tile()
     if visibleontags(win) then num_visible = num_visible + 1 end
     if num_visible > 1 then break end
   end
-  if num_visible == 1 then
+  if num_visible == 1 and single_monocle then
     monocle()
     return
   end
@@ -388,6 +393,7 @@ function dwm.toggle_view(num)
 end
 
 --- Set the currently visible workspaces to |view_tags| (table) or { view_tags } (integer)
+--- @param view_tags integer|integer[]
 function dwm.set_view(view_tags)
   prev_view = table.move(view, 1, #view, 1, {})
   local new_view = get_tagsset()
@@ -452,7 +458,10 @@ function dwm.activate()
   event_handler.window_closed = function(args) 
     remove_window() 
   end
-  event_handler.window_focus_changed = arrange
+  event_handler.window_focus_changed = function(args) 
+    if vv.api.window_is_lua(args.new_focus) then return end
+    arrange() 
+  end
   if #windows > 0 then
     local f = window.from_handle(lst[1])
     set_focus(f)
@@ -638,6 +647,20 @@ function dwm.set_status(mode)
   show_status = mode or not show_status
   -- dwm.reserve(0, 0, show_status and 1 or 0, 0)
   arrange()
+end
+
+--- @param vis velvet.window
+function dwm.make_visible(vis)
+  if tags[vis] then
+    if not visibleontags(window) then
+      local tbl = {}
+      for i, b in ipairs(tags[vis]) do
+        if b then table.insert(tbl, i) end
+      end
+      dwm.set_view(tbl)
+      arrange()
+    end
+  end
 end
 
 return dwm
