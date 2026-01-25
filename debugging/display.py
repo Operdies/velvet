@@ -55,12 +55,16 @@ def screen_cell_summary(valobj, x, y):
     value = cp.GetChildMemberWithName('value').GetValueAsUnsigned(0)
     return chr(value)
 
+def velvet_window_summary(valobj, x, y):
+    id = valobj.GetChildMemberWithName('id').GetValueAsUnsigned(0)
+    return f"{id}"
+
 def color_summary(valobj, x, y):
-    cmd = valobj.GetChildMemberWithName('cmd').GetValueAsUnsigned(0)
+    cmd = valobj.GetChildMemberWithName('kind').GetValueAsUnsigned(0)
     table = valobj.GetChildMemberWithName('table').GetValueAsUnsigned(0)
-    r = valobj.GetChildMemberWithName('r').GetValueAsUnsigned(0)
-    g = valobj.GetChildMemberWithName('g').GetValueAsUnsigned(0)
-    b = valobj.GetChildMemberWithName('b').GetValueAsUnsigned(0)
+    r = valobj.GetChildMemberWithName('red').GetValueAsUnsigned(0)
+    g = valobj.GetChildMemberWithName('green').GetValueAsUnsigned(0)
+    b = valobj.GetChildMemberWithName('blue').GetValueAsUnsigned(0)
 
     if cmd == 1:
         return f"#{r:02x}{g:02x}{b:02x}"
@@ -323,6 +327,7 @@ def configure(debugger):
     debugger.HandleCommand(f'type synthetic add screen --python-class display.screen_SynthProvider')
     debugger.HandleCommand( 'type summary add -F display.vec_summary -e -x "^vec$"')
     debugger.HandleCommand( 'type summary add -F display.color_summary -e -x "^color$"')
+    debugger.HandleCommand( 'type summary add -F display.velvet_window_summary -e -x "^velvet_window$"')
     debugger.HandleCommand( 'type summary add -F display.unicode_codepoint_summary -e -x "^codepoint$"')
     debugger.HandleCommand( 'type summary add -F display.screen_cell_style_summary -e -x "^screen_cell_style$"')
     debugger.HandleCommand( 'type summary add -F display.screen_cell_summary -e -x "^screen_cell$"')

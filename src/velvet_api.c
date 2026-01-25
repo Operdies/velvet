@@ -365,11 +365,32 @@ void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win_id, e
   velvet_ensure_render_scheduled(v);
 }
 
-static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
-  return (struct color) { .kind = COLOR_RGB, .red = pal.red, .green = pal.green, .blue = pal.blue };
+static uint8_t fconv(float f) {
+  return CLAMP(f * 255, 0, 255);
 }
+static float iconv(uint8_t v) {
+  return (float)v / 255.0f;
+}
+
+static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
+  struct color rgb = {
+      .kind = COLOR_RGB,
+      .red = fconv(pal.red),
+      .green = fconv(pal.green),
+      .blue = fconv(pal.blue),
+      .alpha = fconv(pal.alpha.value),
+  };
+  return rgb;
+}
+
 static struct velvet_api_rgb_color palette_from_rgb(struct color col) {
-  return (struct velvet_api_rgb_color) { .red = col.red, .blue = col.blue, .green = col.green };
+  struct velvet_api_rgb_color api = {
+      .red = iconv(col.red),
+      .blue = iconv(col.blue),
+      .green = iconv(col.green),
+      .alpha.value = iconv(col.alpha),
+  };
+  return api;
 }
 
 struct velvet_api_theme vv_api_get_theme(struct velvet *v) {
@@ -468,10 +489,7 @@ lua_Integer vv_api_window_get_scroll_offset(struct velvet *v, lua_Integer win_id
 
 void vv_api_window_set_drawing_color(struct velvet *v, lua_Integer win_id, enum velvet_api_brush brush, struct velvet_api_rgb_color color) {
   struct velvet_window *w = check_window(v, win_id);
-  struct color col = {.kind = COLOR_RGB,
-                      .red = CLAMP(color.red, 0, 255),
-                      .green = CLAMP(color.green, 0, 255),
-                      .blue = CLAMP(color.blue, 0, 255)};
+  struct color col = rgb_from_palette(color);
   struct screen *g = vte_get_current_screen(&w->emulator);
   switch (brush) {
   case VELVET_API_BRUSH_BACKGROUND: g->cursor.brush.bg = col; break;

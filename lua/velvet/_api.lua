@@ -66,9 +66,10 @@ local api = {}
 
 
 --- @class velvet.api.rgb_color
---- @field red integer nil
---- @field green integer nil
---- @field blue integer nil
+--- @field red number nil
+--- @field green number nil
+--- @field blue number nil
+--- @field alpha? number nil
 
 --- @class velvet.api.theme
 --- @field black velvet.api.rgb_color|string Palette color 0

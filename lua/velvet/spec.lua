@@ -203,10 +203,12 @@ return {
   types = {
     {
       name = "rgb_color",
+      doc = "rgb color with colors values in the range 0 < |col| < 1",
       fields = {
-        { name = "red",   type = "int" },
-        { name = "green", type = "int" },
-        { name = "blue",  type = "int" },
+        { name = "red",   type = "float" },
+        { name = "green", type = "float" },
+        { name = "blue",  type = "float" },
+        { name = "alpha", type = "float", optional = true },
       },
     },
     {

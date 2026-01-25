@@ -56,7 +56,7 @@ struct color {
   union {
     uint8_t table;
     struct {
-      uint8_t red, green, blue;
+      uint8_t red, green, blue, alpha;
     };
   };
 };

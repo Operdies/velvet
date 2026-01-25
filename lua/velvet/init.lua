@@ -34,8 +34,8 @@ local function string_to_rgb(hex)
   -- theme.cursor = 'red', where 'red' is automatically inferred as theme.red
   if vv.options.theme[hex] then return vv.options.theme[hex] end
 
-  -- Must be exactly "#rrggbb"
-  if #hex ~= 7 or hex:sub(1, 1) ~= "#" then
+  -- Must be "#rrggbb" or "#rrggbbaa"
+  if (#hex ~= 7 and #hex ~= 9) or hex:sub(1, 1) ~= "#" then
     return nil, "invalid format (expected #rrggbb)"
   end
 
@@ -43,19 +43,23 @@ local function string_to_rgb(hex)
   local r = hex:sub(2, 3)
   local g = hex:sub(4, 5)
   local b = hex:sub(6, 7)
+  local a = #hex > 7 and hex:sub(8, 9) or "00"
 
   -- Validate hex digits
   if not (r:match("^[%x][%x]$") and
         g:match("^[%x][%x]$") and
-        b:match("^[%x][%x]$")) then
+        b:match("^[%x][%x]$") and
+        a:match("^[%x][%x]$")) then
     return nil, "invalid hex digits"
   end
 
-  return {
-    red   = tonumber(r, 16),
-    green = tonumber(g, 16),
-    blue  = tonumber(b, 16),
+  local color = {
+    red   = tonumber(r, 16) / 255,
+    green = tonumber(g, 16) / 255,
+    blue  = tonumber(b, 16) / 255,
+    alpha = tonumber(a, 16) / 255,
   }
+  return color
 end
 
 local theme = setmetatable({}, {

@@ -673,7 +673,13 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
       int cell_index = row * r->w + column;
       if (!cell_equals(staging->cells[cell_index], empty)) {
         struct screen_cell above = staging->cells[cell_index];
-        struct screen_cell below = composite->cells[cell_index];
+        struct screen_cell below = normalize_cell(t, composite->cells[cell_index]);
+        struct screen_cell a_norm = normalize_cell(t, above);
+
+        struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
+        bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
+        bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
+        bool fg_seethrough = !attributes_visible && (above.cp.value == ' ' || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.alpha == 255) && !is_wide_continuation;
 
         /* dim before blending. This looks a bit more like what you would expect in cases
          * where a dimmed window is covering a non-dimmed window. The dimming effect still
@@ -688,23 +694,32 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
                      (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
 
+        if (a_norm.style.bg.alpha) {
+          above = normalize_cell(t, above);
+          float a = (float)a_norm.style.bg.alpha / 255.0;
+          above.style.bg = color_alpha_blend(above.style.bg, below.style.bg, 1.0f - a);
+          if (fg_seethrough) {
+            above.cp = below.cp;
+            above.style.attr = below.style.attr;
+            above.style.fg = color_alpha_blend(a_norm.style.bg, below.style.fg, 1.0f - a);
+          }
+        }
+
+        if (a_norm.style.fg.alpha && !fg_seethrough) {
+          above = normalize_cell(t, above);
+          float a = (float)a_norm.style.fg.alpha / 255.0;
+          above.style.fg = color_alpha_blend(above.style.fg, below.style.bg, 1.0f - a);
+        }
+
         if (blend) {
           above = normalize_cell(t, above);
-          below = normalize_cell(t, below);
-          struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
-          bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
-
           /* if the top cell is blank, draw the glyph from the cell below, but tint it
            * with the background color of the top cell. This creates the illusion of transparency. */
-          bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED |
-                                                        ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
-          bool blend_fg = !attributes_visible && above.cp.value == ' ' && !is_wide_continuation;
-
           if (is_block_element(above.cp.value) || is_half_circle(above.cp.value)) {
             /* block elements are used for pixel graphics. If we blend the background of such characters
              * we must blend the foreground equally. Otherwise everything looks glitchy. */
             above.style.fg = color_alpha_blend(below.style.bg, above.style.fg, trns.alpha);
-          } else if (blend_fg) {
+          } else if (fg_seethrough) {
             above.cp = below.cp;
             above.style.attr = below.style.attr;
             above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.alpha);
@@ -998,7 +1013,7 @@ static bool color_equals(struct color a, struct color b) {
   if (a.kind != b.kind) return false;
   switch (a.kind) {
   case COLOR_RESET: return true;
-  case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue;
+  case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue && a.alpha == b.alpha;
   case COLOR_TABLE: return a.table == b.table;
   }
   return false;
