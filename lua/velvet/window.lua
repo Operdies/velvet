@@ -407,15 +407,20 @@ function Window:set_frame_enabled(enabled)
     for _, brd in pairs(self.borders) do
       brd:set_alternate_screen(true)
       brd:set_cursor_visible(false)
-      brd:on_mouse_move(function(_) 
+      brd:on_mouse_move(function(_)
         -- focus parent when mouse hovers borders
         if vv.options.focus_follows_mouse then
-          self:focus() 
+          self:focus()
         end
       end)
     end
     self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
     self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse_move") end)
+  end
+  if not enabled and self.borders then
+    for _, brd in pairs(self.borders) do
+      brd:set_visibility(false)
+    end
   end
 end
 
