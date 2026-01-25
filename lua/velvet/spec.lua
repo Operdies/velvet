@@ -234,8 +234,8 @@ return {
         -- Additional named colors
         { name = "foreground",        type = "rgb_color", doc = "The default text color" },
         { name = "background",        type = "rgb_color", doc = "The default background color" },
-        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor" },
-        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor" },
+        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor", optional = true },
+        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor", optional = true },
       },
     },
     {

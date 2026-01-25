@@ -196,6 +196,7 @@ local function push_field(tbl, type, path)
 ]]):format(path, tp.composite.name))
     for _, mem in ipairs(tp.composite.fields) do
       local mem_path = path .. "." .. mem.name
+      if mem.optional then mem_path = mem_path .. '.value' end
       push_field(tbl, mem.type, mem_path)
       table.insert(tbl, ([[
   lua_setfield(L, -2, "%s"); /* %s = %s */

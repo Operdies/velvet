@@ -89,8 +89,8 @@ local api = {}
 --- @field bright_white velvet.api.rgb_color|string Palette color 15
 --- @field foreground velvet.api.rgb_color|string The default text color
 --- @field background velvet.api.rgb_color|string The default background color
---- @field cursor_foreground velvet.api.rgb_color|string The foreground color of the cell containing the cursor
---- @field cursor_background velvet.api.rgb_color|string The background color of the cell containing the cursor
+--- @field cursor_foreground? velvet.api.rgb_color|string The foreground color of the cell containing the cursor
+--- @field cursor_background? velvet.api.rgb_color|string The background color of the cell containing the cursor
 
 --- @class velvet.api.window.create_options
 --- @field working_directory? string The initial working directory of the new window.

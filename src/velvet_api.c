@@ -381,8 +381,8 @@ struct velvet_api_theme vv_api_get_theme(struct velvet *v) {
   p.bright_white = palette_from_rgb(v->scene.theme.palette[15]);
   p.foreground = palette_from_rgb(v->scene.theme.foreground);
   p.background = palette_from_rgb(v->scene.theme.background);
-  p.cursor_foreground = palette_from_rgb(v->scene.theme.cursor.foreground);
-  p.cursor_background = palette_from_rgb(v->scene.theme.cursor.background);
+  p.cursor_foreground.value = palette_from_rgb(v->scene.theme.cursor.foreground);
+  p.cursor_background.value = palette_from_rgb(v->scene.theme.cursor.background);
   return p;
 }
 
@@ -405,8 +405,16 @@ struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_the
   v->scene.theme.palette[15] = rgb_from_palette(new_value.bright_white);
   v->scene.theme.foreground = rgb_from_palette(new_value.foreground);
   v->scene.theme.background = rgb_from_palette(new_value.background);
-  v->scene.theme.cursor.foreground = rgb_from_palette(new_value.cursor_foreground);
-  v->scene.theme.cursor.background = rgb_from_palette(new_value.cursor_background);
+  if (new_value.cursor_foreground.set) {
+    v->scene.theme.cursor.foreground = rgb_from_palette(new_value.cursor_foreground.value);
+  } else {
+    v->scene.theme.cursor.foreground = rgb_from_palette(new_value.background);
+  }
+  if (new_value.cursor_background.set) {
+    v->scene.theme.cursor.background = rgb_from_palette(new_value.cursor_background.value);
+  } else {
+    v->scene.theme.cursor.background = rgb_from_palette(new_value.foreground);
+  }
   velvet_ensure_render_scheduled(v);
   return vv_api_get_theme(v);
 }
