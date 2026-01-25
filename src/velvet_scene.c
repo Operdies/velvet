@@ -634,6 +634,13 @@ static bool is_cell_bg_clear(struct screen_cell c) {
   else return c.style.bg.kind == COLOR_RESET;
 }
 
+static bool is_block_element(uint32_t codepoint) {
+  return codepoint >= 9600 && codepoint <= 9631;
+}
+static bool is_half_circle(uint32_t codepoint) {
+  return codepoint == 57524; /*  */
+}
+
 static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_window *win, struct velvet_theme t) {
   struct velvet_render *r = &m->renderer;
   bool is_focused = velvet_scene_get_focus(m) == win;
@@ -692,7 +699,12 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
           bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED |
                                                         ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
           bool blend_fg = !attributes_visible && above.cp.value == ' ' && !is_wide_continuation;
-          if (blend_fg) {
+
+          if (is_block_element(above.cp.value) || is_half_circle(above.cp.value)) {
+            /* block elements are used for pixel graphics. If we blend the background of such characters
+             * we must blend the foreground equally. Otherwise everything looks glitchy. */
+            above.style.fg = color_alpha_blend(below.style.bg, above.style.fg, trns.alpha);
+          } else if (blend_fg) {
             above.cp = below.cp;
             above.style.attr = below.style.attr;
             above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.alpha);
