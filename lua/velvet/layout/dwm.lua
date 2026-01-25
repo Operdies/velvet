@@ -178,8 +178,9 @@ end
 
 local show_status = true
 
+--- @param layout arrange
 --- @return nil
-local function status_update()
+local function status_update(layout)
   taskbar:set_visibility(show_status)
   if not show_status then return end
   local sz = vv.api.get_screen_geometry()
@@ -189,7 +190,7 @@ local function status_update()
   taskbar:set_opacity(0)
   taskbar:clear()
   taskbar:set_foreground_color('black')
-  taskbar:set_cursor(1, 1)
+  taskbar:set_cursor(3, 1)
 
   for i=1,9 do 
     if view[i] or tag_occupied(i) then
@@ -198,7 +199,7 @@ local function status_update()
     end
   end
 
-  if layout_name == 'monocle' then
+  if layout == 'monocle' then
     local focus = 0
     local out_of = 0
     local fid = vv.api.get_focused_window()
@@ -207,6 +208,16 @@ local function status_update()
       if win.id == fid then focus = out_of end
     end
     local segment = (' %d of %d '):format(focus, out_of)
+    taskbar:set_cursor(sz.width // 2 - #segment // 2, 1)
+    taskbar:set_background_color('red')
+    taskbar:draw(segment)
+  elseif layout == 'tiled' then
+    local visible = 0
+    local out_of = #windows
+    for _, win in ipairs(windows) do
+      if visibleontags(win) then visible = visible + 1 end
+    end
+    local segment = (' %d of %d shown '):format(visible, out_of)
     taskbar:set_cursor(sz.width // 2 - #segment // 2, 1)
     taskbar:set_background_color('red')
     taskbar:draw(segment)
@@ -225,9 +236,50 @@ local function status_update()
   taskbar:on_mouse_click(view_mouse_hit)
 end
 
+local function monocle()
+  local ok, err = pcall(status_update, 'monocle')
+  if not ok then dbg({ status_update = err }) end
+  local term = vv.api.get_screen_geometry()
+
+  local focused_id = vv.api.get_focused_window()
+  -- don't steal focus from lua windows since they are not managed here
+  if not vv.api.window_is_lua(focused_id) then
+    if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
+      -- if focus was changed outside of this module, update internal focus order tracking
+      set_focus(window.from_handle(focused_id))
+    end
+  end
+  term.width = term.width - (r_left + r_right)
+  term.height = term.height - (r_top + r_bottom)
+  focused_id = vv.api.get_focused_window()
+
+  for _, win in ipairs(windows) do
+    if win.id == focused_id and visibleontags(win) then
+      win:set_visibility(true)
+      win:set_dimming(0)
+      win:set_frame_color('red')
+      win:set_z_index(tiled_z)
+      win_stack(r_left - 1, r_top - 1, term.width + 2, term.height, { win })
+    else 
+      win:set_visibility(false)
+    end
+  end
+
+  ensure_focus_visible()
+end
+
 local function tile()
-  dbg'arrange tile'
-  local ok, err = pcall(status_update)
+  local num_visible = 0
+  for _, win in ipairs(windows) do
+    if visibleontags(win) then num_visible = num_visible + 1 end
+    if num_visible > 1 then break end
+  end
+  if num_visible == 1 then
+    monocle()
+    return
+  end
+
+  local ok, err = pcall(status_update, 'tiled')
   if not ok then dbg({ status_update = err }) end
   local term = vv.api.get_screen_geometry()
 
@@ -289,39 +341,6 @@ local function tile()
   win_stack(left, top, master_width, term.height, master)
   if #stack > 0 then
     win_stack(master_width + left, top, term.width - master_width, term.height, stack)
-  end
-
-  ensure_focus_visible()
-end
-
-local function monocle()
-  dbg'arrange monocle'
-  local ok, err = pcall(status_update)
-  if not ok then dbg({ status_update = err }) end
-  local term = vv.api.get_screen_geometry()
-
-  local focused_id = vv.api.get_focused_window()
-  -- don't steal focus from lua windows since they are not managed here
-  if not vv.api.window_is_lua(focused_id) then
-    if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
-      -- if focus was changed outside of this module, update internal focus order tracking
-      set_focus(window.from_handle(focused_id))
-    end
-  end
-  term.width = term.width - (r_left + r_right)
-  term.height = term.height - (r_top + r_bottom)
-  focused_id = vv.api.get_focused_window()
-
-  for _, win in ipairs(windows) do
-    if win.id == focused_id and visibleontags(win) then
-      win:set_visibility(true)
-      win:set_dimming(0)
-      win:set_frame_color('red')
-      win:set_z_index(tiled_z)
-      win_stack(r_left - 1, r_top - 1, term.width + 2, term.height + 1, { win })
-    else 
-      win:set_visibility(false)
-    end
   end
 
   ensure_focus_visible()
@@ -426,7 +445,8 @@ function dwm.activate()
   end
   local event_handler = e.create_group(vv.arrange_group_name, true)
   taskbar = create_status_window()
-  dwm.reserve(0, 0, 1, 0)
+  -- dwm.reserve(0, 0, 1, 0)
+  dwm.reserve(0, 0, 0, 0)
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args) add_window(args.win_id, false) end
   event_handler.window_closed = function(args) 
@@ -616,7 +636,7 @@ end
 --- @param mode? boolean if true, show the status bar. Otherwise hide it
 function dwm.set_status(mode)
   show_status = mode or not show_status
-  dwm.reserve(0, 0, show_status and 1 or 0, 0)
+  -- dwm.reserve(0, 0, show_status and 1 or 0, 0)
   arrange()
 end
 
