@@ -194,8 +194,10 @@ local function status_update(layout)
   taskbar:set_foreground_color('black')
   taskbar:set_cursor(3, 1)
 
+  local views = {}
   for i=1,9 do 
     if view[i] or tag_occupied(i) then
+      views[#views+1] = i
       taskbar:set_background_color(view[i] and 'red' or 'blue')
       taskbar:draw((" %d "):format(i))
     end
@@ -228,9 +230,9 @@ local function status_update(layout)
   local function view_mouse_hit(_, args)
     if args.mouse_button == 'left' then
       local col = args.pos.col
-      local hit = 1 + ((col - 1) // 3)
-      if hit >= 1 and hit <= 9 then
-        dwm.set_view(hit)
+      local hit = col // 3
+      if hit >= 1 and hit <= #views then
+        dwm.set_view(views[hit])
       end
     end
   end
@@ -262,6 +264,7 @@ local function monocle()
       first = false
       win:set_visibility(true)
       win:set_dimming(0)
+      win:set_opacity(0.8)
       win:set_frame_color('red')
       win:set_z_index(tiled_z)
       win_stack(r_left - 1, r_top - 1, term.width + 2, term.height, { win })
