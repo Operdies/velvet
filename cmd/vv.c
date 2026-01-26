@@ -551,6 +551,12 @@ static void vv_attach(struct velvet_args args) {
   close(signal_pipes[1]);
   terminal_reset();
 
+  usleep(100);
+  /* after resetting the terminal, ensure stdin is fully flushed to avoid leaking e.g. mouse events to the calling process */
+  char discard[1024];
+  set_nonblocking(STDIN_FILENO);
+  while (read(STDIN_FILENO, discard, sizeof(discard)) > 0) usleep(100);
+
   if (ctx.detach) {
     printf("[Detached]\n");
   } else {
