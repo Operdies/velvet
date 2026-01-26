@@ -4,7 +4,10 @@ local default_shell = os.getenv("SHELL") or "bash"
 local map = vv.api.keymap_set
 local rmap = function(keys, action) vv.api.keymap_set(keys, action, { repeatable = true }) end
 
-map("<C-x>c", function() vv.api.window_create_process(default_shell) end)
+map("<C-x>c", function() 
+  local cwd = vv.api.window_get_working_directory(vv.api.get_focused_window())
+  vv.api.window_create_process(default_shell, { working_directory = cwd }) 
+end)
 map("<C-x>d", function() vv.api.session_detach(vv.api.get_active_session()) end)
 
 map("<C-x><C-x>", function() vv.api.window_send_keys(vv.api.get_focused_window(), "<C-x>") end)

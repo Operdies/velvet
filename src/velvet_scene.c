@@ -1118,6 +1118,8 @@ void velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
 }
 
 bool velvet_window_start(struct velvet_window *velvet_window) {
+  static const char *home = NULL;
+  if (!home) home = getenv("HOME");
   struct rect c = velvet_window->geometry;
   struct winsize velvet_windowsize = {.ws_col = c.w, .ws_row = c.h, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
@@ -1157,9 +1159,11 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   if (pid == 0) {
     if (velvet_window->cwd.len) {
       string_ensure_null_terminated(&velvet_window->cwd);
-      if (chdir((char*)velvet_window->cwd.content) == -1) {
+      if (chdir((char *)velvet_window->cwd.content) == -1) {
         ERROR("chdir:");
       }
+    } else if (home) {
+      chdir(home);
     }
 
     string_ensure_null_terminated(&velvet_window->cmdline);
