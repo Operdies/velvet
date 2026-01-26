@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -249,18 +250,21 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    /* original process */
-    if (fork()) {
+    int pid = fork();
+    if (pid) {
+      /* original process */
       close(sock_fd);
+      /* reap the next fork. Otherwise it becomes a zombie process */
+      waitpid(pid, NULL, 0);
       vv_attach(args);
       return 0;
     }
 
     // detach from controlling terminal
-    if (!setsid()) velvet_die("setsid:");
+    if (setsid() < 0) velvet_die("setsid:");
 
-    /* parent of child */
     if (fork()) {
+      /* parent of daemon */
       exit(0);
     }
   } else {
