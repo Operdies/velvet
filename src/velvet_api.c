@@ -546,3 +546,7 @@ lua_Integer vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
   return w->parent_window_id;
 }
+
+const char* vv_api_get_startup_directory(struct velvet *v) {
+  return v->startup_directory;
+}

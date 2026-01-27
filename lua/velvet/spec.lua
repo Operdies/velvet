@@ -469,6 +469,11 @@ return {
       name = "quit",
       doc = "Quit velvet with no warning"
     },
+    {
+      name = "get_startup_directory",
+      doc = "Get the directory whcih velvet was started in.",
+      returns = { type = "string", doc = "startup directory" },
+    },
     --- Windows {{{2
     {
       name = "get_windows",

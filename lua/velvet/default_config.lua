@@ -78,7 +78,7 @@ map("<M-o>", apply(dwm.incnmaster, -1))
 map("<M-`>", dwm.select_previous_view)
 
 if #vv.api.get_windows() == 0 then
-  vv.api.window_create_process(default_shell)
+  vv.api.window_create_process(default_shell, { working_directory = vv.api.get_startup_directory() })
 end
 local ok, err = pcall(dwm.activate)
 if not ok then dbg({ dwm_activate = err }) end

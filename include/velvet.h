@@ -97,6 +97,7 @@ struct velvet {
   /* velvet will try to render when io is idle, but if io is constantly busy
    * it will try to render at least in this interval */
   int min_ms_per_frame;
+  const char *startup_directory;
 };
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e);

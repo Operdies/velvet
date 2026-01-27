@@ -230,6 +230,10 @@ function api.session_detach(session_id) end
 --- @return nil ret 
 function api.quit() end
 
+--- Get the directory whcih velvet was started in.
+--- @return string ret startup directory
+function api.get_startup_directory() end
+
 --- Get the IDs of all windows.
 --- @return integer[] ret List of window IDs
 function api.get_windows() end

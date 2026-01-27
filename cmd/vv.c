@@ -288,6 +288,9 @@ int main(int argc, char **argv) {
     dup2(new_stdout, STDOUT_FILENO);
   }
 
+  char startup_directory[PATH_MAX];
+  getcwd(startup_directory, PATH_MAX - 1);
+
   struct velvet velvet = {
       .scene = velvet_scene_default,
       .input = velvet_input_default,
@@ -296,6 +299,7 @@ int main(int argc, char **argv) {
       .event_loop = io_default,
       .signal_read = signal_pipes[0],
       .daemon = !args.foreground,
+      .startup_directory = startup_directory,
   };
 
   velvet_loop(&velvet);
