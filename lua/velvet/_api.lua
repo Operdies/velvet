@@ -373,6 +373,11 @@ function api.window_get_working_directory(win_id) end
 --- @return string ret The current working directory of the window
 function api.window_get_foreground_process(win_id) end
 
+--- Returns the id of the parent of |win_id| or 0 if the window does not have a parent.
+--- @param win_id integer Window id
+--- @return integer ret The window id of the parent window.
+function api.window_get_parent(win_id) end
+
 --- Returns true if |win_id| exists and is a lua window.
 --- @param win_id integer Window id
 --- @return boolean ret Bool indicating if |win_id| is naked.

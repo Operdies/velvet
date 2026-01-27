@@ -661,6 +661,12 @@ return {
       returns = { type = "string", doc = "The current working directory of the window" }
     },
     {
+      name = "window_get_parent",
+      doc = "Returns the id of the parent of |win_id| or 0 if the window does not have a parent.",
+      params = { { name = "win_id", type = "int", doc = "Window id" } },
+      returns = { type = "int", doc = "The window id of the parent window." }
+    },
+    {
       name = "window_is_lua",
       doc = "Returns true if |win_id| exists and is a lua window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
