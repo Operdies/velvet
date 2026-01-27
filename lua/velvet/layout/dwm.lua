@@ -395,12 +395,22 @@ local function remove_window()
   arrange()
 end
 
+local function set_view(new_view)
+  for i=1,9 do
+    if new_view[i] ~= view[i] then
+      prev_view = table.move(view, 1, 9, 1, {})
+      view = new_view
+      arrange()
+      return
+    end
+  end
+end
 
 --- Toggle visibility of workspace #num. Multiple workspaces can be visible
 function dwm.toggle_view(num)
-  prev_view = table.move(view, 1, #view, 1, {})
-  if view[num] then view[num] = false else view[num] = true end
-  arrange()
+  local new_view = table.move(view, 1, #view, 1, {})
+  if new_view[num] then new_view[num] = false else new_view[num] = true end
+  set_view(new_view)
 end
 
 --- Set the currently visible workspaces to |view_tags| (table) or { view_tags } (integer)
@@ -415,15 +425,12 @@ function dwm.set_view(view_tags)
   else
     new_view[view_tags] = true
   end
-  view = new_view
+  set_view(new_view)
   arrange()
 end
 
 function dwm.select_previous_view()
-  local new_view = table.move(prev_view, 1, #prev_view, 1, {})
-  prev_view = view
-  view = new_view
-  arrange()
+  set_view(prev_view)
 end
 
 --- Set tag |win_tags| on window |win|.
