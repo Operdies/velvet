@@ -48,6 +48,7 @@ CMD_OUT = $(patsubst %.c.o, %$(BINARY_EXTENSION), $(CMD_OBJECTS))
 CMD_DEPS = $(CMD_OBJECTS:.o=.d)
 
 UTF8PROC = deps/utf8proc/libutf8proc.a
+SUBMODULE_INIT = deps/utf8proc/utf8proc.c
 
 DEPS = $(UTF8PROC) $(LUA_LIBS)
 
@@ -145,10 +146,14 @@ $(PROFILE_TARGET):
 $(RELEASE_TARGET):
 	@$(MAKE) BUILD=release all
 
-$(UTF8PROC): 
+$(UTF8PROC): $(SUBMODULE_INIT)
 	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc MAKEFLAGS=
 
 $(LUA_LIBS): $(LUA)
+
+$(SUBMODULE_INIT):
+	git submodule init
+	git submodule update
 
 $(LUA):
 	$(MAKE) -C $(LUA_DIR) all MAKEFLAGS=
