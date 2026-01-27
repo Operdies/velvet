@@ -445,9 +445,9 @@ static bool luaL_checkboolean(lua_State *L, lua_Integer idx) {
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
   -- String to integer value {{{4
-  table.insert(c, ([[
-static %s %s_string_to_enum(const char *str) {
-]]):format(c_type(enum.name), enum.name))
+  table.insert(c, ([=[
+[[maybe_unused]] static %s %s_string_to_enum(const char *str) {
+]=]):format(c_type(enum.name), enum.name))
   for _, option in ipairs(enum.values) do
     local field_name = enum_value_c_name(cname, option.name)
     table.insert(c, ([[
@@ -458,9 +458,9 @@ static %s %s_string_to_enum(const char *str) {
 
   -- Integer value to string {{{4
   local table_name = enum.name .. "_idx_to_string"
-  table.insert(c, ([[
-static const char *%s_to_string(%s value) {
-]]):format(enum.name, c_type(enum.name)))
+  table.insert(c, ([=[
+[[maybe_unused]] static const char *%s_to_string(%s value) {
+]=]):format(enum.name, c_type(enum.name)))
   table.insert(c, ([[
   switch (value) {
 ]]):format(table_name))
