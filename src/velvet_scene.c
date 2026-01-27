@@ -111,6 +111,14 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
       if (first_visible) velvet_scene_set_focus(m, first_visible);
     }
   }
+
+  do {
+    /* reap all child windows of this window. this call may recursively kill a whole window tree. */
+    vec_find(w, m->windows, w->parent_window_id == win_id);
+    if (w) {
+      velvet_scene_close_and_remove_window(m, w);
+    }
+  } while (w);
 }
 
 int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template) {

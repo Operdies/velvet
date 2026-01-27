@@ -186,12 +186,8 @@ end
 
 hooks.window_closed = function(win)
   local w = win_registry[win.win_id]
-  if w then
-    for _, child in ipairs(w.child_windows) do
-      pcall(Window.close, child)
-    end
-    win_registry[win.win_id] = nil
-  end
+  if w.on_window_closed_handler then pcall(w.on_window_closed_handler, win) end
+  win_registry[win.win_id] = nil
 end
 
 --- @param event string event name
@@ -303,8 +299,17 @@ function Window:close()
 end
 
 --- Create a new window whose lifetime is tied to the parent window. If the parent window is closed, the child window is also closed. Otherwise, the windows are completely independent.
+--- @return velvet.window
 function Window:create_child_window()
-  local child = Window.create()
+  local child = Window.create({ parent_window = self.id })
+  child.parent = self
+  table.insert(self.child_windows, child)
+  return child
+end
+
+--- @return velvet.window
+function Window:create_child_process_window(cmd)
+  local child = Window.create_process(cmd, { parent_window = self.id })
   child.parent = self
   table.insert(self.child_windows, child)
   return child
@@ -376,9 +381,19 @@ function Window.from_handle(id)
 end
 
 --- Create a new window
+--- @param options? velvet.api.window.create_options initial window options
 --- @return velvet.window
-function Window.create()
-  local win = Window.from_handle(a.window_create())
+function Window.create(options)
+  local win = Window.from_handle(a.window_create(options))
+  return win
+end
+
+--- Create a new window hosting a process
+--- @param cmd string the name of the process
+--- @param options? velvet.api.window.create_options initial window options
+--- @return velvet.window
+function Window.create_process(cmd, options)
+  local win = Window.from_handle(a.window_create_process(cmd, options))
   return win
 end
 

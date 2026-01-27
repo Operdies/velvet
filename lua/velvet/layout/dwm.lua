@@ -115,9 +115,17 @@ local function visibleontags(win)
   return false
 end
 
+local function ignore_window(win)
+  if type(win) == 'table' then
+    win = win.id
+  end
+  if not vv.api.window_is_valid(win) then return false end
+  return vv.api.window_is_lua(win) or vv.api.window_get_parent(win) > 0
+end
+
 --- @param win velvet.window
 local function set_focus(win)
-  if vv.api.window_is_lua(vv.api.get_focused_window()) then return end
+  if ignore_window(vv.api.get_focused_window()) then return end
   if win == nil then return end
   if win == taskbar.id then return end
   local current_index = table_index(focus_order, win)
@@ -247,7 +255,7 @@ local function monocle()
 
   local focused_id = vv.api.get_focused_window()
   -- don't steal focus from lua windows since they are not managed here
-  if not vv.api.window_is_lua(focused_id) then
+  if not ignore_window(focused_id) then
     if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
       -- if focus was changed outside of this module, update internal focus order tracking
       set_focus(window.from_handle(focused_id))
@@ -256,7 +264,7 @@ local function monocle()
   term.width = term.width - (r_left + r_right)
   term.height = term.height - (r_top + r_bottom)
   focused_id = vv.api.get_focused_window()
-  local focus_is_lua = vv.api.window_is_lua(focused_id)
+  local focus_is_lua = ignore_window(focused_id)
   local first = true
 
   for _, win in ipairs(windows) do
@@ -293,7 +301,7 @@ local function tile()
 
   local focused_id = vv.api.get_focused_window()
   -- don't steal focus from lua windows since they are not managed here
-  if not vv.api.window_is_lua(focused_id) then
+  if not ignore_window(focused_id) then
     if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
       -- if focus was changed outside of this module, update internal focus order tracking
       set_focus(window.from_handle(focused_id))
@@ -359,7 +367,7 @@ local function arrange()
 end
 
 local function add_window(id, init)
-  if vv.api.window_is_lua(id) then return end
+  if ignore_window(id) then return end
   local win = window.from_handle(id)
   win:set_frame_enabled(true)
   layers[win] = dwm.layers.tiled
@@ -462,7 +470,7 @@ function dwm.activate()
     remove_window() 
   end
   event_handler.window_focus_changed = function(args) 
-    if vv.api.window_is_lua(args.new_focus) then return end
+    if ignore_window(args.new_focus) then return end
     arrange() 
   end
   if #windows > 0 then
