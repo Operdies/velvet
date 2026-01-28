@@ -86,7 +86,9 @@ local function set_real_home()
   if f then
     local res = f:read('*a')
     f:close()
-    home = res:gsub('[/\r\n]*$', '')
+    if type(res) == 'string' then
+      home = res:gsub('[/\r\n]*$', '')
+    end
   end
 end
 

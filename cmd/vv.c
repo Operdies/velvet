@@ -496,6 +496,25 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
   }
 }
 
+static int stdin_flags = 0;
+static int stdout_flags = 0;
+static void restore_flags() {
+  fcntl(STDIN_FILENO, F_SETFL, stdin_flags);
+  fcntl(STDOUT_FILENO, F_SETFL, stdout_flags);
+}
+
+static void ensure_input_output_blocking() {
+  stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
+  if (stdin_flags == -1 || fcntl(STDIN_FILENO, F_SETFL, stdin_flags & ~O_NONBLOCK) == -1) {
+    velvet_die("fcntl:");
+  }
+
+  stdout_flags = fcntl(STDOUT_FILENO, F_GETFL);
+  if (stdout_flags == -1 || fcntl(STDOUT_FILENO, F_SETFL, stdout_flags & ~O_NONBLOCK) == -1) {
+    velvet_die("fcntl:");
+  }
+}
+
 /* TODO: This loop sucks.
  * Update it to use `struct io` and proper signal handling.
  */
@@ -513,9 +532,13 @@ static void vv_attach(struct velvet_args args) {
 
   struct rect ws;
   platform_get_winsize(&ws);
-  int sockfd = vv_connect(args.socket);
 
-  terminal_setup();
+  terminal_setup(restore_flags);
+
+  /* client logic depends on stdout being blocking for clean writes. */
+  ensure_input_output_blocking();
+
+  int sockfd = vv_connect(args.socket);
 
   int output_pipe[2];
   if (pipe(output_pipe) < 0) velvet_fatal("pipe:");
@@ -560,10 +583,11 @@ static void vv_attach(struct velvet_args args) {
   terminal_reset();
 
   usleep(100);
-  /* after resetting the terminal, ensure stdin is fully flushed to avoid leaking e.g. mouse events to the calling process */
   char discard[1024];
-  set_nonblocking(STDIN_FILENO);
-  while (read(STDIN_FILENO, discard, sizeof(discard)) > 0) usleep(100);
+  struct pollfd pfd = { .events = POLLIN, .fd = STDIN_FILENO };
+  /* after resetting the terminal, ensure stdin is fully drained to avoid 
+   * leaking e.g. mouse events to the calling process */
+  while (poll(&pfd, 1, 10) > 0 && read(STDIN_FILENO, discard, sizeof(discard)) > 0);
 
   if (ctx.detach) {
     printf("[Detached]\n");

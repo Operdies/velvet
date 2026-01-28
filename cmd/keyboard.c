@@ -137,7 +137,7 @@ static void quit_keybind(struct velvet_keymap *k, struct velvet_key_event e) {
 int main(void) {
   signal(SIGTERM, on_signal);
   signal(SIGINT, on_signal);
-  terminal_setup();
+  terminal_setup(NULL);
 
   struct velvet v = {
       .input = velvet_input_default,

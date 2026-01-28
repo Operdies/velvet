@@ -124,16 +124,20 @@ static const struct setup_pair setup_functions[] = {
     {.enable = enable_kitty_keyboard,   .disable = disable_kitty_keyboard   },
 };
 
-void terminal_setup(void) {
+static void (*reset_callback)(void);
+void terminal_setup(void (*reset)(void)) {
   for (int i = 0; i < LENGTH(setup_functions); i++) setup_functions[i].enable();
   terminfo_initialized = true;
+  reset_callback = reset;
 }
 
 void terminal_reset(void) {
-  if (terminfo_initialized)
+  if (terminfo_initialized) {
     for (int i = LENGTH(setup_functions) - 1; i >= 0; i--)  {
       setup_functions[i].disable();
     }
+    if (reset_callback) reset_callback();
+  }
   terminfo_initialized = false;
 }
 
