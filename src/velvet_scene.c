@@ -1094,7 +1094,7 @@ static bool rect_same_size(struct rect b1, struct rect b2) {
   return b1.w == b2.w && b1.h == b2.h;
 }
 
-void velvet_window_resize(struct velvet_window *win, struct rect geom, struct velvet *v) {
+bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct velvet *v) {
   // Refuse to go below a minimum size
   int min_size = 1;
   if (geom.w < min_size) geom.w = min_size;
@@ -1123,6 +1123,7 @@ void velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
     struct velvet_api_window_moved_event_args event_args = { .win_id = win->id, .new_size = new, .old_size = old };
     if (v) velvet_api_raise_window_moved(v, event_args);
   }
+  return resized || moved;
 }
 
 bool velvet_window_start(struct velvet_window *velvet_window) {

@@ -118,7 +118,8 @@ void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velv
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
     struct rect new_geometry = {.h = geometry.height, .y = geometry.top, .x = geometry.left, .w = geometry.width};
-    velvet_window_resize(w, new_geometry, v);
+    if (velvet_window_resize(w, new_geometry, v))
+      velvet_ensure_render_scheduled(v);
   }
 }
 

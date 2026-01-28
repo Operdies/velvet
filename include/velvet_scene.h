@@ -27,7 +27,7 @@ struct velvet_window {
   float dim_factor;
 };
 
-void velvet_window_resize(struct velvet_window *velvet_window, struct rect window, struct velvet *v);
+bool velvet_window_resize(struct velvet_window *velvet_window, struct rect window, struct velvet *v);
 bool velvet_window_start(struct velvet_window *velvet_window);
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
 
