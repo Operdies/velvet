@@ -105,11 +105,11 @@ endif
 .PHONY: all
 all: $(CMD_OUT) $(OUT_DIR)
 
-$(OUT_DIR)/%.c.o: $(OBJECT_DIR)/%.c | $(OUT_DIR) $(GEN_C_HEADER)
+$(OUT_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(OUT_DIR)
 	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c | $(OUT_DIR) $(GEN_LUA_AUTOGEN)
+$(OUT_DIR)/%.c.o: $(CMD_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(OUT_DIR)
 	@echo $(CC) -c $(CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(CFLAGS) $< -o $@
 
