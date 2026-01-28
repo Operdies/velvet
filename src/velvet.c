@@ -298,7 +298,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     velvet_window_process_output(vte, str);
 
     if (window_visible(v, vte)) {
-      velvet_ensure_render_scheduled(v);
+      v->render_invalidated = true;
     }
   } else {
     velvet_scene_remove_exited(v);
@@ -310,7 +310,7 @@ static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *fo
   if (focus->ws.w && focus->ws.h && (focus->ws.w != v->scene.ws.w || focus->ws.h != v->scene.ws.h)) {
     velvet_scene_resize(&v->scene, focus->ws);
     resized = true;
-    velvet_ensure_render_scheduled(v);
+    v->render_invalidated = true;
   }
   return resized;
 }
@@ -326,12 +326,13 @@ static void velvet_dispatch_frame(void *data) {
     struct velvet_api_pre_render_event_args event_args = { .time = get_ms_since_startup(), .cause = is_idle ? "io_idle" : "io_busy" };
     velvet_api_raise_pre_render(v, event_args);
     velvet_scene_render_damage(&v->scene, velvet_render, v);
+    v->render_invalidated = false;
   }
   io_schedule_cancel(&v->event_loop, v->active_render_token);
   io_schedule_cancel(&v->event_loop, v->idle_render_token);
 }
 
-void velvet_ensure_render_scheduled(struct velvet *velvet) {
+static void velvet_ensure_render_scheduled(struct velvet *velvet) {
   if (!io_schedule_exists(&velvet->event_loop, velvet->idle_render_token)) {
     /* schedule a render as soon as io is idle */
     velvet->idle_render_token = io_schedule_idle(&velvet->event_loop, velvet_dispatch_frame, velvet);
@@ -341,6 +342,7 @@ void velvet_ensure_render_scheduled(struct velvet *velvet) {
     velvet->active_render_token =
         io_schedule(&velvet->event_loop, velvet->min_ms_per_frame, velvet_dispatch_frame, velvet);
   }
+  velvet->render_invalidated = false;
 }
 
 static bool file_exists(const char *path) {
@@ -400,12 +402,13 @@ void velvet_loop(struct velvet *velvet) {
    * For most updates, this timeout will not be hit at all since IO will normally be idle at some point.
    * */
   velvet->min_ms_per_frame = 1000 * (1.0 / 40);
-  velvet_ensure_render_scheduled(velvet);
+  velvet->render_invalidated = true;
 
   for (;;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
     if (focus) velvet_align_and_arrange(velvet, focus);
+    if (velvet->render_invalidated) velvet_ensure_render_scheduled(velvet);
 
     // Set up IO
     vec_clear(&loop->sources);

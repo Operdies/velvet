@@ -98,6 +98,8 @@ struct velvet {
    * it will try to render at least in this interval */
   int min_ms_per_frame;
   const char *startup_directory;
+  /* if render_invalidated is set, velvet will schedule a render at an appropriate time. */
+  bool render_invalidated;
 };
 
 void velvet_input_send(struct velvet_keymap *k, struct velvet_key_event e);
@@ -121,7 +123,6 @@ struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
-void velvet_ensure_render_scheduled(struct velvet *velvet);
 bool window_visible(struct velvet *v, struct velvet_window *w);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {

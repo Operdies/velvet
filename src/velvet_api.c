@@ -75,7 +75,7 @@ void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text)
     struct u8_slice s = u8_slice_from_cstr(text);
     velvet_window_process_output(w, s);
     if (window_visible(v, w))
-      velvet_ensure_render_scheduled(v);
+      v->render_invalidated = true;
   }
 }
 
@@ -119,7 +119,7 @@ void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velv
   if (w) {
     struct rect new_geometry = {.h = geometry.height, .y = geometry.top, .x = geometry.left, .w = geometry.width};
     if (velvet_window_resize(w, new_geometry, v))
-      velvet_ensure_render_scheduled(v);
+      v->render_invalidated = true;
   }
 }
 
@@ -324,7 +324,7 @@ void vv_api_window_set_hidden(struct velvet *v, lua_Integer win_id, bool hidden)
   struct velvet_window *w = check_window(v, win_id);
   if (w->hidden != hidden) {
     w->hidden = hidden;
-    velvet_ensure_render_scheduled(v);
+    v->render_invalidated = true;
   }
 }
 
@@ -337,7 +337,7 @@ void vv_api_window_set_z_index(struct velvet *v, lua_Integer win_id, lua_Integer
   struct velvet_window *w = check_window(v, win_id);
   if (w->z_index != z) {
     w->z_index = z;
-    velvet_ensure_render_scheduled(v);
+    v->render_invalidated = true;
   }
 }
 lua_Integer vv_api_window_get_z_index(struct velvet *v, lua_Integer win_id) {
@@ -353,7 +353,7 @@ void vv_api_window_set_opacity(struct velvet *v, lua_Integer win_id, float opaci
   struct velvet_window *w = check_window(v, win_id);
   opacity = CLAMP(opacity, 0, 1);
   w->transparency.alpha = 1.0 - opacity;
-  velvet_ensure_render_scheduled(v);
+  v->render_invalidated = true;
 }
 
 enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(struct velvet *v, lua_Integer win_id) {
@@ -371,7 +371,7 @@ void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win_id, e
   default: lua_bail(v->L, "Invalid transparency mode %I", mode);
   }
 
-  velvet_ensure_render_scheduled(v);
+  v->render_invalidated = true;
 }
 
 static uint8_t fconv(float f) {
@@ -456,7 +456,7 @@ struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_the
   } else {
     v->scene.theme.cursor.background = rgb_from_palette(new_value.foreground);
   }
-  velvet_ensure_render_scheduled(v);
+  v->render_invalidated = true;
   return vv_api_get_theme(v);
 }
 
@@ -467,7 +467,7 @@ float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win_id) {
 void vv_api_window_set_dim_factor(struct velvet *v, lua_Integer win_id, float factor) {
   struct velvet_window *w = check_window(v, win_id);
   w->dim_factor = CLAMP(factor, 0, 1);
-  velvet_ensure_render_scheduled(v);
+  v->render_invalidated = true;
 }
 
 void vv_api_window_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args mouse_move) {
@@ -513,7 +513,7 @@ void vv_api_window_set_cursor_position(struct velvet *v, lua_Integer win_id, str
   pos.row = CLAMP(pos.row, 1, w->geometry.h);
 
   if (w->emulator.options.cursor.visible && (pos.col != g->cursor.column || pos.row != g->cursor.line))
-    velvet_ensure_render_scheduled(v);
+    v->render_invalidated = true;
 
   screen_set_cursor_position(g, pos.col - 1, pos.row - 1);
 }
