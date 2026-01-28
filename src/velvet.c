@@ -326,8 +326,9 @@ static void velvet_dispatch_frame(void *data) {
     struct velvet_api_pre_render_event_args event_args = { .time = get_ms_since_startup(), .cause = is_idle ? "io_idle" : "io_busy" };
     velvet_api_raise_pre_render(v, event_args);
     velvet_scene_render_damage(&v->scene, velvet_render, v);
-    v->render_invalidated = false;
   }
+
+  v->render_invalidated = false;
   io_schedule_cancel(&v->event_loop, v->active_render_token);
   io_schedule_cancel(&v->event_loop, v->idle_render_token);
 }

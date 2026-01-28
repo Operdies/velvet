@@ -416,7 +416,6 @@ end
 --- Set the currently visible workspaces to |view_tags| (table) or { view_tags } (integer)
 --- @param view_tags integer|integer[]
 function dwm.set_view(view_tags)
-  prev_view = table.move(view, 1, #view, 1, {})
   local new_view = get_tagsset()
   if type(view_tags) == 'table' then
     for _, t in ipairs(view_tags) do
@@ -425,8 +424,13 @@ function dwm.set_view(view_tags)
   else
     new_view[view_tags] = true
   end
-  set_view(new_view)
-  arrange()
+  for i=1,9 do
+    if new_view[i] ~= view[i] then
+      set_view(new_view)
+      arrange()
+      return
+    end
+  end
 end
 
 function dwm.select_previous_view()
