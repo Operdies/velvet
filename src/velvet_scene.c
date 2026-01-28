@@ -958,7 +958,7 @@ static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_
         /* disable all currently set styles */
         if (features[1] & attr) // special case for bold again
           sgr_buffer_push(&sgr, 22);
-        for (size_t i = 3; i < LENGTH(features); i++) {
+        for (size_t i = 2; i < LENGTH(features); i++) {
           uint32_t current = features[i] & attr;
           if (current) sgr_buffer_push(&sgr, 20 + i);
         }
