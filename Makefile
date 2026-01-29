@@ -1,6 +1,3 @@
-MAKEFLAGS += --no-builtin-rules
-.SUFFIXES:
-
 BINARY_EXTENSION =
 
 ifeq ($(OS),Windows_NT)
@@ -147,7 +144,7 @@ $(RELEASE_TARGET):
 	@$(MAKE) BUILD=release all
 
 $(UTF8PROC): $(SUBMODULE_INIT)
-	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc MAKEFLAGS=
+	UTF8PROC_DEFINES=-DUTF8PROC_STATIC $(MAKE) -C ./deps/utf8proc
 
 $(LUA_LIBS): $(LUA)
 
@@ -156,7 +153,7 @@ $(SUBMODULE_INIT):
 	git submodule update
 
 $(LUA):
-	$(MAKE) -C $(LUA_DIR) all MAKEFLAGS=
+	$(MAKE) -C $(LUA_DIR) all
 
 $(GEN_LUA_AUTOGEN): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
 	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
