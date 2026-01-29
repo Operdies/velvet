@@ -390,6 +390,7 @@ static int vv_connect(char *vv_socket) {
       }
     }
     if (!connected) {
+      terminal_reset();
       fprintf(stderr, "No sessions.\n");
       exit(1);
     }
