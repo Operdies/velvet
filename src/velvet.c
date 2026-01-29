@@ -321,7 +321,6 @@ static void velvet_dispatch_frame(void *data) {
   struct velvet_session *focus = velvet_get_focused_session(v);
   if (focus) {
     bool is_idle = io_schedule_exists(&v->event_loop, v->active_render_token);
-    velvet_align_and_arrange(v, focus);
     v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_wide_chars;
     struct velvet_api_pre_render_event_args event_args = { .time = get_ms_since_startup(), .cause = is_idle ? "io_idle" : "io_busy" };
     velvet_api_raise_pre_render(v, event_args);

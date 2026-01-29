@@ -509,20 +509,26 @@ static bool should_emulate_cursor(struct cursor_options cur) {
   }
 }
 
-static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct velvet_window *h, struct velvet_theme t) {
-  struct velvet_render *r = &m->renderer;
-  struct screen *active = vte_get_current_screen(&h->emulator);
-  assert(active);
-  assert(active->w == h->geometry.w);
-  assert(active->h == h->geometry.h);
+static void
+velvet_render_copy_cells_from_window(struct velvet_scene *scene, struct velvet_window *win, struct velvet_theme t) {
+  struct velvet_render *r = &scene->renderer;
+  struct screen *win_buf = vte_get_current_screen(&win->emulator);
+  assert(win_buf->w == win->geometry.w);
+  assert(win_buf->h == win->geometry.h);
 
-  for (int line = 0; line < active->h; line++) {
-    struct screen_line *screen_line = screen_get_view_line(active, line);
-    int render_line = h->geometry.y + line;
-    if (render_line >= r->h) break;
-    for (int column = 0; column < active->w; column++) {
-      int render_column = h->geometry.x + column;
-      if (render_column >= r->w) break;
+  int l_start = win->geometry.y < 0 ? -win->geometry.y : 0;
+  int l_end = win->geometry.y + win->geometry.h > r->h ? r->h - win->geometry.y : win->geometry.h;
+  int c_start = win->geometry.x < 0 ? -win->geometry.x : 0;
+  int c_end = win->geometry.x + win->geometry.w > r->w ? r->w - win->geometry.x : win->geometry.w;
+
+  if (!(l_start < l_end) || !(c_start < c_end)) 
+    return;
+
+  for (int line = l_start; line < l_end; line++) {
+    struct screen_line *screen_line = screen_get_view_line(win_buf, line);
+    int render_line = win->geometry.y + line;
+    for (int column = c_start; column < c_end; column++) {
+      int render_column = win->geometry.x + column;
       struct screen_cell cell = screen_line->cells[column];
       if (r->options.display_eol) {
         if (screen_line->has_newline) {
@@ -541,15 +547,15 @@ static void velvet_render_copy_cells_from_window(struct velvet_scene *m, struct 
     }
   }
 
-  bool is_focused = h == velvet_scene_get_focus(m);
-  if (is_focused && should_emulate_cursor(h->emulator.options.cursor)) {
-    int x = h->geometry.x + active->cursor.column;
-    int y = h->geometry.y + active->cursor.line + screen_get_scroll_offset(active);
-    if (y < h->geometry.y + h->geometry.h) {
+  bool is_focused = win->id == scene->focus;
+  if (is_focused && should_emulate_cursor(win->emulator.options.cursor)) {
+    int x = win->geometry.x + win_buf->cursor.column;
+    int y = win->geometry.y + win_buf->cursor.line + screen_get_scroll_offset(win_buf);
+    if (y < win->geometry.y + win->geometry.h) {
       struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
       if (current) {
         struct screen_cell cursor = *current;
-        switch (h->emulator.options.cursor.style) {
+        switch (win->emulator.options.cursor.style) {
         case CURSOR_STYLE_DEFAULT:
         case CURSOR_STYLE_BLINKING_BLOCK:
         case CURSOR_STYLE_STEADY_BLOCK:
