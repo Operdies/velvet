@@ -551,3 +551,16 @@ lua_Integer vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
 const char* vv_api_get_startup_directory(struct velvet *v) {
   return v->startup_directory;
 }
+
+void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct velvet_api_session_options options) {
+  struct velvet_session *s;
+  /* bit of a hack because clients don't really have a way of knowing their own id */
+  if (session_id == 0) session_id = v->socket_cmd_sender;
+  vec_find(s, v->sessions, s->socket == session_id);
+  if (s == NULL) lua_bail(v->L, "Session %I is not a valid session.", session_id);
+  s->ws.height = options.lines;
+  s->ws.width = options.columns;
+  s->ws.x_pixel = options.x_pixel;
+  s->ws.y_pixel = options.y_pixel;
+  if (options.supports_repeating_multibyte_characters.set) s->features.no_repeat_wide_chars = !options.supports_repeating_multibyte_characters.value;
+}

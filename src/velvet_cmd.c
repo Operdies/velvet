@@ -129,49 +129,6 @@ struct velvet_action_data {
   struct string cmd;
 };
 
-static void
-velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8_slice option, struct u8_slice value) {
-  /* TODO: This sucks. The implementation mixes:
-   * 1. Changing settings on the *active session*
-   * 2. Changing settings on the *sender* (ephemeral CLI, active session, socat, ....)
-   * 3. Changing settings on various server-side subsystems
-   * A common interface to change settings is fine, but mixing all three in a huge if-else is not great */
-
-  struct velvet_session *focus = velvet_get_focused_session(v);
-
-  int digit = 0;
-  bool is_digit = u8_slice_to_int32(value, &digit);
-  bool boolean = digit || (value.len && value.content[0] == 't');
-  if (u8_match(option, "lines")) {
-    if (focus && is_digit) focus->ws.height = digit;
-  } else if (u8_match(option, "columns")) {
-    if (focus && is_digit) focus->ws.width = digit;
-  } else if (u8_match(option, "lines_pixels")) {
-    if (focus && is_digit) focus->ws.y_pixel = digit;
-  } else if (u8_match(option, "columns_pixels")) {
-    if (focus && is_digit) focus->ws.x_pixel = digit;
-  } else if (u8_match(option, "cwd")) {
-    if (sender) {
-      string_clear(&sender->cwd);
-      string_push_slice(&sender->cwd, value);
-    }
-  } else if (u8_match(option, "no_repeat_wide_chars")) {
-    focus->features.no_repeat_wide_chars = boolean;
-  }
-}
-
-static void velvet_cmd_set(struct velvet *v, struct velvet_session *sender, struct velvet_cmd_arg_iterator *it) {
-  struct u8_slice option, value;
-  if (velvet_cmd_arg_iterator_next(it)) {
-    option = it->current;
-    if (velvet_cmd_arg_iterator_next(it)) {
-      value = it->current;
-      velvet_cmd_set_option(v, sender, option, value);
-    }
-  }
-}
-
-
 static int l_velvet_lua_print_to_socket(lua_State *L) {
   int source_socket = luaL_checkinteger(L, 1);
   if (source_socket == 0) return 0;
@@ -217,9 +174,7 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
 }
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
-  struct velvet_session *sender = NULL;
   velvet_log("velvet_cmd: %.*s", (int)cmd.len, cmd.content);
-  if (source_socket) vec_find(sender, v->sessions, sender->socket == source_socket);
 
   if (cmd.len > 2) {
     if (cmd.content[0] == cmd.content[cmd.len - 1]) {
@@ -247,11 +202,11 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     if (u8_match(command, "detach")) {
       velvet_detach_session(v, velvet_get_focused_session(v));
     } else if (u8_match(command, "lua")) {
+      /* bit of a hack because sessions don't really have a way of knowing their own id */
+      v->socket_cmd_sender = source_socket;
       velvet_lua(v, &it, source_socket);
     } else if (u8_match(command, "quit")) {
       v->quit = true;
-    } else if (u8_match(command, "set")) {
-      velvet_cmd_set(v, sender, &it);
     } else {
       velvet_log("Unknown command '%.*s'", (int)command.len, command.content);
     }

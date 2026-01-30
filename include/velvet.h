@@ -72,7 +72,6 @@ struct velvet_session {
   int input;                    // stdin
   int output;                   // stdout
   struct rect ws;
-  struct string cwd;
   struct {
     struct string buffer; // partial commands
     int lines;
@@ -88,6 +87,7 @@ struct velvet {
   struct vec /* struct session */ sessions;
   /* this is modified by events such as receiving focus IN/OUT events, new sessions attaching, etc */
   int focused_socket;
+  int socket_cmd_sender;
   int socket;
   int signal_read;
   bool quit;

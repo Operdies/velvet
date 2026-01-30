@@ -368,6 +368,17 @@ return {
         { name = "level",   type = "severity", doc = "Error level" },
       },
     },
+    {
+      name = "session_options",
+      doc = "session specific options of an attached client.",
+      fields = {
+        { name = "x_pixel",                                 type = "int",  doc = "The number of horizontal pixels." },
+        { name = "y_pixel",                                 type = "int",  doc = "The number of vertical pixels." },
+        { name = "lines",                                   type = "int",  doc = "The number of lines." },
+        { name = "columns",                                 type = "int",  doc = "The number of columns." },
+        { name = "supports_repeating_multibyte_characters", type = "bool", doc = "Some terminals do not support CSI REP for multibyte characters.", optional = true },
+      },
+    },
   },
 
   --- {{{1 events
@@ -464,6 +475,14 @@ return {
       name = "session_detach",
       doc = "Detach |session| session from the server.",
       params = { { name = "session_id", type = "int", doc = "Session id" } },
+    },
+    {
+      name = "session_set_options",
+      doc = "Update session options for the session id id |session_id|",
+      params = {
+        { name = "session_id", type = "int",             doc = "Session id" },
+        { name = "options",    type = "session_options", doc = "The new session options." },
+      },
     },
     {
       name = "quit",

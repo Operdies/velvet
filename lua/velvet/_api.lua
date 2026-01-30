@@ -173,6 +173,13 @@ local api = {}
 --- @field message string The message
 --- @field level velvet.api.severity Error level
 
+--- @class velvet.api.session_options
+--- @field x_pixel integer The number of horizontal pixels.
+--- @field y_pixel integer The number of vertical pixels.
+--- @field lines integer The number of lines.
+--- @field columns integer The number of columns.
+--- @field supports_repeating_multibyte_characters? boolean Some terminals do not support CSI REP for multibyte characters.
+
 --- Remap the modifier |from| to the modifier |to|. This is a one-way mapping. To swap two modifier, you must also apply the inverse mapping. Shift is not supported.
 --- @param from velvet.api.key_modifier The modifier to remap.
 --- @param to velvet.api.key_modifier The new modifier emitted when the remapped modifier is used.
@@ -225,6 +232,12 @@ function api.get_active_session() end
 --- @param session_id integer Session id
 --- @return nil ret 
 function api.session_detach(session_id) end
+
+--- Update session options for the session id id |session_id|
+--- @param session_id integer Session id
+--- @param options velvet.api.session_options The new session options.
+--- @return nil ret 
+function api.session_set_options(session_id, options) end
 
 --- Quit velvet with no warning
 --- @return nil ret 

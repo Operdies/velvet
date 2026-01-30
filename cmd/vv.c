@@ -312,42 +312,40 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   if (written < (int)sizeof(sig)) velvet_die("signal write:");
 }
 
-static struct string vv_attach_option_buffer = {0};
+static char cmdbuf[256];
 static void vv_attach_update_size(int sockfd) {
   struct rect size;
   platform_get_winsize(&size);
-  string_clear(&vv_attach_option_buffer);
-  string_push_format_slow(&vv_attach_option_buffer, 
-                           "set lines %d\nset columns %d\nset lines_pixels %d\nset columns_pixels %d\n",
-                           size.height,
-                           size.width,
-                           size.y_pixel,
-                           size.x_pixel);
-  io_write(sockfd, string_as_u8_slice(vv_attach_option_buffer));
+  int n = snprintf(cmdbuf,
+                   sizeof(cmdbuf),
+                   "lua 'vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d })'\n",
+                   size.height,
+                   size.width,
+                   size.y_pixel,
+                   size.x_pixel);
+  struct u8_slice s = {.content = (uint8_t *)cmdbuf, .len = n};
+  io_write(sockfd, s);
 }
 
 static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int output_fd) {
-  string_clear(&vv_attach_option_buffer);
   int fds[2] = {input_fd, output_fd};
   bool no_repeat_wide_chars = false;
   char *term;
   if ((term = getenv("TERM_PROGRAM")) && strcmp(term, "Apple_Terminal") == 0) {
     no_repeat_wide_chars = true;
   }
-  string_push_format_slow(&vv_attach_option_buffer,
-                          "set lines %d\n"
-                          "set columns %d\n"
-                          "set lines_pixels %d\n"
-                          "set columns_pixels %d\n"
-                          "set no_repeat_wide_chars %c\n",
+  int n_cmdbuf = snprintf(cmdbuf,
+                          sizeof(cmdbuf),
+                          "lua 'vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d, "
+                          "supports_repeating_multibyte_characters = %s })'\n",
                           size.height,
                           size.width,
                           size.y_pixel,
                           size.x_pixel,
-                          no_repeat_wide_chars ? 't' : 'f');
+                          no_repeat_wide_chars ? "false" : "true");
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
 
-  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = vv_attach_option_buffer.content, .iov_len = vv_attach_option_buffer.len}, .msg_iovlen = 1};
+  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = cmdbuf, .iov_len = n_cmdbuf}, .msg_iovlen = 1};
 
   msg.msg_control = cmsgbuf;
   msg.msg_controllen = sizeof(cmsgbuf);

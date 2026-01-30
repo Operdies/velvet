@@ -25,7 +25,6 @@ void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
   if (s->socket) close(s->socket);
   string_destroy(&s->pending_output);
   string_destroy(&s->commands.buffer);
-  string_destroy(&s->cwd);
   *s = (struct velvet_session){0};
   size_t idx = vec_index(&velvet->sessions, s);
   vec_remove_at(&velvet->sessions, idx);
