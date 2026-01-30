@@ -13,7 +13,7 @@ local r_bottom = 0
 local r_right = 0
 
 local move_duration = 0
-local single_monocle = true
+local single_monocle = false
 
 --- @alias arrange string arrange mode
 ---| 'monocle' single window visible at a time
