@@ -141,12 +141,12 @@ static int create_socket(char *path) {
 struct velvet_args {
   bool attach;
   bool foreground;
+  char *lua;
   char *socket;
-  char **rest;
   int n_rest;
 };
 
-static void vv_configure(struct velvet_args args);
+static void vv_send_lua_chunk(struct velvet_args args);
 static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
@@ -176,6 +176,9 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
+    } else if (F(lua)) {
+      n_commands++;
+      GET(a.lua);
     } else if (F(foreground)) {
       n_commands++;
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
@@ -186,24 +189,19 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       if (a.attach) velvet_fatal("attach specified multiple times.");
       a.attach = true;
     } else {
-      // unnamed positional arguments at the end are sent to the server. Any errors are hnadled server-side.
-      // This is meant to keep the client as simple as possible and keep complexity in the server.
-      // This should allow a dumb client to talk to servers of different versions, hopefully.
-      a.rest = &argv[i];
-      a.n_rest = argc - i;
-      n_commands++;
-      break;
+      usage(argv[0]);
+      exit(1);
     }
   }
 
   if (n_commands > 1) velvet_fatal("Multiple commands specified.");
 
-  if (a.rest) {
+  if (a.lua) {
     if (!a.socket) a.socket = getenv("VELVET");
     if (!a.socket) velvet_fatal("Unable to send command; Either specify the --socket or set $VELVET to a socket path.");
   }
 
-  if (a.socket && !file_is_socket(a.socket) && (a.rest || a.attach)) {
+  if (a.socket && !file_is_socket(a.socket) && (a.lua || a.attach)) {
     velvet_fatal("Socket '%s' is not a unix domain socket.", a.socket);
   }
 
@@ -229,8 +227,8 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (args.rest) {
-    vv_configure(args);
+  if (args.lua) {
+    vv_send_lua_chunk(args);
     return 0;
   }
 
@@ -406,43 +404,29 @@ struct vv_source {
   struct io loop;
 };
 
-
-static void vv_set(int sockfd, char *setting, char *value) {
-  io_write_format_slow(sockfd, "set '%s' '%s'\n", setting, value);
-}
-
-static void vv_configure(struct velvet_args args) {
+static void vv_send_lua_chunk(struct velvet_args args) {
   int sockfd = vv_connect(args.socket);
 
-  char *wd = getcwd(NULL, 0);
-  if (wd) {
-    vv_set(sockfd, "cwd", wd);
-    free(wd);
-  }
-
-
   struct string payload = {0};
-  for (int i = 0; i < args.n_rest; i++) {
-    if (i) string_push_char(&payload, ' ');
-    bool has_space = strchr(args.rest[i], ' ');
-    bool has_squot = strchr(args.rest[i], '\'');
-    bool has_dquot = strchr(args.rest[i], '"');
-    if (has_squot && has_dquot) {
-      string_push_char(&payload, '"');
-      for (char *ch = args.rest[i]; *ch; ch++) {
-        if (*ch == '\\' || *ch == '"') {
-          string_push_char(&payload, '\\');
-        }
-        string_push_char(&payload, *ch);
+  string_push_cstr(&payload, "lua ");
+  bool has_space = strchr(args.lua, ' ');
+  bool has_squot = strchr(args.lua, '\'');
+  bool has_dquot = strchr(args.lua, '"');
+  if (has_squot && has_dquot) {
+    string_push_char(&payload, '"');
+    for (char *ch = args.lua; *ch; ch++) {
+      if (*ch == '\\' || *ch == '"') {
+        string_push_char(&payload, '\\');
       }
-      string_push_char(&payload, '"');
+      string_push_char(&payload, *ch);
+    }
+    string_push_char(&payload, '"');
+  } else {
+    if (has_space || has_squot || has_dquot) {
+      char quote = has_squot ? '"' : '\'';
+      string_push_format_slow(&payload, "%c%s%c", quote, args.lua, quote);
     } else {
-      if (has_space || has_squot || has_dquot) {
-        char quote = has_squot ? '"' : '\'';
-        string_push_format_slow(&payload, "%c%s%c", quote, args.rest[i], quote);
-      } else {
-        string_push_format_slow(&payload, "%s", args.rest[i]);
-      }
+      string_push_format_slow(&payload, "%s", args.lua);
     }
   }
   string_push_char(&payload, '\n');
