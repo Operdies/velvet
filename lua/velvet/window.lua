@@ -110,6 +110,8 @@ local function update_borders(self)
   for _, brd in pairs(self.borders) do
     brd:set_visibility(vis)
     brd:set_z_index(self:get_z_index())
+    brd:set_transparency_mode(vv.api.window_get_transparency_mode(self.id))
+    brd:set_opacity(vv.api.window_get_opacity(self.id))
     if vis then
       brd:set_foreground_color(self.frame_color or color_from_string('black'))
       brd:clear_background_color()
