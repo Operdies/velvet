@@ -75,8 +75,8 @@ struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_
    * We need to check that the window we just created still exists and is valid. */
   vec_find(host, m->windows, host->id == win_id);
   /* if the window was not sized during the created event, set an initial size */
-  if (host && (host->geometry.w <= 0 || host->geometry.h <= 0)) {
-    struct rect default_size = { .w = m->ws.w, .h = m->ws.h };
+  if (host && (host->geometry.width <= 0 || host->geometry.height <= 0)) {
+    struct rect default_size = { .width = m->size.width, .height = m->size.height };
     velvet_window_resize(host, default_size, m->v);
   }
   return host;
@@ -152,12 +152,12 @@ static void velvet_render_destroy(struct velvet_render *renderer) {
 }
 
 void velvet_scene_resize(struct velvet_scene *m, struct rect new_size) {
-  if (m->ws.w != new_size.w || m->ws.h != new_size.h || m->ws.x_pixel != new_size.x_pixel || m->ws.y_pixel != new_size.y_pixel) {
+  if (m->size.width != new_size.width || m->size.height != new_size.height || m->size.x_pixel != new_size.x_pixel || m->size.y_pixel != new_size.y_pixel) {
     struct velvet_api_screen_resized_event_args event_args = {
-        .new_size = {.height = new_size.h, .width = new_size.w},
-        .old_size = {.height = m->ws.h, .width = m->ws.w},
+        .new_size = {.height = new_size.height, .width = new_size.width},
+        .old_size = {.height = m->size.height, .width = m->size.width},
     };
-    m->ws = new_size;
+    m->size = new_size;
     if (m->v) velvet_api_raise_screen_resized(m->v, event_args);
   }
 }
@@ -513,22 +513,22 @@ static void
 velvet_render_copy_cells_from_window(struct velvet_scene *scene, struct velvet_window *win, struct velvet_theme t) {
   struct velvet_render *r = &scene->renderer;
   struct screen *win_buf = vte_get_current_screen(&win->emulator);
-  assert(win_buf->w == win->geometry.w);
-  assert(win_buf->h == win->geometry.h);
+  assert(win_buf->w == win->geometry.width);
+  assert(win_buf->h == win->geometry.height);
 
-  int l_start = win->geometry.y < 0 ? -win->geometry.y : 0;
-  int l_end = win->geometry.y + win->geometry.h > r->h ? r->h - win->geometry.y : win->geometry.h;
-  int c_start = win->geometry.x < 0 ? -win->geometry.x : 0;
-  int c_end = win->geometry.x + win->geometry.w > r->w ? r->w - win->geometry.x : win->geometry.w;
+  int l_start = win->geometry.top < 0 ? -win->geometry.top : 0;
+  int l_end = win->geometry.top + win->geometry.height > r->h ? r->h - win->geometry.top : win->geometry.height;
+  int c_start = win->geometry.left < 0 ? -win->geometry.left : 0;
+  int c_end = win->geometry.left + win->geometry.width > r->w ? r->w - win->geometry.left : win->geometry.width;
 
   if (!(l_start < l_end) || !(c_start < c_end)) 
     return;
 
   for (int line = l_start; line < l_end; line++) {
     struct screen_line *screen_line = screen_get_view_line(win_buf, line);
-    int render_line = win->geometry.y + line;
+    int render_line = win->geometry.top + line;
     for (int column = c_start; column < c_end; column++) {
-      int render_column = win->geometry.x + column;
+      int render_column = win->geometry.left + column;
       struct screen_cell cell = screen_line->cells[column];
       if (r->options.display_eol) {
         if (screen_line->has_newline) {
@@ -549,9 +549,9 @@ velvet_render_copy_cells_from_window(struct velvet_scene *scene, struct velvet_w
 
   bool is_focused = win->id == scene->focus;
   if (is_focused && should_emulate_cursor(win->emulator.options.cursor)) {
-    int x = win->geometry.x + win_buf->cursor.column;
-    int y = win->geometry.y + win_buf->cursor.line + screen_get_scroll_offset(win_buf);
-    if (y < win->geometry.y + win->geometry.h) {
+    int x = win->geometry.left + win_buf->cursor.column;
+    int y = win->geometry.top + win_buf->cursor.line + screen_get_scroll_offset(win_buf);
+    if (y < win->geometry.top + win->geometry.height) {
       struct screen_cell *current = velvet_render_get_staged_cell(r, y, x);
       if (current) {
         struct screen_cell cursor = *current;
@@ -594,8 +594,8 @@ static void velvet_render_init_buffer(struct velvet_render_buffer *buf, int w, i
 
 static void velvet_render_init_buffers(struct velvet_scene *m) {
   struct velvet_render *r = &m->renderer;
-  r->h = m->ws.h;
-  r->w = m->ws.w;
+  r->h = m->size.height;
+  r->w = m->size.width;
   for (int i = 0; i < LENGTH(r->buffers); i++) velvet_render_init_buffer(&r->buffers[i], r->w, r->h);
   velvet_render_init_buffer(&r->staged.buffer, r->w, r->h);
   r->state = render_state_cache_invalidated;
@@ -670,8 +670,8 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
     case CURSOR_STYLE_STEADY_BLOCK: {
       struct screen *screen = vte_get_current_screen(&win->emulator);
       struct cursor *cursor = &screen->cursor;
-      int cursor_line = cursor->line + win->geometry.y + screen->scroll.view_offset;
-      int cursor_col = cursor->column + win->geometry.x;
+      int cursor_line = cursor->line + win->geometry.top + screen->scroll.view_offset;
+      int cursor_col = cursor->column + win->geometry.left;
       block_blend_index = cursor_line * r->w + cursor_col;
     } break;
     default: break;
@@ -756,7 +756,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 }
 
 static bool rect_contains(struct rect r, int x, int y) {
-  return r.x <= x && x < r.x + r.w && r.y <= y && y < r.y + r.h;
+  return r.left <= x && x < r.left + r.width && r.top <= y && y < r.top + r.height;
 }
 
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window *, void *), void *data) {
@@ -788,15 +788,15 @@ static void velvet_scene_stage_and_commit_window(struct velvet_scene *m, struct 
 }
 
 void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_func, void *context) {
-  assert(m->ws.h > 0);
-  assert(m->ws.w > 0);
+  assert(m->size.height > 0);
+  assert(m->size.width > 0);
   if (m->windows.length == 0) return;
   vec_sort(&m->windows, window_cmp);
 
   struct velvet_render *r = &m->renderer;
 
   string_clear(&r->draw_buffer);
-  if (r->h != m->ws.h || r->w != m->ws.w) {
+  if (r->h != m->size.height || r->w != m->size.width) {
     velvet_render_init_buffers(m);
     /* full clear (CSI 2J) causes flickering in some terminals
      * -- selectively erase everything outside of the draw region instead.
@@ -841,8 +841,8 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
     } else if (focused->emulator.options.cursor.visible) {
       struct screen *screen = vte_get_current_screen(&focused->emulator);
       struct cursor *cursor = &screen->cursor;
-      int line = cursor->line + focused->geometry.y + screen->scroll.view_offset;
-      int col = cursor->column + focused->geometry.x;
+      int line = cursor->line + focused->geometry.top + screen->scroll.view_offset;
+      int col = cursor->column + focused->geometry.left;
 
       bool cursor_obscured = false;
       /* if a window is above the current window and obscures the cursor, we should not show it */
@@ -852,7 +852,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
           cursor_obscured = true;
       }
 
-      if (line < 0 || col < 0 || line >= m->ws.h || col >= m->ws.w) cursor_obscured = true;
+      if (line < 0 || col < 0 || line >= m->size.height || col >= m->size.width) cursor_obscured = true;
       if (screen_get_scroll_offset(screen) + cursor->line >= screen->h) cursor_obscured = true;
 
       if (cursor_obscured) {
@@ -1086,37 +1086,37 @@ void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_
 }
 
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
-  assert(velvet_window->emulator.ws.h == velvet_window->geometry.h);
-  assert(velvet_window->emulator.ws.w == velvet_window->geometry.w);
-  assert(velvet_window->geometry.h && velvet_window->geometry.w);
+  assert(velvet_window->emulator.ws.height == velvet_window->geometry.height);
+  assert(velvet_window->emulator.ws.width == velvet_window->geometry.width);
+  assert(velvet_window->geometry.height && velvet_window->geometry.width);
   vte_process(&velvet_window->emulator, str);
 }
 
 static bool rect_same_position(struct rect b1, struct rect b2) {
-  return b1.x == b2.x && b1.y == b2.y;
+  return b1.left == b2.left && b1.top == b2.top;
 }
 
 static bool rect_same_size(struct rect b1, struct rect b2) {
-  return b1.w == b2.w && b1.h == b2.h;
+  return b1.width == b2.width && b1.height == b2.height;
 }
 
 bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct velvet *v) {
   // Refuse to go below a minimum size
   int min_size = 1;
-  if (geom.w < min_size) geom.w = min_size;
-  if (geom.h < min_size) geom.h = min_size;
+  if (geom.width < min_size) geom.width = min_size;
+  if (geom.height < min_size) geom.height = min_size;
 
   bool resized = !rect_same_size(win->geometry, geom);
   bool moved = !rect_same_position(win->geometry, geom);
 
   if (resized) {
-    struct winsize ws = {.ws_col = geom.w, .ws_row = geom.h, .ws_xpixel = geom.x_pixel, .ws_ypixel = geom.y_pixel};
+    struct winsize ws = {.ws_col = geom.width, .ws_row = geom.height, .ws_xpixel = geom.x_pixel, .ws_ypixel = geom.y_pixel};
     if (win->pty) ioctl(win->pty, TIOCSWINSZ, &ws);
     if (win->pid) kill(win->pid, SIGWINCH);
   }
 
-  struct velvet_api_window_geometry old = { .left = win->geometry.x, .top = win->geometry.y, .width = win->geometry.w, .height = win->geometry.h };
-  struct velvet_api_window_geometry new = { .left = geom.x, .top = geom.y, .width = geom.w, .height = geom.h };
+  struct velvet_api_window_geometry old = { .left = win->geometry.left, .top = win->geometry.top, .width = win->geometry.width, .height = win->geometry.height };
+  struct velvet_api_window_geometry new = { .left = geom.left, .top = geom.top, .width = geom.width, .height = geom.height };
 
   win->geometry = geom;
   vte_set_size(&win->emulator, geom);
@@ -1136,7 +1136,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   static const char *home = NULL;
   if (!home) home = getenv("HOME");
   struct rect c = velvet_window->geometry;
-  struct winsize velvet_windowsize = {.ws_col = c.w, .ws_row = c.h, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
+  struct winsize velvet_windowsize = {.ws_col = c.width, .ws_row = c.height, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
   /* block signal generation in the child. This is important because signals delivered between fork() and exec() will be
    * delivered to the parent because the installed signal handlers write to a pipe which is shared across fork(). */

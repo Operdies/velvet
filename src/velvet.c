@@ -270,17 +270,17 @@ static void on_window_writable(struct io_source *src) {
 }
 
 static bool point_in_rect(struct rect r, int x, int y) {
-  return x >= r.x && x <= (r.x + r.w) && y >= r.y && y <= (r.y + r.h);
+  return x >= r.left && x <= (r.left + r.width) && y >= r.top && y <= (r.top + r.height);
 }
 bool window_visible(struct velvet *v, struct velvet_window *w) {
   if (!w->hidden) {
-    struct rect screen = v->scene.ws;
+    struct rect screen = v->scene.size;
     struct rect win = w->geometry;
     int left, right, top, bottom;
-    left = win.x;
-    top = win.y;
-    right = win.x + win.w;
-    bottom = win.y + win.h;
+    left = win.left;
+    top = win.top;
+    right = win.left + win.width;
+    bottom = win.top + win.height;
     if (point_in_rect(screen, left, top) || point_in_rect(screen, right, top) || point_in_rect(screen, left, bottom) ||
         point_in_rect(screen, right, bottom)) {
       return true;
@@ -307,7 +307,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
 
 static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {
   bool resized = false;
-  if (focus->ws.w && focus->ws.h && (focus->ws.w != v->scene.ws.w || focus->ws.h != v->scene.ws.h)) {
+  if (focus->ws.width && focus->ws.height && (focus->ws.width != v->scene.size.width || focus->ws.height != v->scene.size.height)) {
     velvet_scene_resize(&v->scene, focus->ws);
     resized = true;
     v->render_invalidated = true;
@@ -374,7 +374,7 @@ static void velvet_source_config(struct velvet *v) {
 
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
-  struct rect ws = {.w = 80, .h = 24, .x_pixel = 800, .y_pixel = 600};
+  struct rect ws = {.width = 80, .height = 24, .x_pixel = 800, .y_pixel = 600};
   struct io *const loop = &velvet->event_loop;
   velvet_scene_resize(&velvet->scene, ws);
   /* We need to pass in a velvet reference to the scene so it can raise events.

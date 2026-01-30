@@ -143,9 +143,9 @@ velvet_cmd_set_option(struct velvet *v, struct velvet_session *sender, struct u8
   bool is_digit = u8_slice_to_int32(value, &digit);
   bool boolean = digit || (value.len && value.content[0] == 't');
   if (u8_match(option, "lines")) {
-    if (focus && is_digit) focus->ws.h = digit;
+    if (focus && is_digit) focus->ws.height = digit;
   } else if (u8_match(option, "columns")) {
-    if (focus && is_digit) focus->ws.w = digit;
+    if (focus && is_digit) focus->ws.width = digit;
   } else if (u8_match(option, "lines_pixels")) {
     if (focus && is_digit) focus->ws.y_pixel = digit;
   } else if (u8_match(option, "columns_pixels")) {

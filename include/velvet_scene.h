@@ -102,7 +102,7 @@ struct velvet_scene {
   struct vec /*velvet_window*/ windows;
   /* id of window in `windows`. Window can be retrieved with id2win */
   int focus;
-  struct rect ws;
+  struct rect size;
   struct velvet_render renderer;
   struct velvet_theme theme;
   /* needed to raise window creation events. It is a bit spaghetty, but the alternative is just a lot of fuzz for */

@@ -24,7 +24,7 @@ void platform_get_winsize(struct rect *w) {
     velvet_die("TIOCGWINSZ:");
   }
   *w = (struct rect){
-      .w = ws.ws_col, .h = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
+      .width = ws.ws_col, .height = ws.ws_row, .x_pixel = ws.ws_xpixel, .y_pixel = ws.ws_ypixel};
 }
 
 uint64_t get_ms_since_startup(void) {

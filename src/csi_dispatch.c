@@ -784,7 +784,7 @@ static bool DECSTBM(struct vte *vte, struct csi *csi) {
   top = csi->params[0].primary;
   bottom = csi->params[1].primary;
 
-  if (bottom == 0) bottom = vte->ws.h;
+  if (bottom == 0) bottom = vte->ws.height;
   if (top > 0) top--;
   if (bottom > 0) bottom--;
 
@@ -813,7 +813,7 @@ static bool XTWINOPS(struct vte *vte, struct csi *csi) {
     return true;
   }
   case 16: {
-    string_push_csi(&vte->pending_input, 0, INT_SLICE(6, vte->ws.y_pixel / vte->ws.h, vte->ws.x_pixel / vte->ws.w), "t");
+    string_push_csi(&vte->pending_input, 0, INT_SLICE(6, vte->ws.y_pixel / vte->ws.height, vte->ws.x_pixel / vte->ws.width), "t");
     return true;
   }
   case 18: TODO("Report Text Area Size in Characters"); return false;

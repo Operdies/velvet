@@ -39,7 +39,7 @@ enum PACK cell_attributes {
 };
 
 struct rect {
-  int x, y, h, w, x_pixel, y_pixel;
+  int left, top, height, width, x_pixel, y_pixel;
 };
 
 enum PACK color_kind {

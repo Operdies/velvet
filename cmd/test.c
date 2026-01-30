@@ -45,8 +45,8 @@ struct dumb_screen {
   char cells[];
 };
 
-struct rect bsmall = {.w = 5, .h = 5};
-struct rect blarge = {.w = 8, .h = 5};
+struct rect bsmall = {.width = 5, .height = 5};
+struct rect blarge = {.width = 8, .height = 5};
 
 struct dumb_screen *make_dumb_screen(int rows, int cols, char g[rows][cols]) {
   struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols, 1);

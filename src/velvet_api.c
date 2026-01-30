@@ -71,7 +71,7 @@ void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text)
   struct velvet_window *w = check_window(v, win_id);
   if (w && w->is_lua_window) {
     if (!w->is_lua_window) lua_bail(v->L, "Window %I is not a lua window.", win_id);
-    if (w->geometry.h == 0 || w->geometry.w == 0) lua_bail(v->L, "Cannot write to window: size is 0");
+    if (w->geometry.height == 0 || w->geometry.width == 0) lua_bail(v->L, "Cannot write to window: size is 0");
     struct u8_slice s = u8_slice_from_cstr(text);
     velvet_window_process_output(w, s);
     if (window_visible(v, w))
@@ -102,10 +102,10 @@ struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, l
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
     struct rect r = w->geometry;
-    geom.height = r.h;
-    geom.left = r.x;
-    geom.top = r.y;
-    geom.width = r.w;
+    geom.height = r.height;
+    geom.left = r.left;
+    geom.top = r.top;
+    geom.width = r.width;
   }
   return geom;
 }
@@ -117,7 +117,7 @@ void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velv
     return;
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
-    struct rect new_geometry = {.h = geometry.height, .y = geometry.top, .x = geometry.left, .w = geometry.width};
+    struct rect new_geometry = {.height = geometry.height, .top = geometry.top, .left = geometry.left, .width = geometry.width};
     if (velvet_window_resize(w, new_geometry, v))
       v->render_invalidated = true;
   }
@@ -143,7 +143,7 @@ lua_Integer vv_api_get_windows(lua_State *L) {
 }
 
 struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
-  struct velvet_api_screen_geometry geom = { .height = v->scene.ws.h, .width = v->scene.ws.w };
+  struct velvet_api_screen_geometry geom = { .height = v->scene.size.height, .width = v->scene.size.width };
   return geom;
 }
 
@@ -509,8 +509,8 @@ void vv_api_window_set_drawing_color(struct velvet *v, lua_Integer win_id, enum 
 void vv_api_window_set_cursor_position(struct velvet *v, lua_Integer win_id, struct velvet_api_coordinate pos) {
   struct velvet_window *w = check_window(v, win_id);
   struct screen *g = vte_get_current_screen(&w->emulator);
-  pos.col = CLAMP(pos.col, 1, w->geometry.w);
-  pos.row = CLAMP(pos.row, 1, w->geometry.h);
+  pos.col = CLAMP(pos.col, 1, w->geometry.width);
+  pos.row = CLAMP(pos.row, 1, w->geometry.height);
 
   if (w->emulator.options.cursor.visible && (pos.col != g->cursor.column || pos.row != g->cursor.line))
     v->render_invalidated = true;

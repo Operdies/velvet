@@ -499,9 +499,9 @@ static void vte_dispatch_spc(struct vte *vte, uint8_t ch) {
 }
 
 static void vte_init_alternate_screen(struct vte *vte) {
-  if (vte->alternate.w != vte->ws.w || vte->alternate.h != vte->ws.h) {
-    struct screen new = {.w = vte->ws.w, .h =  vte->ws.h};
-    screen_initialize(&new, vte->ws.w,  vte->ws.h);
+  if (vte->alternate.w != vte->ws.width || vte->alternate.h != vte->ws.height) {
+    struct screen new = {.w = vte->ws.width, .h =  vte->ws.height};
+    screen_initialize(&new, vte->ws.width,  vte->ws.height);
     if (vte->alternate.cells) {
       screen_copy_alternate(&new, &vte->alternate);
     }
@@ -526,9 +526,9 @@ void vte_enter_alternate_screen(struct vte *vte) {
 }
 
 static void vte_init_primary_screen(struct vte *vte) {
-  if (vte->primary.w != vte->ws.w || vte->primary.h !=  vte->ws.h) {
-    struct screen new = { .w = vte->ws.w, .h =  vte->ws.h, .scroll.max = vte->primary.scroll.max };
-    screen_initialize(&new, vte->ws.w,  vte->ws.h);
+  if (vte->primary.w != vte->ws.width || vte->primary.h !=  vte->ws.height) {
+    struct screen new = { .w = vte->ws.width, .h =  vte->ws.height, .scroll.max = vte->primary.scroll.max };
+    screen_initialize(&new, vte->ws.width,  vte->ws.height);
     if (vte->primary.cells) {
       screen_copy_primary(&new, &vte->primary);
     }
@@ -546,7 +546,7 @@ void vte_enter_primary_screen(struct vte *vte) {
 void vte_set_size(struct vte *vte, struct rect sz) {
   struct screen *g = vte_get_current_screen(vte);
   vte->ws = sz;
-  if (g->cells == NULL || g->w != sz.w || g->h != sz.h) {
+  if (g->cells == NULL || g->w != sz.width || g->h != sz.height) {
     if (vte->options.alternate_screen) {
       vte_init_alternate_screen(vte);
     } else {
@@ -560,8 +560,8 @@ static bool is_ascii(uint8_t ch) {
 }
 
 void vte_process(struct vte *vte, struct u8_slice str) {
-  assert(vte->ws.h);
-  assert(vte->ws.w);
+  assert(vte->ws.height);
+  assert(vte->ws.width);
   for (size_t i = 0; i < str.len; i++) {
     if (vte->state == vte_ground) {
       size_t j = i;

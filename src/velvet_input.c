@@ -820,7 +820,7 @@ static void velvet_input_send_mouse_event(struct velvet *v, struct velvet_window
                   sgr.button_state != VELVET_API_MOUSE_BUTTON_NONE) ||
                  (m.tracking && sgr.event_type == mouse_scroll);
 
-  if (!(sgr.row > 0 && sgr.column > 0 && sgr.column <= w->geometry.w && sgr.row <= w->geometry.h)) {
+  if (!(sgr.row > 0 && sgr.column > 0 && sgr.column <= w->geometry.width && sgr.row <= w->geometry.height)) {
     /* verify the event is actually within the client area */
     do_send = false;
     velvet_log("mouse event out of bounds");
