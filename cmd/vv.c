@@ -141,6 +141,8 @@ static int create_socket(char *path) {
 struct velvet_args {
   bool attach;
   bool foreground;
+  bool quit;
+  bool detach;
   char *lua;
   char *socket;
   int n_rest;
@@ -152,8 +154,10 @@ static void vv_attach(struct velvet_args args);
 static void usage(char *arg0) {
   printf("Usage:\n  %s [<options>] [<arguments> ...]\n\nOptions:\n"
          "  attach                  Attach to the server at <socket> if present.\n"
+         "  detach                  Detach the current terminal from the session\n"
+         "  foreground              Start a server as a foreground process.\n"
          "  lua <code>              Execute <code> as a lua chunk. A file can be sourced by calling `dofile(<filename>)`\n"
-         "  foreground            Start a server as a foreground process.\n"
+         "  quit                    Quit the velvet session, killing all windows\n"
          "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
          "  -h, --help              Show this help text and exit.\n"
          , arg0);
@@ -183,6 +187,14 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       n_commands++;
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
       a.foreground = true;
+    } else if (F(detach)) {
+      n_commands++;
+      if (a.detach) velvet_fatal("detach specified multiple times.");
+      a.detach = true;
+    } else if (F(quit)) {
+      n_commands++;
+      if (a.quit) velvet_fatal("quit specified multiple times.");
+      a.quit = true;
     } else if (F(attach)) {
       if (nested) velvet_fatal("Nesting velvet sessions is not supported.");
       n_commands++;
@@ -195,6 +207,12 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
   }
 
   if (n_commands > 1) velvet_fatal("Multiple commands specified.");
+
+  if (a.quit) {
+    a.lua = "vv.api.quit()";
+  } else if (a.detach) {
+    a.lua = "vv.api.session_detach(vv.api.get_active_session())";
+  }
 
   if (a.lua) {
     if (!a.socket) a.socket = getenv("VELVET");

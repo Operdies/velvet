@@ -1,9 +1,7 @@
 #compdef vv
 
 _arguments -C \
-  '-S[Specify the socket to use]:socket path:->socket' \
-  '--socket[Specify the socket to use]:socket path:->socket' \
-  '-h[Show help and exit]' \
+  '--socket[Specify the socket to use]:socket path:_files' \
   '--help[Show help and exit]' \
   '1:mode:->mode' \
   '*:argument:' \
@@ -16,6 +14,8 @@ case $state in
       'attach:Attach to a velvet session'
       'lua:Execute lua code in a velvet session'
       'foreground:Start a velvet session without daemonizing'
+      'quit:Quit the velvet session, killing all windows' 
+      'detach:Detach the current terminal from the session' 
     )
     _describe 'mode' modes
     ;;
@@ -24,10 +24,6 @@ case $state in
       lua)
         _arguments \
           '1:lua code:'
-        ;;
-      attach)
-        _arguments \
-          '*:arguments:'
         ;;
       *)
         _arguments \

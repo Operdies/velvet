@@ -199,14 +199,10 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     /* avoid null checks when nothing is focused */
     if (!focused) focused = &dummy;
     command = it.current;
-    if (u8_match(command, "detach")) {
-      velvet_detach_session(v, velvet_get_focused_session(v));
-    } else if (u8_match(command, "lua")) {
+    if (u8_match(command, "lua")) {
       /* bit of a hack because sessions don't really have a way of knowing their own id */
       v->socket_cmd_sender = source_socket;
       velvet_lua(v, &it, source_socket);
-    } else if (u8_match(command, "quit")) {
-      v->quit = true;
     } else {
       velvet_log("Unknown command '%.*s'", (int)command.len, command.content);
     }
