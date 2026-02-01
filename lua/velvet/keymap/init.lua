@@ -102,12 +102,12 @@ end
 --- @field parent? keymap parent keymap
 --- @field children table<string, keymap> child mappings
 --- @field execute? fun(nil): nil keymap action
---- @field options? velvet.keys.set.options
+--- @field options velvet.keys.set.options
 --- @field key? string the key of this keymap in its parent child table
 --- @field trigger? velvet.api.session.key.event_args the exact event which caused this keymap to be entered
 
 --- @type keymap
-local root_keymap = { children = {} }
+local root_keymap = { children = {}, options = {} }
 
 --- @param lhs string
 --- @return chord[] chords
@@ -208,7 +208,7 @@ function keys.set(lhs, rhs, opts)
   local map = root_keymap
   for _, chord in ipairs(sequence) do
     local lookup_key = chord_to_string(chord)
-    if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key } end
+    if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
     map = map.children[lookup_key]
   end
   map.execute = rhs
@@ -224,7 +224,7 @@ local function send_key_to_window(args)
   vv.api.window_send_raw_key(win, args.key)
 end
 
-local sequence = 0
+local sequence_id = 0
 local chain_unwind_timeout = 2000
 
 local dbg_oneline = function(x) dbg(x, { indent = ' ', newline = '', depth = 4 }) end
@@ -269,7 +269,7 @@ end
 
 local function schedule_unwind(seq)
   vv.api.schedule_after(chain_unwind_timeout, function()
-    if sequence == seq then
+    if sequence_id == seq then
       keymap_unwind()
     end
   end)
@@ -305,7 +305,7 @@ function keymap.on_key(args)
   end
 
   -- Increment the sequence number to invalidate scheduled callbacks
-  sequence = sequence + 1
+  sequence_id = sequence_id + 1
 
   local chord = chord_from_key_event(args.key)
   local chord_key, alt_key = chord_to_string(chord)
@@ -314,13 +314,12 @@ function keymap.on_key(args)
   local next_chain = current_chain.children[chord_key] or current_chain.children[alt_key]
 
   if next_chain then
-    print_chain(next_chain)
     next_chain.trigger = args
     if next(next_chain.children) then
       -- If the chain has continuations, schedule an unwind.
       -- Otherwise it will be impossible to type keys which are part of a keymap.
       current_chain = next_chain
-      schedule_unwind(sequence)
+      schedule_unwind(sequence_id)
     else
       if not next_chain.execute then
         print_chain(next_chain)
@@ -394,5 +393,34 @@ end
 local evt = require('velvet.events')
 local grp = evt.create_group('velvet.keys', true)
 grp.session_on_key = keymap.on_key
+
+--- @class which_key
+--- @field description string user provided description
+--- @field keys string keys matching this mapping
+
+--- Introspect the keymap to see the available mappings in the provided
+--- sequence. If sequence is nil, the current chain is used.
+--- @param lhs string|nil the key sequence to introspect child mappings from
+--- @return which_key[] mappings
+function keys.which_key(lhs)
+  local map = current_chain
+  if lhs == '' then
+    map = root_keymap
+  elseif lhs then
+    map = root_keymap
+    local sequence = chords_from_string(lhs)
+    for _, chord in ipairs(sequence) do
+      local lookup_key = chord_to_string(chord)
+      map = map.children[lookup_key]
+      if not map then error(("lhs %s does not match any current mapping."):format(lhs)) end
+    end
+  end
+  local which_keys = {}
+  for k, m in pairs(map.children) do
+    which_keys[#which_keys+1] = { description = m.options.description or k, keys = k }
+  end
+  table.sort(which_keys, function(a, b) return a.keys:upper() < b.keys:upper() end)
+  return which_keys
+end
 
 return keys
