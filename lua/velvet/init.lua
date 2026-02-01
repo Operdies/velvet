@@ -13,8 +13,22 @@ local vv = {
     --- elements which require user attention
     popup = 1000,
   },
-  -- stolen directly from vim.inspect
+
+  -- stolen from vim.inspect
   inspect = require('velvet.inspect').inspect,
+
+  --- Recursively copy the fields and tables of |tbl| and return the copy.
+  ---@param tbl table table to copy
+  ---@return table copy copied table
+  deepcopy = function(tbl)
+    if type(tbl) ~= 'table' then return tbl end
+    local copy = {}
+    for k, v in pairs(tbl) do
+      copy[vv.deepcopy(k)] = vv.deepcopy(v)
+    end
+    return setmetatable(copy, getmetatable(tbl))
+  end,
+
   --- @type velvet.api
   api = {},
   --- @type velvet.options
