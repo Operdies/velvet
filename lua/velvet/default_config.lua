@@ -3,34 +3,43 @@ local keymap = require('velvet.keymap')
 local default_shell = os.getenv("SHELL") or "bash"
 
 local map = keymap.set
-local rmap = function(keys, action) keymap.set(keys, action, { repeatable = true }) end
 
 map("<C-x>c", function()
   local focus = vv.api.get_focused_window()
-  local cwd = vv.api.window_is_valid(focus) and vv.api.window_get_working_directory(focus) or vv.api.get_startup_directory()
+  local cwd = vv.api.window_is_valid(focus) and vv.api.window_get_working_directory(focus) or
+  vv.api.get_startup_directory()
   vv.api.window_create_process(default_shell, { working_directory = cwd })
-end)
+end, { description = "Create a new window running " .. default_shell })
 
-map("<C-x>d", function() vv.api.session_detach(vv.api.get_active_session()) end)
+map("<C-x>d", function() vv.api.session_detach(vv.api.get_active_session()) end,
+  { description = "Detach the current terminal from the velvet session." })
 
-map("<C-x><C-x>", function() vv.api.window_send_keys(vv.api.get_focused_window(), "<C-x>") end)
+map("<C-x><C-x>", function() vv.api.window_send_keys(vv.api.get_focused_window(), "<C-x>") end,
+  { description = "Send the key <C-x> to the current window." })
 
 local dwm = require('velvet.layout.dwm')
 
 for i = 1, 9 do
-  map(("<C-x>%d"):format(i), function() dwm.toggle_tag(vv.api.get_focused_window(), i) end)
-  map(("<C-x><M-%d>"):format(i), function() dwm.toggle_view(i) end)
-  map(("<M-%d>"):format(i), function() dwm.set_view(i) end)
-  map(("<M-S-%d>"):format(i), function() dwm.set_tags(vv.api.get_focused_window(), i) end)
+  map(("<C-x>%d"):format(i), function() dwm.toggle_tag(vv.api.get_focused_window(), i) end,
+    { description = ("Toggle tag %d for the focused window."):format(i) })
+  map(("<C-x><M-%d>"):format(i), function() dwm.toggle_view(i) end,
+    { description = ("Toggle visibility of tag %d."):format(i) })
+  map(("<M-%d>"):format(i), function() dwm.set_view(i) end,
+    { description = ("Set currently visible tags to %d."):format(i) })
+  map(("<M-S-%d>"):format(i), function() dwm.set_tags(vv.api.get_focused_window(), i) end,
+    { description = ("Set tags to %d for the focused window."):format(i) })
 end
 
-map("<M-0>", function() dwm.set_view({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end)
-map("<S-M-0>", function() dwm.set_tags(vv.api.get_focused_window(), { 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end)
-map("<C-x>t", function() dwm.set_layer(vv.api.get_focused_window(), dwm.layers.tiled) end)
+map("<M-0>", function() dwm.set_view({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end,
+  { description = "Make all tags visible." })
+map("<S-M-0>", function() dwm.set_tags(vv.api.get_focused_window(), { 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end,
+  { description = "Make current window visible on all tags." })
+map("<C-x>t", function() dwm.set_layer(vv.api.get_focused_window(), dwm.layers.tiled) end,
+  { description = nil })
 map("<C-x>f", function() 
   local win = vv.api.get_focused_window()
   dwm.set_layer(win, dwm.layers.floating) 
-end)
+end, { description = nil })
 
 local function translate(geom, x, y) 
   return { width = geom.width, height = geom.height, left = geom.left + x, top = geom.top + y }
@@ -61,25 +70,26 @@ local function apply(func, ...)
   return function() func(table.unpack(args)) end
 end
 
-map("<M-right>", apply(move, 2, 0))
-map("<M-left>", apply(move, -2, 0))
-map("<M-S-right>", apply(resize, 2, 0))
-map("<M-S-left>", apply(resize, -2, 0))
-map("<M-up>", apply(move, 0, -1))
-map("<M-down>", apply(move, 0, 1))
-map("<M-S-up>", apply(resize, 0, -1))
-map("<M-S-down>", apply(resize, 0, 1))
-rmap("<C-x><C-j>", dwm.focus_next)
-rmap("<C-x><C-k>", dwm.focus_prev)
-rmap("<C-x>j", dwm.swap_next)
-rmap("<C-x>k", dwm.swap_prev)
-map("<C-x>g", dwm.zoom)
-map("<M-[>", apply(dwm.incmfact, -0.05))
-map("<M-]>", apply(dwm.incmfact, 0.05))
-map("<M-i>", apply(dwm.incnmaster, 1))
-map("<M-o>", apply(dwm.incnmaster, -1))
-map("<M-`>", dwm.select_previous_view)
-
+map("<M-right>", apply(move, 2, 0), { description = "Move window right" })
+map("<M-left>", apply(move, -2, 0), { description = "Move window left" })
+map("<M-S-right>", apply(resize, 2, 0), { description = "Make window wider" })
+map("<M-S-left>", apply(resize, -2, 0), { description = "Make window narrower" })
+map("<M-up>", apply(move, 0, -1), { description = "Move window up" })
+map("<M-down>", apply(move, 0, 1), { description = "Move window down" })
+map("<M-S-up>", apply(resize, 0, -1), { description = "Make window shorter" })
+map("<M-S-down>", apply(resize, 0, 1), { description = "Make window taller" })
+map("<C-x><C-j>", dwm.focus_next, { description = "Focus the next window.", repeatable = true })
+map("<C-x><C-k>", dwm.focus_prev, { description = "Focus the previous window.", repeatable = true })
+map("<C-x>j", dwm.swap_next,
+  { description = "Swap the next current window with the next tiled window.", repeatable = true })
+map("<C-x>k", dwm.swap_prev,
+  { description = "Swap the next current window with the previous tiled window.", repeatable = true })
+map("<C-x>g", dwm.zoom, { description = "Move window to top of tiling stack." })
+map("<M-[>", apply(dwm.incmfact, -0.05), { description = "Make master stacking area narrower" })
+map("<M-]>", apply(dwm.incmfact, 0.05), { description = "Make master stacking area wider" })
+map("<M-i>", apply(dwm.incnmaster, 1), { description = "Increase number of windows in master stack" })
+map("<M-o>", apply(dwm.incnmaster, -1), { description = "Decrease number of windows in master stack" })
+map("<M-`>", dwm.select_previous_view, { description = "Select the previous view" })
 local ok, err = pcall(dwm.activate)
 if not ok then dbg({ dwm_activate = err }) end
 
