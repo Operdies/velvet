@@ -8,7 +8,7 @@ local keymap = {}
 --- @class chord
 --- @field mods integer mask of modifiers for the key
 --- @field key string string representation of the key
---- @field alt string alternate string representation of the key
+--- @field alt_key string alternate string representation of the key
 
 --- @type table<velvet.api.key_modifier, integer>
 local mflags = {
@@ -53,20 +53,34 @@ local modifier_keys = {
   RIGHT_META = (mflags.alt | mflags.meta),
   LEFT_SUPER = mflags.super,
   RIGHT_SUPER = mflags.super,
+  LEFT_HYPER = mflags.hyper, RIGHT_HYPER = mflags.hyper,
+  CAPS_LOCK = mflags.caps_lock,
+  NUM_LOCK = mflags.num_lock,
 }
 
 --- @param key velvet.api.window.key_event
 --- @return chord chord
 local function chord_from_key_event(key)
-  local ch = key.name and key.name or utf8.char(key.codepoint)
+  local primary_key = key.name and key.name or utf8.char(key.codepoint)
   -- Mappings such as <S-2> which (on a us layout) can also
   -- be specified as <S-@>. By checking the alternate codepoint, we can match both mappings.
-  local alt = key.alternate_codepoint > 0 and utf8.char(key.alternate_codepoint)
+  local alt_key = key.alternate_codepoint > 0 and utf8.char(key.alternate_codepoint)
   local mods = flags_from_modifiers(key.modifiers)
 
   -- Prevent modifiers from modifying themselves. This can only cause confusion.
-  if modifier_keys[ch] then mods = mods & ~modifier_keys[ch] end
-  return { key = ch, mods = mods, alt = alt }
+  if modifier_keys[primary_key] then mods = mods & ~modifier_keys[primary_key] end
+  return { key = primary_key, mods = mods, alt_key = alt_key }
+end
+
+--- @param chord chord
+--- @return chord clean chord with unsupported modifiers stripped
+local function clean_chord(chord)
+  local clean = vv.deepcopy(chord)
+  local lower = chord.key:lower()
+  if lower ~= chord.key then clean.key = lower end
+  clean.mods = chord.mods & ~(mflags.num_lock | mflags.caps_lock | mflags.hyper | mflags.meta)
+  if (chord.mods & mflags.meta) == mflags.meta then clean.mods = clean.mods | mflags.alt end
+  return clean
 end
 
 --- @param chord chord
@@ -84,7 +98,7 @@ local function chord_to_string(chord)
 
   if chord.mods == 0 then
     local named = vk[chord.key]
-    return named and '<' .. named .. '>' or chord.alt or chord.key
+    return named and '<' .. named .. '>' or chord.alt_key or chord.key
   end
   local str = '<'
   for _, pair in ipairs(mappings) do
@@ -93,9 +107,9 @@ local function chord_to_string(chord)
       str = str .. pair[2] .. '-'
     end
   end
-  local alt = chord.alt and str .. chord.alt .. '>'
-  local primary = str .. chord.key .. '>'
-  return primary, alt
+  local alt_key = chord.alt_key and str .. chord.alt_key .. '>'
+  local primary_key = str .. chord.key .. '>'
+  return primary_key, alt_key
 end
 
 --- @class keymap
@@ -307,7 +321,8 @@ function keymap.on_key(args)
   -- Increment the sequence number to invalidate scheduled callbacks
   sequence_id = sequence_id + 1
 
-  local chord = chord_from_key_event(args.key)
+  local chord = clean_chord(chord_from_key_event(args.key))
+  dbg({args = args, chord = chord})
   local chord_key, alt_key = chord_to_string(chord)
 
   --- @type keymap
@@ -363,6 +378,7 @@ function keymap.on_key(args)
     end
 
     if is_modifier(args) then
+      dbg_oneline{modifiers=args}
       -- if the key is a modifier, it may advance chains, but it should
       -- not cancel chains or trigger unwinding. Otherwise pressing LEFT_CONTROL
       -- in the middle of a binding using control as a modifier would cancel it.
