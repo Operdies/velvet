@@ -77,7 +77,12 @@ end
 local function clean_chord(chord)
   local clean = vv.deepcopy(chord)
   local lower = chord.key:lower()
-  if lower ~= chord.key then clean.key = lower end
+  local upper = chord.key:upper()
+  if lower ~= chord.key then
+    clean.alt_key = lower
+  elseif upper ~= chord.key then
+    clean.alt_key = upper
+  end
   clean.mods = chord.mods & ~(mflags.num_lock | mflags.caps_lock | mflags.hyper | mflags.meta)
   if (chord.mods & mflags.meta) == mflags.meta then clean.mods = clean.mods | mflags.alt end
   return clean

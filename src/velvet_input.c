@@ -400,6 +400,12 @@ velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enu
   int n = 0;
   struct utf8 buf = {0};
   char *escape = NULL;
+  if (m & VELVET_API_KEY_MODIFIER_CAPS_LOCK) {
+    if (m & VELVET_API_KEY_MODIFIER_SHIFT)
+      vk.codepoint = utf8proc_tolower(vk.codepoint);
+    else
+      vk.codepoint = utf8proc_toupper(vk.codepoint);
+  }
   if (vk.kitty_terminator == 'u' && vk.codepoint && vk.codepoint < 255) {
     uint32_t send = vk.alternate_codepoint && vk.alternate_codepoint < 255 ? vk.alternate_codepoint : vk.codepoint;
     n = codepoint_to_utf8(send, &buf);
