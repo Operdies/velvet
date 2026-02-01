@@ -463,6 +463,10 @@ return {
       doc = "Quit velvet with no warning"
     },
     {
+      name = "reload",
+      doc = "Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then load your config.",
+    },
+    {
       name = "get_startup_directory",
       doc = "Get the directory whcih velvet was started in.",
       returns = { type = "string", doc = "startup directory" },

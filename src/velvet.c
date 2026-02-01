@@ -344,33 +344,6 @@ static void velvet_ensure_render_scheduled(struct velvet *velvet) {
   velvet->render_invalidated = false;
 }
 
-static bool file_exists(const char *path) {
-  struct stat st;
-  return stat(path, &st) == 0;
-}
-
-static void velvet_source_config(struct velvet *v) {
-  struct string scratch = {0};
-  char *home = getenv("HOME");
-  if (home) {
-    string_push_format_slow(&scratch, "%s/.config/velvet/init.lua", home);
-    /* preserve 0 terminator */
-    scratch.len++;
-  }
-  if (file_exists((char*)scratch.content)) {
-    size_t offset = scratch.len;
-    /* lua code to add the user's config folder to the module search path */
-    string_push_format_slow(&scratch, "package.path = package.path .. ';%s/.config/velvet/?/init.lua;%s/.config/velvet/?.lua'", home, home);
-    struct u8_slice search_path = string_range(&scratch, offset, -1);
-    if (luaL_dostring(v->L, (char*)search_path.content) != LUA_OK) lua_die(v->L);
-    velvet_lua_source(v, (char*)scratch.content);
-  } else {
-    /* if the user does not have a config file, source the default config */
-    if (luaL_dostring(v->L, "require('velvet.default_config')") != LUA_OK) lua_die(v->L);
-  }
-  string_destroy(&scratch);
-}
-
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.width = 80, .height = 24, .x_pixel = 800, .y_pixel = 600};
@@ -383,7 +356,6 @@ void velvet_loop(struct velvet *velvet) {
   velvet->scene.v = velvet;
 
   velvet_lua_init(velvet);
-
   velvet_source_config(velvet);
 
   /* arbitrarily set a minimum update rate of 40 fps
@@ -393,7 +365,7 @@ void velvet_loop(struct velvet *velvet) {
   velvet->min_ms_per_frame = 1000 * (1.0 / 40);
   velvet->render_invalidated = true;
 
-  for (;;) {
+  for (;!velvet->quit;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
     struct velvet_session *focus = velvet_get_focused_session(velvet);
     if (focus) velvet_align_and_arrange(velvet, focus);
@@ -438,12 +410,6 @@ void velvet_loop(struct velvet *velvet) {
 
     // Dispatch all pending io
     io_dispatch(loop);
-
-    // quit ?
-    struct velvet_window *real_client;
-    vec_find(real_client, velvet->scene.windows, real_client);
-
-    if (!real_client || velvet->quit) break;
   }
 
   close(velvet->socket);

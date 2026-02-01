@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include "velvet_api.h"
 #include "platform.h"
+#include "velvet_lua.h"
 #include <stdarg.h>
 
 _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
@@ -530,4 +531,37 @@ void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct
 void vv_api_window_send_raw_key(struct velvet *v, lua_Integer win_id, struct velvet_api_window_key_event key) {
   check_window(v, win_id);
   velvet_input_send_key_event(v, key, win_id);
+}
+
+static void reload_callback(void *data) {
+  struct velvet *v = data;
+  struct lua_State *L = v->L;
+  assert(L);
+  /* unassign the lua state to ensure lua functions cannot be called during shutdown. */
+  v->L = NULL;
+
+  for (size_t idx = 0; idx < v->scene.windows.length; idx++) {
+    struct velvet_window *w = vec_nth(v->scene.windows, idx);
+    if (w->is_lua_window) {
+      velvet_scene_close_and_remove_window(&v->scene, w);
+      /* closing a window can cause other windows to be closed
+       * if they are parented, and removing a window causes subsequent
+       * windows to be shifted back in the window vector.
+       * So if we close a window, we can't increment the index. */
+      idx--;
+    }
+  }
+
+  vec_clear(&v->event_loop.scheduled_actions);
+  lua_close(L);
+  velvet_lua_init(v);
+  velvet_source_config(v);
+}
+
+void vv_api_reload(struct velvet *v) {
+  /* ensure there are no lua actions scheduled by crudely clearing schedules.
+   * This is fine because schedules are currently used exclusively for scheduling renders and lua actions. */
+  vec_clear(&v->event_loop.scheduled_actions);
+  /* schedule the actual reload on the event loop so we can return from here. Otherwise we would return into an invalid lua context */
+  io_schedule(&v->event_loop, 0, reload_callback, v);
 }

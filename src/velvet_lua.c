@@ -4,6 +4,7 @@
 #include "lualib.h"
 #include "velvet_lua_autogen.c"
 #include <string.h>
+#include <sys/stat.h>
 #include "platform.h"
 
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
@@ -50,7 +51,35 @@ static void velvet_lua_set_default_options(struct velvet *v) {
   lua_pop(L, lua_gettop(L));
 }
 
+static bool file_exists(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0;
+}
+
+void velvet_source_config(struct velvet *v) {
+  struct string scratch = {0};
+  char *home = getenv("HOME");
+  if (home) {
+    string_push_format_slow(&scratch, "%s/.config/velvet/init.lua", home);
+    /* preserve 0 terminator */
+    scratch.len++;
+  }
+  if (file_exists((char*)scratch.content)) {
+    size_t offset = scratch.len;
+    /* lua code to add the user's config folder to the module search path */
+    string_push_format_slow(&scratch, "package.path = package.path .. ';%s/.config/velvet/?/init.lua;%s/.config/velvet/?.lua'", home, home);
+    struct u8_slice search_path = string_range(&scratch, offset, -1);
+    if (luaL_dostring(v->L, (char*)search_path.content) != LUA_OK) lua_die(v->L);
+    velvet_lua_source(v, (char*)scratch.content);
+  } else {
+    /* if the user does not have a config file, source the default config */
+    if (luaL_dostring(v->L, "require('velvet.default_config')") != LUA_OK) lua_die(v->L);
+  }
+  string_destroy(&scratch);
+}
+
 void velvet_lua_init(struct velvet *v) {
+  assert(!v->L);
   lua_State *L = lua_newstate(lua_allocator, NULL, 0);
   v->L = L;
   luaL_openselectedlibs(v->L, ~0, 0);

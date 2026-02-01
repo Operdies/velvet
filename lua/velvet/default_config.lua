@@ -4,6 +4,8 @@ local default_shell = os.getenv("SHELL") or "bash"
 
 local map = keymap.set
 
+map("<C-x>r", vv.api.reload, { description = "Reload the lua context. This fully wipes out all lua state including windows, keybinds, and any state. Configs will be reloaded after restarting." })
+
 map("<C-x>c", function()
   local focus = vv.api.get_focused_window()
   local cwd = vv.api.window_is_valid(focus) and vv.api.window_get_working_directory(focus) or

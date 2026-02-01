@@ -225,6 +225,10 @@ function api.session_set_options(session_id, options) end
 --- @return nil ret 
 function api.quit() end
 
+--- Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then load your config.
+--- @return nil ret 
+function api.reload() end
+
 --- Get the directory whcih velvet was started in.
 --- @return string ret startup directory
 function api.get_startup_directory() end

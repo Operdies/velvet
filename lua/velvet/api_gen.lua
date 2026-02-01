@@ -584,6 +584,7 @@ for _, evt in ipairs(spec.events) do
 
 void velvet_api_raise_%s(struct velvet *v, struct %s args) {
   lua_State *L = v->L;
+  if (!L) return;
   lua_getglobal(L, "vv");
   lua_getfield(L, -1, "events");
   lua_getfield(L, -1, "emit_event");
