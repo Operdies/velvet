@@ -226,7 +226,7 @@ function keys.set(lhs, rhs, opts)
     if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
     map = map.children[lookup_key]
   end
-  map.execute = rhs
+  map.execute = function() pcall(rhs) end
   map.options = opts or {}
 end
 
@@ -253,7 +253,7 @@ local function keymap_unwind()
   local map = current_chain
   while map and map.trigger do
     if map.execute then
-      pcall(map.execute)
+      map.execute()
       break
     end
 
@@ -325,8 +325,17 @@ function keymap.on_key(args)
   local chord = clean_chord(chord_from_key_event(args.key))
   local chord_key, alt_key = chord_to_string(chord)
 
-  --- @type keymap
+  local now = vv.api.get_current_tick()
+
+  --- @type keymap|nil
   local next_chain = current_chain.children[chord_key] or current_chain.children[alt_key]
+  if last_repeat > 0 and next_chain then
+    if not next_chain.options.repeatable then
+      next_chain = nil
+    elseif now - last_repeat > vv.options.key_repeat_timeout then
+      next_chain = nil
+    end
+  end
 
   if next_chain then
     next_chain.trigger = args
@@ -341,32 +350,13 @@ function keymap.on_key(args)
         assert(next_chain.execute, "keymap: internal invariant violation: terminal chains must be executable!")
       end
 
-      if not next_chain.options.repeatable and last_repeat == 0 then
+      if next_chain.options.repeatable then
+        last_repeat = now
+      else
         -- if the key is not repeatable, we can trivially reset the chain and execute the mapping
         current_chain = root_keymap
-        pcall(next_chain.execute)
-      else
-        -- if it is repeatable, we need to check if it has timed out and act accordingly.
-        local now = vv.api.get_current_tick()
-        if last_repeat == 0 then
-          -- this is the first repeat, and therefore cannot have timed out
-          last_repeat = now
-          pcall(next_chain.execute)
-        else
-          local did_time_out = now - last_repeat > vv.options.key_repeat_timeout
-          if did_time_out then
-            -- if we timed out, we need to replay this key in the root keymap.
-            last_repeat = 0
-            current_chain = root_keymap
-            keymap.on_key(args)
-            return
-          else
-            -- if we did not time out, update last repeat and execute the mapping.
-            last_repeat = now
-            pcall(next_chain.execute)
-          end
-        end
       end
+      next_chain.execute()
     end
   end
 
