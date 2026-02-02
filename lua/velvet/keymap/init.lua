@@ -76,13 +76,8 @@ end
 --- @return chord clean chord with unsupported modifiers stripped
 local function clean_chord(chord)
   local clean = vv.deepcopy(chord)
-  local lower = chord.key:lower()
-  local upper = chord.key:upper()
-  if lower ~= chord.key then
-    clean.alt_key = lower
-  elseif upper ~= chord.key then
-    clean.alt_key = upper
-  end
+  clean.key = chord.key:lower()
+  clean.alt_key = chord.key:upper()
   clean.mods = chord.mods & ~(mflags.num_lock | mflags.caps_lock | mflags.hyper | mflags.meta)
   if (chord.mods & mflags.meta) == mflags.meta then clean.mods = clean.mods | mflags.alt end
   return clean
@@ -102,8 +97,9 @@ local function chord_to_string(chord)
   }
 
   if chord.mods == 0 then
-    local named = vk[chord.key]
-    return named and '<' .. named .. '>' or chord.alt_key or chord.key
+    local named = vk[chord.key:upper()]
+    if named then return '<' .. named .. '>' end
+    return chord.key, chord.alt_key
   end
   local str = '<'
   for _, pair in ipairs(mappings) do
@@ -112,7 +108,7 @@ local function chord_to_string(chord)
       str = str .. pair[2] .. '-'
     end
   end
-  local alt_key = chord.alt_key and str .. chord.alt_key .. '>'
+  local alt_key = chord.alt_key and (str .. chord.alt_key .. '>')
   local primary_key = str .. chord.key .. '>'
   return primary_key, alt_key
 end
@@ -327,7 +323,6 @@ function keymap.on_key(args)
   sequence_id = sequence_id + 1
 
   local chord = clean_chord(chord_from_key_event(args.key))
-  dbg({args = args, chord = chord})
   local chord_key, alt_key = chord_to_string(chord)
 
   --- @type keymap
@@ -383,7 +378,6 @@ function keymap.on_key(args)
     end
 
     if is_modifier(args) then
-      dbg_oneline{modifiers=args}
       -- if the key is a modifier, it may advance chains, but it should
       -- not cancel chains or trigger unwinding. Otherwise pressing LEFT_CONTROL
       -- in the middle of a binding using control as a modifier would cancel it.
