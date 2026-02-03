@@ -685,4 +685,11 @@ function dwm.make_visible(vis)
   end
 end
 
+function dwm.is_visible(win)
+  if type(win) == 'integer' then
+    win = window.from_handle(win)
+  end
+  return visibleontags(win)
+end
+
 return dwm
