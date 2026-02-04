@@ -139,6 +139,8 @@ void terminal_reset(void) {
     if (reset_callback) reset_callback();
   }
   terminfo_initialized = false;
+  /* discard pending input to avoid leaking escapes after reset */
+  tcflush(STDIN_FILENO, TCIFLUSH); // equivalent to ioctl(STDIN_FILENO, TCFLSH, TCIFLUSH);
 }
 
 void set_nonblocking(int fd) {

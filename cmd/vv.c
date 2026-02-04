@@ -582,13 +582,6 @@ static void vv_attach(struct velvet_args args) {
   close(signal_pipes[1]);
   terminal_reset();
 
-  usleep(100);
-  char discard[1024];
-  struct pollfd pfd = { .events = POLLIN, .fd = STDIN_FILENO };
-  /* after resetting the terminal, ensure stdin is fully drained to avoid 
-   * leaking e.g. mouse events to the calling process */
-  while (poll(&pfd, 1, 10) > 0 && read(STDIN_FILENO, discard, sizeof(discard)) > 0);
-
   if (ctx.detach) {
     printf("[Detached]\n");
   } else {
