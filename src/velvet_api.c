@@ -25,6 +25,14 @@ lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_valu
   return v->input.options.key_repeat_timeout_ms;
 }
 
+struct velvet_window *check_lua_window(struct velvet *v, int win) {
+  struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
+  if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
+  if (!w->is_lua_window) lua_bail(v->L, "Window id %I is not a lua window.", win);
+  assert(w);
+  return w;
+}
+
 struct velvet_window *check_window(struct velvet *v, int win) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
   if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
@@ -68,16 +76,12 @@ bool vv_api_window_is_lua(struct velvet *v, lua_Integer win_id) {
   return false;
 }
 
-void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char* text) {
-  struct velvet_window *w = check_window(v, win_id);
-  if (w && w->is_lua_window) {
-    if (!w->is_lua_window) lua_bail(v->L, "Window %I is not a lua window.", win_id);
-    if (w->geometry.height == 0 || w->geometry.width == 0) lua_bail(v->L, "Cannot write to window: size is 0");
-    struct u8_slice s = u8_slice_from_cstr(text);
-    velvet_window_process_output(w, s);
-    if (window_visible(v, w))
-      v->render_invalidated = true;
-  }
+void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char *text) {
+  struct velvet_window *w = check_lua_window(v, win_id);
+  if (w->geometry.height == 0 || w->geometry.width == 0) lua_bail(v->L, "Cannot write to window: size is 0");
+  struct u8_slice s = u8_slice_from_cstr(text);
+  velvet_window_process_output(w, s);
+  if (window_visible(v, w)) velvet_invalidate_render(v, "write to window");
 }
 
 void vv_api_session_detach(struct velvet *v, lua_Integer session_id) {
@@ -120,7 +124,7 @@ void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velv
   if (w) {
     struct rect new_geometry = {.height = geometry.height, .top = geometry.top, .left = geometry.left, .width = geometry.width};
     if (velvet_window_resize(w, new_geometry, v))
-      v->render_invalidated = true;
+      velvet_invalidate_render(v, "window resized");
   }
 }
 
@@ -287,7 +291,7 @@ void vv_api_window_set_hidden(struct velvet *v, lua_Integer win_id, bool hidden)
   struct velvet_window *w = check_window(v, win_id);
   if (w->hidden != hidden) {
     w->hidden = hidden;
-    v->render_invalidated = true;
+    velvet_invalidate_render(v, "window visibility changed");
   }
 }
 
@@ -300,7 +304,7 @@ void vv_api_window_set_z_index(struct velvet *v, lua_Integer win_id, lua_Integer
   struct velvet_window *w = check_window(v, win_id);
   if (w->z_index != z) {
     w->z_index = z;
-    v->render_invalidated = true;
+    velvet_invalidate_render(v, "z index changed");
   }
 }
 lua_Integer vv_api_window_get_z_index(struct velvet *v, lua_Integer win_id) {
@@ -315,8 +319,11 @@ float vv_api_window_get_opacity(struct velvet *v, lua_Integer win_id) {
 void vv_api_window_set_opacity(struct velvet *v, lua_Integer win_id, float opacity) {
   struct velvet_window *w = check_window(v, win_id);
   opacity = CLAMP(opacity, 0, 1);
-  w->transparency.alpha = 1.0 - opacity;
-  v->render_invalidated = true;
+  float alpha = 1.0 - opacity;
+  if (alpha != w->transparency.alpha) {
+    w->transparency.alpha = alpha;
+    velvet_invalidate_render(v, "opacity changed");
+  }
 }
 
 enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(struct velvet *v, lua_Integer win_id) {
@@ -327,14 +334,16 @@ enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(struct vel
 void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win_id, enum velvet_api_transparency_mode mode) {
   struct velvet_window *w = check_window(v, win_id);
 
-  switch (mode) {
-  case VELVET_API_TRANSPARENCY_MODE_NONE:
-  case VELVET_API_TRANSPARENCY_MODE_CLEAR:
-  case VELVET_API_TRANSPARENCY_MODE_ALL: w->transparency.mode = mode; break;
-  default: lua_bail(v->L, "Invalid transparency mode %I", mode);
-  }
+  if (w->transparency.mode != mode) {
+    switch (mode) {
+    case VELVET_API_TRANSPARENCY_MODE_NONE:
+    case VELVET_API_TRANSPARENCY_MODE_CLEAR:
+    case VELVET_API_TRANSPARENCY_MODE_ALL: w->transparency.mode = mode; break;
+    default: lua_bail(v->L, "Invalid transparency mode %I", mode);
+    }
 
-  v->render_invalidated = true;
+    velvet_invalidate_render(v, "transparency mode changed.");
+  }
 }
 
 static uint8_t fconv(float f) {
@@ -419,7 +428,7 @@ struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_the
   } else {
     v->scene.theme.cursor.background = rgb_from_palette(new_value.foreground);
   }
-  v->render_invalidated = true;
+  velvet_invalidate_render(v, "color palette updated");
   return vv_api_get_theme(v);
 }
 
@@ -429,8 +438,11 @@ float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win_id) {
 }
 void vv_api_window_set_dim_factor(struct velvet *v, lua_Integer win_id, float factor) {
   struct velvet_window *w = check_window(v, win_id);
-  w->dim_factor = CLAMP(factor, 0, 1);
-  v->render_invalidated = true;
+  float dim = CLAMP(factor, 0, 1);
+  if (dim != w->dim_factor) {
+    w->dim_factor = dim;
+    velvet_invalidate_render(v, "dim factor changed");
+  }
 }
 
 void vv_api_window_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args mouse_move) {
@@ -470,13 +482,13 @@ void vv_api_window_set_drawing_color(struct velvet *v, lua_Integer win_id, enum 
 }
 
 void vv_api_window_set_cursor_position(struct velvet *v, lua_Integer win_id, struct velvet_api_coordinate pos) {
-  struct velvet_window *w = check_window(v, win_id);
+  struct velvet_window *w = check_lua_window(v, win_id);
   struct screen *g = vte_get_current_screen(&w->emulator);
   pos.col = CLAMP(pos.col, 1, w->geometry.width);
   pos.row = CLAMP(pos.row, 1, w->geometry.height);
 
   if (w->emulator.options.cursor.visible && (pos.col != g->cursor.column || pos.row != g->cursor.line))
-    v->render_invalidated = true;
+    velvet_invalidate_render(v, "cursor moved");
 
   screen_set_cursor_position(g, pos.col - 1, pos.row - 1);
 }

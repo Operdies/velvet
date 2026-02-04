@@ -69,9 +69,11 @@ struct velvet {
   int min_ms_per_frame;
   const char *startup_directory;
   /* if render_invalidated is set, velvet will schedule a render at an appropriate time. */
-  bool render_invalidated;
+  bool _render_invalidated;
+  const char *render_invalidate_reason;
 };
 
+void velvet_invalidate_render(struct velvet *velvet, [[maybe_unused]] const char *reason);
 void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.

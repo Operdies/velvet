@@ -345,7 +345,7 @@ local function tile()
   end
 
   for i, win in ipairs(focus_order) do
-    local z = tiled(win) and (tiled_z + i) or (floating_z + i)
+    local z = tiled(win) and (tiled_z) or (floating_z + i)
     win:set_z_index(z)
   end
 
