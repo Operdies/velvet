@@ -1,3 +1,6 @@
+--- @class window.focus_changed
+--- @field focused boolean true if the window is focused
+
 --- @class velvet.window.border
 --- @field left velvet.window left border
 --- @field right velvet.window left border
@@ -210,6 +213,19 @@ hooks.pre_render = function()
   end
 end
 
+hooks.window_focus_changed = function(args)
+  if args.old_focus ~= args.new_focus then
+    local old = win_registry[args.old_focus]
+    if old and old:valid() and old.on_window_focus_changed then
+      pcall(old.on_window_focus_changed, old, { focused = false })
+    end
+    local new = win_registry[args.new_focus]
+    if new and new:valid() and new.on_window_focus_changed then
+      pcall(new.on_window_focus_changed, new, { focused = true })
+    end
+  end
+end
+
 --- @alias mouse_event
 --- | 'mouse_click'
 --- | 'mouse_move'
@@ -370,6 +386,21 @@ end
 --- @return boolean valid flag indicating if this window is valid.
 function Window:valid()
   return a.window_is_valid(self.id)
+end
+
+local nil_window = {}
+
+--- @return velvet.window|nil parent parent window or nil
+function Window:get_parent()
+  if not self.parent then
+    local id = vv.api.window_get_parent(self.id)
+    if id == 0 then
+      self.parent = nil_window
+      return nil
+    end
+    self.parent = Window.from_handle(id)
+  end
+  if self.parent == nil_window then return nil else return self.parent end
 end
 
 --- Wrap an existing window
@@ -620,6 +651,11 @@ end
 --- @param handler fun(self: velvet.window, args: velvet.api.window.on_key.event_args)
 function Window:on_window_on_key(handler)
   self.on_window_on_key_handler = handler
+end
+
+--- @param handler fun(self: velvet.window, args: window.focus_changed): nil
+function Window:on_focus_changed(handler)
+  self.on_window_focus_changed = handler
 end
 
 --- Focus this window
