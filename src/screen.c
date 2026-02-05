@@ -450,7 +450,7 @@ void screen_copy_primary(struct screen *restrict dst, const struct screen *restr
 
   int col = CLAMP(dst_column, 0, dst->w - 1);
   int row = CLAMP(dst_row, 0, dst->h - 1);
-  dst->cursor = (struct cursor){.column = col, .line = row};
+  dst->cursor = (struct cursor){.column = col, .line = row, .brush = src->cursor.brush};
 }
 
 /* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
