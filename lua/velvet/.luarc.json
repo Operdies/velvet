@@ -5,6 +5,6 @@
     "enable": true,
     "globals": ["vv"],
     "disable": ["lowercase-global"]
-  },
+  }
 }
 
