@@ -8,8 +8,8 @@
 
 /* keys sourced from https://sw.kovidgoyal.net/kitty/keyboard-protocol/#functional-key-definitions */
 
-X("ESC",                  ESC,       27,    'u')
 X("ESCAPE",               ESC,       27,    'u')
+X("ESC",                  ESC,       27,    'u')
 X("ENTER",                "\r",      13,    'u')
 X("RETURN",               "\r",      13,    'u')
 X("RET",                  "\r",      13,    'u')

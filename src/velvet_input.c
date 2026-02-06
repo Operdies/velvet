@@ -55,6 +55,17 @@ static bool find_key(char *name, struct velvet_key *key) {
   return false;
 }
 
+static bool find_key_by_keycode(uint32_t keycode, struct velvet_key *key) {
+  for (int i = 0; i < LENGTH(named_keys); i++) {
+    struct velvet_key n = named_keys[i];
+    if (n.kitty_terminator == 'u' && n.codepoint == keycode) {
+      *key = n;
+      return true;
+    }
+  }
+  return false;
+}
+
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event key);
 
 static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
@@ -67,7 +78,7 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   // special case for <C-Space>
   if (cp == 0) {
     struct velvet_key_event e = {.modifiers = VELVET_API_KEY_MODIFIER_CONTROL};
-    find_key("space", &e.key);
+    find_key_by_keycode(' ', &e.key);
     return e;
   }
 
@@ -98,6 +109,8 @@ static struct velvet_key_event key_event_from_codepoint(uint32_t cp) {
   }
 
   k.key.codepoint = cp;
+  /* populate the "name" field if possible. This is needed for characters such as escape, tab, backspace etc. */
+  find_key_by_keycode(cp, &k.key);
   k.modifiers = ((iscntrl * VELVET_API_KEY_MODIFIER_CONTROL) | (isshift * VELVET_API_KEY_MODIFIER_SHIFT));
   k.key.kitty_terminator = 'u';
   k.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
@@ -606,7 +619,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
     struct velvet_key_event k = {0};
-    find_key("ESCAPE", &k.key);
+    find_key_by_keycode(27, &k.key);
     dispatch_key_event(v, k);
   }
 }
