@@ -314,7 +314,7 @@ static void raise_key_event(struct velvet *v, struct velvet_key_event e) {
 // this is supposed to emulate VIM-like behavior
 static void dispatch_key_event(struct velvet *v, struct velvet_key_event e) {
   assert(v);
-  assert(e.type);
+  if (!e.type) e.type = VELVET_API_KEY_EVENT_TYPE_PRESS;
   raise_key_event(v, e);
 }
 
