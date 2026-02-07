@@ -48,11 +48,11 @@ struct velvet_window *check_process_window(struct velvet *v, int win) {
   return w;
 }
 
-lua_Integer vv_api_window_create_process(struct velvet *v, const char *cmd, struct velvet_api_window_create_options options) {
+lua_Integer vv_api_window_create_process(struct velvet *v, struct u8_slice cmd, struct velvet_api_window_create_options options) {
   struct velvet_window template = { .emulator = vte_default };
-  string_push_cstr(&template.cmdline, cmd);
+  string_push_slice(&template.cmdline, cmd);
 
-  if (options.working_directory.set) string_push_cstr(&template.cwd, options.working_directory.value);
+  if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
 
   return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template);
@@ -63,7 +63,7 @@ lua_Integer vv_api_window_create(struct velvet *v, struct velvet_api_window_crea
     .emulator = vte_default,
     .is_lua_window = true,
   };
-  if (options.working_directory.set) string_push_cstr(&template.cwd, options.working_directory.value);
+  if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
   struct velvet_window *created = velvet_scene_manage(&v->scene, template);
   string_push_format_slow(&created->emulator.osc.title, "Naked window %d", created->id);
@@ -76,11 +76,10 @@ bool vv_api_window_is_lua(struct velvet *v, lua_Integer win_id) {
   return false;
 }
 
-void vv_api_window_write(struct velvet *v, lua_Integer win_id, const char *text) {
+void vv_api_window_write(struct velvet *v, lua_Integer win_id, struct u8_slice text) {
   struct velvet_window *w = check_lua_window(v, win_id);
   if (w->geometry.height == 0 || w->geometry.width == 0) lua_bail(v->L, "Cannot write to window: size is 0");
-  struct u8_slice s = u8_slice_from_cstr(text);
-  velvet_window_process_output(w, s);
+  velvet_window_process_output(w, text);
   if (window_visible(v, w)) velvet_invalidate_render(v, "write to window");
 }
 
@@ -157,7 +156,8 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
 
   if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
     struct velvet *v = *(struct velvet **)lua_getextraspace(L);
-    const char *err = lua_tostring(L, -1);
+    struct u8_slice err;
+    err.content = (const uint8_t*)lua_tolstring(L, -1, &err.len);
     struct velvet_api_system_message_event_args event_args = {
       .level = VELVET_API_SEVERITY_ERROR,
       .message = err,
@@ -191,14 +191,12 @@ bool vv_api_set_display_damage(struct velvet *v, bool new_value) {
   return v->scene.renderer.options.display_damage;
 }
 
-void vv_api_window_paste_text(struct velvet *v, lua_Integer winid, const char* text) {
-  struct u8_slice t = u8_slice_from_cstr(text);
-  velvet_input_paste_text(v, t, winid);
+void vv_api_window_paste_text(struct velvet *v, lua_Integer winid, struct u8_slice text) {
+  velvet_input_paste_text(v, text, winid);
 }
 
-void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, const char* keys) {
-  struct u8_slice t = u8_slice_from_cstr(keys);
-  velvet_input_send_keys(v, t, winid);
+void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, struct u8_slice keys) {
+  velvet_input_send_keys(v, keys, winid);
 }
 
 void vv_api_set_focused_window(struct velvet *v, lua_Integer winid){
@@ -236,23 +234,21 @@ lua_Integer vv_api_get_current_tick(struct velvet *v) {
   return get_ms_since_startup();
 }
 
-const char* vv_api_window_get_title(struct velvet *v, lua_Integer win_id) {
+struct u8_slice vv_api_window_get_title(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
+  struct u8_slice result = {0};
   if (w->emulator.osc.title.len) {
-    string_ensure_null_terminated(&w->emulator.osc.title);
-    return (const char*)w->emulator.osc.title.content;
+    result = u8_slice_from_string(w->emulator.osc.title);
+  } else if (w->cmdline.len) {
+    result = u8_slice_from_string(w->cmdline);
   }
-  if (w->cmdline.len) {
-    string_ensure_null_terminated(&w->cmdline);
-    return (const char*)w->cmdline.content;
-  }
-  return NULL;
+  return result;
 }
 
-void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, const char* title) {
+void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, struct u8_slice title) {
   struct velvet_window *w = check_window(v, win_id);
   string_clear(&w->emulator.osc.title);
-  string_push_cstr(&w->emulator.osc.title, title);
+  string_push_slice(&w->emulator.osc.title, title);
 }
 
 lua_Integer vv_api_get_sessions(lua_State *L) {
@@ -493,7 +489,7 @@ void vv_api_window_set_cursor_position(struct velvet *v, lua_Integer win_id, str
   screen_set_cursor_position(g, pos.col - 1, pos.row - 1);
 }
 
-const char* vv_api_window_get_working_directory(struct velvet *v, lua_Integer win_id) {
+struct u8_slice vv_api_window_get_working_directory(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
   if (w->pty && platform.get_cwd_from_pty) {
     char buf[256] = {0};
@@ -502,20 +498,18 @@ const char* vv_api_window_get_working_directory(struct velvet *v, lua_Integer wi
       string_push_cstr(&w->cwd, buf);
     }
   }
-  if (w->cwd.len == 0) return NULL;
-  string_ensure_null_terminated(&w->cwd);
-  return (const char*)w->cwd.content;
+  return u8_slice_from_string(w->cwd);
 }
 
 static char get_process_foreground_buffer[256] = {0};
-const char* vv_api_window_get_foreground_process(struct velvet *v, lua_Integer win_id) {
+struct u8_slice vv_api_window_get_foreground_process(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_process_window(v, win_id);
   if (w->pty && platform.get_process_from_pty) {
     if (platform.get_process_from_pty(w->pty, get_process_foreground_buffer, sizeof(get_process_foreground_buffer))) {
-      return get_process_foreground_buffer;
+      return u8_slice_from_cstr(get_process_foreground_buffer);
     }
   }
-  return NULL;
+  return (struct u8_slice){0};
 }
 
 lua_Integer vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
@@ -523,8 +517,8 @@ lua_Integer vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
   return w->parent_window_id;
 }
 
-const char* vv_api_get_startup_directory(struct velvet *v) {
-  return v->startup_directory;
+struct u8_slice vv_api_get_startup_directory(struct velvet *v) {
+  return u8_slice_from_cstr(v->startup_directory);
 }
 
 void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct velvet_api_session_options options) {

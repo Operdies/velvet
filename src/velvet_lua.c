@@ -117,9 +117,10 @@ void velvet_lua_init(struct velvet *v) {
 }
 
 static void vv_log_lua_error(struct velvet *vv) {
-  const char *str = luaL_tolstring(vv->L, 1, 0);
-  velvet_log("lua error: %s", str);
-  struct velvet_api_system_message_event_args event_args = { .message = str, .level = VELVET_API_SEVERITY_ERROR };
+  struct u8_slice err;
+  err.content = (const uint8_t*)luaL_tolstring(vv->L, 1, &err.len);
+  velvet_log("lua error: %.*s", (int)err.len, err.content);
+  struct velvet_api_system_message_event_args event_args = { .message = err, .level = VELVET_API_SEVERITY_ERROR };
   velvet_api_raise_system_message(vv, event_args);
 }
 

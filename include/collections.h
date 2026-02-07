@@ -52,6 +52,7 @@ struct vec {
 };
 
 int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
+struct u8_slice u8_slice_from_string(struct string s);
 void string_push_cstr(struct string *str, const char *cstr);
 void string_push_string(struct string *dest, struct string src);
 void string_push_slice(struct string *str, struct u8_slice slice);

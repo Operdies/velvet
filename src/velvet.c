@@ -323,9 +323,9 @@ static void velvet_dispatch_frame(void *data) {
     v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_wide_chars;
     struct velvet_api_pre_render_event_args event_args = {
         .time = get_ms_since_startup(),
-        .cause = v->render_invalidate_reason ? v->render_invalidate_reason
-                 : is_idle                   ? "io_idle"
-                                             : "io_busy",
+        .cause = v->render_invalidate_reason ? u8_slice_from_cstr(v->render_invalidate_reason)
+                 : is_idle                   ? u8_slice_from_cstr("io_idle")
+                                             : u8_slice_from_cstr("io_busy")
     };
     velvet_api_raise_pre_render(v, event_args);
     velvet_scene_render_damage(&v->scene, velvet_render, v);

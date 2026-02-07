@@ -99,10 +99,10 @@ local type_lookup = {
     push = function(var) return ("lua_pushinteger(L, %s)"):format(var) end
   },
   string = {
-    c_type = "const char*",
+    c_type = "struct u8_slice",
     lua_type = "string",
-    check = function(idx) return ("luaL_checklstring(L, %d, NULL)"):format(idx) end,
-    push = function(var) return ("lua_pushstring(L, %s)"):format(var) end
+    check = function(idx) return ("luaL_checkslice(L, %d)"):format(idx) end,
+    push = function(var) return ("lua_pushslice(L, %s)"):format(var) end
   },
   bool = {
     c_type = "bool",
@@ -209,7 +209,7 @@ local function push_field(tbl, type, path)
         local flag_name = enum_value_c_name(enum_name, flag.name)
         table.insert(tbl, ([[
   if (%s & %s) {
-    lua_pushstring(L, %s_to_string(%s));
+    lua_pushslice(L, %s_to_slice(%s));
     lua_pushboolean(L, true);
     lua_settable(L, -3);
   }
@@ -217,7 +217,7 @@ local function push_field(tbl, type, path)
       end
     else
       table.insert(tbl, ([[
-  lua_pushstring(L, %s_to_string(%s));
+  lua_pushslice(L, %s_to_slice(%s));
 ]]):format(tp.enumeration.name, path))
     end
   else
@@ -278,8 +278,8 @@ lua_pop(L, 1);
     else
       local varname = path:gsub('[.]', '_') .. '_str'
       table.insert(result, ([[
-const char *%s = luaL_checklstring(L, -1, NULL);
-%s = %s_string_to_enum(%s);
+struct u8_slice %s = luaL_checkslice(L, -1);
+%s = %s_slice_to_enum(%s);
 if (%s == 0xffffff) { 
   lua_pushstring(L, " is not a valid %s value.");
   lua_concat(L, 2);
@@ -316,6 +316,7 @@ table.insert(h, ([[
 #include "lua.h"
 #include <stdbool.h>
 #include "utils.h"
+#include "collections.h"
 
 struct velvet;
 
@@ -430,42 +431,52 @@ static bool luaL_checkboolean(lua_State *L, lua_Integer idx) {
   return lua_toboolean(L, idx);
 }
 
+static struct u8_slice luaL_checkslice(lua_State *L, lua_Integer idx) {
+  struct u8_slice s;
+  s.content = (const uint8_t*)luaL_checklstring(L, idx, &s.len);
+  return s;
+}
+
+static void lua_pushslice(lua_State *L, struct u8_slice s) {
+  if (s.content) lua_pushlstring(L, (const char*)s.content, s.len);
+  else lua_pushstring(L, NULL);
+}
+
 ]])
 
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
   -- String to integer value {{{4
   table.insert(c, ([=[
-[[maybe_unused]] static %s %s_string_to_enum(const char *str) {
+[[maybe_unused]] static %s %s_slice_to_enum(struct u8_slice str) {
 ]=]):format(c_type(enum.name), enum.name))
   for _, option in ipairs(enum.values) do
     local field_name = enum_value_c_name(cname, option.name)
     table.insert(c, ([[
-  if (strcmp(str, "%s") == 0) return %s;
-]]):format(option.name, field_name))
+  if (u8_slice_equals(str, (struct u8_slice) { .content = (const uint8_t*)"%s", .len = %d })) return %s;
+]]):format(option.name, #option.name, field_name))
   end
   table.insert(c, '  return 0xffffffff;\n};\n\n')
 
   -- Integer value to string {{{4
-  local table_name = enum.name .. "_idx_to_string"
   table.insert(c, ([=[
-[[maybe_unused]] static const char *%s_to_string(%s value) {
+[[maybe_unused]] static struct u8_slice %s_to_slice(%s value) {
 ]=]):format(enum.name, c_type(enum.name)))
-  table.insert(c, ([[
+  table.insert(c, [[
   switch (value) {
-]]):format(table_name))
+]])
   for _, option in ipairs(enum.values) do
     local field_name = ("%s_%s"):format(cname, option.name):upper()
     table.insert(c, ([[
-  case %s: return "%s";
-]]):format(field_name, option.name))
+  case %s: return (struct u8_slice) { .content = (const uint8_t*)"%s", .len = %d };
+]]):format(field_name, option.name, #option.name))
   end
   table.insert(c, ([[
   default: assert(!"%s value out of range");
 ]]):format(enum.name));
   table.insert(c, '  };\n')
-  table.insert(c, ([[
-]]):format(table_name, table_name, table_name))
+  table.insert(c, [[
+]])
   table.insert(c, '}\n\n')
 end
 
@@ -510,8 +521,8 @@ static int l_vv_api_%s(lua_State *L) {
 ]])
     elseif t and t.enumeration then
       table.insert(c, ([[
-  const char *%s_str = %s;
-  %s %s = %s_string_to_enum(%s_str);
+  struct u8_slice %s_str = %s;
+  %s %s = %s_slice_to_enum(%s_str);
 ]]):format(p.name, lua_check('string', idx), c_type(p.type), p.name, p.type, p.name))
     else
       table.insert(c,
@@ -588,8 +599,8 @@ void velvet_api_raise_%s(struct velvet *v, struct %s args) {
   lua_getglobal(L, "vv");
   lua_getfield(L, -1, "events");
   lua_getfield(L, -1, "emit_event");
-  lua_pushstring(L, "%s"); /* event name */
-]]):format(event_name, event_arg_name, evt.name))
+  lua_pushlstring(L, "%s", %d); /* event name */
+]]):format(event_name, event_arg_name, evt.name, #evt.name))
 
   push_field(c, evt.args, "args")
 

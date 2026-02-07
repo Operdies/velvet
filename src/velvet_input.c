@@ -314,12 +314,13 @@ static bool is_modifier(uint32_t codepoint) {
 static bool is_modifier(uint32_t codepoint);
 
 static void raise_key_event(struct velvet *v, struct velvet_key_event e) {
+  struct u8_slice name = u8_slice_from_cstr(e.key.name);
   struct velvet_api_session_key_event_args event_args = {
       .key = {.codepoint = e.key.codepoint,
               .alternate_codepoint = e.key.alternate_codepoint,
               .event_type = e.type,
               .modifiers = e.modifiers,
-              .name = {.set = e.key.name, .value = e.key.name}},
+              .name = {.set = e.key.name, .value = name}},
   };
   velvet_api_raise_session_on_key(v, event_args);
 }
@@ -555,6 +556,7 @@ static void velvet_input_send_vk_to_window(struct velvet_key_event e, struct vel
   assert(f);
 
   if (f->is_lua_window) {
+    struct u8_slice name = u8_slice_from_cstr(e.key.name);
     /* keys should be sent to lua windows as discrete typed events */
     struct velvet_api_window_on_key_event_args event_args = {
         .win_id = f->id,
@@ -564,7 +566,7 @@ static void velvet_input_send_vk_to_window(struct velvet_key_event e, struct vel
                 .alternate_codepoint = e.key.alternate_codepoint,
                 .event_type = e.type,
                 .modifiers = e.modifiers,
-                .name = { .set = e.key.name, .value = e.key.name },
+                .name = { .set = e.key.name, .value = name },
             },
     };
     velvet_api_raise_window_on_key(v, event_args);
@@ -921,10 +923,9 @@ static struct velvet_key_event key_event_from_api_key(struct velvet_api_window_k
     .modifiers = e.modifiers,
   };
 
-  if (e.name.set && e.name.value) {
-    struct u8_slice name_slice = u8_slice_from_cstr(e.name.value);
+  if (e.name.set && e.name.value.content) {
     struct velvet_key out;
-    if (key_from_slice(name_slice, &out)) {
+    if (key_from_slice(e.name.value, &out)) {
       k.key = out;
     }
   } else {

@@ -300,8 +300,12 @@ ssize_t vec_binsearch(struct vec *v, const void *elem, int (*cmp)(const void *, 
   return ~lower;
 }
 
+struct u8_slice u8_slice_from_string(struct string s) {
+  return (struct u8_slice) { .content = s.len ? s.content : NULL, .len = s.len };
+}
+
 struct u8_slice u8_slice_from_cstr(const char *const str) {
-  return (struct u8_slice) { .len = strlen(str), .content = (uint8_t*)str };
+  return (struct u8_slice) { .len = str ? strlen(str) : 0, .content = (uint8_t*)str };
 }
 
 struct u8_slice string_as_u8_slice(struct string s) {
