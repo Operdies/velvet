@@ -426,6 +426,11 @@ function api.window_set_drawing_color(win_id, brush, color) end
 --- @return nil ret 
 function api.window_set_cursor_position(win_id, pos) end
 
+--- Get the display width of a string, taking into account multi-width and 0-width characters.
+--- @param string string Input string.
+--- @return integer ret The display width of |string|
+function api.string_display_width(string) end
+
 --- Get focus_follows_mouse
 --- @return boolean ret The current value
 function api.get_focus_follows_mouse() end

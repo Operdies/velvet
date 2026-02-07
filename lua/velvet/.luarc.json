@@ -1,6 +1,5 @@
 {
   "runtime.version": "Lua 5.5",
-  "workspace.library": [ ],
   "diagnostics": {
     "enable": true,
     "globals": ["vv"],

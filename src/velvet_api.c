@@ -1,4 +1,5 @@
 #include "lauxlib.h"
+#include "utf8proc/utf8proc.h"
 #include "velvet.h"
 #include <string.h>
 #include <sys/stat.h>
@@ -570,4 +571,14 @@ void vv_api_reload(struct velvet *v) {
   vec_clear(&v->event_loop.scheduled_actions);
   /* schedule the actual reload on the event loop so we can return from here. Otherwise we would return into an invalid lua context */
   io_schedule(&v->event_loop, 0, reload_callback, v);
+}
+
+lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string) {
+  (void)v;
+  lua_Integer result = 0;
+  struct u8_slice_codepoint_iterator it = { .src = string };
+  while (u8_slice_codepoint_iterator_next(&it)) {
+    result += utf8proc_charwidth(it.current.value);
+  }
+  return result;
 }

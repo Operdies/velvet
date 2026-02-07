@@ -730,6 +730,13 @@ return {
         { name = "pos",    type = "coordinate", doc = "The new cursor position" },
       },
     },
+    --- unicode {{{1
+    {
+      name = "string_display_width",
+      doc = "Get the display width of a string, taking into account multi-width and 0-width characters.",
+      params = { { name = "string", type = "string", doc = "Input string." } },
+      returns = { type = "int", doc = "The display width of |string|" },
+    },
   },
 }
 
