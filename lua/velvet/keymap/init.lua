@@ -4,6 +4,7 @@ local keys = {}
 local vk = require('velvet.keymap.named_keys')
 
 local keymap = {}
+local remapped_keys = {}
 
 --- @class chord
 --- @field mods integer mask of modifiers for the key
@@ -309,6 +310,8 @@ end
 local last_repeat = 0
 --- @param args velvet.api.session.key.event_args
 function keymap.on_key(args)
+  args.key.codepoint = remapped_keys[args.key.codepoint] or args.key.codepoint
+  args.key.alternate_codepoint = remapped_keys[args.key.alternate_codepoint] or args.key.alternate_codepoint
   if args.key.event_type == 'release' then
     -- TODO: Only send a release event if we previously sent pressed/repeat events to the recipient.
     -- This is a bit tricky because it involves tracking if the press/repeat event was blocked due
@@ -426,6 +429,27 @@ function keys.which_key(lhs)
   end
   table.sort(which_keys, function(a, b) return a.keys:upper() < b.keys:upper() end)
   return which_keys
+end
+
+--- Remap key |from| to |to|
+--- @param from string key
+--- @param to string key to map |from| to
+function keys.remap_key(from, to)
+  local function codes(x)
+    local cc = {}
+    for _, c in utf8.codes(x) do
+      cc[#cc+1] = c
+    end
+    return cc
+  end
+  assert(type(from) == "string", "bad argument #1 (string expected)")
+  assert(type(to) == "string", "bad argument #1 (string expected)")
+  local f = codes(from)
+  local t = codes(to)
+  assert(#f == 1, "bad argument #1 (expected exactly one character)")
+  assert(#t == 1, "bad argument #2 (expected exactly one character)")
+
+  remapped_keys[f[1]] = t[1]
 end
 
 return keys
