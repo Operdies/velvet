@@ -115,34 +115,38 @@ function pick.select(items, opts)
 
   --- @param args velvet.api.window.on_key.event_args
   picker:on_window_on_key(function(args)
+    local keynames = require('velvet.keymap.named_keys')
     local k = args.key
+    local ch = utf8.char(k.codepoint)
+    local m = k.modifiers
     if k.event_type == 'press' or k.event_type == 'repeat' then
-      if k.name == 'ESC' or
-        (k.codepoint == string.byte('c') and k.modifiers.control)
-      then
+      if k.name == keynames.ESCAPE or (ch == 'c' and m.control) then
         dispose()
         return
       end
-      if k.name == 'DOWN' or
-        (k.codepoint == string.byte('n') and k.modifiers.control) then
+      if k.name == keynames.DOWN or (ch == 'n' and m.control) then
         index = 1 + (index % #snapshot)
-      elseif k.name == 'UP' or
-        (k.codepoint == string.byte('p') and k.modifiers.control) then
+      elseif k.name == keynames.UP or (ch == 'p' and m.control) then
         index = index - 1
         if index == 0 then index = #snapshot end
-      elseif k.name == 'ENTER' then
+      elseif k.name == keynames.ENTER then
         submit()
         return
-      elseif k.name == 'BACKSPACE' then
+      elseif k.name == keynames.BACKSPACE then
         if #filter > 0 then
           filter = filter:sub(1, -2)
         end
-      elseif k.codepoint == string.byte('w') and k.modifiers.control then
+      elseif ch == 'w' and m.control then
         filter = ''
-      elseif k.codepoint < 128 then
+      else
         local cp = k.alternate_codepoint > 0 and k.alternate_codepoint or k.codepoint
-        local ch = utf8.char(cp)
-        filter = filter .. ch
+        -- cp 32 is space, and it is the first printable character which makes sense in a filter.
+        -- 57358 chosen kind of arbitrarily. This is the keycode kitty maps caps lock to,
+        -- and it is the first special key with a dedicated keycode. A better way to do this
+        -- would be to use utf8proc to get the unicode category of the symbol and reject PUA / unknwon.
+        if cp >= 32 and cp < 57358 then
+          filter = filter .. utf8.char(cp)
+        end
       end
       draw()
     end

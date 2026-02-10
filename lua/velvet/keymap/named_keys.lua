@@ -1,7 +1,7 @@
 --- This table was generated based on the table in control_sequences/kitty_keys.def
 return {
-  ESC = "ESC",
-  ESCAPE = "ESC",
+  ESC = "ESCAPE",
+  ESCAPE = "ESCAPE",
   ENTER = "ENTER",
   RETURN = "ENTER",
   RET = "ENTER",
