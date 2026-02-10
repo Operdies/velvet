@@ -12,6 +12,9 @@ local r_top = 0
 local r_bottom = 0
 local r_right = 0
 
+local tiled_opacity = 0.8
+local floating_opacity = 0.8
+
 local move_duration = 0
 local single_monocle = false
 
@@ -272,7 +275,7 @@ local function monocle()
       first = false
       win:set_visibility(true)
       win:set_dimming(0)
-      win:set_opacity(0.8)
+      win:set_opacity(tiled_opacity)
       win:set_frame_color('red')
       win:set_z_index(tiled_z)
       win_stack(r_left - 1, r_top - 1, term.width + 2, term.height, { win })
@@ -320,10 +323,10 @@ local function tile()
     local floating = layers[win] == dwm.layers.floating
     if floating then
       win:set_transparency_mode('all')
-      win:set_opacity(0.8)
+      win:set_opacity(floating_opacity)
     else
       win:set_transparency_mode('all')
-      win:set_opacity(0.8)
+      win:set_opacity(tiled_opacity)
     end
     if vis then
       if win.id == focused_id then
