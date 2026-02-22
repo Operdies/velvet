@@ -95,17 +95,27 @@ map("<M-`>", dwm.select_previous_view, { description = "Select the previous view
 local ok, err = pcall(dwm.activate)
 if not ok then dbg({ dwm_activate = err }) end
 
+local function any_process_windows()
+  for _, id in ipairs(vv.api.get_windows()) do
+    if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) then return true end
+  end
+  return false
+end
+
 local event_manager = vv.events.create_group('default_config.close_if_all_exited', true)
 event_manager.window_closed = function()
-  for _, id in ipairs(vv.api.get_windows()) do
-    if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) then return end
+  if not any_process_windows() then 
+    vv.api.quit() 
   end
-  vv.api.quit()
+end
+
+local function start_shell_if_no_windows()
+  if not any_process_windows() then 
+    vv.api.window_create_process(default_shell, { working_directory = vv.api.get_startup_directory() }) 
+  end
 end
 
 -- start a shell after sourcing the user's config, but only if the user config did not create any windows.
 vv.api.schedule_after(0, function()
-  if #vv.api.get_windows() == 0 then
-    vv.api.window_create_process(default_shell, { working_directory = vv.api.get_startup_directory() })
-  end
+  start_shell_if_no_windows()
 end)
