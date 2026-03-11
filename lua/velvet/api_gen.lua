@@ -280,7 +280,7 @@ lua_pop(L, 1);
       table.insert(result, ([[
 struct u8_slice %s = luaL_checkslice(L, -1);
 %s = %s_slice_to_enum(%s);
-if (%s == 0xffffff) { 
+if (%s == 0xffffffff) { 
   lua_pushstring(L, " is not a valid %s value.");
   lua_concat(L, 2);
   lua_error(L); 
