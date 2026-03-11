@@ -246,8 +246,8 @@ void vec_push_range(struct vec *v, const void *elems, size_t count) {
 
 void vec_push(struct vec *v, const void *elem) {
   assert(v->element_size && "Element size cannot be 0");
+  vec_ensure_capacity(v, v->length + 1);
   v->length++;
-  vec_ensure_capacity(v, v->length);
   void *last = vec_nth(*v, v->length - 1);
   if (elem)
     memcpy(last, elem, v->element_size);
