@@ -403,7 +403,7 @@ void screen_shift_from_cursor(struct screen *g, int n) {
   if (n == 0) return;
   struct screen_cell template = { .cp = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = get_current_line(g);
-  for (int col = g->cursor.column; col < screen_right(g); col++) {
+  for (int col = g->cursor.column; col <= screen_right(g); col++) {
     int rcol = col + n;
     struct screen_cell replacement = rcol > screen_right(g) ? template : row->cells[rcol];
     row_set_cell(row, col, replacement);
