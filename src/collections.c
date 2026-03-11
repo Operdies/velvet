@@ -20,14 +20,9 @@ void *vec_nth_unchecked(struct vec v, size_t i) {
 
 static void string_ensure_capacity(struct string *str, size_t required) {
   if (str->content == NULL || str->cap < required) {
-    uint8_t *prev = str->content;
     size_t newsize = next_size(required);
-    str->content = velvet_calloc(newsize, 1);
+    str->content = velvet_erealloc(str->content, newsize, 1);
     str->cap = newsize;
-    if (prev && str->len) {
-      memcpy(str->content, prev, str->len);
-    }
-    free(prev);
   }
 }
 
