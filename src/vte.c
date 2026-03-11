@@ -553,7 +553,7 @@ void vte_set_size(struct vte *vte, struct rect sz) {
 }
 
 static bool is_ascii(uint8_t ch) {
-  return ch >= 0x20 && ch < 0x80;
+  return ch >= SPC && ch < DEL;
 }
 
 void vte_process(struct vte *vte, struct u8_slice str) {
