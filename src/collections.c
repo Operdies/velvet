@@ -143,14 +143,13 @@ void vec_ensure_capacity(struct vec *v, size_t c) {
   if (v->capacity >= c) return;
   // For the initial allocation, try to allocate at least one page. Failing that, just allocate a couple of elements.
   size_t min_capacity = MAX(4, 4096 / (int)v->element_size);
-  if (v->capacity <= 0) 
+  if (v->capacity == 0) 
     v->capacity = min_capacity;
   while (v->capacity < c) {
     v->capacity *= 2;
-    if (v->capacity <= 0) {
+    if (v->capacity > (1UL << 32)) {
+      /* allocating a vector this large is likely an overflow bug; just crash to make this extremely visible */
       velvet_die("Extremely large vector: 0x%zx", c);
-      v->capacity = c;
-      break;
     }
   }
   if (v->content) {
