@@ -176,15 +176,13 @@ static void ground_vtab(struct vte *vte, uint8_t ch) {
 
 static void ground_tab(struct vte *vte, uint8_t ch) {
   (void)ch;
+  /* TODO: Tab stop system not implemented.
+   * Anything using custom tabs will not format correctly (less, man, column)
+   */
   const int tabwidth = 8;
   int x = vte_get_current_screen(vte)->cursor.column;
   int x2 = ((x / tabwidth) + 1) * tabwidth;
-  int numSpaces = x2 - x;
-  struct screen_cell c = { .style = vte_get_current_screen(vte)->cursor.brush, .cp = codepoint_space, .link = osc_get_hyperlink_handle(vte->current_link) };
-  screen_insert(vte_get_current_screen(vte), c, vte->options.auto_wrap_mode);
-  for (int i = 1; i < numSpaces; i++) {
-    screen_insert(vte_get_current_screen(vte), c, false);
-  }
+  screen_set_cursor_column(vte_get_current_screen(vte), x2);
 }
 
 static void ground_bell(struct vte *vte, uint8_t ch) {
