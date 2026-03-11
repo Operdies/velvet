@@ -1149,7 +1149,7 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
   extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
   pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
 
-  if (pid != 0) {
+  if (pid == 0) {
     /* restore default handlers for a couple of terminating signals.
      * This is needed because their signal handlers would otherwise
      * deliver signals to the parent process via a pipe until exec() is called.
