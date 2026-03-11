@@ -611,6 +611,7 @@ void velvet_api_raise_%s(struct velvet *v, struct %s args) {
     velvet_log("lua emit: %s", err);
     lua_pop(L, 1);
   }
+  lua_pop(L, 2);
 }
 ]])
 end
