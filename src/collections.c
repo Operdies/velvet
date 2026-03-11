@@ -277,6 +277,7 @@ void vec_sort(struct vec *v, int (*cmp)(const void*,const void*)) {
 }
 
 ssize_t vec_binsearch(struct vec *v, const void *elem, int (*cmp)(const void *, const void *)) {
+  if (v->length == 0) return ~0;
   size_t lower = 0;
   size_t upper = v->length - 1;
   while (lower < upper) {
