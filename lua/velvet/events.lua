@@ -52,7 +52,7 @@ local events = {
         if data.key.alternate_codepoint ~= 0 then
           cp = data.key.alternate_codepoint
         end
-        name = utf8.char(cp)
+        data.key.name = utf8.char(cp)
       end
     end
     for name, id in pairs(event_groups or {}) do

@@ -188,7 +188,7 @@ local function push_field(tbl, type, path)
   local tp = type_lookup[type]
   if tp.composite then
     table.insert(tbl, ([[
-  lua_newtable(L); /* %s */
+  lua_newtable(L); /* %s = new %s */
 ]]):format(path, tp.composite.name))
     for _, mem in ipairs(tp.composite.fields) do
       local mem_path = path .. "." .. mem.name
@@ -201,8 +201,8 @@ local function push_field(tbl, type, path)
   elseif tp.enumeration then
     if tp.enumeration.flags then 
       table.insert(tbl, ([[
-  lua_newtable(L); /* %s flags */
-]]):format(path, tp.enumeration.name, tp.enumeration.name))
+  lua_newtable(L); /* %s = %s flags */
+]]):format(path, tp.enumeration.name))
       local enum_name = get_cname(type)
 
       for _, flag in ipairs(tp.enumeration.values) do

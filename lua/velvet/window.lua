@@ -339,7 +339,7 @@ function Window:get_friendly_title()
   if self.title then return self.title end
   -- lua windows do not have a process or a meaningful working directory
   if vv.api.window_is_lua(self.id) then return ('lua window %d'):format(self.id) end
-  local title = vv.api.window_get_foreground_process(self.id) or self:get_title()
+  local title = vv.api.window_get_foreground_process_name(self.id) or self:get_title()
   if title:gmatch('^/') then
     title = title:gsub('.*/', '')
   end

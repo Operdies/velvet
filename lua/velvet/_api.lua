@@ -201,7 +201,7 @@ function api.get_current_tick() end
 --- @return integer[] ret List of session IDs
 function api.get_sessions() end
 
---- Get the id of the active session
+--- Set the active session to the session with id |session_id|
 --- @param session_id integer Session id
 --- @return nil ret 
 function api.set_active_session(session_id) end
@@ -293,7 +293,7 @@ function api.window_get_dim_factor(win_id) end
 function api.window_set_dim_factor(win_id, factor) end
 
 --- Get the id of the currently focused window.
---- @return integer ret TThe id of the currently focused window.
+--- @return integer ret The id of the focused window.
 function api.get_focused_window() end
 
 --- Focus the window with id |win_id|
@@ -328,7 +328,7 @@ function api.window_get_title(win_id) end
 --- @return nil ret 
 function api.window_set_title(win_id, title) end
 
---- Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .
+--- Send |key| to the window with id |win_id|.
 --- @param win_id integer The window receiving the keys
 --- @param key velvet.api.window.key_event Low level key event
 --- @return nil ret 
@@ -377,10 +377,10 @@ function api.window_create_process(cmd, options) end
 --- @return string ret The current working directory of the window
 function api.window_get_working_directory(win_id) end
 
---- Get the current foreground_process of |win_id|. Does not apply to lua windows.
+--- Get the name of the foreground_process of |win_id|. Does not apply to lua windows.
 --- @param win_id integer Window id
---- @return string ret The current working directory of the window
-function api.window_get_foreground_process(win_id) end
+--- @return string ret The name of the foreground_process
+function api.window_get_foreground_process_name(win_id) end
 
 --- Returns the id of the parent of |win_id| or 0 if the window does not have a parent.
 --- @param win_id integer Window id

@@ -503,7 +503,7 @@ struct u8_slice vv_api_window_get_working_directory(struct velvet *v, lua_Intege
 }
 
 static char get_process_foreground_buffer[256] = {0};
-struct u8_slice vv_api_window_get_foreground_process(struct velvet *v, lua_Integer win_id) {
+struct u8_slice vv_api_window_get_foreground_process_name(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_process_window(v, win_id);
   if (w->pty && platform.get_process_from_pty) {
     if (platform.get_process_from_pty(w->pty, get_process_foreground_buffer, sizeof(get_process_foreground_buffer))) {

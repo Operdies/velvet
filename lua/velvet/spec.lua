@@ -437,7 +437,7 @@ return {
     },
     {
       name = "set_active_session",
-      doc = "Get the id of the active session",
+      doc = "Set the active session to the session with id |session_id|",
       params = { { name = "session_id", type = "int", doc = "Session id" } },
     },
     {
@@ -554,7 +554,7 @@ return {
     {
       name = "get_focused_window",
       doc = "Get the id of the currently focused window.",
-      returns = { type = "int", doc = "TThe id of the currently focused window." }
+      returns = { type = "int", doc = "The id of the focused window." }
     },
     {
       name = "set_focused_window",
@@ -565,7 +565,7 @@ return {
       name = "window_get_geometry",
       doc = "Get the geometry of the specified window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { name = "geometry", type = "window.geometry", "Window geometry", doc = "The geometry of the window with id |win_id|" },
+      returns = { name = "geometry", type = "window.geometry", doc = "The geometry of the window with id |win_id|" },
     },
     {
       name = "window_set_geometry",
@@ -601,7 +601,7 @@ return {
     {
       name = "window_send_raw_key",
       doc =
-      "Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .",
+      "Send |key| to the window with id |win_id|.",
       params = {
         { name = "win_id", type = "int",              doc = "The window receiving the keys" },
         { name = "key",    type = "window.key_event", doc = "Low level key event" },
@@ -666,10 +666,10 @@ return {
       returns = { type = "string", doc = "The current working directory of the window" }
     },
     {
-      name = "window_get_foreground_process",
-      doc = "Get the current foreground_process of |win_id|. Does not apply to lua windows.",
+      name = "window_get_foreground_process_name",
+      doc = "Get the name of the foreground_process of |win_id|. Does not apply to lua windows.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "string", doc = "The current working directory of the window" }
+      returns = { type = "string", doc = "The name of the foreground_process" }
     },
     {
       name = "window_get_parent",
