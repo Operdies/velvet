@@ -669,11 +669,11 @@ static void decset_set(struct vte *vte, int mode, bool on) {
     } break;
   case 1049: {
       if (on) {
-        screen_save_cursor(screen);
+        screen_save_cursor(&vte->primary);
         vte_enter_alternate_screen(vte);
       } else {
         vte_enter_primary_screen(vte);
-        screen_restore_cursor(screen);
+        screen_restore_cursor(&vte->primary);
       }
     } break;
   case 2004: vte->options.bracketed_paste = on; break;
