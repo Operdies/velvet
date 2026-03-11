@@ -22,7 +22,7 @@ static void push_color(struct vte *vte, struct color col, bool is_fg) {
   case COLOR_RGB: {
     string_push_int(&vte->pending_input, is_fg ? 38 : 48);
     string_push_char(&vte->pending_input, ';');
-    string_push_int(&vte->pending_input, 8);
+    string_push_int(&vte->pending_input, 2);
     string_push_char(&vte->pending_input, ';');
     string_push_int(&vte->pending_input, col.red);
     string_push_char(&vte->pending_input, ';');
