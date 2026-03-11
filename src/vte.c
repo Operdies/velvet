@@ -351,9 +351,8 @@ static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
   case '8': screen_restore_cursor(vte_get_current_screen(vte)); break;
   case '=': vte->options.application_keypad_mode = true; break;
   case '>': vte->options.application_keypad_mode = false; break;
-  case ESC: /* Literal escape */
-    utf8_push(&vte->pending_symbol, ESC);
-    ground_accept(vte);
+  case ESC: // Escape inside an escape sequence should restart the sequence.
+      vte->command_buffer.len = 1;
     break;
   case 'c': vte_full_reset(vte); break;
   case '(': // designate G0, VT100
