@@ -171,7 +171,10 @@ local function chords_from_string(lhs)
     else
       local str = lhs:sub(1, 1)
       lhs = lhs:sub(2, -1)
-      chord = { key = str:lower(), mods = str:upper() == str and mflags.shift or 0 }
+      -- lua's string.upper() only handles ascii characters.
+      -- TODO: expose utf8proc functions in spec.lua to improve this.
+      local is_shifted = str:upper() == str and str:lower() ~= str:upper()
+      chord = { key = str:lower(), mods = is_shifted and mflags.shift or 0 }
     end
     table.insert(sequence, chord)
   end
