@@ -230,6 +230,7 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
   return a;
 }
 
+_Noreturn static void velvet_fast_shutdown(struct velvet *velvet);
 
 int main(int argc, char **argv) {
   setlocale(LC_CTYPE, "");
@@ -318,8 +319,46 @@ int main(int argc, char **argv) {
   };
 
   velvet_loop(&velvet);
-  velvet_destroy(&velvet);
-  return 0;
+  velvet_fast_shutdown(&velvet);
+}
+
+_Noreturn static void velvet_fast_shutdown(struct velvet *velvet) {
+  // 1. Notify all attached clients to detach
+  if (velvet->socket) {
+    struct velvet_session *session;
+    vec_foreach(session, velvet->sessions) {
+      if (session->socket) {
+        uint8_t detach = 'Q';
+        write(session->socket, &detach, 1);
+      }
+    }
+
+    close(velvet->socket);
+  }
+
+  // 2. Remove socket file from filesystem
+  char *sockpath = getenv("VELVET");
+  if (sockpath) {
+    unlink(sockpath);
+  }
+
+  // 3. Notify child processes
+  struct velvet_window *h;
+  vec_foreach(h, velvet->scene.windows) {
+    if (h->pty > 0) {
+      pid_t pgid = tcgetpgrp(h->pty);
+      if (pgid > 0) {
+        kill(-pgid, SIGCONT);
+        kill(-pgid, SIGHUP);
+      } else if (h->pid > 0) {
+        kill(h->pid, SIGCONT);
+        kill(h->pid, SIGHUP);
+      }
+    }
+  }
+
+  // 4. Exit
+  exit(0);
 }
 
 static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
@@ -478,7 +517,8 @@ static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
 static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
   struct vv_attach_context *ctx = src->data;
   if (str.len == 0) ctx->quit = true;
-  else if (str.len == 1 && str.content[0] == 'D') ctx->detach = true;
+  if (str.len == 1 && str.content[0] == 'Q') ctx->quit = true;
+  if (str.len == 1 && str.content[0] == 'D') ctx->detach = true;
 }
 
 static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {

@@ -1,5 +1,4 @@
 #include "velvet.h"
-#include "lauxlib.h"
 #include "utils.h"
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -421,12 +420,6 @@ void velvet_loop(struct velvet *velvet) {
 
     // Dispatch all pending io
     io_dispatch(loop);
-  }
-
-  close(velvet->socket);
-  char *sockpath = getenv("VELVET");
-  if (sockpath) {
-    unlink(sockpath);
   }
 }
 
