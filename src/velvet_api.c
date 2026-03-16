@@ -533,6 +533,7 @@ void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct
   s->ws.x_pixel = options.x_pixel;
   s->ws.y_pixel = options.y_pixel;
   if (options.supports_repeating_multibyte_characters.set) s->features.no_repeat_wide_chars = !options.supports_repeating_multibyte_characters.value;
+  velvet_force_full_redraw(v);
 }
 
 void vv_api_window_send_raw_key(struct velvet *v, lua_Integer win_id, struct velvet_api_window_key_event key) {

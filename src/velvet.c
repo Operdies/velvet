@@ -29,6 +29,14 @@ void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
   vec_remove_at(&velvet->sessions, idx);
 }
 
+/* this is a workaround for a bug (?) in ghostty where the screen is sometimes reset
+ * under MacOS after waking from sleep. Due to velvet's diff based renderer, some
+ * screen regions are redrawn very rarely. */
+void velvet_force_full_redraw(struct velvet *v) {
+  v->scene.force_redraw = true;
+  velvet_invalidate_render(v, "full redraw requested");
+}
+
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
   if (!s) return;
   int sock = s->socket;

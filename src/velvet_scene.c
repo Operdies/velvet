@@ -15,7 +15,7 @@ static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
 static bool color_equals(struct color a, struct color b);
 
-static int window_cmp(const void *a1, const void *b1) {
+static int window_compare_z_index(const void *a1, const void *b1) {
   const struct velvet_window *a = a1;
   const struct velvet_window *b = b1;
 
@@ -761,7 +761,7 @@ static bool rect_contains(struct rect r, int x, int y) {
 
 bool velvet_scene_hit(struct velvet_scene *scene, int x, int y, struct velvet_window_hit *hit, bool skip(struct velvet_window *, void *), void *data) {
   struct velvet_window *h;
-  vec_sort(&scene->windows, window_cmp);
+  vec_sort(&scene->windows, window_compare_z_index);
   vec_rwhere(h, scene->windows, !h->hidden && (!skip || !skip(h, data))) {
     if (rect_contains(h->geometry, x, y)) {
       struct velvet_window_hit client_hit = {.win = h};
@@ -791,12 +791,13 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   assert(m->size.height > 0);
   assert(m->size.width > 0);
   if (m->windows.length == 0) return;
-  vec_sort(&m->windows, window_cmp);
+  vec_sort(&m->windows, window_compare_z_index);
 
   struct velvet_render *r = &m->renderer;
 
   string_clear(&r->draw_buffer);
-  if (r->h != m->size.height || r->w != m->size.width) {
+  if (r->h != m->size.height || r->w != m->size.width || m->force_redraw) {
+    m->force_redraw = false;
     velvet_render_init_buffers(m);
     /* full clear (CSI 2J) causes flickering in some terminals
      * -- selectively erase everything outside of the draw region instead.

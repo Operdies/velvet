@@ -102,6 +102,7 @@ struct velvet_scene {
   struct vec /*velvet_window*/ windows;
   /* id of window in `windows`. Window can be retrieved with id2win */
   int focus;
+  bool force_redraw;
   struct rect size;
   struct velvet_render renderer;
   struct velvet_theme theme;

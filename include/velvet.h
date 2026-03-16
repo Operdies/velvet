@@ -73,6 +73,7 @@ struct velvet {
   const char *render_invalidate_reason;
 };
 
+void velvet_force_full_redraw(struct velvet *scene);
 void velvet_invalidate_render(struct velvet *velvet, [[maybe_unused]] const char *reason);
 void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);

@@ -632,6 +632,7 @@ static void dispatch_focus(struct velvet *v, struct csi c) {
     send(focus, c.final == 'O' ? vt_focus_out : vt_focus_in);
   }
   if (c.final == 'I' && v->input.input_socket) v->focused_socket = v->input.input_socket;
+  velvet_force_full_redraw(v);
 }
 
 void DISPATCH_FOCUS_OUT(struct velvet *v, struct csi c) {
