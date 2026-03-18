@@ -176,6 +176,9 @@ local api = {}
 --- @field message string The message
 --- @field level velvet.api.severity Error level
 
+--- @class velvet.api.pre_reload.event_args
+--- @field time integer The number of miliseconds elapsed since startup
+
 --- @class velvet.api.session_options
 --- @field x_pixel integer The number of horizontal pixels.
 --- @field y_pixel integer The number of vertical pixels.
@@ -494,4 +497,5 @@ function api.set_theme(new_value) end
 --- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
 --- @field system_message? fun(event_args: velvet.api.system_message.event_args): nil Raised when the system logs an error message
 --- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
+--- @field pre_reload? fun(event_args: velvet.api.pre_reload.event_args): nil Raised before reloading. This event can be used to store state.
 

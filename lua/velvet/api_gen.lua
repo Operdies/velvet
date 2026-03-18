@@ -391,10 +391,10 @@ end
 for _, evt in ipairs(spec.events) do
   local event_name = evt.name:gsub("[.]", "_")
   local event_arg_name = get_cname(evt.args)
-  table.insert(h, ([[
+  table.insert(h, ([=[
 /* %s */
-void velvet_api_raise_%s(struct velvet *v, struct %s args);
-]]):format(evt.doc, event_name, event_arg_name))
+void velvet_api_raise_%s(struct velvet *v, [[maybe_unused]] struct %s args);
+]=]):format(evt.doc, event_name, event_arg_name))
 end
 
 table.insert(h, ("#endif /* %s */\n"):format("VELVET_API_H"))
@@ -591,16 +591,16 @@ table.insert(c, [[
 for _, evt in ipairs(spec.events) do
   local event_name = evt.name:gsub("[.]", "_")
   local event_arg_name = get_cname(evt.args)
-  table.insert(c, ([[
+  table.insert(c, ([=[
 
-void velvet_api_raise_%s(struct velvet *v, struct %s args) {
+void velvet_api_raise_%s(struct velvet *v, [[maybe_unused]] struct %s args) {
   lua_State *L = v->L;
   if (!L) return;
   lua_getglobal(L, "vv");
   lua_getfield(L, -1, "events");
   lua_getfield(L, -1, "emit_event");
   lua_pushlstring(L, "%s", %d); /* event name */
-]]):format(event_name, event_arg_name, evt.name, #evt.name))
+]=]):format(event_name, event_arg_name, evt.name, #evt.name))
 
   push_field(c, evt.args, "args")
 

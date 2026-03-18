@@ -374,6 +374,12 @@ return {
       },
     },
     {
+      name = "pre_reload.event_args",
+      fields = {
+        { name = "time", type = "int", doc = "The number of miliseconds elapsed since startup" },
+      },
+    },
+    {
       name = "session_options",
       doc = "session specific options of an attached client.",
       fields = {
@@ -404,6 +410,11 @@ return {
       name = "pre_render",
       doc = "Raised right before content is rendered. This is useful for applying updates just-in-time.",
       args = "pre_render.event_args",
+    },
+    {
+      name = "pre_reload",
+      doc = "Raised before reloading. This event can be used to store state.",
+      args = "pre_reload.event_args",
     },
   },
 

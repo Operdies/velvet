@@ -567,6 +567,8 @@ static void reload_callback(void *data) {
 }
 
 void vv_api_reload(struct velvet *v) {
+  struct velvet_api_pre_reload_event_args args = { .time = get_ms_since_startup() };
+  velvet_api_raise_pre_reload(v, args);
   /* ensure there are no lua actions scheduled by crudely clearing schedules.
    * This is fine because schedules are currently used exclusively for scheduling renders and lua actions. */
   vec_clear(&v->event_loop.scheduled_actions);
