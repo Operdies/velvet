@@ -370,6 +370,7 @@ function keymap.on_key(args)
     if args.key.name == vk.ESCAPE and current_chain ~= root_keymap then
       -- escape should cancel any chain immediately without unwinding if the escape key was not a continuation.
       current_chain = root_keymap
+      last_repeat = 0
       return
     end
 
@@ -386,6 +387,7 @@ function keymap.on_key(args)
     if current_chain == root_keymap then
       -- if the key was not handled and we are in the root keymap,
       -- send the key event to the window.
+      last_repeat = 0
       send_key_to_window(args)
     elseif last_repeat > 0 then
       -- if the previous key was a repeat and the current key did not match anything,
