@@ -1018,6 +1018,7 @@ void test_velvet_cmd() {
 }
 
 static void test_lua();
+static void test_stored_strings();
 
 int main(void) {
   test_input_output();
@@ -1029,6 +1030,7 @@ int main(void) {
   test_vec();
   test_velvet_cmd();
   test_lua();
+  test_stored_strings();
   return n_failures;
 }
 
@@ -1065,4 +1067,29 @@ void test_lua() {
   lua_assert(L, "assert(vv.options.key_repeat_timeout == 1234)");
 
   velvet_destroy(&v);
+}
+
+void test_stored_strings() {
+#define u8(x) u8_slice_from_cstr(x)
+  struct velvet v = {.stored_strings = vec(struct velvet_kvp)};
+  struct u8_slice key1 = u8("my first key");
+  struct u8_slice key2 = u8("my second key");
+  struct u8_slice val1 = u8("my first value");
+  struct u8_slice val2 = u8("my second value");
+  /* both keys should initially be empty */
+  assert(vv_api_load(&v, key1).content == NULL);
+  assert(vv_api_load(&v, key2).content == NULL);
+  /* store val1 in both keys */
+  vv_api_store(&v, key1, val1);
+  vv_api_store(&v, key2, val1);
+  /* verify */
+  assert(u8_slice_equals(vv_api_load(&v, key1), val1));
+  assert(u8_slice_equals(vv_api_load(&v, key2), val1));
+  /* store val2 in the first key */
+  vv_api_store(&v, key1, val2);
+  /* verify both keys are still correct */
+  assert(u8_slice_equals(vv_api_load(&v, key1), val2));
+  assert(u8_slice_equals(vv_api_load(&v, key2), val1));
+  velvet_destroy(&v);
+#undef u8
 }

@@ -431,6 +431,17 @@ function api.window_set_cursor_position(win_id, pos) end
 --- @return integer ret The display width of |string|
 function api.string_display_width(string) end
 
+--- Store a named string. Stored strings are preserved after reloading, but lost when the session ends.
+--- @param key string The key to store.
+--- @param value string The value to store.
+--- @return nil ret 
+function api.store(key, value) end
+
+--- Load a stored string.
+--- @param key string The key of the stored string.
+--- @return string ret The stored string.
+function api.load(key) end
+
 --- Get focus_follows_mouse
 --- @return boolean ret The current value
 function api.get_focus_follows_mouse() end

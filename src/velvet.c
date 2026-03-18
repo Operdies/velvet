@@ -439,6 +439,12 @@ void velvet_destroy(struct velvet *velvet) {
     velvet_session_destroy(velvet, vec_nth(velvet->sessions, 0));
   }
   vec_destroy(&velvet->sessions);
-  lua_close(velvet->L);
+  struct velvet_kvp *kvp;
+  vec_foreach(kvp, velvet->stored_strings) {
+    string_destroy(&kvp->key);
+    string_destroy(&kvp->value);
+  }
+  vec_destroy(&velvet->stored_strings);
+  if (velvet->L) lua_close(velvet->L);
 }
 

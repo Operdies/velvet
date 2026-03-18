@@ -311,6 +311,7 @@ int main(int argc, char **argv) {
       .scene = velvet_scene_default,
       .input = velvet_input_default,
       .sessions = vec(struct velvet_session),
+      .stored_strings = vec(struct velvet_kvp),
       .socket = sock_fd,
       .event_loop = io_default,
       .signal_read = signal_pipes[0],

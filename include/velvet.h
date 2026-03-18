@@ -49,6 +49,11 @@ struct velvet_session {
   struct velvet_session_features features;
 };
 
+struct velvet_kvp {
+  struct string key;
+  struct string value;
+};
+
 struct velvet {
   lua_State *L;
   struct velvet_scene scene;
@@ -71,6 +76,7 @@ struct velvet {
   /* if render_invalidated is set, velvet will schedule a render at an appropriate time. */
   bool _render_invalidated;
   const char *render_invalidate_reason;
+  struct vec /* velvet_kvp */ stored_strings;
 };
 
 void velvet_force_full_redraw(struct velvet *scene);

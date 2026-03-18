@@ -583,3 +583,21 @@ lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string
   }
   return result;
 }
+
+void vv_api_store(struct velvet *v, struct u8_slice key,
+                  struct u8_slice value) {
+  struct velvet_kvp *it = NULL;
+  vec_find(it, v->stored_strings, u8_slice_equals(key, string_as_u8_slice(it->key)));
+  if (it == NULL) it = vec_new_element(&v->stored_strings);
+  string_clear(&it->key);
+  string_push_slice(&it->key, key);
+  string_clear(&it->value);
+  string_push_slice(&it->value, value);
+}
+
+struct u8_slice vv_api_load(struct velvet *v, struct u8_slice key) {
+  struct velvet_kvp *it = NULL;
+  vec_find(it, v->stored_strings, u8_slice_equals(key, string_as_u8_slice(it->key)));
+  if (it == NULL) return (struct u8_slice){0};
+  return string_as_u8_slice(it->value);
+}

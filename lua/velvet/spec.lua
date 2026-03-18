@@ -737,6 +737,20 @@ return {
       params = { { name = "string", type = "string", doc = "Input string." } },
       returns = { type = "int", doc = "The display width of |string|" },
     },
+    {
+      name = "store",
+      doc = "Store a named string. Stored strings are preserved after reloading, but lost when the session ends.",
+      params = {
+        { name = "key",   type = "string", doc = "The key to store." },
+        { name = "value", type = "string", doc = "The value to store." },
+      },
+    },
+    {
+      name = "load",
+      doc = "Load a stored string.",
+      params = { { name = "key", type = "string", doc = "The key of the stored string." } },
+      returns = { type = "string", doc = "The stored string." },
+    },
   },
 }
 
