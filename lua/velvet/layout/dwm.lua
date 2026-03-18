@@ -376,9 +376,11 @@ local function add_window(id, init)
   layers[win] = dwm.layers.tiled
   table.insert(windows, win)
   table.insert(focus_order, 1, win)
-  tags[win] = table.move(view, 1, #view, 1, {})
-  if not init then
-    arrange()
+  if not tags[win] then
+    tags[win] = table.move(view, 1, #view, 1, {})
+    if not init then
+      arrange()
+    end
   end
 end
 
@@ -461,6 +463,62 @@ function dwm.toggle_tag(id, tag)
   arrange()
 end
 
+local stored_state_key = "velvet.dwm.window_tags"
+local stored_view_key = "velvet.dwm.stored_view"
+
+local function store_state()
+  -- store window tag information line-by-line on the format <id>:x,y,z
+  local tbl = {}
+  for win, taglist in pairs(tags) do
+    local entry = win.id
+    local tagstring = ""
+    for i, tag in ipairs(taglist) do
+      if tag then tagstring = tagstring .. i .. "," end
+    end
+    tbl[#tbl + 1] = entry .. ":" .. tagstring
+  end
+  local to_store = table.concat(tbl, '\n')
+  vv.api.store(stored_state_key, to_store)
+
+  -- store currently selected view on the format "x y z"
+  local saved_view = ""
+  for i, v in ipairs(view) do
+    if v then saved_view = saved_view .. i .. " " end
+  end
+  vv.api.store(stored_view_key, saved_view)
+end
+
+local function restore_state()
+  local stored_view = vv.api.load(stored_view_key)
+  if stored_view and stored_view:gmatch("(%d+)") then 
+    local new_view = get_tagsset()
+    for num in stored_view:gmatch("(%d+)") do
+      local idx = math.tointeger(num) or error("bad")
+      if idx then
+        new_view[idx] = true
+      end
+    end
+    view = new_view
+  end
+  local stored_state = vv.api.load(stored_state_key)
+  if stored_state == nil then return end
+  for line in stored_state:gmatch("[^\r\n]+") do
+    local lhs, rhs = line:match("^(%d+):(.+)$")
+    local id = math.tointeger(lhs) or error("bad")
+    if vv.api.window_is_valid(id) then 
+      local win = window.from_handle(id)
+      local taglist = get_tagsset()
+      for num in rhs:gmatch("(%d+)") do
+        local idx = math.tointeger(num) or error("bad")
+        if idx then
+          taglist[idx] = true
+        end
+      end
+      tags[win] = taglist
+    end
+  end
+end
+
 local e = vv.events
 function dwm.activate()
   tags = {}
@@ -468,6 +526,7 @@ function dwm.activate()
   layers = {}
   view = get_tagsset()
   view[1] = true
+  restore_state()
   local lst = vv.api.get_windows()
   focus_order = {}
   for _, id in ipairs(lst) do
@@ -481,7 +540,7 @@ function dwm.activate()
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args) add_window(args.win_id, false) end
   event_handler.window_closed = function(args) 
-    remove_window() 
+    remove_window()
   end
   event_handler.window_focus_changed = function(args) 
     if ignore_window(args.new_focus) then return end
@@ -491,6 +550,7 @@ function dwm.activate()
     local f = window.from_handle(lst[1])
     set_focus(f)
   end
+  event_handler.pre_reload = store_state
   arrange()
 end
 
