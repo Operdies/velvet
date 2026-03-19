@@ -232,6 +232,28 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
 
 _Noreturn static void velvet_fast_shutdown(struct velvet *velvet);
 
+/* daemonize by double forking, detaching from the process group, and then exiting the sandwiched parent. */
+static bool daemonize(void) {
+  int pid = fork();
+  if (pid == -1) velvet_die("fork 1:");
+  if (pid == 0) {
+    /* daemon side */
+    /* detach from controlling terminal */
+    if (setsid() < 0)
+      velvet_die("setsid:");
+
+    pid = fork();
+    if (pid == -1) velvet_die("fork 2:");
+    if (pid == 0) return true;
+    /* exit the middle process. This process is reaped in the waitpid() call below. */
+    exit(0);
+  } else {
+    /* reap the fork. Otherwise it becomes a zombie process */
+    waitpid(pid, NULL, 0);
+    return false;
+  }
+}
+
 int main(int argc, char **argv) {
   setlocale(LC_CTYPE, "");
   setenv("TERM", "xterm-256color", true);
@@ -266,22 +288,14 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    int pid = fork();
-    if (pid) {
-      /* original process */
+    /* we are starting a new session. daemonize and connect to the server. */
+    bool is_daemon = daemonize();
+    if (!is_daemon) {
+      /* close the socket on this side and attach to the server. */
       close(sock_fd);
-      /* reap the next fork. Otherwise it becomes a zombie process */
-      waitpid(pid, NULL, 0);
+      /* attach to the server */
       vv_attach(args);
       return 0;
-    }
-
-    // detach from controlling terminal
-    if (setsid() < 0) velvet_die("setsid:");
-
-    if (fork()) {
-      /* parent of daemon */
-      exit(0);
     }
   } else {
     printf("Server listening at %s\n", getenv("VELVET"));
