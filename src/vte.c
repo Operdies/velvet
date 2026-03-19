@@ -512,10 +512,6 @@ void vte_enter_alternate_screen(struct vte *vte) {
   vte->options.alternate_screen = true;
   vte_init_alternate_screen(vte);
   struct screen *g = &vte->alternate;
-  // TODO: when scrollback is introduced, the scrollback buffer
-  // should be accessible from the alternate screen, but new lines should
-  // not be appended; the `m` rows in the alternate screen should be reused.
-  // Leaving the alternate screen discards the `m` rows
   struct cursor start = {.column = screen_left(g), .line = screen_top(g)};
   struct cursor end = {.column = screen_right(g), .line = screen_bottom(g)};
   screen_erase_between_cursors(g, start, end);
