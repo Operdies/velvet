@@ -503,17 +503,6 @@ function Window:set_frame_enabled(enabled)
   end
 end
 
---- @param color velvet.api.rgb_color|string the new foreground color
-function Window:set_frame_color(color)
-  if type(color) == 'string' then color = color_from_string(color) end
-  self.frame_color = color
-end
-
---- @return boolean
-function Window:get_frame_enabled()
-  return self.frame_visible
-end
-
 local indexed_colors = {
   black = 0, red = 1, green = 2, yellow = 3, blue = 4, magenta = 5, cyan = 6, white = 7,
   bright_black = 8, bright_red = 9, bright_green = 10, bright_yellow = 11, bright_blue = 12, bright_magenta = 13, bright_cyan = 14, bright_white = 15,
@@ -537,6 +526,22 @@ local indexed_colors = {
 ---| 'bright_white'
 
 --- @alias rrggbb string
+
+--- @param color velvet.api.rgb_color|string the new foreground color
+function Window:set_frame_color(color)
+  if type(color) == 'string' then 
+    if not indexed_colors[color] then
+      -- if this is not a pre-configured color, assume it is an #rrggbb string.
+      color = color_from_string(color) 
+    end
+  end
+  self.frame_color = color
+end
+
+--- @return boolean
+function Window:get_frame_enabled()
+  return self.frame_visible
+end
 
 --- @param color velvet.api.rgb_color|indexed_color|rrggbb the new foreground color
 function Window:set_foreground_color(color)
