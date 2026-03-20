@@ -327,9 +327,13 @@ function Window:create_child_window()
   return child
 end
 
+--- @param cmd string process to start
+--- @param opts? velvet.api.window.create_options initial window options
 --- @return velvet.window
-function Window:create_child_process_window(cmd)
-  local child = Window.create_process(cmd, { parent_window = self.id })
+function Window:create_child_process_window(cmd, opts)
+  opts = opts or {}
+  opts.parent_window = self.id
+  local child = Window.create_process(cmd, opts)
   child.parent = self
   table.insert(self.child_windows, child)
   return child
