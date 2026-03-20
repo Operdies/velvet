@@ -714,7 +714,7 @@ void assert_csi_equals(const char *testname, struct csi *expected, struct csi *a
   assert_eq(expected->state, actual->state, testname, "states differ");
   assert_eq(expected->final, actual->final, testname, "final byte differs");
   assert_eq(expected->intermediate, actual->intermediate, testname, "intermediate byte differs");
-  assert_eq(expected->leading, actual->leading, testname, "leading byte differs");
+  assert_eq(expected->prefix, actual->prefix, testname, "prefix byte differs");
   assert_eq(expected->n_params, actual->n_params, testname, "n_params differs");
 
   for (int i = 0; i < expected->n_params; i++) {
@@ -767,25 +767,25 @@ void test_csi_parsing(void) {
       (struct csi){
           .final = 'm', .n_params = 2, .state = CSI_ACCEPT, .params = {{.primary = 48, .sub = {2, 118, 159, 240}}, {.primary = 38, .sub = {2, 235, 160, 172}}}});
   test_csi_testcase(
-    "Test leading / intermediate parsing 1",
+    "Test prefix / intermediate parsing 1",
     ">c",
     (struct csi) {
-      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 0 });
+      .prefix = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 0 });
   test_csi_testcase(
-    "Test leading / intermediate parsing 1",
+    "Test prefix / intermediate parsing 1",
     ">?c",
     (struct csi) {
-      .leading = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 0, .intermediate = '?' });
+      .prefix = '>', .final = 'c', .state = CSI_ACCEPT, .n_params = 0, .intermediate = '?' });
   test_csi_testcase(
-    "Test leading / intermediate parsing 1",
+    "Test prefix / intermediate parsing 1",
     "4?c",
     (struct csi) {
-      .leading = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
+      .prefix = 0, .final = 'c', .state = CSI_ACCEPT, .n_params = 1, .params = {{.primary = 4}}, .intermediate = '?' });
   test_csi_testcase(
     "Test n_params",
     " q",
     (struct csi) {
-      .leading = ' ', .final = 'q', .state = CSI_ACCEPT, .n_params = 0
+      .prefix = ' ', .final = 'q', .state = CSI_ACCEPT, .n_params = 0
     });
 }
 

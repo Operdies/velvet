@@ -40,10 +40,10 @@ void string_push_int(struct string *str, int n) {
   string_push_range(str, buf + idx, max - idx);
 }
 
-void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const char *const final) {
+void string_push_csi(struct string *str, uint8_t prefix, struct int_slice params, const char *const final) {
   const uint8_t *csi = (uint8_t*)"\x1b[";
   string_push(str, csi);
-  if (leading) string_push_char(str, leading);
+  if (prefix) string_push_char(str, prefix);
   for (size_t i = 0; i < params.n; i++) {
     assert(params.content[i] >= 0);
     if (i) string_push_char(str, ';');

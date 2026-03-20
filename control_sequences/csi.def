@@ -1,6 +1,6 @@
 // This file should be included by a C source file which defines a macro called CSI
 // which accepts the following parameters
-// CSI(leading, intermediate, final, dispatch)
+// CSI(prefix, intermediate, final, dispatch)
 
 // These descriptions are taken from https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
 // XTERM specific sequences have been omitted except for XTWINOPS
@@ -10,7 +10,7 @@
 #ifndef CSI 
 // avoid syntax errors while viewing this file, but warn at include sites
 #warning "CSI macro not defined."
-#define CSI(leading, intermdiate, final, command, description)
+#define CSI(prefix, intermediate, final, command, description)
 #endif
 
 // Uncategorized {{{1
@@ -52,10 +52,11 @@ CSI('?',    ___,  'i', DECMC,                      "CSI ? Ps i Media Copy (MC), 
 CSI('?',    ___,  'l', DECRST,                     "CSI ? Pm l DEC Private Mode Reset (DECRST).")
 CSI('?',    ___,  'n', DECDSR,                     "CSI ? Ps n Device Status Report (DSR, DEC-specific).")
 CSI(___,    '$',  'p', DECRQM,                     "CSI Ps $ p Request ANSI mode (DECRQM).")
-CSI('?',    '$',  'p', DECRQM,                     "CSI ? Ps $ p Request DEC private mode (DECRQM).  ")
-// CSI(___, ___,  's', SCOSC,                      "CSI s     Save cursor, available only when DECLRMM is disabled (SCOSC, also ANSI.SYS).")
+CSI('?',    '$',  'p', DECRQM,                     "CSI ? Ps $ p Request DEC private mode (DECRQM).")
+// SCOSC and DECSLRM is disambiguated during dispatch
+// CSI(___,    ___,  's', SCOSC,                      "CSI s     Save cursor, available only when DECLRMM is disabled (SCOSC, also ANSI.SYS).")
 CSI(___,    ___,  'u', SCORC,                      "CSI u     Restore cursor (SCORC, also ANSI.SYS).")
-CSI(___,    ___,  'x', DECREQTPARM,                "  CSI Ps x  Request Terminal Parameters (DECREQTPARM).")
+CSI(___,    ___,  'x', DECREQTPARM,                "CSI Ps x  Request Terminal Parameters (DECREQTPARM).")
 CSI(___,    '\'', 'z', DECELR,                     "CSI Ps ; Pu ' z Enable Locator Reporting (DECELR).")
 CSI(___,    '\'', '{', DECSLE,                     "CSI Pm ' { Select Locator Events (DECSLE).")
 CSI(___,    '\'', '|', DECRQLP,                    "CSI Ps ' | Request Locator Position (DECRQLP).")
@@ -94,7 +95,8 @@ CSI(___,    '$',  '{', DECSERA,                    "CSI Pt ; Pl ; Pb ; Pr $ { Se
 
 // VT420 {{{2
 CSI(___,    ___,  'T', SD,                         "CSI Ps T  Scroll down Ps lines (default = 1) (SD), VT420.")
-CSI(___,    ___,  's', DECSLRM,                    "CSI Pl ; Pr s Set left and right margins (DECSLRM), VT420 and up.  This is available only when DECLRMM is enabled.")
+// SCOSC and DECSLRM is disambiguated during dispatch
+// CSI(___,    ___,  's', DECSLRM,                    "CSI Pl ; Pr s Set left and right margins (DECSLRM), VT420 and up.  This is available only when DECLRMM is enabled.")
 CSI(___,    '\'', 'w', DECEFR,                     "CSI Pt ; Pl ; Pb ; Pr ' w Enable Filter Rectangle (DECEFR), VT420 and up.")
 CSI(___,    '*',  'x', DECSACE,                    "CSI Ps * x Select Attribute Change Extent (DECSACE), VT420 and up.")
 CSI(___,    '$',  'x', DECFRA,                     "CSI Pc ; Pt ; Pl ; Pb ; Pr $ x Fill Rectangular Area (DECFRA), VT420 and up.")
@@ -112,8 +114,8 @@ CSI(___,    ' ',  'q', DECSCUSR,                   "CSI Ps SP q Set cursor style
 CSI(___,    ' ',  't', DECSWBV,                    "CSI Ps SP t Set warning-bell volume (DECSWBV), VT520.")
 CSI(___,    ' ',  'u', DECSMBV,                    "CSI Ps SP u Set margin-bell volume (DECSMBV), VT520.")
 // VT525 {{{2
-CSI(___,    ___,  '|', DECAC,                      "CSI Ps ; Pf ; Pb , | Assign Color (DECAC), VT525 only.")
-CSI(___,    ___,  '}', DECATC,                     "CSI Ps ; Pf ; Pb , } Alternate Text Color (DECATC), VT525 only.  This feature specifies the colors to use when DECSTGLT is selected to 1 or 2.")
+CSI(___,    ',',  '|', DECAC,                      "CSI Ps ; Pf ; Pb , | Assign Color (DECAC), VT525 only.")
+CSI(___,    ',',  '}', DECATC,                     "CSI Ps ; Pf ; Pb , } Alternate Text Color (DECATC), VT525 only.  This feature specifies the colors to use when DECSTGLT is selected to 1 or 2.")
 
 // ECMA {{{1
 CSI(___,    ' ',  '@', SL,                         "CSI Ps SP @ Shift left Ps columns(s) (default = 1) (SL), ECMA-48.")
@@ -122,14 +124,18 @@ CSI(___,    ___,  '^', SD,                         "CSI Ps ^  Scroll down Ps lin
 
 // XTERM {{{1
 CSI(___,    ___,  't', XTWINOPS,                   "CSI Ps ; Ps ; Ps t Window manipulation (XTWINOPS)")
-CSI('>',    ___,  'm', XTMODKEYS,                  "CSI Ps ; Ps ; Ps t Window manipulation (XTWINOPS)")
+CSI('>',    ___,  'm', XTMODKEYS,                  "CSI Ps ; Ps ; Ps t Set/reset key modifier options (XTMODKEYS)")
 
 // Kitty {{{1
 CSI('?',    ___,  'u', KITTY_KEYBOARD_QUERY,       "CSI ? u https://sw.kovidgoyal.net/kitty/keyboard-protocol/")
 CSI('>',    ___,  'u', KITTY_KEYBOARD_PUSH,        "CSI > flags u Push `flags` to the key settings stack")
 CSI('<',    ___,  'u', KITTY_KEYBOARD_POP,         "CSI < count u Pop `count` entries from the key settings stack")
-CSI('=',    ___,  'u', KITTY_KEYBOARD_MODIFY,      "CSI = flags ; mode u Modify current flags; modes: 1 => assing flags, 2 => set flags, 3 => unset flags")
+CSI('=',    ___,  'u', KITTY_KEYBOARD_MODIFY,      "CSI = flags ; mode u Modify current flags; modes: 1 => assign flags, 2 => set flags, 3 => unset flags")
 CSI(___,    '+',  'T', KITTY_UNSCROLL,             "CSI Ps + T https://sw.kovidgoyal.net/kitty/unscroll/")
+
+// Ambiguous Sequences {{{1
+CSI(___, ___, 's', DECSLRM_OR_SCOSC,               "This command is ambiguous and will be resolved during dispatch. See the comment in the handler in csi_dispatch.c")
+
 
 #undef ___
 

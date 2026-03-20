@@ -64,7 +64,7 @@ void string_push_int(struct string *str, int value);
 void string_memset(struct string *str, uint8_t ch, size_t len);
 void string_clear(struct string *str);
 void string_destroy(struct string *str);
-void string_push_csi(struct string *str, uint8_t leading, struct int_slice params, const char *const final);
+void string_push_csi(struct string *str, uint8_t prefix, struct int_slice params, const char *const final);
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_shift_left(struct string *str, size_t n);

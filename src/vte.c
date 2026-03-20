@@ -407,7 +407,7 @@ static void vte_dispatch_csi(struct vte *vte, uint8_t ch) {
   string_push_char(&vte->command_buffer, ch);
   if (ch >= 0x40 && ch <= 0x7E) {
     struct csi csi = {0};
-    // Strip the leading escape sequence
+    // Strip the prefix escape sequence
     struct u8_slice csi_body = string_range(&vte->command_buffer, 2, -1);
     csi_parse(&csi, csi_body);
     if (csi.state == CSI_ACCEPT) {

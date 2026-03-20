@@ -8,12 +8,12 @@
 
 /** State machine:
  * Ground       --> Parameter
- *              --> Leading
+ *              --> Prefix
  *              --> Accept
  * Parameter    --> Parameter
  *              --> Intermediate
  *              --> Accept
- * Leading      --> Parameter
+ * Prefix       --> Parameter
  *              --> Intermediate
  *              --> Accept
  * Intermediate --> Accept
@@ -108,9 +108,9 @@ static bool looks_like_sgr(struct u8_slice str) {
   if (str.len < 1) return false;
   bool could_be = str.content[str.len - 1] == 'm';
   if (could_be && str.len > 1) {
-    uint8_t leading = str.content[0];
+    uint8_t prefix = str.content[0];
     uint8_t intermediate = str.content[str.len - 2];
-    could_be = (leading >= '0' && leading <= '9') || leading == ';';
+    could_be = (prefix >= '0' && prefix <= '9') || prefix == ';';
     could_be = could_be && ((intermediate >= '0' && intermediate <= '9') || intermediate == ';' || intermediate == ':');
   }
   return could_be;
@@ -127,7 +127,7 @@ int csi_parse(struct csi *c, struct u8_slice str) {
     char ch = str.content[i];
     switch (c->state) {
     case CSI_GROUND: {
-      c->state = PARAMETER(ch) ? CSI_PARAMETER : INTERMEDIATE(ch) ? CSI_LEADING : ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
+      c->state = PARAMETER(ch) ? CSI_PARAMETER : INTERMEDIATE(ch) ? CSI_PREFIX : ACCEPT(ch) ? CSI_ACCEPT : CSI_REJECT;
     } break;
     case CSI_PARAMETER: {
       if (c->n_params >= CSI_MAX_PARAMS) {
@@ -152,8 +152,8 @@ int csi_parse(struct csi *c, struct u8_slice str) {
                  : ACCEPT(ch)       ? CSI_ACCEPT
                                     : CSI_REJECT;
     } break;
-    case CSI_LEADING: {
-      c->leading = ch;
+    case CSI_PREFIX: {
+      c->prefix = ch;
       ch = str.content[++i];
       c->state = PARAMETER(ch)      ? CSI_PARAMETER
                  : INTERMEDIATE(ch) ? CSI_INTERMEDIATE

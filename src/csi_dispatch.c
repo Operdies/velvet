@@ -10,7 +10,8 @@ enum DECRQM_QUERY_RESPONSE {
   DECRQM_PERMANENTLY_RESET = 4,
 };
 
-
+/* CSI [...] s is DECSLRM or SCOSC. See comment in implementation */
+static bool DECSLRM_OR_SCOSC(struct vte *vte, struct csi *csi);
 /* CSI Ps @  Insert Ps (Blank) Character(s) (default = 1) (ICH). */
 static bool ICH(struct vte *vte, struct csi *csi);
 /* CSI Ps SP @ Shift left Ps columns(s) (default = 1) (SL), ECMA-48. */
@@ -109,6 +110,8 @@ static bool DECSCL(struct vte *vte, struct csi *csi);
 /* CSI Ps $ p Request ANSI mode (DECRQM). */
 /* CSI ? Ps $ p Request DEC private mode (DECRQM).   */
 static bool DECRQM(struct vte *vte, struct csi *csi);
+/* CSI s     Save cursor, available only when DECLRMM is disabled (SCOSC, also ANSI.SYS). */
+static bool SCOSC(struct vte *vte, struct csi *csi);
 /* CSI Ps q  Load LEDs (DECLL), VT100. */
 static bool DECLL(struct vte *vte, struct csi *csi);
 /* CSI Ps SP q Set cursor style (DECSCUSR), VT520. */
@@ -202,11 +205,11 @@ static char *byte_names[UINT8_MAX + 1] = {
 
 static bool csi_dispatch_todo(struct vte *vte, struct csi *csi) {
   (void)vte;
-  char leading[] = {csi->leading, 0};
+  char prefix[] = {csi->prefix, 0};
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
   TODO("CSI %2s %d %2s %2s",
-       byte_names[csi->leading] ?: leading,
+       byte_names[csi->prefix] ?: prefix,
        csi->params[0].primary,
        byte_names[csi->intermediate] ?: intermediate,
        byte_names[csi->final] ?: final);
@@ -216,11 +219,11 @@ static bool csi_dispatch_todo(struct vte *vte, struct csi *csi) {
 static bool csi_dispatch_omitted(struct vte *vte, struct csi *csi) {
   (void)vte, (void)csi;
   // Display these characters in a more friendly way
-  char leading[] = {csi->leading, 0};
+  char prefix[] = {csi->prefix, 0};
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
   OMITTED("CSI %2s %d %2s %2s",
-          byte_names[csi->leading] ?: leading,
+          byte_names[csi->prefix] ?: prefix,
           csi->params[0].primary,
           byte_names[csi->intermediate] ?: intermediate,
           byte_names[csi->final] ?: final);
@@ -314,10 +317,10 @@ bool csi_dispatch(struct vte *vte, struct csi *csi) {
   }
 
   // convert the three byte values into a single u32 value
-#define KEY(leading, intermediate, final)                                                                              \
-  ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
+#define KEY(prefix, intermediate, final)                                                                              \
+  ((((uint32_t)prefix) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
 
-  switch (KEY(csi->leading, csi->intermediate, csi->final)) {
+  switch (KEY(csi->prefix, csi->intermediate, csi->final)) {
     // convert each CSI item from csi.def into a switch case
 #define CSI(l, i, f, fn, _)                                                                                            \
   case KEY(l, i, f): return fn(vte, csi);
@@ -326,12 +329,12 @@ bool csi_dispatch(struct vte *vte, struct csi *csi) {
   default: {
     /* This is the case for commands such as DECSCUSR (CSI Ps SP q) and
      * e.g. DECSED (CSI ? Ps J) when the Ps parameter is omitted. In that case, we
-     * cannot determine if the identifying character refers to a leading or intermediate character.
+     * cannot determine if the identifying character refers to a prefix or intermediate character.
      * If we could not identify the command, swap and try again. */
-    bool ambiguous = csi->n_params == 0 && csi->leading && !csi->intermediate && csi->final;
+    bool ambiguous = csi->n_params == 0 && csi->prefix && !csi->intermediate && csi->final;
     if (ambiguous) {
-      csi->intermediate = csi->leading;
-      csi->leading = 0;
+      csi->intermediate = csi->prefix;
+      csi->prefix = 0;
       return csi_dispatch(vte, csi);
     }
     return csi_dispatch_todo(vte, csi);
@@ -757,13 +760,15 @@ bool DECSCL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECS
 
 bool DECRQM(struct vte *vte, struct csi *csi) { 
   int mode = csi->params[0].primary;
-  enum DECRQM_QUERY_RESPONSE r = csi->leading == '?' ? query_private_mode(vte, mode) : query_ansi_mode(vte, mode);
-  string_push_csi(&vte->pending_input, csi->leading, INT_SLICE(mode, r), "$y");
+  enum DECRQM_QUERY_RESPONSE r = csi->prefix == '?' ? query_private_mode(vte, mode) : query_ansi_mode(vte, mode);
+  string_push_csi(&vte->pending_input, csi->prefix, INT_SLICE(mode, r), "$y");
   if (r == DECRQM_NOT_RECOGNIZED) {
     TODO("Query unrecognized mode: %d", mode);
   }
   return true;
 }
+
+bool SCOSC(struct vte *vte, struct csi *csi){ (void)vte, (void)csi; TODO("SCOSC"); return false; }
 
 bool DECLL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECLL"); return false; }
 
@@ -942,4 +947,16 @@ bool DECSASD(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DEC
 bool DECDC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECDC"); return false; }
 
 bool DECSSDT(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECSSDT"); return false; }
+
+bool DECSLRM_OR_SCOSC(struct vte *vte, struct csi *csi) { 
+  /* DECSLRM: CSI Pl ; Pr s Set left and right margins (DECSLRM), VT420 and up.  This is available only when DECLRMM is enabled.
+   * SCOSC:   CSI s         Save cursor, available only when DECLRMM is disabled (SCOSC, also ANSI.SYS).
+   * these two commands must be disambiguated by inspecting the parameters; 
+   * 1. if DECLRMM is enabled and CSI s has parameters, use DECSLRM
+   * 2. if DECLRMM is disabled; CSI s with no parameters is SCOSC
+   */
+  (void)DECSLRM;
+  (void)SCOSC;
+  (void)vte, (void)csi; TODO("DECSLRM_OR_SCOSC"); return false; 
+}
 

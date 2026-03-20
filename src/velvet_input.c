@@ -231,10 +231,10 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
     if (c.state == CSI_ACCEPT) {
       assert(len == s.len);
 
-#define KEY(leading, intermediate, final)                                                                              \
-  ((((uint32_t)leading) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
+#define KEY(prefix, intermediate, final)                                                                              \
+  ((((uint32_t)prefix) << 16) | (((uint32_t)intermediate) << 8) | (((uint32_t) final)))
 
-      switch (KEY(c.leading, c.intermediate, c.final)) {
+      switch (KEY(c.prefix, c.intermediate, c.final)) {
 #define CSI(l, i, f, fn, _)                                                                                            \
   case KEY(l, i, f): DISPATCH_##fn(v, c); break;
 #include "input_csi.def"

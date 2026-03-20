@@ -9,7 +9,7 @@ enum csi_vte_state {
   CSI_GROUND,
   CSI_ACCEPT,
   CSI_PARAMETER,
-  CSI_LEADING,
+  CSI_PREFIX,
   CSI_INTERMEDIATE,
   CSI_REJECT,
 };
@@ -24,7 +24,7 @@ struct csi {
   enum csi_vte_state state;
   struct csi_param params[CSI_MAX_PARAMS];
   int n_params;
-  uint8_t leading;
+  uint8_t prefix;
   uint8_t intermediate;
   uint8_t final;
 };
