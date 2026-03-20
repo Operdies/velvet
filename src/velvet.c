@@ -275,24 +275,13 @@ static void on_window_writable(struct io_source *src) {
     src->events &= ~IO_SOURCE_POLLOUT;
 }
 
-static bool point_in_rect(struct rect r, int x, int y) {
-  return x >= r.left && x <= (r.left + r.width) && y >= r.top && y <= (r.top + r.height);
+static bool rects_intersect(struct rect a, struct rect b) {
+  return a.left < b.left + b.width && a.left + a.width > b.left && a.top < b.top + b.height && a.top + a.height > b.top;
 }
+
 bool window_visible(struct velvet *v, struct velvet_window *w) {
-  if (!w->hidden) {
-    struct rect screen = v->scene.size;
-    struct rect win = w->geometry;
-    int left, right, top, bottom;
-    left = win.left;
-    top = win.top;
-    right = win.left + win.width;
-    bottom = win.top + win.height;
-    if (point_in_rect(screen, left, top) || point_in_rect(screen, right, top) || point_in_rect(screen, left, bottom) ||
-        point_in_rect(screen, right, bottom)) {
-      return true;
-    }
-  }
-  return false;
+  if (w->hidden) return false;
+  return rects_intersect(v->scene.size, w->geometry);
 }
 
 static void on_window_output(struct io_source *src, struct u8_slice str) {
