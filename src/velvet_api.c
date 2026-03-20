@@ -202,7 +202,8 @@ void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, struct u8_slic
 
 void vv_api_set_focused_window(struct velvet *v, lua_Integer winid){
   struct velvet_window *w = check_window(v, winid);
-  if (w) velvet_scene_set_focus(&v->scene, w);
+  if (v->scene.focus != winid) velvet_invalidate_render(v, "focus changed");
+  velvet_scene_set_focus(&v->scene, w);
 }
 
 enum velvet_api_key_modifier check_modifier(lua_State *L, enum velvet_api_key_modifier m) {
