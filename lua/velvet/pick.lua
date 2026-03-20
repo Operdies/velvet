@@ -114,7 +114,7 @@ function pick.select(items, opts)
   end
 
   --- @param args velvet.api.window.on_key.event_args
-  picker:on_window_on_key(function(args)
+  picker:on_window_on_key(function(_, args)
     local keynames = require('velvet.keymap.named_keys')
     local k = args.key
     local ch = utf8.char(k.codepoint)
