@@ -509,7 +509,8 @@ static void vv_send_lua_chunk(struct velvet_args args) {
   do {
     n = 0;
     struct pollfd pfd = {.fd = sockfd, .events = POLL_IN};
-    if (poll(&pfd, 1, 5) > 0) {
+    /* TODO: Have server close the socket instead of polling. */
+    if (poll(&pfd, 1, 50) > 0) {
       char buf[1024];
       n = read(sockfd, buf, sizeof(buf));
       printf("%.*s", n, buf);
