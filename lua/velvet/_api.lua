@@ -213,10 +213,10 @@ function api.set_active_session(session_id) end
 --- @return integer ret Session id
 function api.get_active_session() end
 
---- Detach |session| session from the server.
---- @param session_id integer Session id
+--- Detach session |id| from the server.
+--- @param id integer Session id
 --- @return nil ret 
-function api.session_detach(session_id) end
+function api.session_detach(id) end
 
 --- Update session options for the session id id |session_id|
 --- @param session_id integer Session id
@@ -434,16 +434,16 @@ function api.window_set_cursor_position(win_id, pos) end
 --- @return integer ret The display width of |string|
 function api.string_display_width(string) end
 
---- Store a named string. Stored strings are preserved after reloading, but lost when the session ends.
---- @param key string The key to store.
---- @param value string The value to store.
+--- Store a named value in the current session. Session values are preserved after reloading, but lost when the session ends.
+--- @param name string The name of the stored value.
+--- @param value any The value to store.
 --- @return nil ret 
-function api.store(key, value) end
+function api.session_store_value(name, value) end
 
---- Load a stored string.
---- @param key string The key of the stored string.
---- @return string ret The stored string.
-function api.load(key) end
+--- Load a value from the current session by name.
+--- @param name string The name of the session value.
+--- @return any ret The loaded value.
+function api.session_load_value(name) end
 
 --- Get focus_follows_mouse
 --- @return boolean ret The current value

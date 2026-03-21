@@ -458,8 +458,8 @@ return {
     },
     {
       name = "session_detach",
-      doc = "Detach |session| session from the server.",
-      params = { { name = "session_id", type = "int", doc = "Session id" } },
+      doc = "Detach session |id| from the server.",
+      params = { { name = "id", type = "int", doc = "Session id" } },
     },
     {
       name = "session_set_options",
@@ -749,19 +749,34 @@ return {
       returns = { type = "int", doc = "The display width of |string|" },
     },
     {
-      name = "store",
-      doc = "Store a named string. Stored strings are preserved after reloading, but lost when the session ends.",
+      name = "session_store_value",
+      doc =
+      "Store a named value in the current session. Session values are preserved after reloading, but lost when the session ends.",
       params = {
-        { name = "key",   type = "string", doc = "The key to store." },
-        { name = "value", type = "string", doc = "The value to store." },
+        { name = "name",  type = "string", doc = "The name of the stored value." },
+        { name = "value", type = "any",    doc = "The value to store." },
       },
     },
     {
-      name = "load",
-      doc = "Load a stored string.",
-      params = { { name = "key", type = "string", doc = "The key of the stored string." } },
-      returns = { type = "string", doc = "The stored string." },
+      name = "session_load_value",
+      doc = "Load a value from the current session by name.",
+      params = { { name = "name", type = "string", doc = "The name of the session value." } },
+      returns = { type = "any", doc = "The loaded value." },
     },
+    -- {
+    --   name = "disk_store_value",
+    --   doc = "Store a named value on the disk. Values saved on the disk are shared between sessions.",
+    --   params = {
+    --     { name = "name",  type = "string", doc = "The name of the stored value." },
+    --     { name = "value", type = "any",    doc = "The value to store." },
+    --   },
+    -- },
+    -- {
+    --   name = "disk_load_value",
+    --   doc = "Load a value from disk by name.",
+    --   params = { { name = "name", type = "string", doc = "The name of the disk value." } },
+    --   returns = { type = "any", doc = "The loaded value." },
+    -- },
   },
 }
 

@@ -85,7 +85,7 @@ local view = get_tagsset()
 view[1] = true
 local prev_view = view
 
---- @type table<velvet.window, boolean[]> 
+--- @type table<number, boolean[]> 
 local tags = {}
 
 --- @type table<velvet.window, dwm.layer> 
@@ -111,7 +111,7 @@ end
 --- @param win velvet.window
 --- @return boolean
 local function visibleontags(win)
-  local win_tags = tags[win] or {}
+  local win_tags = tags[win.id] or {}
   for i, v in ipairs(view) do
     if v and win_tags[i] then return true end
   end
@@ -376,8 +376,8 @@ local function add_window(id, init)
   layers[win] = dwm.layers.tiled
   table.insert(windows, win)
   table.insert(focus_order, 1, win)
-  if not tags[win] then
-    tags[win] = table.move(view, 1, #view, 1, {})
+  if not tags[win.id] then
+    tags[win.id] = table.move(view, 1, #view, 1, {})
     if not init then
       arrange()
     end
@@ -394,8 +394,8 @@ local function remove_window()
   for win, _ in pairs(layers) do
     if not win:valid() then layers[win] = nil end
   end
-  for win, _ in pairs(tags) do
-    if not win:valid() then tags[win] = nil end
+  for id, _ in pairs(tags) do
+    if not vv.api.window_is_valid(id) then tags[id] = nil end
   end
   arrange()
 end
@@ -453,70 +453,29 @@ function dwm.set_tags(id, win_tags)
   else
     tagset[win_tags] = true
   end
-  tags[win] = tagset
+  tags[win.id] = tagset
   arrange()
 end
 
 function dwm.toggle_tag(id, tag)
   local win = window.from_handle(id)
-  if tags[win][tag] then tags[win][tag] = false else tags[win][tag] = true end
+  if tags[win.id][tag] then tags[win.id][tag] = false else tags[win.id][tag] = true end
   arrange()
 end
 
-local stored_state_key = "velvet.dwm.window_tags"
-local stored_view_key = "velvet.dwm.stored_view"
+local tags_key = "velvet.dwm.tags"
+local view_key = "velvet.dwm.views"
 
 local function store_state()
-  -- store window tag information line-by-line on the format <id>:x,y,z
-  local tbl = {}
-  for win, taglist in pairs(tags) do
-    local entry = win.id
-    local tagstring = ""
-    for i, tag in ipairs(taglist) do
-      if tag then tagstring = tagstring .. i .. "," end
-    end
-    tbl[#tbl + 1] = entry .. ":" .. tagstring
-  end
-  local to_store = table.concat(tbl, '\n')
-  vv.api.store(stored_state_key, to_store)
-
-  -- store currently selected view on the format "x y z"
-  local saved_view = ""
-  for i, v in ipairs(view) do
-    if v then saved_view = saved_view .. i .. " " end
-  end
-  vv.api.store(stored_view_key, saved_view)
+  vv.api.session_store_value(tags_key, tags)
+  vv.api.session_store_value(view_key, view)
 end
 
 local function restore_state()
-  local stored_view = vv.api.load(stored_view_key)
-  if stored_view and stored_view:gmatch("(%d+)") then 
-    local new_view = get_tagsset()
-    for num in stored_view:gmatch("(%d+)") do
-      local idx = math.tointeger(num) or error("bad")
-      if idx then
-        new_view[idx] = true
-      end
-    end
-    view = new_view
-  end
-  local stored_state = vv.api.load(stored_state_key)
-  if stored_state == nil then return end
-  for line in stored_state:gmatch("[^\r\n]+") do
-    local lhs, rhs = line:match("^(%d+):(.+)$")
-    local id = math.tointeger(lhs) or error("bad")
-    if vv.api.window_is_valid(id) then 
-      local win = window.from_handle(id)
-      local taglist = get_tagsset()
-      for num in rhs:gmatch("(%d+)") do
-        local idx = math.tointeger(num) or error("bad")
-        if idx then
-          taglist[idx] = true
-        end
-      end
-      tags[win] = taglist
-    end
-  end
+  local stored_view = vv.api.session_load_value(view_key)
+  if stored_view then view = stored_view end
+  local stored_tags = vv.api.session_load_value(tags_key)
+  if stored_tags then tags = stored_tags end
 end
 
 local e = vv.events

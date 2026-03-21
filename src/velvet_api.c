@@ -1,12 +1,13 @@
+#include "velvet_api.h"
 #include "lauxlib.h"
+#include "platform.h"
 #include "utf8proc/utf8proc.h"
 #include "velvet.h"
+#include "velvet_lua.h"
+#include <math.h>
+#include <stdarg.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "velvet_api.h"
-#include "platform.h"
-#include "velvet_lua.h"
-#include <stdarg.h>
 
 _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   va_list ap;
@@ -49,8 +50,9 @@ struct velvet_window *check_process_window(struct velvet *v, int win) {
   return w;
 }
 
-lua_Integer vv_api_window_create_process(struct velvet *v, struct u8_slice cmd, struct velvet_api_window_create_options options) {
-  struct velvet_window template = { .emulator = vte_default };
+lua_Integer
+vv_api_window_create_process(struct velvet *v, struct u8_slice cmd, struct velvet_api_window_create_options options) {
+  struct velvet_window template = {.emulator = vte_default};
   string_push_slice(&template.cmdline, cmd);
 
   if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
@@ -61,8 +63,8 @@ lua_Integer vv_api_window_create_process(struct velvet *v, struct u8_slice cmd, 
 
 lua_Integer vv_api_window_create(struct velvet *v, struct velvet_api_window_create_options options) {
   struct velvet_window template = {
-    .emulator = vte_default,
-    .is_lua_window = true,
+      .emulator = vte_default,
+      .is_lua_window = true,
   };
   if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
@@ -96,12 +98,12 @@ void vv_api_window_close(struct velvet *v, lua_Integer winid) {
   velvet_scene_close_and_remove_window(&v->scene, w);
 }
 
-lua_Integer vv_api_get_focused_window(struct velvet *v){
+lua_Integer vv_api_get_focused_window(struct velvet *v) {
   struct velvet_window *w = velvet_scene_get_focus(&v->scene);
   return w ? w->id : 0;
 }
 
-struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, lua_Integer winid){
+struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, lua_Integer winid) {
   struct velvet_api_window_geometry geom = {0};
   struct velvet_window *w;
   vec_find(w, v->scene.windows, w->id == winid);
@@ -118,13 +120,12 @@ struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, l
 void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velvet_api_window_geometry geometry) {
   struct velvet_window *w;
   /* sanity check -- 1000 is already ridiculous, but let's be lenient */
-  if (geometry.width < 0 || geometry.width > 1000 || geometry.height < 0 || geometry.height > 1000)
-    return;
+  if (geometry.width < 0 || geometry.width > 1000 || geometry.height < 0 || geometry.height > 1000) return;
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
-    struct rect new_geometry = {.height = geometry.height, .top = geometry.top, .left = geometry.left, .width = geometry.width};
-    if (velvet_window_resize(w, new_geometry, v))
-      velvet_invalidate_render(v, "window resized");
+    struct rect new_geometry = {
+        .height = geometry.height, .top = geometry.top, .left = geometry.left, .width = geometry.width};
+    if (velvet_window_resize(w, new_geometry, v)) velvet_invalidate_render(v, "window resized");
   }
 }
 
@@ -148,7 +149,7 @@ lua_Integer vv_api_get_windows(lua_State *L) {
 }
 
 struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
-  struct velvet_api_screen_geometry geom = { .height = v->scene.size.height, .width = v->scene.size.width };
+  struct velvet_api_screen_geometry geom = {.height = v->scene.size.height, .width = v->scene.size.width};
   return geom;
 }
 
@@ -158,10 +159,10 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
     struct velvet *v = *(struct velvet **)lua_getextraspace(L);
     struct u8_slice err;
-    err.content = (const uint8_t*)lua_tolstring(L, -1, &err.len);
+    err.content = (const uint8_t *)lua_tolstring(L, -1, &err.len);
     struct velvet_api_system_message_event_args event_args = {
-      .level = VELVET_API_SEVERITY_ERROR,
-      .message = err,
+        .level = VELVET_API_SEVERITY_ERROR,
+        .message = err,
     };
     velvet_api_raise_system_message(v, event_args);
     lua_pop(L, 1);
@@ -181,7 +182,7 @@ void vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func
   luaL_checktype(v->L, func, LUA_TFUNCTION);
   lua_pushvalue(v->L, func);
   lua_Integer ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
-  io_schedule(&v->event_loop, delay, schedule_execute, (void*)(lua_Integer)ref);
+  io_schedule(&v->event_loop, delay, schedule_execute, (void *)(lua_Integer)ref);
 }
 
 bool vv_api_get_display_damage(struct velvet *v) {
@@ -200,7 +201,7 @@ void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, struct u8_slic
   velvet_input_send_keys(v, keys, winid);
 }
 
-void vv_api_set_focused_window(struct velvet *v, lua_Integer winid){
+void vv_api_set_focused_window(struct velvet *v, lua_Integer winid) {
   struct velvet_window *w = check_window(v, winid);
   if (v->scene.focus != winid) velvet_invalidate_render(v, "focus changed");
   velvet_scene_set_focus(&v->scene, w);
@@ -224,7 +225,7 @@ enum velvet_api_key_modifier check_modifier(lua_State *L, enum velvet_api_key_mo
 }
 
 bool vv_api_get_focus_follows_mouse(struct velvet *v) {
-    return v->input.options.focus_follows_mouse;
+  return v->input.options.focus_follows_mouse;
 }
 bool vv_api_set_focus_follows_mouse(struct velvet *v, bool new_value) {
   v->input.options.focus_follows_mouse = new_value;
@@ -270,8 +271,7 @@ lua_Integer vv_api_get_sessions(lua_State *L) {
 void vv_api_set_active_session(struct velvet *v, lua_Integer session_id) {
   struct velvet_session *s;
   vec_find(s, v->sessions, s->socket == session_id);
-  if (s == NULL || !s->output)
-    lua_bail(v->L, "Session %I is not a valid session.", session_id);
+  if (s == NULL || !s->output) lua_bail(v->L, "Session %I is not a valid session.", session_id);
   velvet_set_focused_session(v, session_id);
 }
 
@@ -463,13 +463,16 @@ lua_Integer vv_api_window_get_scrollback_size(struct velvet *v, lua_Integer win_
   struct screen *active = vte_get_current_screen(&w->emulator);
   return active->scroll.height;
 }
-lua_Integer vv_api_window_get_scroll_offset(struct velvet *v, lua_Integer win_id){
+lua_Integer vv_api_window_get_scroll_offset(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
   struct screen *active = vte_get_current_screen(&w->emulator);
   return active->scroll.view_offset;
 }
 
-void vv_api_window_set_drawing_color(struct velvet *v, lua_Integer win_id, enum velvet_api_brush brush, struct velvet_api_rgb_color color) {
+void vv_api_window_set_drawing_color(struct velvet *v,
+                                     lua_Integer win_id,
+                                     enum velvet_api_brush brush,
+                                     struct velvet_api_rgb_color color) {
   struct velvet_window *w = check_window(v, win_id);
   struct color col = rgb_from_palette(color);
   struct screen *g = vte_get_current_screen(&w->emulator);
@@ -533,7 +536,8 @@ void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct
   s->ws.width = options.columns;
   s->ws.x_pixel = options.x_pixel;
   s->ws.y_pixel = options.y_pixel;
-  if (options.supports_repeating_multibyte_characters.set) s->features.no_repeat_wide_chars = !options.supports_repeating_multibyte_characters.value;
+  if (options.supports_repeating_multibyte_characters.set)
+    s->features.no_repeat_wide_chars = !options.supports_repeating_multibyte_characters.value;
   velvet_force_full_redraw(v);
 }
 
@@ -568,27 +572,285 @@ static void reload_callback(void *data) {
 }
 
 void vv_api_reload(struct velvet *v) {
-  struct velvet_api_pre_reload_event_args args = { .time = get_ms_since_startup() };
+  struct velvet_api_pre_reload_event_args args = {.time = get_ms_since_startup()};
   velvet_api_raise_pre_reload(v, args);
   /* ensure there are no lua actions scheduled by crudely clearing schedules.
    * This is fine because schedules are currently used exclusively for scheduling renders and lua actions. */
   vec_clear(&v->event_loop.scheduled_actions);
-  /* schedule the actual reload on the event loop so we can return from here. Otherwise we would return into an invalid lua context */
+  /* schedule the actual reload on the event loop so we can return from here. Otherwise we would return into an invalid
+   * lua context */
   io_schedule(&v->event_loop, 0, reload_callback, v);
 }
 
 lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string) {
   (void)v;
   lua_Integer result = 0;
-  struct u8_slice_codepoint_iterator it = { .src = string };
+  struct u8_slice_codepoint_iterator it = {.src = string};
   while (u8_slice_codepoint_iterator_next(&it)) {
     result += utf8proc_charwidth(it.current.value);
   }
   return result;
 }
 
-void vv_api_store(struct velvet *v, struct u8_slice key,
-                  struct u8_slice value) {
+static struct u8_slice luaL_checkslice(lua_State *L, lua_Integer idx) {
+  struct u8_slice s;
+  s.content = (const uint8_t *)luaL_checklstring(L, idx, &s.len);
+  return s;
+}
+
+struct walk_context {
+  struct vec /* lua_pointer */ recursion_guard;
+  struct string output;
+  int indent;
+};
+
+static bool isdigit(char ch) {
+  return ch >= '0' && ch <= '9';
+}
+
+static bool isletter(char ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+}
+
+static bool needs_quote(const char *ch) {
+  if (*ch == 0) return true;
+  if (isdigit(*ch)) return true;
+  for (; *ch; ch++)
+    if (!isdigit(*ch) && !isletter(*ch) && *ch != '_') return true;
+  return false;
+}
+
+static void get_string_quote(const char *ch, char **left, char **right) {
+  const char *tmp = ch;
+  bool has_dquot, has_squot;
+  has_dquot = has_squot = false;
+  for (; *tmp; tmp++) {
+    has_dquot |= *tmp == '"';
+    has_squot |= *tmp == '\'';
+  }
+
+  if (has_squot && has_dquot) {
+    if (!strstr(ch, "]]")) {
+      *left = "[[";
+      *right = "]]";
+    } else if (!strstr(ch, "]=]")) {
+      *left = "[=[";
+      *right = "]=]";
+    } else if (!strstr(ch, "]==]")) {
+      *left = "[==[";
+      *right = "]==]";
+    } else {
+      /* treat this as an adversarial example and emit nil. */
+      *left = *right = NULL;
+    }
+  } else if (has_dquot) {
+    *left = "'";
+    *right = "'";
+  } else {
+    *left = "\"";
+    *right = "\"";
+  }
+}
+
+static void get_key_quote(const char *ch, char **left, char **right) {
+  if (!needs_quote(ch)) {
+    *left = "";
+    *right = "";
+    return;
+  }
+
+  const char *tmp = ch;
+  bool has_dquot, has_squot;
+  has_dquot = has_squot = false;
+  for (; *tmp; tmp++) {
+    has_dquot |= *tmp == '"';
+    has_squot |= *tmp == '\'';
+  }
+
+  if (has_squot && has_dquot) {
+    if (!strstr(ch, "]]")) {
+      *left = "[ [[";
+      *right = "]] ]";
+    } else if (!strstr(ch, "]=]")) {
+      *left = "[ [=[";
+      *right = "]=] ]";
+    } else if (!strstr(ch, "]==]")) {
+      *left = "[ [==[";
+      *right = "]==] ]";
+    } else {
+      /* treat this as an adversarial example and emit nil. */
+      *left = *right = NULL;
+    }
+  } else if (has_dquot) {
+    *left = "['";
+    *right = "']";
+  } else {
+    *left = "[\"";
+    *right = "\"]";
+  }
+}
+
+/* TODO:
+ * Two-pass table iteration -- nice-to-have, get rid of superfluous indexers
+ * First pass stores consecutive keys (no [1] = x, [2] = y, ...)
+ * Second pass stores explicit keys
+ *
+ * Recursive references -- essential
+ * If a table references a parent table, we need to store the parent table in a local,
+ * and then assign those fields after construction.
+ *
+ * Table instance aliasing -- won't implement unless a use case emerges. This requires topologically sorting
+ * and constructing tables according to their dependencies.
+ * If there are multiple instances of the same table, we need to
+ * instantiate the table in local and then reference that local.
+ *
+ * Expanded string quoting -- won't implement, consider strings simultaneously containing ', ", ]], ]=], ]==] as
+ * adversarial.
+ *
+ * Storing functions -- won't implement, this is not practical.
+ */
+
+static void string_push_cstr_escaped(struct string *s, const char *cstr) {
+  for (const char *ch = cstr; *ch; ch++) {
+    switch (*ch) {
+    case '\\': string_push_cstr(s, "\\\\"); break;
+    case '\n': string_push_cstr(s, "\\n"); break;
+    case '\t': string_push_cstr(s, "\\t"); break;
+    case '\r': string_push_cstr(s, "\\r"); break;
+    default: string_push_char(s, *ch); break;
+    }
+  }
+}
+
+static bool emit_table(lua_State *L, struct walk_context *ctx);
+static bool emit_literal(lua_State *L, struct walk_context *ctx) {
+  char buf[64];
+  /* emit literal */
+  switch (lua_type(L, -1)) {
+  case LUA_TBOOLEAN: {
+    bool b = lua_toboolean(L, -1);
+    string_push_format_slow(&ctx->output, "%s", b ? "true" : "false");
+  } break;
+  case LUA_TNUMBER: {
+    if (lua_isinteger(L, -1)) {
+      lua_Integer i = lua_tointeger(L, -1);
+      string_push_format_slow(&ctx->output, "%lld", i);
+    } else {
+      lua_Number n = lua_tonumber(L, -1);
+      if (isnan(n)) {
+        string_push_cstr(&ctx->output, "0 / 0 --[[ nan ]]");
+      } else if (isinf(n)) {
+        string_push_cstr(&ctx->output, n > 0 ? "math.huge" : "-math.huge");
+      } else {
+        snprintf(buf, sizeof(buf), "%.14g", n);
+        char *postfix = (strchr(buf, '.') || strchr(buf, 'e')) ? "" : ".0";
+        string_push_format_slow(&ctx->output, "%s%s", buf, postfix);
+      }
+    }
+  } break;
+  case LUA_TSTRING: {
+    const char *value = lua_tostring(L, -1);
+    char *lq, *rq;
+    get_string_quote(value, &lq, &rq);
+    if (lq && rq) {
+      string_push_cstr(&ctx->output, lq);
+      string_push_cstr_escaped(&ctx->output, value);
+      string_push_cstr(&ctx->output, rq);
+    } else {
+      string_push_cstr(&ctx->output, "nil");
+    }
+  } break;
+  case LUA_TTABLE: {
+    emit_table(L, ctx);
+  } break;
+  default: return false;
+  }
+  return true;
+}
+
+static bool emit_table(lua_State *L, struct walk_context *ctx) {
+  assert(lua_type(L, -1) == LUA_TTABLE);
+  const void *handle = lua_topointer(L, -1);
+  void **duplicate;
+  vec_find(duplicate, ctx->recursion_guard, handle == *duplicate);
+  if (duplicate) {
+    string_push_cstr(&ctx->output, "nil");
+    /* todo: deferred assignment */
+    return true;
+  }
+  size_t idx = ctx->recursion_guard.length;
+  vec_push(&ctx->recursion_guard, &handle);
+
+  string_push_format_slow(&ctx->output, "%s", "{");
+  ctx->indent++;
+
+  lua_pushnil(L);
+  bool anyKeys = false;
+  while (lua_next(L, -2) != 0) {
+    /* emit key */
+    switch (lua_type(L, -2)) {
+    case LUA_TBOOLEAN: {
+      bool b = lua_toboolean(L, -2);
+      string_push_format_slow(&ctx->output, "\n%*s[%s] = ", ctx->indent * 2, "", b ? "true" : "false");
+    } break;
+    case LUA_TNUMBER: {
+      if (lua_isinteger(L, -2)) {
+        lua_Integer i = lua_tointeger(L, -2);
+        string_push_format_slow(&ctx->output, "\n%*s[%lld] = ", ctx->indent * 2, "", i);
+      } else {
+        lua_Number n = lua_tonumber(L, -2);
+        /* nan is not a valid table key because nan ~= nan, so we don't need to handle that case */
+        if (isinf(n)) {
+          string_push_format_slow(
+              &ctx->output, "\n%*s[%s] = ", ctx->indent * 2, "", n > 0 ? "math.huge" : "-math.huge");
+        } else {
+          /* numbers with an integer representation are coerced during insertion, so
+           * we don't need to handle decimal insertion for numeric keys. */
+          string_push_format_slow(&ctx->output, "\n%*s[%.14g] = ", ctx->indent * 2, "", n);
+        }
+      }
+    } break;
+    case LUA_TSTRING: {
+      const char *key = lua_tostring(L, -2);
+      char *lq, *rq;
+      get_key_quote(key, &lq, &rq);
+      if (lq && rq) {
+        string_push_format_slow(&ctx->output, "\n%*s", ctx->indent * 2, "");
+        string_push_cstr(&ctx->output, lq);
+        string_push_cstr_escaped(&ctx->output, key);
+        string_push_cstr(&ctx->output, rq);
+        string_push_cstr(&ctx->output, " = ");
+      } else {
+        /* adversarial string key silently skipped */
+        lua_pop(L, 1);
+        continue;
+      }
+    } break;
+    default: {
+      /* unsupported key type silently skipped */
+      lua_pop(L, 1);
+      continue;
+    }
+    }
+    anyKeys = true;
+
+    emit_literal(L, ctx);
+    string_push_char(&ctx->output, ',');
+    lua_pop(L, 1); // pop value
+  }
+  vec_remove_at(&ctx->recursion_guard, idx);
+  ctx->indent--;
+  char *push = ctx->indent ? "}" : "}"; /* avoid adding a trailing comma to the outermost object */
+  if (anyKeys) {
+    string_push_format_slow(&ctx->output, "\n%*s%s", ctx->indent * 2, "", push);
+  } else {
+    string_push_format_slow(&ctx->output, "%s", push);
+  }
+
+  return true;
+}
+
+static void velvet_store_string(struct velvet *v, struct u8_slice key, struct u8_slice value) {
   struct velvet_kvp *it = NULL;
   vec_find(it, v->stored_strings, u8_slice_equals(key, string_as_u8_slice(it->key)));
   if (it == NULL) it = vec_new_element(&v->stored_strings);
@@ -598,9 +860,44 @@ void vv_api_store(struct velvet *v, struct u8_slice key,
   string_push_slice(&it->value, value);
 }
 
-struct u8_slice vv_api_load(struct velvet *v, struct u8_slice key) {
+/* Store a named value in the current session. Session values are preserved after reloading, but lost when the session
+ * ends. */
+lua_Integer vv_api_session_store_value(lua_State *L) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  struct u8_slice name = luaL_checkslice(L, 1);
+  struct walk_context ctx = {.recursion_guard = vec(void *)};
+  string_push_cstr(&ctx.output, "return ");
+  emit_literal(L, &ctx);
+  string_ensure_null_terminated(&ctx.output);
+  velvet_store_string(v, name, string_as_u8_slice(ctx.output));
+  string_destroy(&ctx.output);
+  vec_destroy(&ctx.recursion_guard);
+  return 0;
+}
+
+/* Load a value from the current session by name. */
+lua_Integer vv_api_session_load_value(lua_State *L) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  struct u8_slice name = luaL_checkslice(L, 1);
   struct velvet_kvp *it = NULL;
-  vec_find(it, v->stored_strings, u8_slice_equals(key, string_as_u8_slice(it->key)));
-  if (it == NULL) return (struct u8_slice){0};
-  return string_as_u8_slice(it->value);
+  vec_find(it, v->stored_strings, u8_slice_equals(name, string_as_u8_slice(it->key)));
+  if (it == NULL) return 0;
+  string_ensure_null_terminated(&it->value);
+  if (luaL_loadbuffer(L, (char *)it->value.content, it->value.len, "session_load") != LUA_OK) {
+    lua_error(L);
+  }
+  lua_call(L, 0, 1);
+  // return value from lua_call
+  return 1;
+}
+
+/* Store a named value on the disk. Values saved on the disk are shared between sessions. */
+lua_Integer vv_api_disk_store_value(lua_State *L) {
+  (void)L;
+  return 0;
+}
+/* Load a value from disk by name. */
+lua_Integer vv_api_disk_load_value(lua_State *L) {
+  (void)L;
+  return 0;
 }
