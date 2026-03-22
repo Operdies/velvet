@@ -56,7 +56,7 @@ local taskbar = nil
 local function win_stack(left, top, width, height, lst)
   local offset = top
   for i, win in ipairs(lst) do
-    local height_left = height - offset
+    local height_left = 1 + height - offset
     local num_items_left = 1 + #lst - i
     local win_height = math.floor(height_left / num_items_left)
     if win_height < 3 then win_height = 3 end
@@ -197,7 +197,7 @@ local function status_update(layout)
   taskbar:set_visibility(show_status)
   if not show_status then return end
   local sz = vv.api.get_screen_geometry()
-  taskbar:set_geometry({ left = 0, top = sz.height - 1, width = sz.width, height = 1 })
+  taskbar:set_geometry({ left = 1, top = sz.height, width = sz.width, height = 1 })
   taskbar:clear_background_color()
   taskbar:set_transparency_mode('clear')
   taskbar:set_opacity(0)
@@ -355,8 +355,8 @@ local function tile()
   local master_width = #stack > 0 and math.floor(term.width * mfact) or term.width
   if #master == 0 then master_width = 0 end
 
-  local left = r_left
-  local top = r_top
+  local left = 1 + r_left
+  local top = 1 + r_top
   win_stack(left, top, master_width, term.height, master)
   if #stack > 0 then
     win_stack(master_width + left, top, term.width - master_width, term.height, stack)

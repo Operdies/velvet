@@ -284,8 +284,8 @@ local function route_mouse_events(event, args)
     end
     -- Translate event coordinates to be window local
     local geom = win:get_geometry()
-    args.pos.col = args.pos.col - geom.left
-    args.pos.row = args.pos.row - geom.top
+    args.pos.col = 1 + args.pos.col - geom.left
+    args.pos.row = 1 + args.pos.row - geom.top
 
     local window_func = 'on_' .. event .. '_handler'
     if win[window_func] then
