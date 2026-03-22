@@ -56,26 +56,17 @@ static void install_signal_handlers(int *pipes) {
 static void add_bindir_to_path(void) {
   char *exe_path = platform_get_exe_path();
   char *path_var = getenv("PATH");
-  if (!path_var) return;
+  if (!path_var) { free(exe_path); return; }
+
+  // trim exe path to directory
+  char *last_slash = strrchr(exe_path, '/');
+  if (last_slash) *last_slash = 0;  // truncate in place
 
   struct string new_path = {0};
+  string_join(&new_path, ':', exe_path, path_var);
+  string_ensure_null_terminated(&new_path);
+  setenv("PATH", (char*)new_path.content, true);
 
-  bool is_abs = *exe_path == '/';
-
-  if (!is_abs) {
-    char bindir[1024] = {0};
-    getcwd(bindir, sizeof(bindir) - 1);
-    string_push(&new_path, (uint8_t *)bindir);
-    string_push_char(&new_path, '/');
-  }
-
-  char *last_slash = strrchr(exe_path, '/');
-  if (last_slash) string_push_range(&new_path, (uint8_t *)exe_path, (size_t)(last_slash - exe_path));
-
-  string_push_char(&new_path, ':');
-  string_push(&new_path, (uint8_t *)path_var);
-  string_push_char(&new_path, 0);
-  setenv("PATH", (char *)new_path.content, true);
   string_destroy(&new_path);
   free(exe_path);
 }
@@ -380,6 +371,27 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
   ssize_t written = write(signal_write, &sig, sizeof(sig));
   if (written < (int)sizeof(sig)) velvet_die("signal write:");
+}
+
+struct my_mmap_struct {
+  int pty;
+  int mapfd;
+  int n;
+  char *dynamic_string; /* dynamic string allocated in mapfd, length `n` */
+};
+
+static void share_struct(int recipient, struct my_mmap_struct *share) {
+  int fds[] = { share->pty, share->mapfd };
+  char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
+  struct msghdr msg = { .msg_iov = &(struct iovec) { .iov_base = share, .iov_len = sizeof(*share)}, .msg_iovlen = 1};
+  msg.msg_control = cmsgbuf;
+  msg.msg_controllen = sizeof(cmsgbuf);
+  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_len = CMSG_LEN(sizeof(fds));
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  memcpy(CMSG_DATA(cmsg), fds, sizeof(fds));
+  sendmsg(recipient, &msg, 0);
 }
 
 static char cmdbuf[256];

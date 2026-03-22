@@ -540,3 +540,29 @@ bool u8_slice_to_int32(struct u8_slice s, int *i32) {
 bool u8_match(struct u8_slice s, char *opt) {
   return u8_slice_equals(s, u8_slice_from_cstr(opt));
 }
+
+void _string_join(struct string *str, char separator, int n, ...) {
+  va_list ap;
+  va_start(ap, n);
+  for (int i = 0; i < n; i++) {
+    if (i) string_push_char(str, separator);
+    const char *arg = va_arg(ap, char*);
+    string_push_cstr(str, arg);
+  }
+  va_end(ap);
+}
+
+void _string_joinpath(struct string *str, int n, ...) {
+  char separator = '/';
+  va_list ap;
+  va_start(ap, n);
+  for (int i = 0; i < n; i++) {
+    const char *arg = va_arg(ap, char*);
+    if (i) {
+      if (str->content[str->len-1] == separator) str->len--;
+      if (arg[0] != separator) string_push_char(str, separator);
+    }
+    string_push_cstr(str, arg);
+  }
+  va_end(ap);
+}

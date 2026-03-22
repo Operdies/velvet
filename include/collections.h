@@ -162,4 +162,12 @@ bool u8_match(struct u8_slice s, char *opt);
     }                                                                                                                  \
   } while (0)
 
+/* join `n` strings by the path separator '/'. */
+void _string_joinpath(struct string *str, int n, ...);
+/* join `n` strings by `separator` '/'. */
+void _string_join(struct string *str, char separator, int n, ...);
+
+#define string_join(str, separator, ...) _string_join(str, separator, LENGTH(((char *[]){__VA_ARGS__})), __VA_ARGS__);
+#define string_joinpath(str, ...) _string_joinpath(str, LENGTH(((char *[]){__VA_ARGS__})), __VA_ARGS__);
+
 #endif /*  COLLECTIONS_H */
