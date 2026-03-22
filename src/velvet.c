@@ -29,9 +29,9 @@ void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
   vec_remove_at(&velvet->sessions, idx);
 }
 
-/* this is a workaround for a bug (?) in ghostty where the screen is sometimes reset
- * under MacOS after waking from sleep. Due to velvet's diff based renderer, some
- * screen regions are redrawn very rarely. */
+/* Occasionally under MacOS, the screen is not fully redrawn after waking from sleep.
+ * I have personally observed this under Ghostty, but it's not clear if it's an issue in other emulators.
+ * Forcing a full redraw on focus regain works around it. */
 void velvet_force_full_redraw(struct velvet *v) {
   v->scene.force_redraw = true;
   velvet_invalidate_render(v, "full redraw requested");
@@ -359,7 +359,7 @@ void velvet_loop(struct velvet *velvet) {
   /* We need to pass in a velvet reference to the scene so it can raise events.
    * TODO: Get rid of `velvet_scene` and store windows directly in `velvet`.
    * Scene initially made sense because it managed and arranged windows.
-   * Not it's just a dumb container. */
+   * Now it's just a dumb container. */
   velvet->scene.v = velvet;
 
   velvet_lua_init(velvet);
