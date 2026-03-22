@@ -1116,8 +1116,8 @@ bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
     if (win->pid) kill(win->pid, SIGWINCH);
   }
 
-  struct velvet_api_window_geometry old = { .left = win->geometry.left, .top = win->geometry.top, .width = win->geometry.width, .height = win->geometry.height };
-  struct velvet_api_window_geometry new = { .left = geom.left, .top = geom.top, .width = geom.width, .height = geom.height };
+  struct velvet_api_rect old = { .left = win->geometry.left, .top = win->geometry.top, .width = win->geometry.width, .height = win->geometry.height };
+  struct velvet_api_rect new = { .left = geom.left, .top = geom.top, .width = geom.width, .height = geom.height };
 
   win->geometry = geom;
   vte_set_size(&win->emulator, geom);

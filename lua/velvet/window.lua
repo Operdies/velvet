@@ -301,13 +301,13 @@ hooks.mouse_move = function(args) route_mouse_events('mouse_move', args) end
 hooks.mouse_scroll = function(args) route_mouse_events('mouse_scroll', args) end
 
 --- get window geometry
---- @return velvet.api.window.geometry
+--- @return velvet.api.rect
 function Window:get_geometry()
   return a.window_get_geometry(self.id)
 end
 
 --- set window geometry
---- @param geom velvet.api.window.geometry
+--- @param geom velvet.api.rect
 function Window:set_geometry(geom)
   a.window_set_geometry(self.id, geom)
 end

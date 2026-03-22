@@ -247,7 +247,7 @@ return {
       },
     },
     {
-      name = "window.geometry",
+      name = "rect",
       fields = {
         { name = "left",   type = "int", doc = "The leftmost cell of the window." },
         { name = "top",    type = "int", doc = "The topmost cell of the window." },
@@ -274,16 +274,16 @@ return {
       name = "window.moved.event_args",
       fields = {
         { name = "win_id",   type = "int",             doc = "The id of the resized window." },
-        { name = "old_size", type = "window.geometry", doc = "The old geometry of |id|." },
-        { name = "new_size", type = "window.geometry", doc = "The new geometry of |id|." },
+        { name = "old_size", type = "rect", doc = "The old geometry of |id|." },
+        { name = "new_size", type = "rect", doc = "The new geometry of |id|." },
       }
     },
     {
       name = "window.resized.event_args",
       fields = {
         { name = "win_id",   type = "int",             doc = "The id of the resized window." },
-        { name = "old_size", type = "window.geometry", doc = "The old geometry of |id|." },
-        { name = "new_size", type = "window.geometry", doc = "The new geometry of |id|." },
+        { name = "old_size", type = "rect", doc = "The old geometry of |id|." },
+        { name = "new_size", type = "rect", doc = "The new geometry of |id|." },
       }
     },
     {
@@ -576,14 +576,14 @@ return {
       name = "window_get_geometry",
       doc = "Get the geometry of the specified window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { name = "geometry", type = "window.geometry", doc = "The geometry of the window with id |win_id|" },
+      returns = { name = "geometry", type = "rect", doc = "The geometry of the window with id |win_id|" },
     },
     {
       name = "window_set_geometry",
       doc = "Set the geometry of the specified window.",
       params = {
         { name = "win_id",   type = "int",             doc = "Window id" },
-        { name = "geometry", type = "window.geometry", doc = "Window geometry" },
+        { name = "geometry", type = "rect", doc = "rect" },
       },
     },
     {

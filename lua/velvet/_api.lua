@@ -97,7 +97,7 @@ local api = {}
 --- @field working_directory? string The initial working directory of the new window.
 --- @field parent_window? integer The parent window of this window. If set, this window will close with the parent.
 
---- @class velvet.api.window.geometry
+--- @class velvet.api.rect
 --- @field left integer The leftmost cell of the window.
 --- @field top integer The topmost cell of the window.
 --- @field width integer The width of the window
@@ -115,13 +115,13 @@ local api = {}
 
 --- @class velvet.api.window.moved.event_args
 --- @field win_id integer The id of the resized window.
---- @field old_size velvet.api.window.geometry The old geometry of |id|.
---- @field new_size velvet.api.window.geometry The new geometry of |id|.
+--- @field old_size velvet.api.rect The old geometry of |id|.
+--- @field new_size velvet.api.rect The new geometry of |id|.
 
 --- @class velvet.api.window.resized.event_args
 --- @field win_id integer The id of the resized window.
---- @field old_size velvet.api.window.geometry The old geometry of |id|.
---- @field new_size velvet.api.window.geometry The new geometry of |id|.
+--- @field old_size velvet.api.rect The old geometry of |id|.
+--- @field new_size velvet.api.rect The new geometry of |id|.
 
 --- @class velvet.api.window.focus_changed.event_args
 --- @field old_focus integer The previous focused window.
@@ -306,12 +306,12 @@ function api.set_focused_window(win_id) end
 
 --- Get the geometry of the specified window.
 --- @param win_id integer Window id
---- @return velvet.api.window.geometry ret The geometry of the window with id |win_id|
+--- @return velvet.api.rect ret The geometry of the window with id |win_id|
 function api.window_get_geometry(win_id) end
 
 --- Set the geometry of the specified window.
 --- @param win_id integer Window id
---- @param geometry velvet.api.window.geometry Window geometry
+--- @param geometry velvet.api.rect rect
 --- @return nil ret 
 function api.window_set_geometry(win_id, geometry) end
 

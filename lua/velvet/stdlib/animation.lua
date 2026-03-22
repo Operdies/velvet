@@ -41,7 +41,7 @@ end
 
 --- Change the dimensions of window |id| to |target| over |duration| ms
 --- @param id integer Window ID
---- @param target velvet.api.window.geometry Final window geometry
+--- @param target velvet.api.rect Final rect
 --- @param duration integer Animation duration in milliseconds
 --- @param opts? animate_options additional parameters
 function animation.animate(id, target, duration, opts)

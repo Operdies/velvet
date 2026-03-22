@@ -103,8 +103,8 @@ lua_Integer vv_api_get_focused_window(struct velvet *v) {
   return w ? w->id : 0;
 }
 
-struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, lua_Integer winid) {
-  struct velvet_api_window_geometry geom = {0};
+struct velvet_api_rect vv_api_window_get_geometry(struct velvet *v, lua_Integer winid) {
+  struct velvet_api_rect geom = {0};
   struct velvet_window *w;
   vec_find(w, v->scene.windows, w->id == winid);
   if (w) {
@@ -117,7 +117,7 @@ struct velvet_api_window_geometry vv_api_window_get_geometry(struct velvet *v, l
   return geom;
 }
 
-void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velvet_api_window_geometry geometry) {
+void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velvet_api_rect geometry) {
   struct velvet_window *w;
   /* sanity check -- 1000 is already ridiculous, but let's be lenient */
   if (geometry.width < 0 || geometry.width > 1000 || geometry.height < 0 || geometry.height > 1000) return;

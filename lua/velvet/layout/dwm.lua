@@ -26,7 +26,7 @@ local single_monocle = false
 local layout_name = 'tiled'
 
 --- @param win velvet.window
---- @param to velvet.api.window.geometry
+--- @param to velvet.api.rect
 local function win_move(win, to)
   local client_area = to
   if win:get_frame_enabled() then
