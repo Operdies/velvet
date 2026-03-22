@@ -55,17 +55,11 @@ local function cfg()
     dwm.set_layer(win, dwm.layers.floating) 
   end, { description = nil })
 
-  local function translate(geom, x, y) 
-    return { width = geom.width, height = geom.height, left = geom.left + x, top = geom.top + y }
-  end
-
-  local function scale(geom, dx, dy)
-    return { width = geom.width + dx, height = geom.height + dy, left = geom.left, top = geom.top }
-  end
+  local rect = require('velvet.ui.rect')
 
   local function move_and_resize(x, y, dx, dy)
     local win = vv.api.get_focused_window()
-    local geom = translate(scale(vv.api.window_get_geometry(win), dx, dy), x, y)
+    local geom = rect.translate(rect.grow(vv.api.window_get_geometry(win), dx, dy), x, y)
     dwm.set_layer(win, dwm.layers.floating) 
     local w = require('velvet.window').from_handle(win)
     w:set_geometry(geom)
