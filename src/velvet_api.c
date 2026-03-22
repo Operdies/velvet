@@ -169,6 +169,9 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   }
 }
 
+/* This is kind of a hack to avoid having to heap allocate every schedule.
+ * There's no issue now because velvet is single threaded and only ever uses one velvet instance,
+ * but we should move to heap allocating schedules or passing a 2nd context object if this changes. */
 static struct velvet *VELVET;
 void schedule_execute(void *data) {
   assert(VELVET);
