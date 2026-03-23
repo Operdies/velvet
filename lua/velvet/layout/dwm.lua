@@ -695,10 +695,10 @@ end
 
 --- @param vis velvet.window
 function dwm.make_visible(vis)
-  if tags[vis] then
+  if tags[vis.id] then
     if not visibleontags(window) then
       local tbl = {}
-      for i, b in ipairs(tags[vis]) do
+      for i, b in ipairs(tags[vis.id]) do
         if b then table.insert(tbl, i) end
       end
       dwm.set_view(tbl)
