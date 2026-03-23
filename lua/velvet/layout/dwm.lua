@@ -81,15 +81,19 @@ local windows = {}
 --- @type velvet.window[]
 local focus_order = {}
 
-local view = get_tagsset()
-view[1] = true
-local prev_view = view
-
---- @type table<number, boolean[]> 
-local tags = {}
-
---- @type table<velvet.window, dwm.layer> 
-local layers = {}
+-- |state| is automatically saved and reloaded when user config is reloaded.
+-- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
+-- And also because the restore logic cannot handle table keys.
+local state = {
+  --- @type table<integer, boolean[]> 
+  tags = {},
+  --- @type table<integer, dwm.layer> 
+  layers = {},
+  --- @type boolean[]
+  view = { true, false, false, false, false, false, false, false, false },
+  --- @type boolean[]
+  prev_view = { true, false, false, false, false, false, false, false, false },
+}
 
 --- @return nil
 local function table_swap(tbl, i1, i2)
@@ -111,8 +115,8 @@ end
 --- @param win velvet.window
 --- @return boolean
 local function visibleontags(win)
-  local win_tags = tags[win.id] or {}
-  for i, v in ipairs(view) do
+  local win_tags = state.tags[win.id] or {}
+  for i, v in ipairs(state.view) do
     if v and win_tags[i] then return true end
   end
   return false
@@ -156,9 +160,9 @@ local function ensure_focus_visible()
   end
 end
 
---- @param id velvet.window
-local function tiled(id)
-  return layers[id] == dwm.layers.tiled
+--- @param win velvet.window
+local function tiled(win)
+  return state.layers[win.id] == dwm.layers.tiled
 end
 
 -- arbitrarily decide where floating and tiled windows begin
@@ -183,7 +187,7 @@ end
 --- @param tag integer
 --- @return boolean
 local function tag_occupied(tag)
-  for _, set in pairs(tags) do
+  for _, set in pairs(state.tags) do
     if set[tag] then return true end
   end
   return false
@@ -206,10 +210,10 @@ local function status_update(layout)
   taskbar:set_cursor(3, 1)
 
   local views = {}
-  for i=1,9 do 
-    if view[i] or tag_occupied(i) then
+  for i=1,9 do
+    if state.view[i] or tag_occupied(i) then
       views[#views+1] = i
-      taskbar:set_background_color(view[i] and 'red' or 'blue')
+      taskbar:set_background_color(state.view[i] and 'red' or 'blue')
       taskbar:draw((" %d "):format(i))
     end
   end
@@ -320,7 +324,7 @@ local function tile()
   for _, win in ipairs(windows) do
     local vis = visibleontags(win)
     win:set_visibility(vis)
-    local floating = layers[win] == dwm.layers.floating
+    local floating = state.layers[win.id] == dwm.layers.floating
     if floating then
       win:set_transparency_mode('all')
       win:set_opacity(floating_opacity)
@@ -373,11 +377,11 @@ local function add_window(id, init)
   if ignore_window(id) then return end
   local win = window.from_handle(id)
   win:set_frame_enabled(true)
-  layers[win] = dwm.layers.tiled
+  if not state.layers[win.id] then state.layers[win.id] = dwm.layers.tiled end
   table.insert(windows, win)
   table.insert(focus_order, 1, win)
-  if not tags[win.id] then
-    tags[win.id] = table.move(view, 1, #view, 1, {})
+  if not state.tags[win.id] then
+    state.tags[win.id] = table.move(state.view, 1, #state.view, 1, {})
     if not init then
       arrange()
     end
@@ -391,20 +395,20 @@ local function remove_window()
   for i, win in ipairs(focus_order) do
     if not win:valid() then table.remove(focus_order, i) end
   end
-  for win, _ in pairs(layers) do
-    if not win:valid() then layers[win] = nil end
+  for id, _ in pairs(state.layers) do
+    if not vv.api.window_is_valid(id) then state.layers[id] = nil end
   end
-  for id, _ in pairs(tags) do
-    if not vv.api.window_is_valid(id) then tags[id] = nil end
+  for id, _ in pairs(state.tags) do
+    if not vv.api.window_is_valid(id) then state.tags[id] = nil end
   end
   arrange()
 end
 
 local function set_view(new_view)
   for i=1,9 do
-    if new_view[i] ~= view[i] then
-      prev_view = table.move(view, 1, 9, 1, {})
-      view = new_view
+    if new_view[i] ~= state.view[i] then
+      state.prev_view = table.move(state.view, 1, 9, 1, {})
+      state.view = new_view
       arrange()
       return
     end
@@ -413,7 +417,7 @@ end
 
 --- Toggle visibility of workspace #num. Multiple workspaces can be visible
 function dwm.toggle_view(num)
-  local new_view = table.move(view, 1, #view, 1, {})
+  local new_view = table.move(state.view, 1, #state.view, 1, {})
   if new_view[num] then new_view[num] = false else new_view[num] = true end
   set_view(new_view)
 end
@@ -430,7 +434,7 @@ function dwm.set_view(view_tags)
     new_view[view_tags] = true
   end
   for i=1,9 do
-    if new_view[i] ~= view[i] then
+    if new_view[i] ~= state.view[i] then
       set_view(new_view)
       arrange()
       return
@@ -439,7 +443,7 @@ function dwm.set_view(view_tags)
 end
 
 function dwm.select_previous_view()
-  set_view(prev_view)
+  set_view(state.prev_view)
 end
 
 --- Set tag |win_tags| on window |win|.
@@ -453,63 +457,44 @@ function dwm.set_tags(id, win_tags)
   else
     tagset[win_tags] = true
   end
-  tags[win.id] = tagset
+  state.tags[win.id] = tagset
   arrange()
 end
 
 function dwm.toggle_tag(id, tag)
   local win = window.from_handle(id)
-  if tags[win.id][tag] then tags[win.id][tag] = false else tags[win.id][tag] = true end
+  if state.tags[win.id][tag] then state.tags[win.id][tag] = false else state.tags[win.id][tag] = true end
   arrange()
-end
-
-local tags_key = "velvet.dwm.tags"
-local view_key = "velvet.dwm.views"
-
-local function store_state()
-  vv.api.session_store_value(tags_key, tags)
-  vv.api.session_store_value(view_key, view)
-end
-
-local function restore_state()
-  local stored_view = vv.api.session_load_value(view_key)
-  if stored_view then view = stored_view end
-  local stored_tags = vv.api.session_load_value(tags_key)
-  if stored_tags then tags = stored_tags end
 end
 
 local e = vv.events
 function dwm.activate()
-  tags = {}
+  local dwm_stored_state_key = "velvet.dwm.stored_state"
+  local event_handler = e.create_group(vv.arrange_group_name, true)
+  event_handler.pre_reload = function() vv.api.session_store_value(dwm_stored_state_key, state) end
+  local stored_state = vv.api.session_load_value(dwm_stored_state_key)
+  if stored_state then state = stored_state end
   windows = {}
-  layers = {}
-  view = get_tagsset()
-  view[1] = true
-  restore_state()
   local lst = vv.api.get_windows()
   focus_order = {}
   for _, id in ipairs(lst) do
     focus_order[#focus_order + 1] = window.from_handle(id)
     add_window(id, true)
   end
-  local event_handler = e.create_group(vv.arrange_group_name, true)
   taskbar = create_status_window()
   -- dwm.reserve(0, 0, 1, 0)
   dwm.reserve(0, 0, 0, 0)
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args) add_window(args.win_id, false) end
-  event_handler.window_closed = function(args) 
-    remove_window()
-  end
-  event_handler.window_focus_changed = function(args) 
+  event_handler.window_closed = function(_) remove_window() end
+  event_handler.window_focus_changed = function(args)
     if ignore_window(args.new_focus) then return end
-    arrange() 
+    arrange()
   end
   if #windows > 0 then
     local f = window.from_handle(lst[1])
     set_focus(f)
   end
-  event_handler.pre_reload = store_state
   arrange()
 end
 
@@ -535,7 +520,7 @@ end
 
 function dwm.set_layer(id, layer)
   local win = window.from_handle(id)
-  layers[win] = layer
+  state.layers[win.id] = layer
   arrange()
 end
 
@@ -597,7 +582,7 @@ function dwm.focus_next()
 end
 
 --- Swap the focused window with the next visible tiled window
-function dwm.swap_next() 
+function dwm.swap_next()
   local fid = vv.api.get_focused_window()
   local focus = window.from_handle(fid)
   if not tiled(focus) then return end
@@ -611,7 +596,7 @@ function dwm.swap_next()
 end
 
 --- Swap the focused window with the previous visible tiled window
-function dwm.swap_prev() 
+function dwm.swap_prev()
   local fid = vv.api.get_focused_window()
   local focus = window.from_handle(fid)
   if not tiled(focus) then return end
@@ -654,7 +639,7 @@ function dwm.reserve(top, left, bottom, right)
   arrange()
 end
 
-function dwm.set_animation_duration(v, dur)
+function dwm.set_animation_duration(_, dur)
   move_duration = dur
 end
 
@@ -695,10 +680,10 @@ end
 
 --- @param vis velvet.window
 function dwm.make_visible(vis)
-  if tags[vis.id] then
+  if state.tags[vis.id] then
     if not visibleontags(window) then
       local tbl = {}
-      for i, b in ipairs(tags[vis.id]) do
+      for i, b in ipairs(state.tags[vis.id]) do
         if b then table.insert(tbl, i) end
       end
       dwm.set_view(tbl)
