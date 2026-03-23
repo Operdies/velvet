@@ -70,30 +70,14 @@ struct velvet_session *velvet_get_focused_session(struct velvet *v) {
 
 static void session_handle_command_buffer(struct velvet *v, struct velvet_session *src) {
   int socket = src->socket;
-  struct velvet_cmd_iterator it = {.src = string_as_u8_slice(src->commands.buffer)};
-
-  /* if the command is from an open socket, we can't know if the last line in the input
-   * is complete or partial. This final line will only be handled once it is either terminated,
-   * or the socket is closed.
-   */
-  bool require_newline = src->socket != 0;
-  it.require_terminator = require_newline;
-  while (velvet_cmd_iterator_next(&it)) {
-    velvet_cmd(v, socket, it.current);
-  }
-
-  /* the command buffer may contain a partial command.
-   * Drop all the commands we have actually handled and buffer the partial command for later.
-   */
-  if (it.cursor) {
-    string_shift_left(&src->commands.buffer, it.cursor);
-    src->commands.lines += it.line_count;
-  }
+  struct u8_slice cmd = string_as_u8_slice(src->commands.buffer);
+  velvet_cmd(v, socket, cmd);
+  string_clear(&src->commands.buffer);
 }
 
 static void session_socket_callback(struct io_source *src) {
   struct velvet *velvet = src->data;
-  char data_buf[2048] = {0};
+  char data_buf[8192] = {0};
   int fds[2] = {0};
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
   struct msghdr msg = {
@@ -112,6 +96,13 @@ static void session_socket_callback(struct io_source *src) {
   struct velvet_session *session;
   vec_find(session, velvet->sessions, session->socket == src->fd);
   assert(session);
+
+  if (n >= (int)sizeof(data_buf)) {
+    const char *err = "error: lua chunk too large (max 8kb); use dofile() for larger scripts\n";
+    write(src->fd, err, strlen(err));
+    velvet_session_destroy(velvet, session);
+    return;
+  }
 
   if (n == 0) {
     // The socket was closed, so let's ensure we don't write to it or close it again

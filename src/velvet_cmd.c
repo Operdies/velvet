@@ -144,12 +144,7 @@ static int l_socket_print(lua_State *L) {
   return 0;
 }
 
-static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int source_socket) {
-  if (!velvet_cmd_arg_iterator_next(it)) {
-    velvet_log("lua: missing string");
-    return;
-  }
-  struct u8_slice cmd = it->current;
+static void velvet_lua(struct velvet *v, struct u8_slice chunk, int source_socket) {
   lua_State *L = v->L;
 
   // Build a custom env: setmetatable({print = socket_print}, {__index = _G})
@@ -167,7 +162,7 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
   int socket_print_idx = lua_gettop(L) - 1;
   int env_idx = lua_gettop(L);
 
-  if (luaL_loadbuffer(L, (char *)cmd.content, cmd.len, "=(lua cmd)") != LUA_OK) {
+  if (luaL_loadbuffer(L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
     size_t len = 0;
     const char *err = lua_tolstring(L, -1, &len);
     if (source_socket)
@@ -194,42 +189,38 @@ static void velvet_lua(struct velvet *v, struct velvet_cmd_arg_iterator *it, int
   lua_pop(L, lua_gettop(L));
 }
 
-void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
-  velvet_log("velvet_cmd: %.*s", (int)cmd.len, cmd.content);
+static int read_digit(struct u8_slice s, int *i32) {
+  if (s.len == 0) return false;
+  size_t i, v;
+  i = v = 0;
+  for (; i < s.len; i++) {
+    uint8_t ch = s.content[i];
+    if (!(ch >= '0' && ch <= '9')) break;
+    v *= 10;
+    v += ch - '0';
+  }
+  *i32 = v;
+  return i;
+}
 
-  if (cmd.len > 2) {
-    if (cmd.content[0] == cmd.content[cmd.len - 1]) {
-      if (cmd.content[0] == '\'' || cmd.content[0] == '"') {
-        /* if `cmd` is a single quoted string, it could be composed of multiple commands.
-         * Unquote and resplit the command, and then dispatch them separately.*/
-        struct velvet_cmd_iterator it = {.src = u8_slice_range(cmd, 1, -2)};
-        while (velvet_cmd_iterator_next(&it)) velvet_cmd(v, source_socket, it.current);
-        return;
-      }
-    }
+void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
+  int codelength;
+  int read = read_digit(cmd, &codelength);
+  if (!read) {
+    io_write(source_socket, u8_slice_from_cstr("Expected command to start with length encoding"));
+    return;
   }
 
-  struct velvet_cmd_arg_iterator it = {.src = cmd};
-  struct u8_slice command;
+  v->socket_cmd_sender = source_socket;
+  const uint8_t *chunk_start = cmd.content + read;
 
-  struct velvet_scene *s = &v->scene;
-
-  if (velvet_cmd_arg_iterator_next(&it)) {
-    struct velvet_window dummy = {0};
-    struct velvet_window *focused = velvet_scene_get_focus(s);
-    /* avoid null checks when nothing is focused */
-    if (!focused) focused = &dummy;
-    command = it.current;
-    if (u8_match(command, "lua")) {
-      /* bit of a hack because sessions don't really have a way of knowing their own id */
-      v->socket_cmd_sender = source_socket;
-      velvet_lua(v, &it, source_socket);
-    } else {
-      velvet_log("Unknown command '%.*s'", (int)command.len, command.content);
-    }
-
-    while (velvet_cmd_arg_iterator_next(&it)) {
-      velvet_log("Unhandled trailing argument: %.*s", (int)it.current.len, it.current.content);
-    }
+  size_t remaining = (cmd.content + cmd.len) - chunk_start;
+  if (remaining != (size_t)codelength) {
+    io_write_format_slow(source_socket, "lua chunk length does not match encoded length. "
+                         "This could be due to a partial write (chunk too large),"
+                         "or it could be a bug!");
+  } else {
+    struct u8_slice chunk = {.len = codelength, .content = chunk_start};
+    velvet_lua(v, chunk, source_socket);
   }
 }

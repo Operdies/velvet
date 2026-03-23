@@ -173,7 +173,12 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       exit(0);
     } else if (F(lua)) {
       n_commands++;
-      GET(a.lua);
+      a.lua = NEXT();
+      if (!a.lua || a.lua[0] == '-') {
+        /* no inline code — read from stdin. re-push consumed token if it was an option. */
+        if (a.lua) i--;
+        a.lua = "";
+      }
     } else if (F(foreground)) {
       n_commands++;
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
@@ -373,38 +378,19 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   if (written < (int)sizeof(sig)) velvet_die("signal write:");
 }
 
-struct my_mmap_struct {
-  int pty;
-  int mapfd;
-  int n;
-  char *dynamic_string; /* dynamic string allocated in mapfd, length `n` */
-};
-
-static void share_struct(int recipient, struct my_mmap_struct *share) {
-  int fds[] = { share->pty, share->mapfd };
-  char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
-  struct msghdr msg = { .msg_iov = &(struct iovec) { .iov_base = share, .iov_len = sizeof(*share)}, .msg_iovlen = 1};
-  msg.msg_control = cmsgbuf;
-  msg.msg_controllen = sizeof(cmsgbuf);
-  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-  cmsg->cmsg_len = CMSG_LEN(sizeof(fds));
-  cmsg->cmsg_level = SOL_SOCKET;
-  cmsg->cmsg_type = SCM_RIGHTS;
-  memcpy(CMSG_DATA(cmsg), fds, sizeof(fds));
-  sendmsg(recipient, &msg, 0);
-}
-
 static char cmdbuf[256];
 static void vv_attach_update_size(int sockfd) {
   struct rect size;
   platform_get_winsize(&size);
-  int n = snprintf(cmdbuf,
-                   sizeof(cmdbuf),
-                   "lua 'vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d })'\n",
-                   size.height,
-                   size.width,
-                   size.y_pixel,
-                   size.x_pixel);
+  char codebuf[200];
+  int n_codebuf = snprintf(codebuf,
+                           sizeof(codebuf),
+                           "vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d })\n",
+                           size.height,
+                           size.width,
+                           size.y_pixel,
+                           size.x_pixel);
+  int n = snprintf(cmdbuf, sizeof(cmdbuf), "%d%s", n_codebuf, codebuf);
   struct u8_slice s = {.content = (uint8_t *)cmdbuf, .len = n};
   io_write(sockfd, s);
 }
@@ -416,15 +402,18 @@ static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int 
   if ((term = getenv("TERM_PROGRAM")) && strcmp(term, "Apple_Terminal") == 0) {
     no_repeat_wide_chars = true;
   }
-  int n_cmdbuf = snprintf(cmdbuf,
-                          sizeof(cmdbuf),
-                          "lua 'vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d, "
-                          "supports_repeating_multibyte_characters = %s })'\n",
-                          size.height,
-                          size.width,
-                          size.y_pixel,
-                          size.x_pixel,
-                          no_repeat_wide_chars ? "false" : "true");
+
+  char codebuf[200];
+  int n_codebuf = snprintf(codebuf,
+                           sizeof(codebuf),
+                           "vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d, "
+                           "supports_repeating_multibyte_characters = %s })\n",
+                           size.height,
+                           size.width,
+                           size.y_pixel,
+                           size.x_pixel,
+                           no_repeat_wide_chars ? "false" : "true");
+  int n_cmdbuf = snprintf(cmdbuf, sizeof(cmdbuf), "%d%s", n_codebuf, codebuf);
   char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
 
   struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = cmdbuf, .iov_len = n_cmdbuf}, .msg_iovlen = 1};
@@ -489,31 +478,25 @@ struct vv_source {
 };
 
 static void vv_send_lua_chunk(struct velvet_args args) {
+  char buf[4096];
   int sockfd = vv_connect(args.socket);
 
-  struct string payload = {0};
-  string_push_cstr(&payload, "lua ");
-  bool has_space = strchr(args.lua, ' ');
-  bool has_squot = strchr(args.lua, '\'');
-  bool has_dquot = strchr(args.lua, '"');
-  if (has_squot && has_dquot) {
-    string_push_char(&payload, '"');
-    for (char *ch = args.lua; *ch; ch++) {
-      if (*ch == '\\' || *ch == '"') {
-        string_push_char(&payload, '\\');
-      }
-      string_push_char(&payload, *ch);
-    }
-    string_push_char(&payload, '"');
-  } else {
-    if (has_space || has_squot || has_dquot) {
-      char quote = has_squot ? '"' : '\'';
-      string_push_format_slow(&payload, "%c%s%c", quote, args.lua, quote);
-    } else {
-      string_push_format_slow(&payload, "%s", args.lua);
-    }
+  struct string stdin_buf = {0};
+  const char *code = args.lua;
+  size_t codelen = strlen(code);
+  if (codelen == 0) {
+    ssize_t n;
+    while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0)
+      string_push_slice(&stdin_buf, (struct u8_slice){.content = (uint8_t *)buf, .len = (size_t)n});
+    string_ensure_null_terminated(&stdin_buf);
+    code = (char *)stdin_buf.content;
+    codelen = stdin_buf.len;
   }
-  string_push_char(&payload, '\n');
+
+  struct string payload = {0};
+  string_push_int(&payload, codelen);
+  string_push_range(&payload, (uint8_t*)code, codelen);
+  string_destroy(&stdin_buf);
   io_write(sockfd, string_as_u8_slice(payload));
   string_destroy(&payload);
 
@@ -523,7 +506,6 @@ static void vv_send_lua_chunk(struct velvet_args args) {
     struct pollfd pfd = {.fd = sockfd, .events = POLL_IN};
     /* TODO: Have server close the socket instead of polling. */
     if (poll(&pfd, 1, -1) > 0) {
-      char buf[1024];
       n = read(sockfd, buf, sizeof(buf));
       printf("%.*s", n, buf);
     }
