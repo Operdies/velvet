@@ -143,6 +143,11 @@ static void session_socket_callback(struct io_source *src) {
   string_push_slice(&session->commands.buffer, cmd);
   session_handle_command_buffer(velvet, session);
 
+  if (!session->input) {
+    velvet_session_destroy(velvet, session);
+    return;
+  }
+
   if (needs_render) {
     velvet_scene_render_full(&velvet->scene, velvet_session_render, session);
   }
