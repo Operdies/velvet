@@ -495,12 +495,11 @@ velvet_input_send_kitty_encoding(struct velvet_window *f, struct velvet_key_even
   bool do_send_encoded =
       (o & KITTY_KEYBOARD_REPORT_ALL_KEYS_AS_ESCAPE_CODES) /* self explanatory */
       || is_mod                                            /* modifers must always be encoded */
-      || (e.type == VELVET_API_KEY_EVENT_TYPE_RELEASE)     /* release events must be encoded. In my mind, repeat events
-                                        should also     be encoded, but this is not how other emulators do it. */
+      || (e.type == VELVET_API_KEY_EVENT_TYPE_RELEASE)     /* release events must be encoded */
       || (e.key.escape && e.key.escape[0] == ESC) /* encode any key which is otherwise encoded with a leading ESC */
+      || (e.key.codepoint < 0x20 && (e.modifiers & VELVET_API_KEY_MODIFIER_SHIFT)) /* encode keys in the ctrl range if shift is pressed */
       || (is_keypad(e.key) && !is_keypad_with_text(e.key)) /* all non-text keypad keys */
-      || (e.modifiers &
-          (VELVET_API_KEY_MODIFIER_CONTROL | VELVET_API_KEY_MODIFIER_ALT)); /* disambiguate ctrl / alt modifiers */
+      || (e.modifiers & VELVET_API_KEY_MODIFIER_CONTROL); /* disambiguate ctrl */
 
   if (!do_send_encoded) {
     /* send the base symbol. This applies to most pure-text keys */
