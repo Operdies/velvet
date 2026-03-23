@@ -1,5 +1,6 @@
 --- @class window.focus_changed
---- @field focused boolean true if the window is focused
+--- @field old? velvet.window previous focus or nil
+--- @field new? velvet.window new focus or nil
 
 --- @class velvet.window.border
 --- @field left velvet.window left border
@@ -216,12 +217,12 @@ end
 hooks.window_focus_changed = function(args)
   if args.old_focus ~= args.new_focus then
     local old = win_registry[args.old_focus]
-    if old and old:valid() and old.on_window_focus_changed then
-      pcall(old.on_window_focus_changed, old, { focused = false })
-    end
     local new = win_registry[args.new_focus]
+    if old and old:valid() and old.on_window_focus_changed then
+      pcall(old.on_window_focus_changed, old, { old = old, new = new })
+    end
     if new and new:valid() and new.on_window_focus_changed then
-      pcall(new.on_window_focus_changed, new, { focused = true })
+      pcall(new.on_window_focus_changed, new, { old = old, new = new })
     end
   end
 end

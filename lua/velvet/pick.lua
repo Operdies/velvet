@@ -168,7 +168,7 @@ function pick.select(items, opts)
   end)
 
   picker:on_focus_changed(function (_, args)
-    if not args.focused then
+    if args.new ~= picker then
       dispose(true)
     end
   end)
