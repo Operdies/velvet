@@ -523,6 +523,15 @@ return {
       returns = { type = "float", doc = "The new window opacity." },
     },
     {
+      name = "window_get_text",
+      doc = "Get window text contained in |region|. 1-indexed.",
+      params = {
+        { name = "win_id",  type = "int",   doc = "Window id" },
+        { name = "region", type = "rect", doc = "The region to get text from" },
+      },
+      returns = { type = "string[]", doc = "The text in the specified region." },
+    },
+    {
       name = "window_set_opacity",
       doc = "Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|",
       params = {

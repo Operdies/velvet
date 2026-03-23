@@ -71,6 +71,12 @@ void string_push(struct string *str, const uint8_t *src) {
   string_push_range(str, src, len);
 }
 
+void string_push_codepoint(struct string *str, uint32_t codepoint) {
+  struct utf8 u;
+  int n = codepoint_to_utf8(codepoint, &u);
+  string_push_range(str, u.utf8, n);
+}
+
 void string_push_char(struct string *str, uint8_t ch) {
   string_push_range(str, &ch, 1);
 }

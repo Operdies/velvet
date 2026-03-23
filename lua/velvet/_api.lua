@@ -267,6 +267,12 @@ function api.window_get_hidden(win_id) end
 --- @return number ret The new window opacity.
 function api.window_get_opacity(win_id) end
 
+--- Get window text contained in |region|. 1-indexed.
+--- @param win_id integer Window id
+--- @param region velvet.api.rect The region to get text from
+--- @return string[] ret The text in the specified region.
+function api.window_get_text(win_id, region) end
+
 --- Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|
 --- @param win_id integer Window id
 --- @param opacity number The new window opacity.

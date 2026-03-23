@@ -155,6 +155,54 @@ struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
   return geom;
 }
 
+lua_Integer vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velvet_api_rect region) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  struct velvet_window *w = check_window(v, win_id);
+  region.left = region.left - 1;
+  region.top = region.top - 1;
+  if (region.left < 0) {
+    int delta = -region.left;
+    region.left += delta;
+    region.width -= delta;
+  }
+  if (region.top < 0) {
+    int delta = -region.top;
+    region.top += delta;
+    region.height -= delta;
+  }
+
+  region.width = CLAMP(region.width, 0, w->geometry.width - region.left);
+  region.height = CLAMP(region.height, 0, w->geometry.height - region.top);
+
+  lua_newtable(L);
+
+  struct string scratch = {0};
+  struct screen *screen = vte_get_current_screen(&w->emulator);
+  for (int row = region.top; row < region.top + region.height; row++) {
+    string_clear(&scratch);
+    struct screen_line *l = screen_get_view_line(screen, row);
+    for (int col = region.left; col < region.left + region.width; col++) {
+      struct screen_cell *c, *p;
+      c = &l->cells[col];
+      p = col ? c - 1 : NULL;
+      if (p && p->cp.is_wide) {
+        /* If the left boundary is a wide char, insert a space instead
+         * to preserve alignment. */
+        string_push_char(&scratch, ' ');
+      } else {
+        /* if this cell is wide, increment col to skip the next 0-width cell. */
+        string_push_codepoint(&scratch, c->cp.value);
+        if (c->cp.is_wide) col++;
+      }
+    }
+    /* todo: string */
+    lua_pushlstring(L, (char*)scratch.content, scratch.len);
+    lua_seti(L, -2, 1 + row - region.top);
+  }
+  string_destroy(&scratch);
+  return 1;
+}
+
 static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
 
@@ -603,12 +651,6 @@ static struct u8_slice luaL_checkslice(lua_State *L, lua_Integer idx) {
   return s;
 }
 
-struct walk_context {
-  struct vec /* lua_pointer */ recursion_guard;
-  struct string output;
-  int indent;
-};
-
 static bool isdigit(char ch) {
   return ch >= '0' && ch <= '9';
 }
@@ -727,8 +769,14 @@ static void string_push_cstr_escaped(struct string *s, const char *cstr) {
   }
 }
 
-static bool emit_table(lua_State *L, struct walk_context *ctx);
-static bool emit_literal(lua_State *L, struct walk_context *ctx) {
+struct emit_context {
+  struct vec /* lua_pointer */ recursion_guard;
+  struct string output;
+  int indent;
+};
+
+static bool emit_table(lua_State *L, struct emit_context *ctx);
+static bool emit_literal(lua_State *L, struct emit_context *ctx) {
   char buf[64];
   /* emit literal */
   switch (lua_type(L, -1)) {
@@ -773,7 +821,7 @@ static bool emit_literal(lua_State *L, struct walk_context *ctx) {
   return true;
 }
 
-static bool emit_table(lua_State *L, struct walk_context *ctx) {
+static bool emit_table(lua_State *L, struct emit_context *ctx) {
   assert(lua_type(L, -1) == LUA_TTABLE);
   const void *handle = lua_topointer(L, -1);
   void **duplicate;
@@ -870,7 +918,7 @@ static void velvet_store_string(struct velvet *v, struct u8_slice key, struct u8
 lua_Integer vv_api_session_store_value(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct u8_slice name = luaL_checkslice(L, 1);
-  struct walk_context ctx = {.recursion_guard = vec(void *)};
+  struct emit_context ctx = {.recursion_guard = vec(void *)};
   string_push_cstr(&ctx.output, "return ");
   emit_literal(L, &ctx);
   string_ensure_null_terminated(&ctx.output);
@@ -881,9 +929,8 @@ lua_Integer vv_api_session_store_value(lua_State *L) {
 }
 
 /* Load a value from the current session by name. */
-lua_Integer vv_api_session_load_value(lua_State *L) {
+lua_Integer vv_api_session_load_value(lua_State *L, struct u8_slice name) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
-  struct u8_slice name = luaL_checkslice(L, 1);
   struct velvet_kvp *it = NULL;
   vec_find(it, v->stored_strings, u8_slice_equals(name, string_as_u8_slice(it->key)));
   if (it == NULL) return 0;
@@ -896,13 +943,3 @@ lua_Integer vv_api_session_load_value(lua_State *L) {
   return 1;
 }
 
-/* Store a named value on the disk. Values saved on the disk are shared between sessions. */
-lua_Integer vv_api_disk_store_value(lua_State *L) {
-  (void)L;
-  return 0;
-}
-/* Load a value from disk by name. */
-lua_Integer vv_api_disk_load_value(lua_State *L) {
-  (void)L;
-  return 0;
-}
