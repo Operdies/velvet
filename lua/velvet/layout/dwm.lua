@@ -78,8 +78,6 @@ end
 
 --- @type velvet.window[]
 local windows = {}
---- @type velvet.window[]
-local focus_order = {}
 
 -- |state| is automatically saved and reloaded when user config is reloaded.
 -- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
@@ -93,6 +91,8 @@ local state = {
   view = { true, false, false, false, false, false, false, false, false },
   --- @type boolean[]
   prev_view = { true, false, false, false, false, false, false, false, false },
+  --- @type integer[]
+  focus_order = {}
 }
 
 --- @return nil
@@ -102,17 +102,17 @@ local function table_swap(tbl, i1, i2)
   end
 end
 
---- @param tbl velvet.window[]
---- @param val velvet.window
+--- @generic T
+--- @param tbl T[]
+--- @param val T
 --- @return integer?
 local function table_index(tbl, val)
   for i, v in ipairs(tbl) do
     if v == val then return i end
   end
-  return nil
 end
 
---- @param win velvet.window
+--- @param win velvet.window|integer
 --- @return boolean
 local function visibleontags(win)
   local win_tags = state.tags[win.id] or {}
@@ -135,26 +135,28 @@ local function set_focus(win)
   if ignore_window(vv.api.get_focused_window()) then return end
   if win == nil then return end
   if win == taskbar.id then return end
-  local current_index = table_index(focus_order, win)
-  if current_index ~= nil then table.remove(focus_order, current_index) end
-  table.insert(focus_order, win)
+  local current_index = table_index(state.focus_order, win.id)
+  if current_index ~= nil then table.remove(state.focus_order, current_index) end
+  table.insert(state.focus_order, win.id)
   win:focus()
 end
 
 --- @return velvet.window?
 local function get_focus()
-  if #focus_order == 0 then return nil end
-  return focus_order[#focus_order]
+  local id = state.focus_order[#state.focus_order]
+  return id and window.from_handle(id)
 end
 
 --- Set the focus to the most recently focused visible item
 --- @return nil
 local function ensure_focus_visible()
-  for i=#focus_order,1,-1 do
-    if visibleontags(focus_order[i]) then
-      focus_order[i]:focus()
-      local rem = table.remove(focus_order, i)
-      table.insert(focus_order, rem)
+  for i=#state.focus_order,1,-1 do
+    local id = state.focus_order[i]
+    local win = window.from_handle(id)
+    if visibleontags(win) then
+      win:focus()
+      local rem = table.remove(state.focus_order, i)
+      table.insert(state.focus_order, rem)
       return
     end
   end
@@ -351,7 +353,8 @@ local function tile()
     end
   end
 
-  for i, win in ipairs(focus_order) do
+  for i, id in ipairs(state.focus_order) do
+    local win = window.from_handle(id)
     local z = tiled(win) and (tiled_z) or (floating_z + i)
     win:set_z_index(z)
   end
@@ -377,10 +380,10 @@ local function add_window(id, init)
   if ignore_window(id) then return end
   local win = window.from_handle(id)
   win:set_frame_enabled(true)
-  if not state.layers[win.id] then state.layers[win.id] = dwm.layers.tiled end
-  table.insert(windows, win)
-  table.insert(focus_order, 1, win)
+  windows[#windows+1] = win.id
   if not state.tags[win.id] then
+    table.insert(state.focus_order, 1, win.id)
+    state.layers[win.id] = dwm.layers.tiled
     state.tags[win.id] = table.move(state.view, 1, #state.view, 1, {})
     if not init then
       arrange()
@@ -392,8 +395,8 @@ local function remove_window()
   for i, win in ipairs(windows) do
     if not win:valid() then table.remove(windows, i) end
   end
-  for i, win in ipairs(focus_order) do
-    if not win:valid() then table.remove(focus_order, i) end
+  for i, id in ipairs(state.focus_order) do
+    if not vv.api.window_is_valid(id) then table.remove(state.focus_order, i) end
   end
   for id, _ in pairs(state.layers) do
     if not vv.api.window_is_valid(id) then state.layers[id] = nil end
@@ -471,14 +474,14 @@ local e = vv.events
 function dwm.activate()
   local dwm_stored_state_key = "velvet.dwm.stored_state"
   local event_handler = e.create_group(vv.arrange_group_name, true)
-  event_handler.pre_reload = function() vv.api.session_store_value(dwm_stored_state_key, state) end
-  local stored_state = vv.api.session_load_value(dwm_stored_state_key)
-  if stored_state then state = stored_state end
+  event_handler.pre_reload = function() 
+    vv.api.session_store_value(dwm_stored_state_key, state) 
+  end
+  local ok, stored_state = pcall(vv.api.session_load_value, dwm_stored_state_key)
+  if ok and stored_state then state = stored_state end
   windows = {}
   local lst = vv.api.get_windows()
-  focus_order = {}
   for _, id in ipairs(lst) do
-    focus_order[#focus_order + 1] = window.from_handle(id)
     add_window(id, true)
   end
   taskbar = create_status_window()
