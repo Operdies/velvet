@@ -25,6 +25,7 @@ struct velvet_window {
   struct vte emulator;
   struct pseudotransparency_options transparency;
   float dim_factor;
+  bool had_output;
 };
 
 bool velvet_window_resize(struct velvet_window *velvet_window, struct rect window, struct velvet *v);

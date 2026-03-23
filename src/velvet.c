@@ -288,6 +288,8 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     assert(vte);
     velvet_window_process_output(vte, str);
 
+    vte->had_output = true;
+
     if (window_visible(v, vte)) {
       velvet_invalidate_render(v, "window output");
     }
@@ -306,6 +308,15 @@ static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *fo
   return resized;
 }
 
+static void velvet_raise_window_output_events(struct velvet *v) {
+  struct velvet_window *win;
+  vec_where(win, v->scene.windows, win->had_output) {
+    win->had_output = false;
+    struct velvet_api_window_output_event_args event_args = {.win_id = win->id};
+    velvet_api_raise_window_output(v, event_args);
+  }
+}
+
 static void velvet_dispatch_frame(void *data) {
   struct velvet *v = data;
 
@@ -320,6 +331,7 @@ static void velvet_dispatch_frame(void *data) {
                                              : u8_slice_from_cstr("io_busy")
     };
     velvet_api_raise_pre_render(v, event_args);
+    velvet_raise_window_output_events(v);
     velvet_scene_render_damage(&v->scene, velvet_render, v);
   }
 
@@ -413,6 +425,7 @@ void velvet_loop(struct velvet *velvet) {
 
     // Dispatch all pending io
     io_dispatch(loop);
+    velvet_raise_window_output_events(velvet);
   }
 }
 
