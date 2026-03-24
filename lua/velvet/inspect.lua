@@ -269,7 +269,6 @@ function Inspector:putValue(v)
     or tv == 'nil'
     or tv == 'cdata'
     or tv == 'ctype'
-    or (vim and v == vim.NIL)
   then
     puts(buf, tostring(v))
   elseif tv == 'table' and not self.ids[v] then
@@ -286,11 +285,6 @@ function Inspector:putValue(v)
 
       local keys, keysLen, seqLen = getKeys(t)
       local mt = getmetatable(t)
-
-      if vim and seqLen == 0 and keysLen == 0 and mt == vim._empty_dict_mt then
-        puts(buf, tostring(t))
-        return
-      end
 
       puts(buf, '{')
       self.level = self.level + 1
