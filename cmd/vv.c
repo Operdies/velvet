@@ -339,8 +339,8 @@ _Noreturn static void velvet_fast_shutdown(struct velvet *velvet) {
     struct velvet_session *session;
     vec_foreach(session, velvet->sessions) {
       if (session->socket) {
-        uint8_t detach = 'Q';
-        write(session->socket, &detach, 1);
+        uint8_t quit = 'Q';
+        write(session->socket, &quit, 1);
       }
     }
 
@@ -515,9 +515,13 @@ static void vv_send_lua_chunk(struct velvet_args args) {
 
 struct vv_attach_context {
   int socket;
-  bool detach;
-  bool quit;
 };
+
+_Noreturn static void quit(char *reason) {
+  terminal_reset();
+  printf("[%s]\n", reason);
+  exit(0);
+}
 
 static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
   (void)src;
@@ -525,10 +529,10 @@ static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
 }
 
 static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
-  struct vv_attach_context *ctx = src->data;
-  if (str.len == 0) ctx->quit = true;
-  if (str.len == 1 && str.content[0] == 'Q') ctx->quit = true;
-  if (str.len == 1 && str.content[0] == 'D') ctx->detach = true;
+  (void)src;
+  if (str.len == 0) quit("Shutdown");
+  if (str.len == 1 && str.content[0] == 'Q') quit("Shutdown");
+  if (str.len == 1 && str.content[0] == 'D') quit("Detached");
 }
 
 static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
@@ -541,7 +545,7 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
     case SIGWINCH: {
       vv_attach_update_size(ctx->socket);
     } break;
-    default: ctx->quit = true; break;
+    default: quit("Shutdown"); break;
     }
   }
 }
@@ -597,7 +601,7 @@ static void vv_attach(struct velvet_args args) {
   struct io io = io_default;
   struct vv_attach_context ctx = { .socket = sockfd };
 
-  while (!ctx.detach && !ctx.quit) {
+  while (true) {
     io_clear_sources(&io);
     struct io_source signal_source = {
         .data = &ctx,
@@ -620,21 +624,6 @@ static void vv_attach(struct velvet_args args) {
         .on_read = vv_attach_on_socket,
     };
     io_add_source(&io, socket_source);
-
     io_dispatch(&io);
-  }
-  io_destroy(&io);
-
-  close(sockfd);
-  close(output_pipe[0]);
-  close(output_pipe[1]);
-  close(signal_pipes[0]);
-  close(signal_pipes[1]);
-  terminal_reset();
-
-  if (ctx.detach) {
-    printf("[Detached]\n");
-  } else {
-    printf("[Shutdown]\n");
   }
 }
