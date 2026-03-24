@@ -572,3 +572,44 @@ void _string_joinpath(struct string *str, int n, ...) {
   }
   va_end(ap);
 }
+
+void u8_slice_encode_base64(struct u8_slice in, struct string *out) {
+  const char alphabet[] = {"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"};
+  uint8_t mask = 0b00111111;
+  int c1, c2, c3, c4;
+  for (size_t i = 0; i < in.len;) {
+    size_t remaining = in.len - i;
+    const uint8_t *c = in.content + i;
+    if (remaining >= 3) {
+      uint32_t chunk = (c[0] << 16) | (c[1] << 8) | (c[2]); /* 24 significant bits */
+      c1 = alphabet[(chunk >> 18) & mask];                  /* read bit 19-24 */
+      c2 = alphabet[(chunk >> 12) & mask];                  /* read bit 13-18 */
+      c3 = alphabet[(chunk >> 6) & mask];                   /* read bit 7-12 */
+      c4 = alphabet[(chunk)&mask];                          /* read bit 1-6 */
+      string_push_char(out, c1);
+      string_push_char(out, c2);
+      string_push_char(out, c3);
+      string_push_char(out, c4);
+      i += 3;
+    } else if (remaining == 2) {
+      uint32_t chunk = (c[0] << 8) | (c[1]);      /* 16 significant bits */
+      c1 = alphabet[(chunk >> 10) & mask];        /* read bit 11-16 */
+      c2 = alphabet[(chunk >> 4) & mask];         /* read bit 5-10 */
+      c3 = alphabet[((chunk) & 0b00001111) << 2]; /* read remaining 4 bits */
+      string_push_char(out, c1);
+      string_push_char(out, c2);
+      string_push_char(out, c3);
+      string_push_char(out, '=');
+      i += 2;
+    } else {                                    /* remaining  = 1 */
+      uint32_t chunk = c[0];                    /* 8 significant bits */
+      c1 = alphabet[(chunk >> 2) & mask];       /* read 6 most significant bits */
+      c2 = alphabet[(chunk & 0b00000011) << 4]; /* read remaining 2 bits */
+      string_push_char(out, c1);
+      string_push_char(out, c2);
+      string_push_char(out, '=');
+      string_push_char(out, '=');
+      i++;
+    }
+  }
+}

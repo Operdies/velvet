@@ -817,6 +817,31 @@ void test_string() {
   string_destroy(&s);
 }
 
+static void test_base64() {
+  struct { const char *input; const char *expected; } cases[] = {
+    { "",       "" },
+    { "f",      "Zg==" },
+    { "fo",     "Zm8=" },
+    { "foo",    "Zm9v" },
+    { "foob",   "Zm9vYg==" },
+    { "fooba",  "Zm9vYmE=" },
+    { "foobar", "Zm9vYmFy" },
+  };
+  struct string out = {0};
+  for (size_t i = 0; i < LENGTH(cases); i++) {
+    string_clear(&out);
+    struct u8_slice in = u8_slice_from_cstr(cases[i].input);
+    u8_slice_encode_base64(in, &out);
+    struct u8_slice result = string_as_u8_slice(out);
+    if (!u8_slice_equals(result, u8_slice_from_cstr(cases[i].expected))) {
+      printf("base64 failed for '%s': got '%.*s', expected '%s'\n",
+             cases[i].input, (int)result.len, result.content, cases[i].expected);
+      fail();
+    }
+  }
+  string_destroy(&out);
+}
+
 void test_vec() {
   int *item = NULL;
   struct vec v = vec(int);
@@ -834,7 +859,12 @@ void test_vec() {
     vec_push(&v, push + i);
   }
   int expected[] = {
-      /* insert[0] */ 6, 3, 6, 7, /*insert[4] #2 */ 4, /* insert[4] */ 9, 8, 0, 1, 3, 5, 1, /* insert[length] */ 7};
+      6, 3, 6, 7,          /* insert[0] */
+      4,                   /* insert[4] #2 */
+      9, 8, 0, 1, 3, 5, 1, /* insert[4] */
+      7,                   /* insert[length] */
+  };
+
   vec_insert(&v, 0, &(int){6});
   vec_insert(&v, v.length, &(int){7});
   vec_insert(&v, 4, &(int){9});
@@ -1027,6 +1057,7 @@ int main(void) {
   test_scrolling();
   test_csi_parsing();
   test_string();
+  test_base64();
   test_vec();
   test_velvet_cmd();
   test_lua();
