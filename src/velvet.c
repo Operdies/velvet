@@ -6,13 +6,13 @@
 #include <sys/socket.h>
 #include <csi.h>
 #include <string.h>
-#include "velvet_cmd.h"
 #include <signal.h>
 #include <sys/wait.h>
 #include <pwd.h>
 #include "velvet_lua.h"
 #include "platform.h"
 
+void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd);
 static void velvet_session_render(struct u8_slice str, void *context) {
   struct velvet_session *s = context;
   string_push_slice(&s->pending_output, str);
