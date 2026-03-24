@@ -755,6 +755,12 @@ return {
         { name = "pos",    type = "coordinate", doc = "The new cursor position" },
       },
     },
+    --- clipboard {{{1
+    {
+      name = "clipboard_set",
+      doc = "Copy text to the system clipboard.",
+      params = { { name = "text", type = "string", doc = "The text to copy." } },
+    },
     --- unicode {{{1
     {
       name = "string_display_width",

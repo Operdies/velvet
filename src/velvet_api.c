@@ -943,3 +943,17 @@ lua_Integer vv_api_session_load_value(lua_State *L, struct u8_slice name) {
   return 1;
 }
 
+void vv_api_clipboard_set(struct velvet *v, struct u8_slice text) {
+  struct string osc_buffer = {0};
+  /* OSC 52 sets the clipboard */
+  string_push_cstr(&osc_buffer, "\x1b]52;c;");
+  u8_slice_encode_base64(text, &osc_buffer);
+  string_push_char(&osc_buffer, '\a');
+  /* in almost all cases there will be just 1 session, but let's just push to all
+    * and hope one of them handles OSC 52 */
+  struct velvet_session *s;
+  vec_where(s, v->sessions, s->input && s->output) {
+    string_push_string(&s->pending_output, osc_buffer);
+  }
+  string_destroy(&osc_buffer);
+}

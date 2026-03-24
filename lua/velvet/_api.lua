@@ -438,6 +438,11 @@ function api.window_set_drawing_color(win_id, brush, color) end
 --- @return nil ret 
 function api.window_set_cursor_position(win_id, pos) end
 
+--- Copy text to the system clipboard.
+--- @param text string The text to copy.
+--- @return nil ret 
+function api.clipboard_set(text) end
+
 --- Get the display width of a string, taking into account multi-width and 0-width characters.
 --- @param string string Input string.
 --- @return integer ret The display width of |string|
