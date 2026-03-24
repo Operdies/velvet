@@ -274,10 +274,9 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
       /* If this is a wide character, clear the cell following it.
        * Note that unlike when clearing the previous character,
        * we also overwrite the style here. */
-      struct screen_cell next = c;
-      next.cp = codepoint_space;
-      this[1] = next;
-      cur->column++;
+      struct screen_cell clear = c;
+      clear.cp = codepoint_space;
+      row_set_cell(row, cur->column++, clear);
     }
   } else {
     row_set_cell(row, cur->column++, c);
