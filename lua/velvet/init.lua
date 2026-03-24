@@ -57,7 +57,7 @@ local function string_to_rgb(hex)
   local r = hex:sub(2, 3)
   local g = hex:sub(4, 5)
   local b = hex:sub(6, 7)
-  local a = #hex > 7 and hex:sub(8, 9) or "00"
+  local a = #hex > 7 and hex:sub(8, 9) or "ff"
 
   -- Validate hex digits
   if not (r:match("^[%x][%x]$") and

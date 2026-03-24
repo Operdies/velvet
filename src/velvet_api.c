@@ -410,7 +410,7 @@ static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
       .red = fconv(pal.red),
       .green = fconv(pal.green),
       .blue = fconv(pal.blue),
-      .alpha = fconv(pal.alpha.value),
+      .transparency = pal.alpha.set ? fconv(1.0 - pal.alpha.value) : 0,
   };
   return rgb;
 }
@@ -420,7 +420,7 @@ static struct velvet_api_rgb_color palette_from_rgb(struct color col) {
       .red = iconv(col.red),
       .blue = iconv(col.blue),
       .green = iconv(col.green),
-      .alpha.value = iconv(col.alpha),
+      .alpha.value = 1.0 - iconv(col.transparency),
   };
   return api;
 }

@@ -693,7 +693,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
         bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
         bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
-        bool fg_seethrough = !attributes_visible && (above.cp.value == ' ' || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.alpha == 255) && !is_wide_continuation;
+        bool fg_seethrough = !attributes_visible && (above.cp.value == ' ' || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255) && !is_wide_continuation;
 
         /* dim before blending. This looks a bit more like what you would expect in cases
          * where a dimmed window is covering a non-dimmed window. The dimming effect still
@@ -708,9 +708,9 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
                      (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
 
-        if (a_norm.style.bg.alpha) {
+        if (a_norm.style.bg.transparency) {
           above = normalize_cell(t, above);
-          float a = (float)a_norm.style.bg.alpha / 255.0;
+          float a = (float)a_norm.style.bg.transparency / 255.0;
           above.style.bg = color_alpha_blend(above.style.bg, below.style.bg, 1.0f - a);
           if (fg_seethrough) {
             above.cp = below.cp;
@@ -719,9 +719,9 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
           }
         }
 
-        if (a_norm.style.fg.alpha && !fg_seethrough) {
+        if (a_norm.style.fg.transparency && !fg_seethrough) {
           above = normalize_cell(t, above);
-          float a = (float)a_norm.style.fg.alpha / 255.0;
+          float a = (float)a_norm.style.fg.transparency / 255.0;
           above.style.fg = color_alpha_blend(above.style.fg, below.style.bg, 1.0f - a);
         }
 
@@ -1028,7 +1028,7 @@ static bool color_equals(struct color a, struct color b) {
   if (a.kind != b.kind) return false;
   switch (a.kind) {
   case COLOR_RESET: return true;
-  case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue && a.alpha == b.alpha;
+  case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue && a.transparency == b.transparency;
   case COLOR_TABLE: return a.table == b.table;
   }
   return false;
