@@ -21,6 +21,8 @@ enum vte_state {
   vte_charset,
 };
 
+typedef uint8_t bit;
+
 struct modifier_options {
   union {
     // TODO: Implement these options?
@@ -188,6 +190,7 @@ struct vte {
   struct codepoint previous_symbol;
   struct vec /* *hyperlink */ links;
   struct osc_hyperlink *current_link;
+  struct vec /* bit */ tabstops;
 };
 
 static const struct emulator_options emulator_options_default = {
@@ -200,6 +203,7 @@ static const struct vte vte_default = {
     .options = emulator_options_default,
     .primary = { .scroll.max = 10000, },
     .links = vec(struct osc_hyperlink*),
+    .tabstops = vec(bit),
 };
 
 enum vte_dsr {

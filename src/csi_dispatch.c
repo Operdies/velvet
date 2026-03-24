@@ -1,6 +1,7 @@
 #include "csi.h"
 #include "vte.h"
 #include "utils.h"
+#include <string.h>
 
 enum DECRQM_QUERY_RESPONSE {
   DECRQM_NOT_RECOGNIZED = 0,
@@ -403,7 +404,18 @@ static bool CUP(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool CHT(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("CHT"); return false; }
+bool CHT(struct vte *vte, struct csi *csi) {
+  /* forward `count` tabs */
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  struct screen *g = vte_get_current_screen(vte);
+  bit *tabstops = vte->tabstops.content;
+  int i = g->cursor.column + 1;
+  for (; i < screen_right(g);  i++) {
+    if (tabstops[i] && --count == 0) break;
+  }
+  screen_set_cursor_column(g, i);
+  return true;
+}
 
 static bool ED(struct vte *vte, struct csi *csi) {
   struct screen *g = vte_get_current_screen(vte);
@@ -494,7 +506,12 @@ bool SD(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool DECST8C(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECST8C"); return false; }
+bool DECST8C(struct vte *vte, struct csi *csi) {
+  (void)csi;
+  bit *tabstops = vte->tabstops.content;
+  for (size_t i = 0; i < vte->tabstops.length; i++) tabstops[i] = i && i % 8 == 0;
+  return true;
+}
 
 static bool ECH(struct vte *vte, struct csi *csi) {
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
@@ -509,7 +526,18 @@ static bool ECH(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool CBT(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("CBT"); return false; }
+bool CBT(struct vte *vte, struct csi *csi) {
+  /* backward `count` tabs */
+  int count = csi->params[0].primary ? csi->params[0].primary : 1;
+  struct screen *g = vte_get_current_screen(vte);
+  bit *tabstops = vte->tabstops.content;
+  int i = g->cursor.column - 1;
+  for (; i > 0;  i--) {
+    if (tabstops[i] && --count == 0) break;
+  }
+  screen_set_cursor_column(g, i);
+  return true;
+}
 
 bool HPA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("HPA"); return false; }
 
@@ -568,7 +596,18 @@ bool VPR(struct vte *vte, struct csi *csi) {
 
 static bool HVP(struct vte *vte, struct csi *csi) { return CUP(vte, csi); }
 
-bool TBC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("TBC"); return false; }
+bool TBC(struct vte *vte, struct csi *csi) {
+  int mode = csi->params[0].primary ? csi->params[0].primary : 0;
+  bit *tabstops = vte->tabstops.content;
+  if (mode == 0) {
+    /* clear the tabstop at the cursor */
+    tabstops[vte_get_current_screen(vte)->cursor.column] = 0;
+  } else if (mode == 3) {
+    /* clear all tabstops */
+    memset(tabstops, 0, vte->tabstops.length * sizeof(bit));
+  }
+  return true;
+}
 
 static bool SM(struct vte *vte, struct csi *csi) {
   bool on = csi->final == 'h';
