@@ -388,17 +388,17 @@ static void dispatch_app(struct velvet *v, uint8_t ch) {
   if (!found) velvet_log("TODO: Unhandled escape \x1bO%c", ch);
 }
 
-static void dispatch_esc(struct velvet *v, uint8_t ch) {
-  string_push_char(&v->input.command_buffer, ch);
+static void dispatch_esc(struct velvet *v, uint32_t codepoint) {
+  string_push_codepoint(&v->input.command_buffer, codepoint);
   struct velvet_input *in = &v->input;
-  if (ch == '[') {
+  if (codepoint == '[') {
     in->state = VELVET_INPUT_STATE_CSI;
-  } else if (ch == 'O') {
+  } else if (codepoint == 'O') {
     in->state = VELVET_INPUT_STATE_APPLICATION_KEYS;
   } else {
     in->state = VELVET_INPUT_STATE_NORMAL;
     string_clear(&v->input.command_buffer);
-    struct velvet_key_event k = key_event_from_codepoint(ch);
+    struct velvet_key_event k = key_event_from_codepoint(codepoint);
     /* ALT and META are different, but in VT environments they have historically
      * been collated. Since there is no way to distinguish them,
      * treat ESC as both. */
@@ -420,8 +420,8 @@ velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enu
     else
       vk.codepoint = utf8proc_toupper(vk.codepoint);
   }
-  if (vk.kitty_terminator == 'u' && vk.codepoint && vk.codepoint < 255) {
-    uint32_t send = vk.alternate_codepoint && vk.alternate_codepoint < 255 ? vk.alternate_codepoint : vk.codepoint;
+  if (vk.kitty_terminator == 'u' && vk.codepoint) {
+    uint32_t send = vk.alternate_codepoint ? vk.alternate_codepoint : vk.codepoint;
     n = codepoint_to_utf8(send, &buf);
     escape = (char *)buf.utf8;
   } else if (vk.escape && vk.escape[0]) {
@@ -588,17 +588,17 @@ static void velvet_input_send_vk(struct velvet *v, struct velvet_key_event e) {
   if (f) velvet_input_send_vk_to_window(e, f, v);
 }
 
-static void dispatch_normal(struct velvet *v, uint8_t ch) {
+static void dispatch_normal(struct velvet *v, uint32_t codepoint) {
   struct velvet_input *in = &v->input;
   assert(in->command_buffer.len == 0);
 
-  if (ch == ESC) {
-    string_push_char(&v->input.command_buffer, ch);
+  if (codepoint == ESC) {
+    string_push_char(&v->input.command_buffer, ESC);
     in->state = VELVET_INPUT_STATE_ESC;
     return;
   }
 
-  struct velvet_key_event key = key_event_from_codepoint(ch);
+  struct velvet_key_event key = key_event_from_codepoint(codepoint);
   key.legacy = true;
   dispatch_key_event(v, key);
 }
@@ -607,7 +607,28 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
   // velvet_log("Input: %.*s (%d)", (int)str.len, str.content, (int)str.len);
   struct velvet_input *in = &v->input;
   for (size_t i = 0; i < str.len; i++) {
-    uint8_t ch = str.content[i];
+    /* skip continuation bytes in the middle of the stream. This could theoretically happen
+     * if the unicode handling right after this discarded a partial sequence. */
+    if (in->state == VELVET_INPUT_STATE_NORMAL || in->state == VELVET_INPUT_STATE_ESC) {
+      while (i < str.len && (str.content[i] & 0xC0) == 0x80) i++;
+      if (i >= str.len) break;
+    }
+
+    uint32_t ch = str.content[i];
+    /* assume all multibyte symbols arrive together. This should be true for all reasonable implementations.
+     */
+    if (in->state == VELVET_INPUT_STATE_NORMAL || in->state == VELVET_INPUT_STATE_ESC) {
+      int expected_length = utf8_expected_length(ch);
+      int remaining = str.len - i;
+      if (expected_length > remaining) { 
+        in->state = VELVET_INPUT_STATE_NORMAL;
+        break;
+      }
+      if (expected_length > 1) {
+        ch = utf8_to_codepoint(str.content + i, &expected_length).value;
+        i += expected_length - 1;
+      }
+    }
     switch (in->state) {
     case VELVET_INPUT_STATE_NORMAL: dispatch_normal(v, ch); break;
     case VELVET_INPUT_STATE_ESC: dispatch_esc(v, ch); break;
