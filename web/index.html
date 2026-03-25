@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Velvet</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #1e1e2e; overflow: hidden; }
+    #terminal { height: 100%; }
+    @font-face {
+      font-family: 'MesloLGS Nerd Font';
+      src: local('MesloLGS Nerd Font'), local('MesloLGS NF'), local('MesloLGSNerdFont-Regular');
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+  <script>
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: '"MesloLGS Nerd Font", Menlo, Monaco, "Courier New", monospace',
+      theme: {
+        background: '#1e1e2e',
+        foreground: '#cdd6f4',
+        cursor: '#f5e0dc',
+      },
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    const wsPort = parseInt(location.port) + 1;
+    const ws = new WebSocket(`ws://${location.hostname}:${wsPort}`);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    };
+
+    ws.onmessage = (event) => {
+      term.write(event.data);
+    };
+
+    ws.onclose = () => {
+      term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n');
+    };
+
+    // Translate Option+key to Alt (ESC prefix) since macOS browsers
+    // produce special characters (å, π, etc.) instead of sending Meta
+    term.attachCustomKeyEventHandler((event) => {
+      const isLetter = event.code.startsWith('Key');
+      const isDigit = event.code.startsWith('Digit');
+      if (event.altKey && (isLetter || isDigit)) {
+        if (event.type === 'keydown') {
+          const key = isLetter ? event.code.charAt(3).toLowerCase() : event.code.charAt(5);
+          ws.send(JSON.stringify({ type: 'data', data: '\x1b' + key }));
+        }
+        // Block both keydown and keypress to prevent composed char
+        return false;
+      }
+      return true;
+    });
+
+    term.onData((data) => {
+      ws.send(JSON.stringify({ type: 'data', data }));
+    });
+
+    window.addEventListener('resize', () => {
+      fitAddon.fit();
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    });
+  </script>
+</body>
+</html>
