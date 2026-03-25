@@ -9,14 +9,15 @@ import pty
 import signal
 import struct
 import subprocess
+import sys
 import termios
 import threading
+import uuid
 from pathlib import Path
 
 import websockets
 
-PORT = 3000
-VELVET = str(Path(__file__).resolve().parent.parent / "release" / "vv")
+IMAGE = os.environ.get("VELVET_IMAGE", "velvet")
 INDEX_HTML = Path(__file__).resolve().parent / "index.html"
 
 
@@ -29,37 +30,63 @@ async def serve_terminal(ws):
     master_fd, slave_fd = pty.openpty()
     set_winsize(master_fd, 40, 120)
 
-    env = os.environ.copy()
-    env["TERM"] = "xterm-256color"
-    env["COLORTERM"] = "truecolor"
+    container_name = f"velvet-{uuid.uuid4().hex[:12]}"
 
     proc = subprocess.Popen(
-        [VELVET],
+        [
+            "podman", "run",
+            "--rm",
+            "--name", container_name,
+            "--hostname", "velvet",
+            "--memory", "256m",
+            "--cpus", "0.5",
+            "--pids-limit", "64",
+            "--read-only",
+            "--tmpfs", "/tmp",
+            "--tmpfs", "/home/demo:uid=1000,gid=1000",
+            "--network", "none",
+            "-e", "TERM=xterm-256color",
+            "-e", "COLORTERM=truecolor",
+            IMAGE,
+        ],
         stdin=slave_fd,
         stdout=slave_fd,
         stderr=slave_fd,
         preexec_fn=os.setsid,
-        env=env,
-        cwd=os.environ["HOME"],
     )
     os.close(slave_fd)
 
     loop = asyncio.get_event_loop()
 
-    # Use asyncio fd reader instead of polling
     pty_queue = asyncio.Queue()
+    utf8_buf = bytearray()
 
     def on_pty_readable():
+        nonlocal utf8_buf
         try:
             data = os.read(master_fd, 65536)
-            if data:
-                pty_queue.put_nowait(data.decode("utf-8", errors="replace"))
+            if not data:
+                return
+            utf8_buf.extend(data)
+            try:
+                text = utf8_buf.decode("utf-8")
+                utf8_buf.clear()
+            except UnicodeDecodeError:
+                for i in range(1, 4):
+                    try:
+                        text = utf8_buf[:-i].decode("utf-8")
+                        utf8_buf = utf8_buf[-i:]
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    return
+            pty_queue.put_nowait(text)
         except OSError:
             loop.remove_reader(master_fd)
 
     loop.add_reader(master_fd, on_pty_readable)
 
-    # PTY -> WebSocket
     async def pty_reader():
         try:
             while True:
@@ -70,7 +97,6 @@ async def serve_terminal(ws):
 
     reader_task = asyncio.create_task(pty_reader())
 
-    # WebSocket -> PTY
     try:
         async for msg in ws:
             message = json.loads(msg)
@@ -78,7 +104,6 @@ async def serve_terminal(ws):
                 os.write(master_fd, message["data"].encode())
             elif message["type"] == "resize":
                 set_winsize(master_fd, message["rows"], message["cols"])
-                # SIGWINCH to the whole process group
                 try:
                     os.killpg(proc.pid, signal.SIGWINCH)
                 except ProcessLookupError:
@@ -88,15 +113,16 @@ async def serve_terminal(ws):
     finally:
         reader_task.cancel()
         loop.remove_reader(master_fd)
-        try:
-            os.killpg(proc.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        # Kill the container
+        subprocess.run(
+            ["podman", "kill", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         proc.wait()
         os.close(master_fd)
 
 
-# Simple HTTP server for index.html
 class HTTPHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
@@ -106,6 +132,17 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", len(content))
             self.end_headers()
             self.wfile.write(content)
+        elif self.path.startswith("/fonts/") and self.path.endswith(".woff2"):
+            font_path = Path(__file__).resolve().parent / self.path.lstrip("/")
+            if font_path.is_file():
+                content = font_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "font/woff2")
+                self.send_header("Content-Length", len(content))
+                self.end_headers()
+                self.wfile.write(content)
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
@@ -114,12 +151,14 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
 
 
 async def main():
-    httpd = http.server.HTTPServer(("localhost", PORT), HTTPHandler)
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
+
+    httpd = http.server.HTTPServer(("localhost", port), HTTPHandler)
     http_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     http_thread.start()
 
-    async with websockets.serve(serve_terminal, "localhost", PORT + 1):
-        print(f"Velvet web terminal: http://localhost:{PORT}")
+    async with websockets.serve(serve_terminal, "localhost", port + 1):
+        print(f"Velvet web terminal: http://localhost:{port}")
         await asyncio.Future()
 
 

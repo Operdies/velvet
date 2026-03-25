@@ -10,7 +10,27 @@
     #terminal { height: 100%; }
     @font-face {
       font-family: 'MesloLGS Nerd Font';
-      src: local('MesloLGS Nerd Font'), local('MesloLGS NF'), local('MesloLGSNerdFont-Regular');
+      src: url('/fonts/MesloLGSNerdFont-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'MesloLGS Nerd Font';
+      src: url('/fonts/MesloLGSNerdFont-Bold.woff2') format('woff2');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'MesloLGS Nerd Font';
+      src: url('/fonts/MesloLGSNerdFont-Italic.woff2') format('woff2');
+      font-weight: normal;
+      font-style: italic;
+    }
+    @font-face {
+      font-family: 'MesloLGS Nerd Font';
+      src: url('/fonts/MesloLGSNerdFont-BoldItalic.woff2') format('woff2');
+      font-weight: bold;
+      font-style: italic;
     }
   </style>
 </head>
@@ -19,8 +39,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.8.0/lib/addon-unicode11.min.js"></script>
   <script>
     const term = new Terminal({
+      allowProposedApi: true,
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"MesloLGS Nerd Font", Menlo, Monaco, "Courier New", monospace',
@@ -34,6 +56,9 @@
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
     term.loadAddon(new WebLinksAddon.WebLinksAddon());
+    const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+    term.loadAddon(unicode11Addon);
+    term.unicode.activeVersion = '11';
 
     term.open(document.getElementById('terminal'));
     fitAddon.fit();
