@@ -73,7 +73,7 @@ void velvet_source_config(struct velvet *v) {
     velvet_lua_source(v, (char*)scratch.content);
   } else {
     /* if the user does not have a config file, source the default config */
-    if (luaL_dostring(v->L, "require('velvet.default_config')") != LUA_OK) lua_die(v->L);
+    if (luaL_dostring(v->L, "require('velvet.default_config').setup()") != LUA_OK) lua_die(v->L);
   }
   string_destroy(&scratch);
 }

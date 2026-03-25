@@ -3,12 +3,11 @@
 
 local M = {
   --- @type default_settings
-  settings = {
-    prefix = "<C-x>"
-  }
+  settings = {}
 }
 
 local function cfg()
+  M.settings.prefix = M.settings.prefix or "<C-x>"
   local vv = require('velvet')
   local keymap = require('velvet.keymap')
   local default_shell = os.getenv("SHELL") or "bash"
@@ -129,7 +128,7 @@ end
 
 --- @param opt default_settings
 function M.setup(opt)
-  M.settings = vv.deepcopy(opt) -- todo: implement table merging
+  M.settings = vv.deepcopy(opt or {}) -- todo: implement table merging
   cfg()
 end
 
