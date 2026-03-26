@@ -35,6 +35,7 @@ async def serve_terminal(ws):
     proc = subprocess.Popen(
         [
             "podman", "run",
+            "-it",
             "--rm",
             "--name", container_name,
             "--hostname", "velvet",
@@ -43,7 +44,7 @@ async def serve_terminal(ws):
             "--pids-limit", "64",
             "--read-only",
             "--tmpfs", "/tmp",
-            "--tmpfs", "/home/demo:uid=1000,gid=1000",
+            "--tmpfs", "/home/demo",
             "--network", "none",
             "-e", "TERM=xterm-256color",
             "-e", "COLORTERM=truecolor",
@@ -113,13 +114,13 @@ async def serve_terminal(ws):
     finally:
         reader_task.cancel()
         loop.remove_reader(master_fd)
-        # Kill the container
-        subprocess.run(
+        # Kill the container without blocking the event loop
+        await asyncio.to_thread(subprocess.run,
             ["podman", "kill", container_name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        proc.wait()
+        await asyncio.to_thread(proc.wait)
         os.close(master_fd)
 
 

@@ -1,0 +1,16 @@
+bin/
+release/
+profile/
+release_lto/
+.cache/
+compile_commands.json
+*.ansi
+deps/lua-5.5.0/src/*.[oa]
+deps/lua-5.5.0/src/lua
+deps/lua-5.5.0/src/luac
+deps/utf8proc/*.o
+deps/utf8proc/*.a
+web/.venv/
+web/fonts/
+.claude/
+.git/
