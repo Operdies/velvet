@@ -631,7 +631,57 @@ static void reload_callback(void *data) {
   velvet_source_config(v);
 }
 
+static bool file_exists(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0;
+}
+
+static bool read_file(struct string *str, char *path) {
+  FILE *f = fopen(path, "r");
+  if (!f) return false;
+
+  fseek(f, 0, SEEK_END);
+  size_t len = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  string_ensure_capacity(str, len);
+  fread(str->content, 1, len, f);
+  str->len = len;
+  fclose(f);
+  return true;
+}
+
+/* validate the user's config. If this fails, an appropriate lua error will be thrown.
+ * Normal return indicates success */
+static void check_config(struct velvet *v) {
+  struct string path = {0};
+  string_joinpath(&path, getenv("HOME"), ".config/velvet/init.lua");
+  string_ensure_null_terminated(&path);
+
+  /* config did not exist -- just return */
+  if (!file_exists((char*)path.content)) {
+    string_destroy(&path);
+    return;
+  }
+
+  struct string config = {0};
+  bool ok = read_file(&config, (char*)path.content);
+  string_destroy(&path);
+
+  if (!ok) lua_bail(v->L, "Unable to open config for reading.");
+
+  int status = luaL_loadbuffer(v->L, (char*)config.content, config.len, "validate config");
+  string_destroy(&config);
+  if (status != LUA_OK) {
+    const char *s = luaL_checkstring(v->L, -1);
+    /* raise the config error to the caller if loadbuffer failed */
+    lua_bail(v->L, "Error parsing config: %s", s);
+  }
+  /* pop the loadbuffer() chunk */
+  lua_pop(v->L, 1);
+}
+
 void vv_api_reload(struct velvet *v) {
+  check_config(v);
   struct velvet_api_pre_reload_event_args args = {.time = get_ms_since_startup()};
   velvet_api_raise_pre_reload(v, args);
   /* ensure there are no lua actions scheduled by crudely clearing schedules.

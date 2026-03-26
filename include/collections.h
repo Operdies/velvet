@@ -51,6 +51,7 @@ struct vec {
 #endif
 };
 
+void string_ensure_capacity(struct string *str, size_t required);
 int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
 struct u8_slice u8_slice_from_string(struct string s);
 void string_push_cstr(struct string *str, const char *cstr);

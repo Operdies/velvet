@@ -18,7 +18,7 @@ void *vec_nth_unchecked(struct vec v, size_t i) {
   return (void *)base + offset;
 }
 
-static void string_ensure_capacity(struct string *str, size_t required) {
+void string_ensure_capacity(struct string *str, size_t required) {
   if (str->content == NULL || str->cap < required) {
     size_t newsize = next_size(required);
     str->content = velvet_erealloc(str->content, newsize, 1);
