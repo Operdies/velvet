@@ -174,13 +174,17 @@ lua_Integer vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velv
   region.width = CLAMP(region.width, 0, w->geometry.width - region.left);
   region.height = CLAMP(region.height, 0, w->geometry.height - region.top);
 
-  lua_newtable(L);
+  lua_newtable(L); /* line[] */
 
   struct string scratch = {0};
   struct screen *screen = vte_get_current_screen(&w->emulator);
   for (int row = region.top; row < region.top + region.height; row++) {
+  lua_newtable(L); /* { text, wraps, truncated } */
     string_clear(&scratch);
     struct screen_line *l = screen_get_view_line(screen, row);
+    bool wraps = !l->has_newline;
+    lua_pushboolean(L, wraps);
+    lua_setfield(L, -2, "wraps");
     for (int col = region.left; col < region.left + region.width; col++) {
       struct screen_cell *c, *p;
       c = &l->cells[col];
@@ -189,6 +193,8 @@ lua_Integer vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velv
         /* If the left boundary is a wide char, insert a space instead
          * to preserve alignment. */
         string_push_char(&scratch, ' ');
+        lua_pushboolean(L, true);
+        lua_setfield(L, -2, "truncated");
       } else {
         /* if this cell is wide, increment col to skip the next 0-width cell. */
         string_push_codepoint(&scratch, c->cp.value);
@@ -197,6 +203,7 @@ lua_Integer vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velv
     }
     /* todo: string */
     lua_pushlstring(L, (char*)scratch.content, scratch.len);
+    lua_setfield(L, -2, "text");
     lua_seti(L, -2, 1 + row - region.top);
   }
   string_destroy(&scratch);

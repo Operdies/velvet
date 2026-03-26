@@ -86,7 +86,7 @@ end
 --- @type table<string,gen_type>
 local type_lookup = {
   any = { lua_type = "any", c_type = "void" },
-  ["string[]"] = { lua_type = "string[]", c_type = "char*[]" },
+  ["string[]"] = { lua_type = "line[]", c_type = "char*[]" },
   ["int[]"] = { lua_type = "integer[]", c_type = "int[]" },
   void = { c_type = "void", lua_type = "nil" },
   ["function"] = {
@@ -134,7 +134,7 @@ end
 
 local function is_manual(name) 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
-  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true }
+  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true, ["line[]"] = true }
   return manual_types[name]
 end
 
@@ -151,6 +151,11 @@ for _, type in ipairs(spec.types) do
   local entry = { c_type = "struct " .. get_cname(type.name), lua_type = get_luaname(type.name), composite = type }
   entry.optional = compute_is_optional(type)
   type_lookup[type.name] = entry
+
+  -- limited support for arrays of objects. 
+  -- These types cannot be automatically marshalled, but we still need to generate docs.
+  local array_entry = { lua_type = entry.lua_type .. '[]' }
+  type_lookup[type.name .. '[]'] = array_entry
 end
 
 for _, type in ipairs(spec.enums) do

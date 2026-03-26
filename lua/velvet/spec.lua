@@ -322,6 +322,15 @@ return {
       },
     },
     {
+      name = "line",
+      doc = "A line of text extracted from a window",
+      fields = {
+        { name = "text", type = "string", doc = "Text content" },
+        { name = "wraps", type = "bool", doc = "Set if the line continues on the next row" },
+        { name = "truncated", type = "bool", doc = "Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space." },
+      },
+    },
+    {
       name = "coordinate",
       doc = "1-indexed screen coordinate",
       fields = {
@@ -534,7 +543,7 @@ return {
         { name = "win_id",  type = "int",   doc = "Window id" },
         { name = "region", type = "rect", doc = "The region to get text from" },
       },
-      returns = { type = "string[]", doc = "The text in the specified region." },
+      returns = { type = "line[]", doc = "The text in the specified region." },
     },
     {
       name = "window_set_opacity",

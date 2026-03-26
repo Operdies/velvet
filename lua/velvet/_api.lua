@@ -145,6 +145,11 @@ local api = {}
 --- @field win_id integer The id of the window the keys were sent to.
 --- @field key velvet.api.window.key_event The key which generated the event.
 
+--- @class velvet.api.line
+--- @field text string Text content
+--- @field wraps boolean Set if the line continues on the next row
+--- @field truncated boolean Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space.
+
 --- @class velvet.api.coordinate
 --- @field row integer row
 --- @field col integer column
@@ -273,7 +278,7 @@ function api.window_get_opacity(win_id) end
 --- Get window text contained in |region|. 1-indexed.
 --- @param win_id integer Window id
 --- @param region velvet.api.rect The region to get text from
---- @return string[] ret The text in the specified region.
+--- @return velvet.api.line[] ret The text in the specified region.
 function api.window_get_text(win_id, region) end
 
 --- Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|
