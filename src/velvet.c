@@ -23,7 +23,7 @@ void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
   if (s->output) close(s->output);
   if (s->socket) close(s->socket);
   string_destroy(&s->pending_output);
-  string_destroy(&s->commands.buffer);
+  string_destroy(&s->command_buffer);
   *s = (struct velvet_session){0};
   size_t idx = vec_index(&velvet->sessions, s);
   vec_remove_at(&velvet->sessions, idx);
@@ -70,9 +70,9 @@ struct velvet_session *velvet_get_focused_session(struct velvet *v) {
 
 static void session_handle_command_buffer(struct velvet *v, struct velvet_session *src) {
   int socket = src->socket;
-  struct u8_slice cmd = string_as_u8_slice(src->commands.buffer);
+  struct u8_slice cmd = string_as_u8_slice(src->command_buffer);
   velvet_cmd(v, socket, cmd);
-  string_clear(&src->commands.buffer);
+  string_clear(&src->command_buffer);
 }
 
 static void session_socket_callback(struct io_source *src) {
@@ -131,7 +131,7 @@ static void session_socket_callback(struct io_source *src) {
   }
 
   struct u8_slice cmd = {.content = (uint8_t *)data_buf, .len = n};
-  string_push_slice(&session->commands.buffer, cmd);
+  string_push_slice(&session->command_buffer, cmd);
   session_handle_command_buffer(velvet, session);
 
   if (!session->input) {
@@ -323,7 +323,7 @@ static void velvet_dispatch_frame(void *data) {
   struct velvet_session *focus = velvet_get_focused_session(v);
   if (focus) {
     bool is_idle = io_schedule_exists(&v->event_loop, v->active_render_token);
-    v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_wide_chars;
+    v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_multibyte_graphemes;
     struct velvet_api_pre_render_event_args event_args = {
         .time = get_ms_since_startup(),
         .cause = v->render_invalidate_reason ? u8_slice_from_cstr(v->render_invalidate_reason)

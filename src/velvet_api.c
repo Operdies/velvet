@@ -267,23 +267,6 @@ void vv_api_set_focused_window(struct velvet *v, lua_Integer winid) {
   velvet_scene_set_focus(&v->scene, w);
 }
 
-enum velvet_api_key_modifier check_modifier(lua_State *L, enum velvet_api_key_modifier m) {
-  switch (m) {
-  case VELVET_API_KEY_MODIFIER_ALT: return m;
-  case VELVET_API_KEY_MODIFIER_CONTROL: return m;
-  case VELVET_API_KEY_MODIFIER_SUPER: return m;
-  case VELVET_API_KEY_MODIFIER_SHIFT: lua_bail(L, "Shift cannot be remapped.");
-  case VELVET_API_KEY_MODIFIER_HYPER: lua_bail(L, "Hyper cannot be remapped.");
-  case VELVET_API_KEY_MODIFIER_META: return VELVET_API_KEY_MODIFIER_ALT;
-  case VELVET_API_KEY_MODIFIER_CAPS_LOCK: lua_bail(L, "Caps lock cannot be remapped.");
-  case VELVET_API_KEY_MODIFIER_NUM_LOCK: lua_bail(L, "Num lock cannot be remapped."); break;
-  default: lua_bail(L, "Multiple modifiers specified. Please specify a single modifier.");
-  }
-
-  /* unreachable */
-  assert(!"Unreachable");
-}
-
 bool vv_api_get_focus_follows_mouse(struct velvet *v) {
   return v->input.options.focus_follows_mouse;
 }
@@ -597,7 +580,7 @@ void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct
   s->ws.x_pixel = options.x_pixel;
   s->ws.y_pixel = options.y_pixel;
   if (options.supports_repeating_multibyte_characters.set)
-    s->features.no_repeat_wide_chars = !options.supports_repeating_multibyte_characters.value;
+    s->features.no_repeat_multibyte_graphemes = !options.supports_repeating_multibyte_characters.value;
   velvet_force_full_redraw(v);
 }
 

@@ -134,13 +134,6 @@ int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct 
   return host ? host->id : 0;
 }
 
-int velvet_scene_spawn_process(struct velvet_scene *scene, struct u8_slice cmdline) {
-  assert(scene->windows.element_size == sizeof(struct velvet_window));
-  struct velvet_window host = { .emulator = vte_default };
-  string_push_slice(&host.cmdline, cmdline);
-  return velvet_scene_spawn_process_from_template(scene, host);
-}
-
 static void velvet_render_destroy(struct velvet_render *renderer) {
   string_destroy(&renderer->draw_buffer);
   for (int i = 0; i < LENGTH(renderer->buffers); i++) {

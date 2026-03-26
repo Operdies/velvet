@@ -15,8 +15,6 @@ enum velvet_input_state {
 
 struct velvet_input_options {
   bool focus_follows_mouse;
-  /* When one mapping is a prefix of another, we resolve the shorter mapping after this delay. */
-  uint64_t key_chain_timeout_ms;
   /* When a keybind repeatable mapping is triggered, allow retriggers within this window */
   uint64_t key_repeat_timeout_ms;
   /* how many lines are scrolled at a time */
@@ -27,13 +25,11 @@ struct velvet_input {
   enum velvet_input_state state;
   struct string command_buffer;
   struct velvet_input_options options;
-  uint64_t last_repeat;
   int input_socket;
-  io_schedule_id unwind_callback_token;
 };
 
 struct velvet_session_features {
-  bool no_repeat_wide_chars;
+  bool no_repeat_multibyte_graphemes; // compatibility with some terminals with poor multibyte handling
 };
 
 struct velvet_session {
@@ -41,11 +37,8 @@ struct velvet_session {
   struct string pending_output; // buffered output
   int input;                    // stdin
   int output;                   // stdout
-  struct rect ws;
-  struct {
-    struct string buffer; // partial commands
-    int lines;
-  } commands;
+  struct rect ws;               // window size
+  struct string command_buffer; // vv lua commands
   struct velvet_session_features features;
 };
 
@@ -95,7 +88,6 @@ void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_sc
  * current keymap. */
 void velvet_input_process(struct velvet *in, struct u8_slice str);
 void velvet_input_destroy(struct velvet_input *v);
-void velvet_input_unwind(struct velvet *v);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
@@ -106,7 +98,6 @@ bool window_visible(struct velvet *v, struct velvet_window *w);
     .options =
         {
             .focus_follows_mouse = true,
-            .key_chain_timeout_ms = 2000,
             .key_repeat_timeout_ms = 500,
             .scroll_multiplier = 3,
         },
