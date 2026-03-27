@@ -3,7 +3,7 @@
 
 local M = {
   --- @type default_settings
-  settings = {}
+  settings = { prefix = "<C-x>" }
 }
 
 local function cfg()

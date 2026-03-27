@@ -25,6 +25,27 @@ local single_monocle = false
 --- @type arrange
 local layout_name = 'tiled'
 
+--- @type integer[]
+local windows = {}
+
+-- |state| is automatically saved and reloaded when user config is reloaded.
+-- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
+-- And also because the restore logic cannot handle table keys.
+local session_options = require('velvet.session_storage').create('velvet.dwm')
+session_options.state = session_options.state or {
+  --- @type table<integer, boolean[]> 
+  tags = {},
+  --- @type table<integer, dwm.layer> 
+  layers = {},
+  --- @type boolean[]
+  view = { true, false, false, false, false, false, false, false, false },
+  --- @type boolean[]
+  prev_view = { true, false, false, false, false, false, false, false, false },
+  --- @type integer[]
+  focus_order = {}
+}
+local state = session_options.state
+
 --- @param win velvet.window
 --- @param to velvet.api.rect
 local function win_move(win, to)
@@ -74,26 +95,6 @@ local function get_tagsset()
   end
   return tags
 end
-
-
---- @type integer[]
-local windows = {}
-
--- |state| is automatically saved and reloaded when user config is reloaded.
--- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
--- And also because the restore logic cannot handle table keys.
-local state = {
-  --- @type table<integer, boolean[]> 
-  tags = {},
-  --- @type table<integer, dwm.layer> 
-  layers = {},
-  --- @type boolean[]
-  view = { true, false, false, false, false, false, false, false, false },
-  --- @type boolean[]
-  prev_view = { true, false, false, false, false, false, false, false, false },
-  --- @type integer[]
-  focus_order = {}
-}
 
 --- @generic TKey
 --- @param tbl table<TKey, any>
@@ -476,15 +477,8 @@ function dwm.toggle_tag(id, tag)
   arrange()
 end
 
-local e = vv.events
 function dwm.activate()
-  local dwm_stored_state_key = "velvet.dwm.stored_state"
-  local event_handler = e.create_group(vv.arrange_group_name, true)
-  event_handler.pre_reload = function() 
-    vv.api.session_store_value(dwm_stored_state_key, state) 
-  end
-  local ok, stored_state = pcall(vv.api.session_load_value, dwm_stored_state_key)
-  if ok and stored_state then state = stored_state end
+  local event_handler = vv.events.create_group(vv.arrange_group_name, true)
   local lst = vv.api.get_windows()
   for _, id in ipairs(lst) do
     add_window(id, true)
@@ -498,9 +492,6 @@ function dwm.activate()
   event_handler.window_focus_changed = function(args)
     if ignore_window(args.new_focus) then return end
     arrange()
-  end
-  if #windows > 0 then
-    set_focus(windows[1])
   end
   arrange()
 end
