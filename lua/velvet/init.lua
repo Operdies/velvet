@@ -14,6 +14,13 @@ local vv = {
     popup = 1000,
   },
 
+  --- Emit an error message to all system_message listeners
+  --- @param error_message string error message
+  system_error = function(error_message)
+    ---@diagnostic disable-next-line: invisible
+    vv.events.emit_event('system_message', { message = error_message, level = 'error' })
+  end,
+
   -- stolen from vim.inspect
   inspect = require('velvet.inspect').inspect,
 
@@ -123,20 +130,9 @@ vv.options = setmetatable(vv.options, {
 --- @param x any the object to log
 --- @param options inspect.format_options|nil formatting options
 function dbg(x, options) 
-  local text = vv.inspect(x, options)
-  print(text) 
+  local text = type(x) == 'string' and x or vv.inspect(x, options)
   ---@diagnostic disable-next-line: invisible
   vv.events.emit_event('system_message', { message = text, level = 'debug' })
-end
-
-local global_error = error
-error = function(message, level)
-  -- level: set the call stack position to generate debug information from
-  level = (level or 1) + 2
-  local _, err = pcall(global_error, message, level)
----@diagnostic disable-next-line: invisible
-  vv.events.emit_event('system_message', { message = err, level = 'error' })
-  global_error(message, level)
 end
 
 return vv

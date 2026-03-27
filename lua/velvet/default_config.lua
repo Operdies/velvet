@@ -12,15 +12,7 @@ local function cfg()
   local keymap = require('velvet.keymap')
   local default_shell = os.getenv("SHELL") or "bash"
 
-  local map = function(keys, callback, options)
-    local wrap = function()
-      xpcall(callback, function(e)
-        vv.events.emit_event('system_message', { message = debug.traceback(e, 2), level = 'error' })
-        return e
-      end)
-    end
-    keymap.set(keys, wrap, options)
-  end
+  local map = keymap.set
   local map_prefix = function(mapping, ...) map(M.settings.prefix .. mapping, ...) end
 
   map_prefix("r", vv.api.reload, { description = "Reload the lua context. This fully wipes out all lua state including windows, keybinds, and any state. Configs will be reloaded after restarting." })

@@ -230,7 +230,14 @@ function keys.set(lhs, rhs, opts)
     if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
     map = map.children[lookup_key]
   end
-  map.execute = function() pcall(rhs) end
+  map.execute = function() 
+    local handler = function(e)
+      local traceback = debug.traceback(e, 2)
+      local msg = "Unhandled error in mapping " .. lhs .. ":\n" .. traceback
+      vv.system_error(msg)
+    end
+    xpcall(rhs, handler) 
+  end
   map.options = opts or {}
 end
 

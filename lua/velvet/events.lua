@@ -55,19 +55,17 @@ local events = {
         data.key.name = utf8.char(cp)
       end
     end
-    for name, id in pairs(event_groups or {}) do
+    for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
-      if group_func_table[event_name] then 
-        local ok, err = pcall(group_func_table[event_name], ...)
-        if not ok then 
-          -- enrich the error event with detailed information about the handler
-          error(vv.inspect({
-            event = event_name,
-            data = data,
-            handler_name = name,
-            error = err
-          }))
+      if group_func_table[event_name] then
+        local error_handler = function(e)
+          -- prevent recursion if message handlers have errors
+          if event_name ~= 'system_message' then
+            vv.system_error(debug.traceback(e, 2))
+          end
+          return e
         end
+        xpcall(group_func_table[event_name], error_handler, ...)
       end
     end
   end
