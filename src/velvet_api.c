@@ -105,30 +105,23 @@ lua_Integer vv_api_get_focused_window(struct velvet *v) {
 
 struct velvet_api_rect vv_api_window_get_geometry(struct velvet *v, lua_Integer winid) {
   struct velvet_api_rect geom = {0};
-  struct velvet_window *w;
-  vec_find(w, v->scene.windows, w->id == winid);
-  if (w) {
-    struct rect r = w->geometry;
-    geom.height = r.height;
-    geom.left = r.left + 1;
-    geom.top = r.top + 1;
-    geom.width = r.width;
-  }
+  struct velvet_window *w = check_window(v, winid);
+  struct rect r = w->geometry;
+  geom.height = r.height;
+  geom.left = r.left + 1;
+  geom.top = r.top + 1;
+  geom.width = r.width;
   return geom;
 }
 
 void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, struct velvet_api_rect geometry) {
-  struct velvet_window *w;
+  struct velvet_window *w = check_window(v, winid);
   /* sanity check -- 1000 is already ridiculous, but let's be lenient */
   if (geometry.width < 0 || geometry.width > 1000 || geometry.height < 0 || geometry.height > 1000) return;
   geometry.left -= 1;
   geometry.top -= 1;
-  vec_find(w, v->scene.windows, w->id == winid);
-  if (w) {
-    struct rect new_geometry = {
-        .height = geometry.height, .top = geometry.top, .left = geometry.left, .width = geometry.width};
-    if (velvet_window_resize(w, new_geometry, v)) velvet_invalidate_render(v, "window resized");
-  }
+  struct rect new_geometry = { .height = geometry.height, .top = geometry.top, .left = geometry.left, .width = geometry.width};
+  if (velvet_window_resize(w, new_geometry, v)) velvet_invalidate_render(v, "window resized");
 }
 
 bool vv_api_window_is_valid(struct velvet *v, lua_Integer winid) {
