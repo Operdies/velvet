@@ -36,6 +36,8 @@ local vv = {
     return setmetatable(copy, getmetatable(tbl))
   end,
 
+  tbl_deep_extend = require('velvet.lib.deep_extend'),
+
   --- @type velvet.api
   api = {},
   --- @type velvet.options
