@@ -317,12 +317,13 @@ local function is_modifier(args)
   return modifier_keys[args.key.name] and true or false
 end
 
+local passthrough = false
 local last_repeat = 0
 --- @param args velvet.api.session.key.event_args
 function keymap.on_key(args)
   args.key.codepoint = remapped_keys[args.key.codepoint] or args.key.codepoint
   args.key.alternate_codepoint = remapped_keys[args.key.alternate_codepoint] or args.key.alternate_codepoint
-  if args.key.event_type == 'release' then
+  if passthrough or args.key.event_type == 'release' then
     -- TODO: Only send a release event if we previously sent pressed/repeat events to the recipient.
     -- This is a bit tricky because it involves tracking if the press/repeat event was blocked due
     -- to a keymap, and because the focus may have been changed by a key repeat.
@@ -462,6 +463,18 @@ function keys.remap_key(from, to)
   assert(#t == 1, "bad argument #2 (expected exactly one character)")
 
   remapped_keys[f[1]] = t[1]
+end
+
+--- Enable or disable passthrough mode. In passthrouh mode, the current keymap is ignored.
+--- This is useful for sending keys to windows which would otherwise be intercepted.
+function keys.passthrough(b)
+  local set = b and true or false
+  if passthrough ~= set then
+    -- reset keymap on passthrough
+    last_repeat = 0
+    current_chain = root_keymap
+  end
+  passthrough = set
 end
 
 return keys
