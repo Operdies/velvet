@@ -65,8 +65,7 @@
     term.focus();
     fitAddon.fit();
 
-    const wsPort = parseInt(location.port) + 1;
-    const ws = new WebSocket(`ws://${location.hostname}:${wsPort}`);
+    const ws = new WebSocket(`ws://${location.hostname}:${location.port}`);
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));

@@ -2,7 +2,6 @@
 import asyncio
 import fcntl
 import http
-import http.server
 import json
 import os
 import pty
@@ -11,11 +10,12 @@ import struct
 import subprocess
 import sys
 import termios
-import threading
 import uuid
 from pathlib import Path
 
 import websockets
+from websockets.datastructures import Headers
+from websockets.http11 import Response
 
 IMAGE = os.environ.get("VELVET_IMAGE", "velvet")
 INDEX_HTML = Path(__file__).resolve().parent / "index.html"
@@ -124,41 +124,29 @@ async def serve_terminal(ws):
         os.close(master_fd)
 
 
-class HTTPHandler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/" or self.path == "/index.html":
-            content = INDEX_HTML.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", len(content))
-            self.end_headers()
-            self.wfile.write(content)
-        elif self.path.startswith("/fonts/") and self.path.endswith(".woff2"):
-            font_path = Path(__file__).resolve().parent / self.path.lstrip("/")
-            if font_path.is_file():
-                content = font_path.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "font/woff2")
-                self.send_header("Content-Length", len(content))
-                self.end_headers()
-                self.wfile.write(content)
-            else:
-                self.send_error(404)
-        else:
-            self.send_error(404)
+FONTS_DIR = Path(__file__).resolve().parent / "fonts"
 
-    def log_message(self, *args):
-        pass
+
+async def process_request(connection, request):
+    if request.headers.get("Upgrade", "").lower() == "websocket":
+        return None
+    if request.path == "/" or request.path == "/index.html":
+        content = INDEX_HTML.read_bytes()
+        return Response(200, "OK", Headers({"Content-Type": "text/html"}), content)
+    if request.path.startswith("/fonts/") and request.path.endswith(".woff2"):
+        font_path = FONTS_DIR / Path(request.path).name
+        if font_path.is_file():
+            content = font_path.read_bytes()
+            return Response(200, "OK", Headers({"Content-Type": "font/woff2"}), content)
+    return Response(404, "Not Found", Headers(), b"Not Found")
 
 
 async def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 
-    httpd = http.server.HTTPServer(("localhost", port), HTTPHandler)
-    http_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    http_thread.start()
-
-    async with websockets.serve(serve_terminal, "localhost", port + 1):
+    async with websockets.serve(
+        serve_terminal, "localhost", port, process_request=process_request
+    ):
         print(f"Velvet web terminal: http://localhost:{port}")
         await asyncio.Future()
 
