@@ -425,6 +425,8 @@ end
 --- @return velvet.window
 function Window.create(options)
   local win = Window.from_handle(a.window_create(options))
+  win:set_auto_return(true)
+  win:set_line_wrapping(true)
   return win
 end
 
