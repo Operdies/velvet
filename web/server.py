@@ -40,7 +40,7 @@ async def serve_terminal(ws):
             "--name", container_name,
             "--hostname", "velvet",
             "--memory", "256m",
-            "--cpus", "0.5",
+            "--cpus", "1.3",
             "--pids-limit", "64",
             "--read-only",
             "--tmpfs", "/tmp:size=256m",

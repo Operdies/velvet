@@ -11,4 +11,11 @@ if [ ! -d "$DIR/.venv" ]; then
     "$DIR/.venv/bin/pip" install -q websockets
 fi
 
-exec "$DIR/.venv/bin/python" "$DIR/server.py" "$PORT"
+# allow velvet sessions to use at most 14/16 logical cores.
+# individual pods are further limited to 120% which appears to be a sweetspot for velvet throughput
+# (server + client relay)
+if command -v systemd-run; then
+  systemd-run --user --scope --property="CPUQuota=1400%" -- "$DIR/.venv/bin/python" "$DIR/server.py" "$PORT"
+else
+  "$DIR/.venv/bin/python" "$DIR/server.py" "$PORT"
+fi
