@@ -148,8 +148,14 @@ end
 
 --- @return velvet.window?
 local function get_focus()
-  local id = state.focus_order[#state.focus_order]
-  return id and window.from_handle(id)
+  for i=#state.focus_order,1,-1 do
+    local id = state.focus_order[i]
+    if id and not vv.api.window_is_valid(id) then
+      state.focus_order[i] = nil
+    else
+      return window.from_handle(id)
+    end
+  end
 end
 
 --- Set the focus to the most recently focused visible item
