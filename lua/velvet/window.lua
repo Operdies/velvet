@@ -202,7 +202,7 @@ end
 --- @param args velvet.api.window.resized.event_args|velvet.api.window.on_key.event_args|velvet.api.window.moved.event_args
 local function route_window_events(event, args)
   local win = win_registry[args.win_id]
-  if win[event] then win[event](win, args) end
+  if win and win[event] then win[event](win, args) end
 end
 
 hooks.window_moved = function(evt) route_window_events('on_window_moved_handler', evt) end

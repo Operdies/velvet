@@ -247,7 +247,7 @@ local current_chain = root_keymap
 --- @param args velvet.api.session.key.event_args
 local function send_key_to_window(args)
   local win = vv.api.get_focused_window()
-  vv.api.window_send_raw_key(win, args.key)
+  if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
 end
 
 local sequence_id = 0

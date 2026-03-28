@@ -15,7 +15,7 @@ local r_right = 0
 local tiled_opacity = 0.8
 local floating_opacity = 0.8
 
-local move_duration = 0
+local move_duration = 150
 local single_monocle = false
 
 --- @alias arrange string arrange mode
@@ -49,18 +49,12 @@ local state = session_options.state
 --- @param win velvet.window
 --- @param to velvet.api.rect
 local function win_move(win, to)
+  local rect = require('velvet.ui.rect')
   local client_area = to
-  if win:get_frame_enabled() then
-    -- if this window has a frame, shrink the client area to accomodate it
-    client_area = {
-      left = to.left + 1,
-      top = to.top + 1,
-      width = to.width - 2,
-      height = to.height - 2,
-    }
-  end
+  -- if this window has a frame, shrink the client area.
+  if win:get_frame_enabled() then client_area = rect.inset(to, 1) end
   if move_duration > 0 then
-    local a = require('ui.animation')
+    local a = require('velvet.ui.animation')
     a.animate(win.id, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
   else
     win:set_geometry(client_area)
@@ -305,6 +299,20 @@ local function monocle()
   ensure_focus_visible()
 end
 
+local function get_stacks()
+  local master, stack = {}, {}
+  for _, id in ipairs(vv.api.get_windows()) do
+    if visibleontags(id) and state.layers[id] == dwm.layers.tiled then
+      if #master < nmaster then
+        table.insert(master, id)
+      else
+        table.insert(stack, id)
+      end
+    end
+  end
+  return master, stack
+end
+
 local function tile()
   local num_visible = 0
   for _, win in ipairs(windows) do
@@ -493,7 +501,25 @@ function dwm.activate()
   -- dwm.reserve(0, 0, 1, 0)
   dwm.reserve(0, 0, 0, 0)
   event_handler.screen_resized = arrange
-  event_handler.window_created = function(args) add_window(args.win_id, false) end
+  event_handler.window_created = function(args) 
+    if ignore_window(args.win_id) then return end
+    local sz = vv.api.get_screen_geometry()
+    local master, stack = get_stacks()
+    local mwidth = math.floor(sz.width * mfact)
+    local swidth = sz.width - mwidth
+    local height = sz.height // (#stack + 1)
+    -- set initial window location and size so it appears to slide in from the bottom of the screen.
+    local loc = { left = mwidth, top = sz.height, width = swidth, height = height }
+    if #stack == 0 and #master > 0 then
+      -- if stack is empty, make it slide in from the side instead
+      loc = { left = sz.width, top = 1, width = swidth, height = sz.height }
+    elseif #master == 0 then
+      -- if master is empty, occupy the whole screen.
+      loc = { left = 1, top = 1, width = sz.width, height = sz.height }
+    end
+    vv.api.window_set_geometry(args.win_id, loc)
+    add_window(args.win_id, false) 
+  end
   event_handler.window_closed = function(_) remove_window() end
   event_handler.window_focus_changed = function(args)
     if ignore_window(args.new_focus) then return end
