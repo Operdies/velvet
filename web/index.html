@@ -104,6 +104,12 @@
       fitAddon.fit();
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     });
+
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    });
+    resizeObserver.observe(document.getElementById('terminal'));
   </script>
 </body>
 </html>
