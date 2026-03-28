@@ -61,8 +61,9 @@ static void push_sgr(struct vte *vte) {
   push_color(vte, g->cursor.brush.bg, false);
 }
 
-static void push_unhandled(struct vte *vte, const char *st) {
-  string_push_cstr(&vte->pending_input, ESC "P0$r");
+static void push_unhandled(struct vte *vte, const char *intermediate, const char *st) {
+  string_push_cstr(&vte->pending_input, ESC "P0");
+  string_push_cstr(&vte->pending_input, intermediate);
   string_push_cstr(&vte->pending_input, st);
 }
 
@@ -82,12 +83,10 @@ void dcs_dispatch(struct vte *vte, struct u8_slice cmd, const char *st) {
     string_push_format_slow(&vte->pending_input, ESC "P1$r%d q%s", vte->options.cursor.style, st);
   } else if (u8_slice_starts_with_cstr(cmd, "q")) {
     TODO("Sixel graphics");
-    push_unhandled(vte, st);
   } else if (u8_slice_starts_with_cstr(cmd, "+q")) {
     /* xterm private sequence */
-    push_unhandled(vte, st);
+    push_unhandled(vte, "+r", st);
   } else {
     TODO("Unrecognized DCS sequence: '%.*s'", (int)cmd.len, cmd.content);
-    push_unhandled(vte, st);
   }
 }
