@@ -27,7 +27,13 @@ return {
     end
     return known_stores[key]
   end,
-  --- List known stores.
+  --- inspect known stores. This is meant for debugging, and not programmatic use.
   --- @return table<string, table> known_stores a table of all known stores.
-  list = function() return known_stores end,
+  inspect = function() 
+    local copy = {}
+    for k, v in pairs(known_stores) do
+      copy[k] = v
+    end
+    return copy
+  end,
 }
