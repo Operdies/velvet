@@ -368,8 +368,8 @@ local function tile()
 
   for i, id in ipairs(state.focus_order) do
     local win = window.from_handle(id)
-    local z = tiled(id) and (tiled_z) or (floating_z + i)
-    win:set_z_index(z)
+    local z = tiled(id) and tiled_z or floating_z
+    win:set_z_index(i + z)
   end
 
   local master_width = #stack > 0 and math.floor(term.width * mfact) or term.width
