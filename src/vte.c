@@ -623,6 +623,7 @@ void vte_destroy(struct vte *vte) {
   vec_foreach(link, vte->links)
     hyperlink_destroy(*link);
   vec_destroy(&vte->links);
+  vec_destroy(&vte->tabstops);
 }
 
 struct screen *vte_get_current_screen(struct vte *vte) {
