@@ -1,15 +1,22 @@
-local t = {X = 123}
-local t1 = { 
-  __index = function(tbl, key) 
-    print('read index: ' .. key)
-    if key == 'Z' then return function() print("Invoked returned function") end end
-  end,
-  __newindex = function(tbl, key, value)
-    print('assign index: ' .. key .. ' = ' .. value)
-  end
+local tests = {
+  'velvet.test.test_deep_extend',
+  'velvet.test.test_session_storage',
 }
-setmetatable(t, t1)
 
-t.W = 1
-local y = t.Y
-t.Z()
+local function run()
+  local failed = 0
+  for _, mod in ipairs(tests) do
+    print('running: ' .. mod)
+    local ok, err = pcall(require, mod)
+    if not ok then
+      print('FAIL: ' .. mod .. ': ' .. tostring(err))
+      failed = failed + 1
+    end
+  end
+  if failed > 0 then
+    error(failed .. ' test module(s) failed')
+  end
+  print('all ' .. #tests .. ' test module(s) passed')
+end
+
+return { run = run }

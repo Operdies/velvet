@@ -940,7 +940,7 @@ void test_vec() {
 }
 
 static void test_lua();
-static void test_session_load_and_store();
+static void test_lua_modules();
 
 int main(void) {
   test_input_output();
@@ -952,7 +952,7 @@ int main(void) {
   test_base64();
   test_vec();
   test_lua();
-  test_session_load_and_store();
+  test_lua_modules();
   return n_failures;
 }
 
@@ -1006,196 +1006,16 @@ void test_lua() {
   velvet_destroy(&v);
 }
 
-static void test_session_load_and_store() {
+void test_lua_modules() {
   struct velvet v = {.event_loop = io_default, .stored_strings = vec(struct velvet_kvp)};
   velvet_lua_init(&v);
   lua_State *L = v.L;
 
-  // Primitive types
-  lua_assert(L,
-             "vv.api.session_store_value('int', 99)\n"
-             "assert(vv.api.session_load_value('int') == 99)\n");
+  if (luaL_dostring(L, "require('velvet')") != LUA_OK) {
+    lua_die(L);
+  }
+  lua_pop(L, lua_gettop(L));
 
-  lua_assert(L,
-             "vv.api.session_store_value('float', 1.5)\n"
-             "assert(vv.api.session_load_value('float') == 1.5)\n");
-
-  lua_assert(L,
-             "vv.api.session_store_value('bool_true', true)\n"
-             "vv.api.session_store_value('bool_false', false)\n"
-             "assert(vv.api.session_load_value('bool_true') == true)\n"
-             "assert(vv.api.session_load_value('bool_false') == false)\n");
-
-  lua_assert(L,
-             "vv.api.session_store_value('str', 'hello')\n"
-             "assert(vv.api.session_load_value('str') == 'hello')\n");
-
-  // String edge cases
-  lua_assert(L,
-             "vv.api.session_store_value('str_quotes', 'say \"hello\" it\\'s fine')\n"
-             "assert(vv.api.session_load_value('str_quotes') == 'say \"hello\" it\\'s fine')\n");
-
-  lua_assert(L,
-             "vv.api.session_store_value('str_newline', 'line1\\nline2')\n"
-             "assert(vv.api.session_load_value('str_newline') == 'line1\\nline2')\n");
-
-  // Missing key returns nil
-  lua_assert(L, "assert(vv.api.session_load_value('nonexistent') == nil)\n");
-
-  // Overwrite
-  lua_assert(L,
-             "vv.api.session_store_value('overwrite', 1)\n"
-             "vv.api.session_store_value('overwrite', 2)\n"
-             "assert(vv.api.session_load_value('overwrite') == 2)\n");
-
-  // Delete by setting nil
-  lua_assert(L,
-             "vv.api.session_store_value('delete_me', 42)\n"
-             "vv.api.session_store_value('delete_me', nil)\n"
-             "assert(vv.api.session_load_value('delete_me') == nil)\n");
-
-  // Simple table
-  lua_assert(L,
-             "vv.api.session_store_value('tbl', { x = 1, y = 2 })\n"
-             "local t = vv.api.session_load_value('tbl')\n"
-             "assert(t.x == 1)\n"
-             "assert(t.y == 2)\n");
-
-  // Integer keys
-  lua_assert(L,
-             "vv.api.session_store_value('arr', { 10, 20, 30 })\n"
-             "local t = vv.api.session_load_value('arr')\n"
-             "assert(t[1] == 10)\n"
-             "assert(t[2] == 20)\n"
-             "assert(t[3] == 30)\n");
-
-  // Mixed keys
-  lua_assert(L,
-             "vv.api.session_store_value('mixed', { 1, 2, x = 'hello', [10] = true })\n"
-             "local t = vv.api.session_load_value('mixed')\n"
-             "assert(t[1] == 1)\n"
-             "assert(t[2] == 2)\n"
-             "assert(t.x == 'hello')\n"
-             "assert(t[10] == true)\n");
-
-  // Nested tables
-  lua_assert(L,
-             "vv.api.session_store_value('nested', { a = { b = { c = 42 } } })\n"
-             "local t = vv.api.session_load_value('nested')\n"
-             "assert(t.a.b.c == 42)\n");
-
-  // Integer vs float subtype preservation
-  lua_assert(L,
-             "vv.api.session_store_value('numtypes', { i = 1, f = 1.0 })\n"
-             "local t = vv.api.session_load_value('numtypes')\n"
-             "assert(math.type(t.i) == 'integer')\n"
-             "assert(math.type(t.f) == 'float')\n");
-
-  // Special float values
-  lua_assert(L,
-             "local nan = 0 / 0\n"
-             "vv.api.session_store_value('inf', math.huge)\n"
-             "vv.api.session_store_value('neginf', -math.huge)\n"
-             "vv.api.session_store_value('nan', nan)\n"
-             "assert(vv.api.session_load_value('inf') == math.huge)\n"
-             "assert(vv.api.session_load_value('neginf') == -math.huge)\n"
-             "assert(vv.api.session_load_value('nan') ~= vv.api.session_load_value('nan'))\n" // nan ~= nan
-  );
-
-  // Empty table
-  lua_assert(L,
-             "vv.api.session_store_value('empty', {})\n"
-             "local t = vv.api.session_load_value('empty')\n"
-             "assert(type(t) == 'table')\n");
-
-  lua_assert(
-      L,
-      "local original = {\n"
-      "  -- primitives\n"
-      "  i = 42,\n"
-      "  f = 3.14,\n"
-      "  s = 'hello world',\n"
-      "  b_true = true,\n"
-      "  b_false = false,\n"
-      "  -- special floats\n"
-      "  inf = math.huge,\n"
-      "  neginf = -math.huge,\n"
-      "  nan = 0/0,\n"
-      "  -- integer keys\n"
-      "  [1] = 'one',\n"
-      "  [2] = 'two',\n"
-      "  [100] = 'sparse',\n"
-      "  -- string with quotes\n"
-      "  quoted = 'say \"hello\" it\\'s fine',\n"
-      "  -- nested\n"
-      "  layout = {\n"
-      "    x = 10,\n"
-      "    y = 20,\n"
-      "    size = 1.5,\n"
-      "    tags = { 'visible', 'active', 'focused' },\n"
-      "    children = {\n"
-      "      { name = 'panel_a', width = 100, height = 200, visible = true },\n"
-      "      { name = 'panel_b', width = 300, height = 400, visible = false },\n"
-      "    },\n"
-      "  },\n"
-      "  prefs = {\n"
-      "    volume = 0.75,\n"
-      "    theme = 'dark',\n"
-      "    keymap = {\n"
-      "      save = 'ctrl+s',\n"
-      "      quit = 'ctrl+q',\n"
-      "      reload = 'ctrl+r',\n"
-      "    },\n"
-      "  },\n"
-      "}\n"
-      "vv.api.session_store_value('big', original)\n"
-      "local t = vv.api.session_load_value('big')\n"
-      "assert(t.i == 42, 'i: expected 42, got ' .. tostring(t.i))\n"
-      "assert(math.type(t.i) == 'integer', 'i: expected integer subtype, got ' .. math.type(t.i))\n"
-      "assert(t.f == 3.14, 'f: expected 3.14, got ' .. tostring(t.f))\n"
-      "assert(math.type(t.f) == 'float', 'f: expected float subtype, got ' .. math.type(t.f))\n"
-      "assert(t.s == 'hello world', 's: expected \"hello world\", got ' .. tostring(t.s))\n"
-      "assert(t.b_true == true, 'b_true: expected true, got ' .. tostring(t.b_true))\n"
-      "assert(t.b_false == false, 'b_false: expected false, got ' .. tostring(t.b_false))\n"
-      "assert(t.inf == math.huge, 'inf: expected math.huge, got ' .. tostring(t.inf))\n"
-      "assert(t.neginf == -math.huge, 'neginf: expected -math.huge, got ' .. tostring(t.neginf))\n"
-      "assert(t.nan ~= t.nan, 'nan: expected NaN (not equal to itself)')\n"
-      "assert(t[1] == 'one', '[1]: expected \"one\", got ' .. tostring(t[1]))\n"
-      "assert(t[2] == 'two', '[2]: expected \"two\", got ' .. tostring(t[2]))\n"
-      "assert(t[100] == 'sparse', '[100]: expected \"sparse\", got ' .. tostring(t[100]))\n"
-      "assert(t.quoted == 'say \"hello\" it\\'s fine', 'quoted: expected correct string, got ' .. tostring(t.quoted))\n"
-      "assert(t.layout.x == 10, 'layout.x: expected 10, got ' .. tostring(t.layout.x))\n"
-      "assert(t.layout.y == 20, 'layout.y: expected 20, got ' .. tostring(t.layout.y))\n"
-      "assert(t.layout.size == 1.5, 'layout.size: expected 1.5, got ' .. tostring(t.layout.size))\n"
-      "assert(t.layout.tags[1] == 'visible', 'layout.tags[1]: expected \"visible\", got ' .. "
-      "tostring(t.layout.tags[1]))\n"
-      "assert(t.layout.tags[2] == 'active', 'layout.tags[2]: expected \"active\", got ' .. "
-      "tostring(t.layout.tags[2]))\n"
-      "assert(t.layout.tags[3] == 'focused', 'layout.tags[3]: expected \"focused\", got ' .. "
-      "tostring(t.layout.tags[3]))\n"
-      "assert(t.layout.children[1].name == 'panel_a', 'children[1].name: expected \"panel_a\", got ' .. "
-      "tostring(t.layout.children[1].name))\n"
-      "assert(t.layout.children[1].width == 100, 'children[1].width: expected 100, got ' .. "
-      "tostring(t.layout.children[1].width))\n"
-      "assert(t.layout.children[1].height == 200, 'children[1].height: expected 200, got ' .. "
-      "tostring(t.layout.children[1].height))\n"
-      "assert(t.layout.children[1].visible == true, 'children[1].visible: expected true, got ' .. "
-      "tostring(t.layout.children[1].visible))\n"
-      "assert(t.layout.children[2].name == 'panel_b', 'children[2].name: expected \"panel_b\", got ' .. "
-      "tostring(t.layout.children[2].name))\n"
-      "assert(t.layout.children[2].width == 300, 'children[2].width: expected 300, got ' .. "
-      "tostring(t.layout.children[2].width))\n"
-      "assert(t.layout.children[2].height == 400, 'children[2].height: expected 400, got ' .. "
-      "tostring(t.layout.children[2].height))\n"
-      "assert(t.layout.children[2].visible == false, 'children[2].visible: expected false, got ' .. "
-      "tostring(t.layout.children[2].visible))\n"
-      "assert(t.prefs.volume == 0.75, 'prefs.volume: expected 0.75, got ' .. tostring(t.prefs.volume))\n"
-      "assert(t.prefs.theme == 'dark', 'prefs.theme: expected \"dark\", got ' .. tostring(t.prefs.theme))\n"
-      "assert(t.prefs.keymap.save == 'ctrl+s', 'keymap.save: expected \"ctrl+s\", got ' .. "
-      "tostring(t.prefs.keymap.save))\n"
-      "assert(t.prefs.keymap.quit == 'ctrl+q', 'keymap.quit: expected \"ctrl+q\", got ' .. "
-      "tostring(t.prefs.keymap.quit))\n"
-      "assert(t.prefs.keymap.reload == 'ctrl+r', 'keymap.reload: expected \"ctrl+r\", got ' .. "
-      "tostring(t.prefs.keymap.reload))\n");
+  lua_assert(L, "require('velvet.test').run()");
   velvet_destroy(&v);
 }
