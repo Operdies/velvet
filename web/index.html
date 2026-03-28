@@ -42,10 +42,13 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.8.0/lib/addon-unicode11.min.js"></script>
   <script>
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const fontSize = isMobile ? 28 : 14;
+
     const term = new Terminal({
       allowProposedApi: true,
       cursorBlink: true,
-      fontSize: 14,
+      fontSize: fontSize,
       fontFamily: '"MesloLGS Nerd Font", Menlo, Monaco, "Courier New", monospace',
       theme: {
         background: '#1e1e2e',
