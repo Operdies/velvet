@@ -60,7 +60,7 @@ local function win_move(win, to)
     }
   end
   if move_duration > 0 then
-    local a = require('velvet.stdlib.animation')
+    local a = require('ui.animation')
     a.animate(win.id, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
   else
     win:set_geometry(client_area)
