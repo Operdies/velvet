@@ -1,6 +1,6 @@
 #include "platform.h"
 #include "utils.h"
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>

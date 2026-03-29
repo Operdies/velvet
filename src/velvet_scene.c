@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <velvet_scene.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <signal.h>

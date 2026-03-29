@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   va_list ap;
@@ -684,19 +685,11 @@ static struct u8_slice luaL_checkslice(lua_State *L, lua_Integer idx) {
   return s;
 }
 
-static bool isdigit(char ch) {
-  return ch >= '0' && ch <= '9';
-}
-
-static bool isletter(char ch) {
-  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
-}
-
 static bool needs_quote(const char *ch) {
   if (*ch == 0) return true;
   if (isdigit(*ch)) return true;
   for (; *ch; ch++)
-    if (!isdigit(*ch) && !isletter(*ch) && *ch != '_') return true;
+    if (!isalnum(*ch) && *ch != '_') return true;
   return false;
 }
 
