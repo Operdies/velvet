@@ -58,6 +58,18 @@ def velvet_window_summary(valobj, x, y):
     win_id = valobj.GetChildMemberWithName('id').GetValueAsUnsigned(0)
     return f"{win_id}"
 
+def rect_summary(valobj, x, y):
+    left = valobj.GetChildMemberWithName('left').GetValueAsUnsigned(0)
+    top = valobj.GetChildMemberWithName('top').GetValueAsUnsigned(0)
+    width = valobj.GetChildMemberWithName('width').GetValueAsUnsigned(0)
+    height = valobj.GetChildMemberWithName('height').GetValueAsUnsigned(0)
+    return f"[{left},{top} {width}x{height}]"
+
+def cursor_summary(valobj, x, y):
+    line = valobj.GetChildMemberWithName('line').GetValueAsUnsigned(0)
+    column = valobj.GetChildMemberWithName('column').GetValueAsUnsigned(0)
+    return f"[{line},{column}]"
+
 def color_summary(valobj, x, y):
     cmd = valobj.GetChildMemberWithName('kind').GetValueAsUnsigned(0)
     table = valobj.GetChildMemberWithName('table').GetValueAsUnsigned(0)
@@ -325,6 +337,8 @@ def configure(debugger):
     debugger.HandleCommand('type summary add -F lldb_velvet.screen_cell_style_summary screen_cell_style')
     debugger.HandleCommand('type summary add -F lldb_velvet.screen_cell_summary screen_cell')
     debugger.HandleCommand('type summary add -F lldb_velvet.screen_line_summary screen_line')
+    summarize(debugger, 'rect')
+    summarize(debugger, 'cursor')
 def __lldb_init_module(debugger, dict):
     configure(debugger)
 
