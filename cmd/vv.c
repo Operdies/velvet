@@ -147,7 +147,7 @@ static void usage(char *arg0) {
          "  attach                  Attach to the server at <socket> if present.\n"
          "  detach                  Detach the current terminal from the session\n"
          "  foreground              Start a server as a foreground process.\n"
-         "  lua <code>              Execute <code> as a lua chunk. A file can be sourced by calling `dofile(<filename>)`\n"
+         "  lua [<code>|-]          Execute <code> as a lua chunk. If <code> is not provided, or '-' is specified, read from stdin.\n"
          "  quit                    Quit the velvet session, killing all windows\n"
          "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
          "  -h, --help              Show this help text and exit.\n"
