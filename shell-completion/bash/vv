@@ -1,0 +1,27 @@
+_vv() {
+  local cur prev modes
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  modes="attach lua foreground quit detach"
+
+  case "$prev" in
+    --socket)
+      COMPREPLY=($(compgen -f -- "$cur"))
+      return
+      ;;
+  esac
+
+  if [[ "$cur" == -* ]]; then
+    COMPREPLY=($(compgen -W "--socket --help" -- "$cur"))
+    return
+  fi
+
+  if [[ $COMP_CWORD -eq 1 ]]; then
+    COMPREPLY=($(compgen -W "$modes" -- "$cur"))
+    return
+  fi
+}
+
+complete -F _vv vv

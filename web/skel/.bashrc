@@ -12,6 +12,7 @@ shopt -s cdspell
 
 # Completion
 set completion-ignore-case on
+source /etc/bash_completion.d/vv
 
 # Aliases
 alias ls='ls --color=auto'
