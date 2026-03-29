@@ -1,4 +1,4 @@
-local dwm = { }
+local dwm = {}
 --- @enum dwm.layer
 dwm.layers = {
   tiled = 1, floating = 2,
@@ -15,7 +15,7 @@ local r_right = 0
 local tiled_opacity = 0.8
 local floating_opacity = 0.8
 
-local move_duration = 150
+local move_duration = 0
 local single_monocle = false
 
 --- @alias arrange string arrange mode
@@ -33,9 +33,9 @@ local windows = {}
 -- And also because the restore logic cannot handle table keys.
 local session_options = require('velvet.session_storage').create('velvet.dwm')
 session_options.state = session_options.state or {
-  --- @type table<integer, boolean[]> 
+  --- @type table<integer, boolean[]>
   tags = {},
-  --- @type table<integer, dwm.layer> 
+  --- @type table<integer, dwm.layer>
   layers = {},
   --- @type boolean[]
   view = { true, false, false, false, false, false, false, false, false },
@@ -49,15 +49,16 @@ local state = session_options.state
 --- @param win velvet.window
 --- @param to velvet.api.rect
 local function win_move(win, to)
+  local a = require('velvet.ui.animation')
   local rect = require('velvet.ui.rect')
   local client_area = to
   -- if this window has a frame, shrink the client area.
   if win:get_frame_enabled() then client_area = rect.inset(to, 1) end
   if move_duration > 0 then
-    local a = require('velvet.ui.animation')
     a.animate(win.id, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
   else
     win:set_geometry(client_area)
+    a.cancel(win.id)
   end
 end
 
@@ -142,7 +143,7 @@ end
 
 --- @return velvet.window?
 local function get_focus()
-  for i=#state.focus_order,1,-1 do
+  for i = #state.focus_order, 1, -1 do
     local id = state.focus_order[i]
     if id and not vv.api.window_is_valid(id) then
       state.focus_order[i] = nil
@@ -155,7 +156,7 @@ end
 --- Set the focus to the most recently focused visible item
 --- @return nil
 local function ensure_focus_visible()
-  for i=#state.focus_order,1,-1 do
+  for i = #state.focus_order, 1, -1 do
     local id = state.focus_order[i]
     if visibleontags(id) then
       local win = window.from_handle(id)
@@ -217,9 +218,9 @@ local function status_update(layout)
   taskbar:set_cursor(3, 1)
 
   local views = {}
-  for i=1,9 do
+  for i = 1, 9 do
     if state.view[i] or tag_occupied(i) then
-      views[#views+1] = i
+      views[#views + 1] = i
       taskbar:set_background_color(state.view[i] and 'red' or 'blue')
       taskbar:draw((" %d "):format(i))
     end
@@ -401,7 +402,7 @@ local function add_window(id, init)
   if ignore_window(id) then return end
   local win = window.from_handle(id)
   win:set_frame_enabled(true)
-  windows[#windows+1] = win.id
+  windows[#windows + 1] = win.id
   if not state.tags[win.id] then
     table.insert(state.focus_order, 1, win.id)
     state.layers[win.id] = dwm.layers.tiled
@@ -429,7 +430,7 @@ local function remove_window()
 end
 
 local function set_view(new_view)
-  for i=1,9 do
+  for i = 1, 9 do
     if new_view[i] ~= state.view[i] then
       state.prev_view = table.move(state.view, 1, 9, 1, {})
       state.view = new_view
@@ -457,7 +458,7 @@ function dwm.set_view(view_tags)
   else
     new_view[view_tags] = true
   end
-  for i=1,9 do
+  for i = 1, 9 do
     if new_view[i] ~= state.view[i] then
       set_view(new_view)
       arrange()
@@ -491,10 +492,6 @@ function dwm.toggle_tag(id, tag)
   arrange()
 end
 
-local function defer(fn)
-  return setmetatable({}, { __close = fn })
-end
-
 function dwm.activate()
   local event_handler = vv.events.create_group(vv.arrange_group_name, true)
   local lst = vv.api.get_windows()
@@ -504,33 +501,10 @@ function dwm.activate()
   taskbar = create_status_window()
   -- dwm.reserve(0, 0, 1, 0)
   dwm.reserve(0, 0, 0, 0)
-  event_handler.screen_resized = function() 
-    local tmp = move_duration
-    move_duration = 0
-    local _ <close> = defer(function() move_duration = tmp end)
-    arrange()
-  end
-  event_handler.window_created = function(args) 
+  event_handler.screen_resized = arrange
+  event_handler.window_created = function(args)
     if ignore_window(args.win_id) then return end
-
-    if move_duration > 0 then
-      local sz = vv.api.get_screen_geometry()
-      local master, stack = get_stacks()
-      local mwidth = math.floor(sz.width * mfact)
-      local swidth = sz.width - mwidth
-      local height = sz.height // (#stack + 1)
-      -- set initial window location and size so it appears to slide in from the bottom of the screen.
-      local loc = { left = mwidth, top = sz.height, width = swidth, height = height }
-      if #stack == 0 and #master > 0 then
-        -- if stack is empty, make it slide in from the side instead
-        loc = { left = sz.width, top = 1, width = swidth, height = sz.height }
-      elseif #master == 0 then
-        -- if master is empty, occupy the whole screen.
-        loc = { left = 1, top = 1, width = sz.width, height = sz.height }
-      end
-      vv.api.window_set_geometry(args.win_id, loc)
-    end
-    add_window(args.win_id, false) 
+    add_window(args.win_id, false)
   end
 
   event_handler.window_closed = function(_) remove_window() end
@@ -660,7 +634,8 @@ function dwm.zoom()
   local focus_id = vv.api.get_focused_window()
   if focus_id == 0 then return end
   local focus_index = table_index(windows, focus_id)
-  local next_index = get_first_matching(windows, function(win) return win ~= focus_id and visibleontags(win) and tiled(win) end)
+  local next_index = get_first_matching(windows,
+    function(win) return win ~= focus_id and visibleontags(win) and tiled(win) end)
   if next_index then
     local next_win = windows[next_index]
     table_swap(windows, focus_index, next_index)
