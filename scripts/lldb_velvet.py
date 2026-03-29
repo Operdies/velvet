@@ -1,4 +1,5 @@
 import sys
+import re
 import lldb
 
 # If a collection is larger than this, it is most likely not initialized.
@@ -29,9 +30,15 @@ def configure_velvet_scene(debugger):
     summarize(debugger, "velvet_scene")
 
 def string_summary(valobj, x, y):
-    length_val = valobj.GetChildMemberWithName('len')
-    length = length_val.GetValueAsUnsigned(0)
-    return f"string[{length}]"
+    o2 = valobj.GetNonSyntheticValue()
+    n = o2.GetChildMemberWithName('len').GetValueAsUnsigned(0)
+    if n > SUSPICIOUS_SIZE:
+        return '<uninitialized>'
+    ptr = o2.GetChildMemberWithName('content')
+    data = ptr.GetPointeeData(0, n).uint8
+    summary = ''.join(chr(data[i]) for i in range(n))
+    summary = _escape_control_chars(summary)
+    return f'string[{n}] "{summary}"'
 
 def vec_summary(valobj, x, y):
     raw = valobj.GetNonSyntheticValue()
@@ -277,6 +284,27 @@ def int_slice_summary(valobj, _1, _2):
     prov = intslice_SynthProvider(valobj, None)
     return "size=" + str(prov.num_children())
 
+_CONTROL_TABLE = {}
+for _i in range(0x20):
+    _CONTROL_TABLE[_i] = '^' + chr(_i+64)
+for _i in range(0x80, 0x100):
+    _CONTROL_TABLE[_i] = f"\\x{_i:02x}"
+_CONTROL_TABLE[0x1b] = '\x1b'
+_CONTROL_TABLE[0x0d] = '\\r'
+_CONTROL_TABLE[0x0a] = '\\n'
+_CONTROL_TABLE[9] = '\\t'
+_CONTROL_TABLE[127] = '<DEL>'
+_CONTROL_TABLE[8] = '<BS>'
+_RE_SPACES = re.compile(r" {5,}")
+_RE_SPACE = re.compile(r" ")
+
+def _escape_control_chars(s):
+    s = s.translate(_CONTROL_TABLE)
+    s = _RE_SPACES.sub(lambda m: f"‹{len(m.group(0))}␠›", s)
+    s = _RE_SPACE.sub("␠", s)
+    s = s.replace("\x1b[", " CSI ").replace("\x1b]", " OSC ").replace("\x1b", " ESC ").strip()
+    return s
+
 def u8_slice_summary(valobj, _1, _2):
     o2 = valobj.GetNonSyntheticValue()
     n = o2.GetChildMemberWithName('len').GetValueAsUnsigned(0)
@@ -284,35 +312,9 @@ def u8_slice_summary(valobj, _1, _2):
     if n > SUSPICIOUS_SIZE:
         return '<uninitialized>'
 
-    def escape_control_chars(s: str) -> str:
-        table = { }
-        for i in range(0x20):
-            table[i] = '^' + chr(i+64)
-        for i in range(0x80, 0x100):
-            table[i] = f"\\x{i:02x}"
-        table[0x1b] = '\x1b'
-        table[0x0d] = '\\r'
-        table[0x0a] = '\\n'
-        table[9] = '\\t'
-        table[127] = '<DEL>'
-        table[8] = '<BS>'
-
-        s = s.translate(table)
-        import re
-        # replace 5 or more consecutive spaces with <spaces:x>
-        s = re.sub(r" {5,}", lambda m: f"<spaces:{len(m.group(0))}>", s)
-        # replace remaining spaces with ␠ symbol
-        s = re.sub(r" ", lambda m: "␠" * len(m.group(0)), s)
-        s = s.replace("\x1b[", " CSI ").replace("\x1b]", " OSC ").replace("\x1b", " ESC ").strip()
-        return s
-
-
-    bytes = ptr.GetPointeeData(0, n).uint8
-    summary = ""
-    for i in range(n):
-        summary += chr(bytes[i])
-
-    summary = escape_control_chars(summary)
+    data = ptr.GetPointeeData(0, n).uint8
+    summary = ''.join(chr(data[i]) for i in range(n))
+    summary = _escape_control_chars(summary)
 
     return f'u8[{n}] "{summary}"'
 
