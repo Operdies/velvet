@@ -375,7 +375,7 @@ return {
     {
       name = "pre_render.event_args",
       fields = {
-        { name = "time",  type = "int",    doc = "The number of miliseconds elapsed since startup" },
+        { name = "time",  type = "int",    doc = "The number of milliseconds elapsed since startup" },
         { name = "cause", type = "string", doc = "The reason for the render, such as 'io_idle' or 'io_max_exceeded'" },
       },
     },
@@ -389,7 +389,7 @@ return {
     {
       name = "pre_reload.event_args",
       fields = {
-        { name = "time", type = "int", doc = "The number of miliseconds elapsed since startup" },
+        { name = "time", type = "int", doc = "The number of milliseconds elapsed since startup" },
       },
     },
     {
@@ -442,12 +442,21 @@ return {
     },
     --- timing {{{2
     {
+      name = "schedule_cancel",
+      params = {
+        { name = "cancellation_id", type = "int", doc = "Schedule cancellation token returned by |schedule_after|." },
+      },
+      returns = { type = "bool", doc = "Boolean value indicating if a schedule was cancelled." },
+      doc = "Cancel the schedule with id |cancellation_id|.",
+    },
+    {
       name = "schedule_after",
       params = {
-        { name = "delay", type = "int",      doc = "delay in miliseconds" },
+        { name = "delay", type = "int",      doc = "delay in milliseconds" },
         { name = "func",  type = "function", doc = "function to run" },
       },
-      doc = "Schedule |function| to run after at least |delay| ms",
+      returns = { type = "int", doc = "Schedule cancellation token. Pass to |schedule_cancel| to cancel this schedule." },
+      doc = "Schedule oneshot |function| to run after at least |delay| ms. Returns a token which can be passed to schedule_cancel.",
     },
     {
       name = "get_current_tick",

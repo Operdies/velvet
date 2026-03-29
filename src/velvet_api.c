@@ -231,12 +231,16 @@ void schedule_execute(void *data) {
   luaL_unref(VELVET->L, LUA_REGISTRYINDEX, func);
 }
 
-void vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func) {
+bool vv_api_schedule_cancel(struct velvet *v, lua_Integer cancellation_id) {
+  return io_schedule_cancel(&v->event_loop, cancellation_id);
+}
+
+lua_Integer vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func) {
   VELVET = v;
   luaL_checktype(v->L, func, LUA_TFUNCTION);
   lua_pushvalue(v->L, func);
   lua_Integer ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
-  io_schedule(&v->event_loop, delay, schedule_execute, (void *)(lua_Integer)ref);
+  return io_schedule(&v->event_loop, delay, schedule_execute, (void *)(lua_Integer)ref);
 }
 
 bool vv_api_get_display_damage(struct velvet *v) {

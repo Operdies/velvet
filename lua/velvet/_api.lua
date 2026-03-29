@@ -177,7 +177,7 @@ local api = {}
 --- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
 
 --- @class velvet.api.pre_render.event_args
---- @field time integer The number of miliseconds elapsed since startup
+--- @field time integer The number of milliseconds elapsed since startup
 --- @field cause string The reason for the render, such as 'io_idle' or 'io_max_exceeded'
 
 --- @class velvet.api.system_message.event_args
@@ -185,7 +185,7 @@ local api = {}
 --- @field level velvet.api.severity Error level
 
 --- @class velvet.api.pre_reload.event_args
---- @field time integer The number of miliseconds elapsed since startup
+--- @field time integer The number of milliseconds elapsed since startup
 
 --- @class velvet.api.session_options
 --- @field x_pixel integer The number of horizontal pixels.
@@ -198,10 +198,15 @@ local api = {}
 --- @return velvet.api.screen.geometry ret The geometry of the screen window.
 function api.get_screen_geometry() end
 
---- Schedule |function| to run after at least |delay| ms
---- @param delay integer delay in miliseconds
+--- Cancel the schedule with id |cancellation_id|.
+--- @param cancellation_id integer Schedule cancellation token returned by |schedule_after|.
+--- @return boolean ret Boolean value indicating if a schedule was cancelled.
+function api.schedule_cancel(cancellation_id) end
+
+--- Schedule oneshot |function| to run after at least |delay| ms. Returns a token which can be passed to schedule_cancel.
+--- @param delay integer delay in milliseconds
 --- @param func fun(): nil function to run
---- @return nil ret 
+--- @return integer ret Schedule cancellation token. Pass to |schedule_cancel| to cancel this schedule.
 function api.schedule_after(delay, func) end
 
 --- Get the number of milliseconds elapsed since startup
