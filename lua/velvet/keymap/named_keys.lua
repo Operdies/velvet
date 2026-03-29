@@ -9,6 +9,8 @@ return {
   TAB = "TAB",
   BACKSPACE = "BACKSPACE",
   BS = "BACKSPACE",
+  SPACE = "SPACE",
+  [' '] = "SPACE",
   INSERT = "INSERT",
   DELETE = "DELETE",
   LEFT = "LEFT",

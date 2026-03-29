@@ -756,6 +756,14 @@ return {
       },
     },
     {
+      name = "window_get_cursor_position",
+      doc = "Get the position of the cursor local to |win_id|.",
+      params = {
+        { name = "win_id", type = "int",        doc = "Window id" },
+      },
+      returns = { type = "coordinate", doc = "The current cursor position" },
+    },
+    {
       name = "window_set_cursor_position",
       doc =
       "Set the cursor position of |win_id|. This is equivalent to moving the cursor with CUP, but is much faster because it skips formatting and parsing. Useful for tight render loops.",

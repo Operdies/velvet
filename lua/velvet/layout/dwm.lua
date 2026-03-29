@@ -197,7 +197,9 @@ local function tag_occupied(tag)
 end
 
 local show_status = true
+local km = require('velvet.keymap')
 
+local chain = nil
 --- @return nil
 local function status_update()
   taskbar:set_visibility(show_status)
@@ -211,27 +213,46 @@ local function status_update()
   taskbar:set_foreground_color('black')
   taskbar:set_cursor(3, 1)
 
-  local views = {}
+  local on_click = {}
+
   for i = 1, 9 do
     if state.view[i] or tag_occupied(i) then
-      views[#views + 1] = i
       taskbar:set_background_color(state.view[i] and 'red' or 'blue')
-      taskbar:draw((" %d "):format(i))
+      local c1, c2 = taskbar:draw((" %d "):format(i))
+      on_click[#on_click+1] = { c1.col, c2.col - 1, function() dwm.set_view(i) end }
     end
   end
 
-  local visible = 0
-  local out_of = #windows
-  for _, id in ipairs(windows) do
-    if visibleontags(id) then visible = visible + 1 end
+  if chain and #chain > 0 then 
+    local offset = math.max(15, #chain + 2)
+    local lcol = taskbar:get_geometry().width - offset
+    taskbar:set_cursor(lcol, 1)
+    taskbar:clear_background_color()
+    taskbar:set_background_color(vv.options.theme.background)
+    taskbar:set_foreground_color('white')
+    taskbar:draw(' ' .. chain .. ' ')
   end
 
+  local passthrough = km.get_passthrough()
+  if passthrough then
+    local segment = " Direct Input "
+    taskbar:set_foreground_color('black')
+    taskbar:set_background_color('red')
+    taskbar:set_cursor(sz.width // 2 - vv.api.string_display_width(segment) // 2, 1)
+    local c1, c2 = taskbar:draw(segment)
+    on_click[#on_click+1] = { c1.col, c2.col - 1, function() km.set_passthrough(false) end }
+  end
+
+  --- @param args velvet.api.mouse.move.event_args|velvet.api.mouse.click.event_args
   local function view_mouse_hit(_, args)
     if args.mouse_button == 'left' then
       local col = args.pos.col
-      local hit = col // 3
-      if hit >= 1 and hit <= #views then
-        dwm.set_view(views[hit])
+      for _, clk in ipairs(on_click) do
+        local lcol, rcol, fun  = table.unpack(clk)
+        if col >= lcol and col <= rcol then 
+          fun()
+          break
+        end
       end
     end
   end
@@ -433,6 +454,11 @@ function dwm.activate()
     arrange()
   end
   arrange()
+  event_handler[km.passthrough_changed] = status_update
+  event_handler[km.chain_changed] = function(new_chain)
+    chain = new_chain
+    status_update()
+  end
 end
 
 --- @param v number

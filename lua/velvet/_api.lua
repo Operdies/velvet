@@ -437,6 +437,11 @@ function api.window_write(win_id, text) end
 --- @return nil ret 
 function api.window_set_drawing_color(win_id, brush, color) end
 
+--- Get the position of the cursor local to |win_id|.
+--- @param win_id integer Window id
+--- @return velvet.api.coordinate ret The current cursor position
+function api.window_get_cursor_position(win_id) end
+
 --- Set the cursor position of |win_id|. This is equivalent to moving the cursor with CUP, but is much faster because it skips formatting and parsing. Useful for tight render loops.
 --- @param win_id integer Window id
 --- @param pos velvet.api.coordinate The new cursor position

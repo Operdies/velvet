@@ -35,8 +35,6 @@ local events = {
     event_handlers[event_handler.id] = nil
   end,
 
-  --- @package
-  --- don't use this
   --- @param event_name string the raised event
   --- @param ... any depends on the event
   emit_event = function(event_name, ...)

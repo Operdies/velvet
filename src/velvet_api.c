@@ -519,6 +519,15 @@ void vv_api_window_set_drawing_color(struct velvet *v,
   }
 }
 
+struct velvet_api_coordinate vv_api_window_get_cursor_position(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_lua_window(v, win_id);
+  struct screen *g = vte_get_current_screen(&w->emulator);
+  return (struct velvet_api_coordinate){
+      .col = g->cursor.column + 1,
+      .row = g->cursor.line + 1,
+  };
+}
+
 void vv_api_window_set_cursor_position(struct velvet *v, lua_Integer win_id, struct velvet_api_coordinate pos) {
   struct velvet_window *w = check_lua_window(v, win_id);
   struct screen *g = vte_get_current_screen(&w->emulator);

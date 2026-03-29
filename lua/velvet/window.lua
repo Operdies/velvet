@@ -471,6 +471,11 @@ function Window:set_cursor(x, y)
   vv.api.window_set_cursor_position(self.id, { col = x, row = y })
 end
 
+--- @return velvet.api.coordinate ret The current cursor position
+function Window:get_cursor()
+  return vv.api.window_get_cursor_position(self.id)
+end
+
 --- @param alternate boolean if true, enter the alternate screen. Otherwise leave it
 function Window:set_alternate_screen(alternate)
   set_decmode(self, 1047, alternate)
@@ -600,7 +605,10 @@ function Window:get_z_index()
 end
 
 function Window:draw(str)
+  local c1 = self:get_cursor()
   a.window_write(self.id, str)
+  local c2 = self:get_cursor()
+  return c1, c2
 end
 
 --- @param mode velvet.api.transparency_mode

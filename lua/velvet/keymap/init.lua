@@ -3,6 +3,10 @@ local vv = require('velvet')
 local keys = {}
 local vk = require('velvet.keymap.named_keys')
 
+-- create a custom event dispatched on the main event system
+keys.passthrough_changed = "custom.keymap.passthrough_changed"
+keys.chain_changed = "custom.keymap.chain_changed"
+
 local keymap = {}
 local remapped_keys = {}
 
@@ -241,8 +245,25 @@ function keys.set(lhs, rhs, opts)
   map.options = opts or {}
 end
 
+local function chain_str(map)
+  local str = ''
+  while map do
+    str = (map.key or '') .. str
+    map = map.parent
+  end
+  return str
+end
+
+
 --- @type keymap
 local current_chain = root_keymap
+
+local function set_current_chain(chain)
+  if chain ~= current_chain then
+    current_chain = chain
+    vv.events.emit_event(keys.chain_changed, current_chain == root_keymap and nil or chain_str(current_chain))
+  end
+end
 
 --- @param args velvet.api.session.key.event_args
 local function send_key_to_window(args)
@@ -281,7 +302,7 @@ local function keymap_unwind()
   -- the keys from start->map have now been handled.
   -- Replay the remaining keys
   local last_unresolved = current_chain
-  current_chain = root_keymap
+  set_current_chain(root_keymap)
   --- @type velvet.api.session.key.event_args[]
   local pending = {}
   while last_unresolved ~= map do
@@ -301,14 +322,8 @@ local function schedule_unwind(seq)
   end)
 end
 
-
 local function print_chain(map)
-  local str = ''
-  while map do
-    str = (map.key or '') .. str
-    map = map.parent
-  end
-  dbg_oneline { current_chain = str }
+  dbg_oneline { current_chain = chain_str(map) }
 end
 
 --- @param args velvet.api.session.key.event_args
@@ -356,7 +371,7 @@ function keymap.on_key(args)
     if next(next_chain.children) then
       -- If the chain has continuations, schedule an unwind.
       -- Otherwise it will be impossible to type keys which are part of a keymap.
-      current_chain = next_chain
+      set_current_chain(next_chain)
       schedule_unwind(sequence_id)
     else
       if not next_chain.execute then
@@ -368,7 +383,7 @@ function keymap.on_key(args)
         last_repeat = now
       else
         -- if the key is not repeatable, we can trivially reset the chain and execute the mapping
-        current_chain = root_keymap
+        set_current_chain(root_keymap)
       end
       next_chain.execute()
     end
@@ -377,7 +392,7 @@ function keymap.on_key(args)
   if not next_chain then
     if args.key.name == vk.ESCAPE and current_chain ~= root_keymap then
       -- escape should cancel any chain immediately without unwinding if the escape key was not a continuation.
-      current_chain = root_keymap
+      set_current_chain(root_keymap)
       last_repeat = 0
       return
     end
@@ -401,7 +416,7 @@ function keymap.on_key(args)
       -- if the previous key was a repeat and the current key did not match anything,
       -- replay the current key in the root keymap
       last_repeat = 0
-      current_chain = root_keymap
+      set_current_chain(root_keymap)
       keymap.on_key(args)
     else
       -- otherwise, we should unwind the chain and replay the key.
@@ -470,11 +485,12 @@ end
 function keys.set_passthrough(b)
   local set = b and true or false
   if passthrough ~= set then
+    passthrough = set
     -- reset keymap on passthrough
     last_repeat = 0
-    current_chain = root_keymap
+    set_current_chain(root_keymap)
+    vv.events.emit_event(keys.passthrough_changed, passthrough)
   end
-  passthrough = set
 end
 function keys.get_passthrough() return passthrough end
 
