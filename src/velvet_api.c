@@ -204,10 +204,17 @@ lua_Integer vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velv
   return 1;
 }
 
+static int traceback_msgh(lua_State *L) {
+  luaL_traceback(L, L, lua_tostring(L, 1), 1);
+  return 1;
+}
+
 static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
+  lua_pushcfunction(L, traceback_msgh);
+  int msgh = lua_gettop(L);
   lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
 
-  if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+  if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
     struct velvet *v = *(struct velvet **)lua_getextraspace(L);
     struct u8_slice err;
     err.content = (const uint8_t *)lua_tolstring(L, -1, &err.len);
@@ -218,6 +225,7 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
     velvet_api_raise_system_message(v, event_args);
     lua_pop(L, 1);
   }
+  lua_pop(L, 1); // msgh
 }
 
 /* This is kind of a hack to avoid having to heap allocate every schedule.
