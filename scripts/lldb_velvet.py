@@ -4,7 +4,7 @@ import lldb
 # If a collection is larger than this, it is most likely not initialized.
 # Regardless, the debugger will lag if we try to display it, so mark it as
 # suspicious instead,
-SUSPICIOUS_SIZE = 1 << 30
+SUSPICIOUS_SIZE = 1 << 25
 
 def num(obj, name):
     return obj.GetChildMemberWithName(name).GetValueAsUnsigned(0)
@@ -72,6 +72,8 @@ def color_summary(valobj, x, y):
 
 def screen_line_summary(valobj, x, y):
     eol = valobj.GetChildMemberWithName('eol').GetValueAsUnsigned(0)
+    if eol > SUSPICIOUS_SIZE:
+        return '<uninitialized>'
     cells = valobj.GetChildMemberWithName('cells')
     cell_type = cells.GetType().GetPointeeType()
     cell_size = cell_type.GetByteSize()
@@ -123,6 +125,8 @@ class screen_SynthProvider:
         lines_address = lines.GetValueAsUnsigned(0)
         row_type = lines.GetType().GetPointeeType()
         num_lines = self.o.GetChildMemberWithName('h').GetValueAsUnsigned(0)
+        if num_lines > SUSPICIOUS_SIZE:
+            return
 
         expr = f'*({row_type.name} (*)[{num_lines}])((void*){lines_address})'
 
@@ -174,7 +178,7 @@ class string_SynthProvider:
                 self.add_child(capacity)
             self.add_child(elements)
         else:
-            seld.add_child(self.o.CreateValueFromExpression("content", f"<suspicious[{length_num}]>"))
+            self.add_child(self.o.CreateValueFromExpression("content", f"<uninitialized>"))
 
 class vector_SynthProvider:
     def __init__(self, o, dict):
@@ -209,6 +213,8 @@ class vector_SynthProvider:
         typename = self.o.GetChildMemberWithName('typename')
 
         self.num_elements = length.GetValueAsUnsigned(0)
+        if self.num_elements > SUSPICIOUS_SIZE:
+            return
 
         contained_type = get_string(typename)
         self.typename = contained_type
@@ -265,7 +271,7 @@ def u8_slice_summary(valobj, _1, _2):
     n = o2.GetChildMemberWithName('len').GetValueAsUnsigned(0)
     ptr = o2.GetChildMemberWithName('content')
     if n > SUSPICIOUS_SIZE:
-        return f'<suspicious[{n}]>'
+        return '<uninitialized>'
 
     def escape_control_chars(s: str) -> str:
         table = { }
