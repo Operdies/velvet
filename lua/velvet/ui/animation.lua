@@ -84,4 +84,10 @@ function animation.animate(id, target, duration, opts)
   f()
 end
 
+--- Cancel any ongoing animations for window |id|
+--- @param id integer window ID
+function animation.cancel(id)
+  animating[id] = nil
+end
+
 return animation
