@@ -64,8 +64,6 @@ struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
   host->id = win_id;
-  string_push_int(&host->emulator.osc.link_id_prefix, host->id);
-  string_push_char(&host->emulator.osc.link_id_prefix, '_');
 
   // void velvet_api_raise_window_created(struct velvet *v, struct velvet_api_window_created_event_args args);
   struct velvet_api_window_created_event_args event_args = { .win_id = host->id };
@@ -312,22 +310,32 @@ static void velvet_render_set_cursor(struct velvet_render *r, struct cursor_opti
 
 static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style, bool skip_fg);
 
-static void velvet_render_set_hyperlink(struct velvet_render *r, struct osc_hyperlink *link) {
+static void velvet_render_set_hyperlink(struct velvet_render *r, hyperlink_handle link) {
+  /* Hyperlink handling. Discrete cases:
+   * 1. A new link is started -> send link start osc
+   * 2. A link was terminated -> send link end osc
+   * 3. Link changed -> 2) then 3)
+   */
+
   if (r->state.link != link) {
-    r->state.link = link;
+    /* 2. terminate existing link if set */
+    if (r->state.link) {
+      string_push(&r->draw_buffer, (uint8_t *)"\x1b]8;;\x1b\\");
+    }
+    /* 1. set new link if set */
     if (link) {
       struct u8_slice id, url;
       id = hyperlink_get_id(link);
       url = hyperlink_get_url(link);
       string_push(&r->draw_buffer, (uint8_t*)"\x1b]8;id=");
+      string_push_int(&r->draw_buffer, link->owner); /* prefix the id with the owner window to uniquely identify it */
+      string_push_char(&r->draw_buffer, '_');
       string_push_slice(&r->draw_buffer, id);
       string_push_char(&r->draw_buffer, ';');
       string_push_slice(&r->draw_buffer, url);
       string_push(&r->draw_buffer, (uint8_t*)"\x1b\\");
-    } else {
-      /* terminate link */
-      string_push(&r->draw_buffer, (uint8_t *)"\x1b]8;;\x1b\\");
     }
+    r->state.link = link;
   }
 }
 
@@ -535,6 +543,8 @@ velvet_render_copy_cells_from_window(struct velvet_scene *scene, struct velvet_w
         }
       }
 
+      /* owner needed to disambiguate identical links from different windows */
+      if (cell.link) cell.link->owner = win->id;
       velvet_render_set_cell(r, render_line, render_column, cell, t);
       if (cell.cp.is_wide) column++;
     }
@@ -1032,8 +1042,8 @@ static bool cell_equals(struct screen_cell a, struct screen_cell b) {
   assert(!(a.style.attr & ATTR_REVERSE));
   assert(!(b.style.attr & ATTR_REVERSE));
   if (a.cp.value == ' ' && b.cp.value == ' ') 
-    return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr;
-  return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style);
+    return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr && a.link == b.link;
+  return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style) && a.link == b.link;
 }
 
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b) {
@@ -1069,6 +1079,7 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
   }
 
   vte_destroy(&velvet_window->emulator);
+  string_destroy(&velvet_window->title);
   string_destroy(&velvet_window->cmdline);
   string_destroy(&velvet_window->cwd);
   velvet_window->pty = velvet_window->pid = 0;

@@ -31,6 +31,11 @@ struct osc_parameter {
 struct osc_hyperlink {
   struct string buffer;
   int id_len;  /* the id and url can be inferred from this */
+  /* needed to uniquely identify identical hyperlinks from different windows.
+   * Note that this value is managed by the render pass, and not the VT implementation.
+   * It is just more convenient to store the information here since the render pass
+   * would need to manage a separate set of links. */
+  int owner;
 };
 typedef struct osc_hyperlink* hyperlink_handle;
 
@@ -46,9 +51,9 @@ struct osc {
 struct vte;
 int osc_parse(struct osc *c, struct u8_slice str, const uint8_t *st);
 bool osc_dispatch(struct vte *vte, struct osc *osc);
-hyperlink_handle osc_get_hyperlink_handle(struct osc_hyperlink *link);
-struct u8_slice hyperlink_get_id(struct osc_hyperlink *link);
-struct u8_slice hyperlink_get_url(struct osc_hyperlink *link);
-void hyperlink_destroy(struct osc_hyperlink *link);
+hyperlink_handle osc_get_hyperlink_handle(hyperlink_handle link);
+struct u8_slice hyperlink_get_id(hyperlink_handle link);
+struct u8_slice hyperlink_get_url(hyperlink_handle link);
+void hyperlink_destroy(hyperlink_handle link);
 
 #endif /*  OSC_H */

@@ -182,14 +182,19 @@ struct vte {
   struct string pending_input;
   struct string command_buffer;
   struct {
-    struct string title;
-    struct string icon;
-    struct string link_id_prefix;
+    struct {
+      size_t len;
+      uint8_t buffer[128];
+    } title;
+    struct {
+      size_t len;
+      uint8_t buffer[128];
+    } icon;
   } osc;
   struct utf8 pending_symbol;
   struct codepoint previous_symbol;
   struct vec /* *hyperlink */ links;
-  struct osc_hyperlink *current_link;
+  hyperlink_handle current_link;
   struct vec /* bit */ tabstops;
 };
 

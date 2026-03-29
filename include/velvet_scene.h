@@ -15,6 +15,7 @@ struct pseudotransparency_options {
 struct velvet_window {
   struct string cmdline;
   struct string cwd;
+  struct string title;
   bool is_lua_window;
   int pty, pid;
   int id, parent_window_id;

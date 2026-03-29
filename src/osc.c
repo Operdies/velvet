@@ -45,13 +45,12 @@ static bool osc_get_id(struct osc *osc, struct u8_slice *id) {
   return false;
 }
 
-hyperlink_handle osc_get_hyperlink_handle(struct osc_hyperlink *link) {
+hyperlink_handle osc_get_hyperlink_handle(hyperlink_handle link) {
   return link;
 }
 
-static struct u8_slice hyperlink_get_raw_id(struct vte *vte, struct osc_hyperlink *link) {
-  struct string pre = vte->osc.link_id_prefix;
-  return u8_slice_range(hyperlink_get_id(link), pre.len, -1);
+static struct u8_slice hyperlink_get_raw_id(hyperlink_handle link) {
+  return hyperlink_get_id(link);
 }
 
 /* neovim uses hyperlinks in the built-in manual */
@@ -68,7 +67,7 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
   if (osc_get_id(osc, &id)) {
     /* we can reuse the same hyperlink object if the id is equal,
     * and the url is equal. Otherwise we must create a new hyperlink. */
-    vec_find(linkptr, vte->links, u8_slice_equals(id, hyperlink_get_raw_id(vte, *linkptr)));
+    vec_find(linkptr, vte->links, u8_slice_equals(id, hyperlink_get_raw_id(*linkptr)));
     if (linkptr && u8_slice_equals(hyperlink_get_url(*linkptr), url)) {
       vte->current_link = *linkptr;
       return true;
@@ -80,7 +79,6 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
   linkptr = vec_new_element(&vte->links);
   struct osc_hyperlink *link = velvet_calloc(1, sizeof(*link));
   *linkptr = link;
-  string_push_string(&link->buffer, vte->osc.link_id_prefix);
   if (id.content && id.len) {
     string_push_slice(&link->buffer, id);
   } else {
@@ -99,16 +97,16 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
 }
 
 static bool osc_set_title(struct vte *vte, struct osc *osc) {
-  string_clear(&vte->osc.title);
-  struct u8_slice new_title = { .content = osc->pt.content, .len = osc->pt.len };
-  string_push_slice(&vte->osc.title, new_title);
+  int n = MIN(osc->pt.len, sizeof(vte->osc.title.buffer));
+  vte->osc.title.len = n;
+  strncpy((char*)vte->osc.title.buffer, (const char*)osc->pt.content, n);
   return true;
 }
 
 static bool osc_set_icon(struct vte *vte, struct osc *osc) {
-  string_clear(&vte->osc.icon);
-  struct u8_slice new_title = { .content = osc->pt.content, .len = osc->pt.len };
-  string_push_slice(&vte->osc.icon, new_title);
+  int n = MIN(osc->pt.len, sizeof(vte->osc.icon.buffer));
+  vte->osc.icon.len = n;
+  strncpy((char*)vte->osc.icon.buffer, (const char*)osc->pt.content, n);
   return true;
 }
 
@@ -214,11 +212,11 @@ int osc_parse(struct osc *o, struct u8_slice str, const uint8_t *st) {
   return i;
 }
 
-struct u8_slice hyperlink_get_id(struct osc_hyperlink *link) {
+struct u8_slice hyperlink_get_id(hyperlink_handle link) {
   return string_range(&link->buffer, 0, link->id_len);
 }
 
-struct u8_slice hyperlink_get_url(struct osc_hyperlink *link) {
+struct u8_slice hyperlink_get_url(hyperlink_handle link) {
   return string_range(&link->buffer, link->id_len, -1);
 }
 

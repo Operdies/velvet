@@ -70,7 +70,7 @@ lua_Integer vv_api_window_create(struct velvet *v, struct velvet_api_window_crea
   if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
   struct velvet_window *created = velvet_scene_manage(&v->scene, template);
-  string_push_format_slow(&created->emulator.osc.title, "Naked window %d", created->id);
+  string_push_format_slow(&created->title, "Untitled %d", created->id);
   return created->id;
 }
 
@@ -289,8 +289,11 @@ lua_Integer vv_api_get_current_tick(struct velvet *v) {
 struct u8_slice vv_api_window_get_title(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
   struct u8_slice result = {0};
-  if (w->emulator.osc.title.len) {
-    result = u8_slice_from_string(w->emulator.osc.title);
+  if (w->title.len) {
+    result = u8_slice_from_string(w->title);
+  } else if (w->emulator.osc.title.len) {
+    result.len = w->emulator.osc.title.len;
+    result.content = w->emulator.osc.title.buffer;
   } else if (w->cmdline.len) {
     result = u8_slice_from_string(w->cmdline);
   }
@@ -299,8 +302,8 @@ struct u8_slice vv_api_window_get_title(struct velvet *v, lua_Integer win_id) {
 
 void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, struct u8_slice title) {
   struct velvet_window *w = check_window(v, win_id);
-  string_clear(&w->emulator.osc.title);
-  string_push_slice(&w->emulator.osc.title, title);
+  string_clear(&w->title);
+  string_push_slice(&w->title, title);
 }
 
 lua_Integer vv_api_get_sessions(lua_State *L) {

@@ -614,9 +614,6 @@ void vte_destroy(struct vte *vte) {
   screen_destroy(&vte->alternate);
   string_destroy(&vte->pending_input);
   string_destroy(&vte->command_buffer);
-  string_destroy(&vte->osc.title);
-  string_destroy(&vte->osc.icon);
-  string_destroy(&vte->osc.link_id_prefix);
   vec_destroy(&vte->options.kitty[0].stack);
   vec_destroy(&vte->options.kitty[1].stack);
   struct osc_hyperlink **link;
