@@ -16,14 +16,9 @@ local tiled_opacity = 0.8
 local floating_opacity = 0.8
 
 local move_duration = 0
-local single_monocle = false
 
 --- @alias arrange string arrange mode
----| 'monocle' single window visible at a time
 ---|'tiled' dwm-style master-stack tiling
-
---- @type arrange
-local layout_name = 'tiled'
 
 --- @type integer[]
 local windows = {}
@@ -203,9 +198,8 @@ end
 
 local show_status = true
 
---- @param layout arrange
 --- @return nil
-local function status_update(layout)
+local function status_update()
   taskbar:set_visibility(show_status)
   if not show_status then return end
   local sz = vv.api.get_screen_geometry()
@@ -226,28 +220,10 @@ local function status_update(layout)
     end
   end
 
-  if layout == 'monocle' then
-    local focus = 0
-    local out_of = 0
-    local fid = vv.api.get_focused_window()
-    for _, id in ipairs(windows) do
-      if visibleontags(id) then out_of = out_of + 1 end
-      if id == fid then focus = out_of end
-    end
-    local segment = (' %d of %d '):format(focus, out_of)
-    taskbar:set_cursor(sz.width // 2 - #segment // 2, 1)
-    taskbar:set_background_color('red')
-    taskbar:draw(segment)
-  elseif layout == 'tiled' then
-    local visible = 0
-    local out_of = #windows
-    for _, id in ipairs(windows) do
-      if visibleontags(id) then visible = visible + 1 end
-    end
-    local segment = (' %d of %d shown '):format(visible, out_of)
-    taskbar:set_cursor(sz.width // 2 - #segment // 2, 1)
-    taskbar:set_background_color('red')
-    taskbar:draw(segment)
+  local visible = 0
+  local out_of = #windows
+  for _, id in ipairs(windows) do
+    if visibleontags(id) then visible = visible + 1 end
   end
 
   local function view_mouse_hit(_, args)
@@ -263,70 +239,14 @@ local function status_update(layout)
   taskbar:on_mouse_click(view_mouse_hit)
 end
 
-local function monocle()
-  local ok, err = pcall(status_update, 'monocle')
-  if not ok then dbg({ status_update = err }) end
-  local term = vv.api.get_screen_geometry()
-
-  local focused_id = vv.api.get_focused_window()
-  -- don't steal focus from lua windows since they are not managed here
-  if not ignore_window(focused_id) then
-    if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
-      -- if focus was changed outside of this module, update internal focus order tracking
-      set_focus(focused_id)
-    end
-  end
-  term.width = term.width - (r_left + r_right)
-  term.height = term.height - (r_top + r_bottom)
-  focused_id = vv.api.get_focused_window()
-  local focus_is_lua = ignore_window(focused_id)
-  local first = true
-
-  for _, id in ipairs(windows) do
-    local win = window.from_handle(id)
-    if visibleontags(id) and (win.id == focused_id or (focus_is_lua and first)) then
-      first = false
-      win:set_visibility(true)
-      win:set_dimming(0)
-      win:set_opacity(tiled_opacity)
-      win:set_frame_color('red')
-      win:set_z_index(tiled_z)
-      win_stack(r_left - 1, r_top - 1, term.width + 2, term.height, { win })
-    else
-      win:set_visibility(false)
-    end
-  end
-
-  ensure_focus_visible()
-end
-
-local function get_stacks()
-  local master, stack = {}, {}
-  for _, id in ipairs(vv.api.get_windows()) do
-    if visibleontags(id) and state.layers[id] == dwm.layers.tiled then
-      if #master < nmaster then
-        table.insert(master, id)
-      else
-        table.insert(stack, id)
-      end
-    end
-  end
-  return master, stack
-end
-
 local function tile()
   local num_visible = 0
   for _, win in ipairs(windows) do
     if visibleontags(win) then num_visible = num_visible + 1 end
     if num_visible > 1 then break end
   end
-  if num_visible == 1 and single_monocle then
-    monocle()
-    return
-  end
 
-  local ok, err = pcall(status_update, 'tiled')
-  if not ok then dbg({ status_update = err }) end
+  status_update()
   local term = vv.api.get_screen_geometry()
 
   local focused_id = vv.api.get_focused_window()
@@ -395,7 +315,7 @@ local function tile()
 end
 
 local function arrange()
-  if layout_name == 'monocle' then monocle() else tile() end
+  tile()
 end
 
 local function add_window(id, init)
@@ -684,10 +604,6 @@ end
 function dwm.set_arrange(mode)
   layout_name = mode
   arrange()
-end
-
-function dwm.toggle_arrange()
-  if layout_name == 'monocle' then dwm.set_arrange('tiled') else dwm.set_arrange('monocle') end
 end
 
 --- @param mode? boolean if true, show the status bar. Otherwise hide it
