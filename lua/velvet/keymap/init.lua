@@ -467,7 +467,7 @@ end
 
 --- Enable or disable passthrough mode. In passthrouh mode, the current keymap is ignored.
 --- This is useful for sending keys to windows which would otherwise be intercepted.
-function keys.passthrough(b)
+function keys.set_passthrough(b)
   local set = b and true or false
   if passthrough ~= set then
     -- reset keymap on passthrough
@@ -476,5 +476,6 @@ function keys.passthrough(b)
   end
   passthrough = set
 end
+function keys.get_passthrough() return passthrough end
 
 return keys
