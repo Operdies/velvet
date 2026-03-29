@@ -19,11 +19,10 @@ def get_string(valobj):
     return strval
 
 def velvet_scene_summary(valobj, internal_dict, options):
-    height_val = valobj.GetChildMemberWithName('lines')
-    width_val = valobj.GetChildMemberWithName('columns')
-    height = height_val.GetValueAsUnsigned(0)
-    width = width_val.GetValueAsUnsigned(0)
-    return f"mult: [{height}x{width}]"
+    size = valobj.GetChildMemberWithName('size')
+    height = size.GetChildMemberWithName('height').GetValueAsUnsigned(0)
+    width = size.GetChildMemberWithName('width').GetValueAsUnsigned(0)
+    return f"[{height}x{width}]"
 
 def configure_velvet_scene(debugger):
     # debugger.HandleCommand('type filter add velvet_scene --child hosts_vec --child prefix --child draw_buffer')
