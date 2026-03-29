@@ -281,7 +281,7 @@ static void vte_dispatch_ground(struct vte *vte, uint8_t ch) {
   switch (ch) {
 #define CONTROL(C0, C1, cmd, _2)                                                                                      \
   case C1: DISPATCH_##cmd(vte); break;
-#include "control_characters.def"
+#include "control_sequences/control_characters.def"
 #undef CONTROL
   case NUL: ground_noop(vte, ch); break;
   case ESC: ground_esc(vte, ch); break;
@@ -383,7 +383,7 @@ static void vte_dispatch_escape(struct vte *vte, uint8_t ch) {
   case 'm': OMITTED("Memory unlock"); break;
 #define CONTROL(C0, C1, cmd, _2)                                                                                      \
   case C0: DISPATCH_##cmd(vte); break;
-#include "control_characters.def"
+#include "control_sequences/control_characters.def"
 #undef CONTROL
   default: {
     // Unrecognized escape. Treat this char as escaped and continue parsing normally.

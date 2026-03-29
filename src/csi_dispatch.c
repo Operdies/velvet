@@ -325,7 +325,7 @@ bool csi_dispatch(struct vte *vte, struct csi *csi) {
     // convert each CSI item from csi.def into a switch case
 #define CSI(l, i, f, fn, _)                                                                                            \
   case KEY(l, i, f): return fn(vte, csi);
-#include "csi.def"
+#include "control_sequences/csi.def"
 #undef CSI
   default: {
     /* This is the case for commands such as DECSCUSR (CSI Ps SP q) and

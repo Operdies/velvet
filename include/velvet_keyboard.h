@@ -34,7 +34,7 @@ struct velvet_key_event {
 #define X(n, e, cp, f) {.name = n, .escape = e, .codepoint = cp, .kitty_terminator = f},
 static const struct velvet_key named_keys[] = {
     {.name = "SPACE", .codepoint = ' ', .kitty_terminator = 'u', .escape = " "},
-#include "kitty_keys.def"
+#include "control_sequences/kitty_keys.def"
 };
 #undef X
 

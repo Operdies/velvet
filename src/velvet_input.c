@@ -237,7 +237,7 @@ static void dispatch_csi(struct velvet *v, uint8_t ch) {
       switch (KEY(c.prefix, c.intermediate, c.final)) {
 #define CSI(l, i, f, fn, _)                                                                                            \
   case KEY(l, i, f): DISPATCH_##fn(v, c); break;
-#include "input_csi.def"
+#include "control_sequences/input_csi.def"
       default: {
         struct u8_slice raw = string_as_u8_slice(v->input.command_buffer);
         for (int i = 0; i < LENGTH(named_keys); i++) {
