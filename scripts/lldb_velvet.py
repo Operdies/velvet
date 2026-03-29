@@ -10,7 +10,7 @@ def num(obj, name):
     return obj.GetChildMemberWithName(name).GetValueAsUnsigned(0)
 
 def summarize(debugger, type):
-    debugger.HandleCommand(f'type summary add -F display.{type}_summary {type}')
+    debugger.HandleCommand(f'type summary add -F lldb_velvet.{type}_summary {type}')
 
 def get_string(valobj):
     deref = valobj.GetPointeeData(0, 0xFF)
@@ -56,8 +56,8 @@ def screen_cell_summary(valobj, x, y):
     return chr(value)
 
 def velvet_window_summary(valobj, x, y):
-    id = valobj.GetChildMemberWithName('id').GetValueAsUnsigned(0)
-    return f"{id}"
+    win_id = valobj.GetChildMemberWithName('id').GetValueAsUnsigned(0)
+    return f"{win_id}"
 
 def color_summary(valobj, x, y):
     cmd = valobj.GetChildMemberWithName('kind').GetValueAsUnsigned(0)
@@ -69,18 +69,6 @@ def color_summary(valobj, x, y):
     if cmd == 1:
         return f"#{r:02x}{g:02x}{b:02x}"
     return f"{table}"
-
-def scrollback_header_summary(valobj, x, y):
-    valSize = valobj.GetType().GetPointeeType().GetByteSize()
-    valAddr = valobj.GetValueAsUnsigned(0)
-    n_cells = valobj.GetChildMemberWithName('n_cells').GetValueAsUnsigned(0)
-    has_newline = valobj.GetChildMemberWithName('has_newline').GetValueAsUnsigned(0)
-    cells = valobj.GetChildMemberWithName('cells').GetValueAsUnsigned(0)
-    if n_cells > 10000:
-        return "<too big>"
-
-    expr = f'(struct screen_line) {{ {has_newline}, {n_cells}, (struct screen_cell*)((char*){valAddr} + {valSize}) }}'
-    return valobj.CreateValueFromExpression("text", expr).GetSummary()
 
 def screen_line_summary(valobj, x, y):
     eol = valobj.GetChildMemberWithName('eol').GetValueAsUnsigned(0)
@@ -320,19 +308,18 @@ def configure(debugger):
     summarize(debugger, 'int_slice')
     summarize(debugger, "screen_line")
     summarize(debugger, 'u8_slice')
-    debugger.HandleCommand(f'type synthetic add int_slice --python-class display.intslice_SynthProvider')
-    debugger.HandleCommand(f'type synthetic add vec --python-class display.vector_SynthProvider')
-    debugger.HandleCommand(f'type synthetic add string --python-class display.string_SynthProvider')
-    debugger.HandleCommand(f'type synthetic add u8_slice --python-class display.string_SynthProvider')
-    debugger.HandleCommand(f'type synthetic add screen --python-class display.screen_SynthProvider')
-    debugger.HandleCommand( 'type summary add -F display.vec_summary -e -x "^vec$"')
-    debugger.HandleCommand( 'type summary add -F display.color_summary -e -x "^color$"')
-    debugger.HandleCommand( 'type summary add -F display.velvet_window_summary -e -x "^velvet_window$"')
-    debugger.HandleCommand( 'type summary add -F display.unicode_codepoint_summary -e -x "^codepoint$"')
-    debugger.HandleCommand( 'type summary add -F display.screen_cell_style_summary -e -x "^screen_cell_style$"')
-    debugger.HandleCommand( 'type summary add -F display.screen_cell_summary -e -x "^screen_cell$"')
-    debugger.HandleCommand( 'type summary add -F display.screen_line_summary -e -x "^screen_line$"')
-    debugger.HandleCommand( 'type summary add -F display.scrollback_header_summary -e -x "^scrollback_header$"')
+    debugger.HandleCommand('type synthetic add int_slice --python-class lldb_velvet.intslice_SynthProvider')
+    debugger.HandleCommand('type synthetic add vec --python-class lldb_velvet.vector_SynthProvider')
+    debugger.HandleCommand('type synthetic add string --python-class lldb_velvet.string_SynthProvider')
+    debugger.HandleCommand('type synthetic add u8_slice --python-class lldb_velvet.string_SynthProvider')
+    debugger.HandleCommand('type synthetic add screen --python-class lldb_velvet.screen_SynthProvider')
+    debugger.HandleCommand('type summary add -F lldb_velvet.vec_summary vec')
+    debugger.HandleCommand('type summary add -F lldb_velvet.color_summary color')
+    debugger.HandleCommand('type summary add -F lldb_velvet.velvet_window_summary velvet_window')
+    debugger.HandleCommand('type summary add -F lldb_velvet.unicode_codepoint_summary codepoint')
+    debugger.HandleCommand('type summary add -F lldb_velvet.screen_cell_style_summary screen_cell_style')
+    debugger.HandleCommand('type summary add -F lldb_velvet.screen_cell_summary screen_cell')
+    debugger.HandleCommand('type summary add -F lldb_velvet.screen_line_summary screen_line')
 def __lldb_init_module(debugger, dict):
     configure(debugger)
 
