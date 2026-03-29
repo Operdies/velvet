@@ -12,8 +12,8 @@ local r_top = 0
 local r_bottom = 0
 local r_right = 0
 
-local tiled_opacity = 0.8
-local floating_opacity = 0.8
+local tiled_alpha = 0.8
+local floating_alpha = 0.8
 
 local move_duration = 0
 
@@ -208,7 +208,7 @@ local function status_update()
   taskbar:set_geometry({ left = 1, top = sz.height, width = sz.width, height = 1 })
   taskbar:clear_background_color()
   taskbar:set_transparency_mode('clear')
-  taskbar:set_opacity(0)
+  taskbar:set_alpha(0)
   taskbar:clear()
   taskbar:set_foreground_color('black')
   taskbar:set_cursor(3, 1)
@@ -292,10 +292,10 @@ local function tile()
     local floating = state.layers[win.id] == dwm.layers.floating
     if floating then
       win:set_transparency_mode('all')
-      win:set_opacity(floating_opacity)
+      win:set_alpha(floating_alpha)
     else
       win:set_transparency_mode('all')
-      win:set_opacity(tiled_opacity)
+      win:set_alpha(tiled_alpha)
     end
     if vis then
       if win.id == focused_id then

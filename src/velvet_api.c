@@ -359,17 +359,17 @@ lua_Integer vv_api_window_get_z_index(struct velvet *v, lua_Integer win_id) {
   return w->z_index;
 }
 
-float vv_api_window_get_opacity(struct velvet *v, lua_Integer win_id) {
+float vv_api_window_get_alpha(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
-  return 1.0 - w->transparency.alpha;
+  return 1.0 - w->transparency.transparency;
 }
-void vv_api_window_set_opacity(struct velvet *v, lua_Integer win_id, float opacity) {
+void vv_api_window_set_alpha(struct velvet *v, lua_Integer win_id, float alpha) {
   struct velvet_window *w = check_window(v, win_id);
-  opacity = CLAMP(opacity, 0, 1);
-  float alpha = 1.0 - opacity;
-  if (alpha != w->transparency.alpha) {
-    w->transparency.alpha = alpha;
-    velvet_invalidate_render(v, "opacity changed");
+  alpha = CLAMP(alpha, 0, 1);
+  float transparency = 1.0 - alpha;
+  if (transparency != w->transparency.transparency) {
+    w->transparency.transparency = transparency;
+    velvet_invalidate_render(v, "alpha changed");
   }
 }
 

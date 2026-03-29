@@ -115,7 +115,7 @@ local function update_borders(self)
     brd:set_visibility(vis)
     brd:set_z_index(self:get_z_index())
     brd:set_transparency_mode(vv.api.window_get_transparency_mode(self.id))
-    brd:set_opacity(vv.api.window_get_opacity(self.id))
+    brd:set_alpha(vv.api.window_get_alpha(self.id))
     if vis then
       brd:set_foreground_color(self.frame_color or color_from_string('black'))
       brd:clear_background_color()
@@ -626,16 +626,16 @@ function Window:get_dimming()
   return a.window_get_dim_factor(self.id)
 end
 
---- @param opacity number Window opacity (0.0 - 1.0)
-function Window:set_opacity(opacity)
-  opacity = clamp(opacity, 0, 1)
-  if opacity < 1 then
+--- @param alpha number Window alpha (0.0 - 1.0)
+function Window:set_alpha(alpha)
+  alpha = clamp(alpha, 0, 1)
+  if alpha < 1 then
     local mode = a.window_get_transparency_mode(self.id)
     if mode == 'none' then 
       self:set_transparency_mode('all')
     end
   end
-  a.window_set_opacity(self.id, opacity)
+  a.window_set_alpha(self.id, alpha)
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.mouse.click.event_args)

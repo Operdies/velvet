@@ -9,7 +9,7 @@
 
 struct pseudotransparency_options {
   enum velvet_api_transparency_mode mode;
-  float alpha;
+  float transparency;
 };
 
 struct velvet_window {

@@ -725,13 +725,13 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
           if (is_block_element(above.cp.value) || is_half_circle(above.cp.value)) {
             /* block elements are used for pixel graphics. If we blend the background of such characters
              * we must blend the foreground equally. Otherwise everything looks glitchy. */
-            above.style.fg = color_alpha_blend(below.style.bg, above.style.fg, trns.alpha);
+            above.style.fg = color_alpha_blend(below.style.bg, above.style.fg, trns.transparency);
           } else if (fg_seethrough) {
             above.cp = below.cp;
             above.style.attr = below.style.attr;
-            above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.alpha);
+            above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.transparency);
           }
-          above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, trns.alpha);
+          above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, trns.transparency);
         }
 
         /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,

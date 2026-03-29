@@ -138,11 +138,11 @@ return {
     {
       name = "transparency_mode",
       flags = false,
-      doc = "The transparency mode of a window. This affects the behavior of the |opacity| setting.",
+      doc = "The transparency mode of a window. This affects the behavior of the |alpha| setting.",
       values = {
-        { name = "none",  value = 0, doc = 'Completely disables opacity' },
-        { name = "clear", value = 1, doc = 'Opacity applies to cells with no background color' },
-        { name = "all",   value = 2, doc = 'Opacity applies to all cells' },
+        { name = "none",  value = 0, doc = 'Disable alpha blending' },
+        { name = "clear", value = 1, doc = 'alpha blending applies to cells with no background color' },
+        { name = "all",   value = 2, doc = 'alpha blending applies to all cells' },
       }
     },
     {
@@ -540,10 +540,10 @@ return {
       returns = { type = "bool", doc = "Bool indicating if the window is hidden." }
     },
     {
-      name = "window_get_opacity",
-      doc = "Get window opacity",
+      name = "window_get_alpha",
+      doc = "Get window alpha",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "float", doc = "The new window opacity." },
+      returns = { type = "float", doc = "The new window alpha." },
     },
     {
       name = "window_get_text",
@@ -555,11 +555,11 @@ return {
       returns = { type = "line[]", doc = "The text in the specified region." },
     },
     {
-      name = "window_set_opacity",
-      doc = "Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|",
+      name = "window_set_alpha",
+      doc = "Set window alpha. The effect of this depends on the value of |window_get_transparency_mode|",
       params = {
         { name = "win_id",  type = "int",   doc = "Window id" },
-        { name = "opacity", type = "float", doc = "The new window opacity." },
+        { name = "alpha", type = "float", doc = "The new window alpha." },
       },
     },
     {

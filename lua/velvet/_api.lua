@@ -18,10 +18,10 @@ local api = {}
 ---| 'background' 
 ---| 'foreground' 
 
----@alias velvet.api.transparency_mode string The transparency mode of a window. This affects the behavior of the |opacity| setting.
----| 'none' Completely disables opacity
----| 'clear' Opacity applies to cells with no background color
----| 'all' Opacity applies to all cells
+---@alias velvet.api.transparency_mode string The transparency mode of a window. This affects the behavior of the |alpha| setting.
+---| 'none' Disable alpha blending
+---| 'clear' alpha blending applies to cells with no background color
+---| 'all' alpha blending applies to all cells
 
 ---@alias velvet.api.key_event_type string 
 ---| 'press' 
@@ -275,10 +275,10 @@ function api.window_set_hidden(win_id, hidden) end
 --- @return boolean ret Bool indicating if the window is hidden.
 function api.window_get_hidden(win_id) end
 
---- Get window opacity
+--- Get window alpha
 --- @param win_id integer Window id
---- @return number ret The new window opacity.
-function api.window_get_opacity(win_id) end
+--- @return number ret The new window alpha.
+function api.window_get_alpha(win_id) end
 
 --- Get window text contained in |region|. 1-indexed.
 --- @param win_id integer Window id
@@ -286,11 +286,11 @@ function api.window_get_opacity(win_id) end
 --- @return velvet.api.line[] ret The text in the specified region.
 function api.window_get_text(win_id, region) end
 
---- Set window opacity. The effect of this depends on the value of |window_get_transparency_mode|
+--- Set window alpha. The effect of this depends on the value of |window_get_transparency_mode|
 --- @param win_id integer Window id
---- @param opacity number The new window opacity.
+--- @param alpha number The new window alpha.
 --- @return nil ret 
-function api.window_set_opacity(win_id, opacity) end
+function api.window_set_alpha(win_id, alpha) end
 
 --- Get window transparency mode.
 --- @param win_id integer Window id
