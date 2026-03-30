@@ -291,7 +291,7 @@ local function route_mouse_events(event, args)
     local window_func = 'on_' .. event .. '_handler'
     if win[window_func] then
       win[window_func](win, args)
-    elseif not win:is_lua() then
+    else
       vv.api['window_send_' .. event](args)
     end
   end
