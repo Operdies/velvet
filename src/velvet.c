@@ -295,6 +295,13 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     }
   } else {
     velvet_scene_remove_exited(v);
+    /* the window should have been removed in the remove_exited() call,
+     * but in case it was not detected we explicitly remove it by pty here */
+    struct velvet_window *vte;
+    vec_find(vte, v->scene.windows, vte->pty == src->fd);
+    if (vte) {
+      velvet_scene_close_and_remove_window(&v->scene, vte);
+    }
   }
 }
 
