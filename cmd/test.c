@@ -942,7 +942,56 @@ void test_vec() {
 static void test_lua();
 static void test_lua_modules();
 
+static void test_bitmap() {
+  struct tabstop_bitmap bm = {0};
+  bm.bits[0] = 0b1001000011;
+  bm.bits[1] = 0b00010001;
+
+
+  /* tabstop_next: */
+  assert(tabstop_bitmap_next(bm, 0) == 0);
+  assert(tabstop_bitmap_next(bm, 1) == 1);
+  assert(tabstop_bitmap_next(bm, 2) == 6);
+  assert(tabstop_bitmap_next(bm, 3) == 6);
+  assert(tabstop_bitmap_next(bm, 6) == 6);
+  assert(tabstop_bitmap_next(bm, 7) == 9);
+  assert(tabstop_bitmap_next(bm, 9) == 9);
+  assert(tabstop_bitmap_next(bm, 10) == 64);
+  assert(tabstop_bitmap_next(bm, 63) == 64);
+  assert(tabstop_bitmap_next(bm, 64) == 64);
+  assert(tabstop_bitmap_next(bm, 65) == 68);
+  assert(tabstop_bitmap_next(bm, 69) == -1);
+
+  /* tabstop_prev: */
+  assert(tabstop_bitmap_prev(bm, 0) == 0);
+  assert(tabstop_bitmap_prev(bm, 1) == 1);
+  assert(tabstop_bitmap_prev(bm, 2) == 1);
+  assert(tabstop_bitmap_prev(bm, 3) == 1);
+  assert(tabstop_bitmap_prev(bm, 6) == 6);
+  assert(tabstop_bitmap_prev(bm, 7) == 6);
+  assert(tabstop_bitmap_prev(bm, 9) == 9);
+  assert(tabstop_bitmap_prev(bm, 10) == 9);
+  assert(tabstop_bitmap_prev(bm, 63) == 9);
+  assert(tabstop_bitmap_prev(bm, 64) == 64);
+  assert(tabstop_bitmap_prev(bm, 65) == 64);
+  assert(tabstop_bitmap_prev(bm, 69) == 68);
+
+  assert((bm.bits[0] & 1));
+  tabstop_bitmap_set(&bm, 0, 0);
+  assert(!(bm.bits[0] & 1));
+  tabstop_bitmap_set(&bm, 0, 1);
+  assert((bm.bits[0] & 1));
+
+  tabstop_bitmap_set(&bm, 0, 1);
+
+  assert(!(bm.bits[5] & (1 << 25)));
+  tabstop_bitmap_set(&bm, 345, 1);
+  assert((bm.bits[5] & (1 << 25)));
+  tabstop_bitmap_set(&bm, 345, 0);
+}
+
 int main(void) {
+  test_bitmap();
   test_input_output();
   test_reflow();
   test_erase();

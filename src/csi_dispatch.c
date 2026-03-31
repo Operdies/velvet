@@ -408,12 +408,11 @@ bool CHT(struct vte *vte, struct csi *csi) {
   /* forward `count` tabs */
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   struct screen *g = vte_get_current_screen(vte);
-  bit *tabstops = vte->tabstops.content;
-  int i = g->cursor.column + 1;
-  for (; i < screen_right(g);  i++) {
-    if (tabstops[i] && --count == 0) break;
-  }
-  screen_set_cursor_column(g, i);
+  int cur = g->cursor.column;
+  for (; count && cur >= 0; count--)
+    cur = tabstop_bitmap_next(vte->tabstop, cur + 1);
+  if (cur == -1) cur = screen_right(g);
+  screen_set_cursor_column(g, cur);
   return true;
 }
 
@@ -508,8 +507,7 @@ bool SD(struct vte *vte, struct csi *csi) {
 
 bool DECST8C(struct vte *vte, struct csi *csi) {
   (void)csi;
-  bit *tabstops = vte->tabstops.content;
-  for (size_t i = 0; i < vte->tabstops.length; i++) tabstops[i] = i && i % 8 == 0;
+  vte->tabstop = tabstop_bitmap_default;
   return true;
 }
 
@@ -530,12 +528,11 @@ bool CBT(struct vte *vte, struct csi *csi) {
   /* backward `count` tabs */
   int count = csi->params[0].primary ? csi->params[0].primary : 1;
   struct screen *g = vte_get_current_screen(vte);
-  bit *tabstops = vte->tabstops.content;
-  int i = g->cursor.column - 1;
-  for (; i > 0;  i--) {
-    if (tabstops[i] && --count == 0) break;
+  int i = g->cursor.column;
+  for (; i > 0 && count; count--) {
+    i = tabstop_bitmap_prev(vte->tabstop, i - 1);
   }
-  screen_set_cursor_column(g, i);
+  screen_set_cursor_column(g, i < 0 ? 0 : i);
   return true;
 }
 
@@ -598,13 +595,12 @@ static bool HVP(struct vte *vte, struct csi *csi) { return CUP(vte, csi); }
 
 bool TBC(struct vte *vte, struct csi *csi) {
   int mode = csi->params[0].primary ? csi->params[0].primary : 0;
-  bit *tabstops = vte->tabstops.content;
   if (mode == 0) {
     /* clear the tabstop at the cursor */
-    tabstops[vte_get_current_screen(vte)->cursor.column] = 0;
+    tabstop_bitmap_set(&vte->tabstop, vte_get_current_screen(vte)->cursor.column, 0);
   } else if (mode == 3) {
-    /* clear all tabstops */
-    memset(tabstops, 0, vte->tabstops.length * sizeof(bit));
+    /* remove all tabstops */
+    memset(&vte->tabstop, 0, sizeof(vte->tabstop));
   }
   return true;
 }

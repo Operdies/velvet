@@ -21,8 +21,6 @@ enum vte_state {
   vte_charset,
 };
 
-typedef uint8_t bit;
-
 struct modifier_options {
   union {
     // TODO: Implement these options?
@@ -173,6 +171,35 @@ struct emulator_options {
   struct kitty_options kitty[2];
 };
 
+struct tabstop_bitmap {
+  uint64_t bits[16];
+};
+
+static const struct tabstop_bitmap tabstop_bitmap_default = {
+    /* every 8th bit should be set, except the very first bit because column 1 is not a tab stop. */
+    .bits = {
+        [0] =  0x0101010101010100ULL,
+        [1] =  0x0101010101010101ULL,
+        [2] =  0x0101010101010101ULL,
+        [3] =  0x0101010101010101ULL,
+        [4] =  0x0101010101010101ULL,
+        [5] =  0x0101010101010101ULL,
+        [6] =  0x0101010101010101ULL,
+        [7] =  0x0101010101010101ULL,
+        [8] =  0x0101010101010101ULL,
+        [9] =  0x0101010101010101ULL,
+        [10] = 0x0101010101010101ULL,
+        [11] = 0x0101010101010101ULL,
+        [12] = 0x0101010101010101ULL,
+        [13] = 0x0101010101010101ULL,
+        [14] = 0x0101010101010101ULL,
+        [15] = 0x0101010101010101ULL,
+    }};
+
+void tabstop_bitmap_set(struct tabstop_bitmap *bm, int index, bool value);
+int tabstop_bitmap_prev(struct tabstop_bitmap bm, int from);
+int tabstop_bitmap_next(struct tabstop_bitmap bm, int from);
+
 /* finite state machine for parsing ansi escape codes */
 struct vte {
   struct rect ws;
@@ -197,7 +224,8 @@ struct vte {
   struct codepoint previous_symbol;
   struct vec /* *hyperlink */ links;
   hyperlink_handle current_link;
-  struct vec /* bit */ tabstops;
+  /* bitmap of tabstops. 64*16*x is a generous limit. It's okay if tabs break after that. */
+  struct tabstop_bitmap tabstop;
 };
 
 static const struct emulator_options emulator_options_default = {
@@ -209,7 +237,7 @@ static const struct vte vte_default = {
     .options = emulator_options_default,
     .primary = { .scroll.max = 10000, },
     .links = vec(struct osc_hyperlink*),
-    .tabstops = vec(bit),
+    .tabstop = tabstop_bitmap_default,
 };
 
 enum vte_dsr {

@@ -177,16 +177,9 @@ static void ground_vtab(struct vte *vte, uint8_t ch) {
 static void ground_tab(struct vte *vte, uint8_t ch) {
   (void)ch;
   struct screen *g = vte_get_current_screen(vte);
-  bit *tabstops = vte->tabstops.content;
-  for (int i = g->cursor.column + 1; i < screen_right(g);  i++) {
-    if (tabstops[i]) {
-      /* tabstop found */
-      screen_set_cursor_column(vte_get_current_screen(vte), i);
-      return;
-    }
-  }
-  /* no tab stop found -- move to the right margin. */
-  screen_set_cursor_column(vte_get_current_screen(vte), screen_right(g));
+  int cur = tabstop_bitmap_next(vte->tabstop, g->cursor.column + 1);
+  if (cur == -1) cur = screen_right(g);
+  screen_set_cursor_column(vte_get_current_screen(vte), cur);
 }
 
 static void ground_bell(struct vte *vte, uint8_t ch) {
@@ -257,8 +250,7 @@ static void DISPATCH_NEL(struct vte *vte) {
 
 static void DISPATCH_HTS(struct vte *vte)   { 
   struct screen *g = vte_get_current_screen(vte);
-  bit set = 1;
-  vec_set(&vte->tabstops, g->cursor.column, &set);
+  tabstop_bitmap_set(&vte->tabstop, g->cursor.column, 1);
 }
 static void DISPATCH_SS2(struct vte *vte)   { (void)vte; TODO("SS2"); }
 static void DISPATCH_SS3(struct vte *vte)   { (void)vte; TODO("SS3"); }
@@ -548,18 +540,6 @@ void vte_set_size(struct vte *vte, struct rect sz) {
   struct screen *g = vte_get_current_screen(vte);
   vte->ws = sz;
 
-  /* enlarge the vector so it can fit at least `n` elements */
-  size_t prev_size = vte->tabstops.length;
-  if ((int)vte->tabstops.length < sz.width)
-    vec_set(&vte->tabstops, sz.width, NULL);
-
-  if (prev_size != vte->tabstops.length) {
-    bit *bitset = vte->tabstops.content;
-    /* find next uninitialized multiple of 8 */
-    size_t i = 8 + (prev_size - prev_size % 8);
-    for (; i < vte->tabstops.length; i += 8)
-      bitset[i] = 1;
-  }
   if (g->cells == NULL || g->w != sz.width || g->h != sz.height) {
     if (vte->options.alternate_screen) {
       vte_init_alternate_screen(vte);
@@ -618,9 +598,55 @@ void vte_destroy(struct vte *vte) {
   vec_foreach(link, vte->links)
     hyperlink_destroy(*link);
   vec_destroy(&vte->links);
-  vec_destroy(&vte->tabstops);
 }
 
 struct screen *vte_get_current_screen(struct vte *vte) {
   return vte->options.alternate_screen ? &vte->alternate : &vte->primary;
+}
+
+void tabstop_bitmap_set(struct tabstop_bitmap *bm, int index, bool value) {
+  if ((size_t)index >= sizeof(bm->bits) * 8) return;
+  if (index < 0) return;
+  int word = index / 64;
+  int offset = index % 64;
+  uint64_t mask = 1ULL << offset;
+  if (value) {
+    bm->bits[word] |= mask;
+  } else {
+    bm->bits[word] &= ~mask;
+  }
+}
+
+int tabstop_bitmap_next(struct tabstop_bitmap bm, int from) {
+  if ((size_t)from >= sizeof(bm.bits) * 8) return -1;
+  if (from < 0) return -1;
+  int word = from / 64;
+  uint64_t mask = ~0ULL << (from % 64);
+  uint64_t val = bm.bits[word] & mask;
+
+  if (val) return word * 64 + __builtin_ctzll(val);
+
+  for (word = word + 1; word < LENGTH(bm.bits); word++) {
+    val = bm.bits[word];
+    if (val) return word * 64 + __builtin_ctzll(val);
+  }
+
+  return -1;
+}
+
+int tabstop_bitmap_prev(struct tabstop_bitmap bm, int from) {
+  if ((size_t)from >= sizeof(bm.bits) * 8) return -1;
+  if (from < 0) return -1;
+  int word = from / 64;
+  uint64_t mask = ~0ULL >> (63 - (from % 64));
+  uint64_t val = bm.bits[word] & mask;
+
+  if (val) return word * 64 + (63 -  __builtin_clzll(val));
+
+  for (word = word - 1; word >= 0; word--) {
+    val = bm.bits[word];
+    if (bm.bits[word]) return word * 64 + (63 - __builtin_clzll(val));
+  }
+
+  return -1;
 }
