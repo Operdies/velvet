@@ -45,13 +45,6 @@ static bool osc_get_id(struct osc *osc, struct u8_slice *id) {
   return false;
 }
 
-hyperlink_handle osc_get_hyperlink_handle(hyperlink_handle link) {
-  return link;
-}
-
-static struct u8_slice hyperlink_get_raw_id(hyperlink_handle link) {
-  return hyperlink_get_id(link);
-}
 
 /* neovim uses hyperlinks in the built-in manual */
 static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
@@ -67,7 +60,7 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
   if (osc_get_id(osc, &id)) {
     /* we can reuse the same hyperlink object if the id is equal,
     * and the url is equal. Otherwise we must create a new hyperlink. */
-    vec_find(linkptr, vte->links, u8_slice_equals(id, hyperlink_get_raw_id(*linkptr)));
+    vec_find(linkptr, vte->links, u8_slice_equals(id, hyperlink_get_id(*linkptr)));
     if (linkptr && u8_slice_equals(hyperlink_get_url(*linkptr), url)) {
       vte->current_link = *linkptr;
       return true;

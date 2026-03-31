@@ -51,7 +51,6 @@ struct osc {
 struct vte;
 int osc_parse(struct osc *c, struct u8_slice str, const uint8_t *st);
 bool osc_dispatch(struct vte *vte, struct osc *osc);
-hyperlink_handle osc_get_hyperlink_handle(hyperlink_handle link);
 struct u8_slice hyperlink_get_id(hyperlink_handle link);
 struct u8_slice hyperlink_get_url(hyperlink_handle link);
 void hyperlink_destroy(hyperlink_handle link);

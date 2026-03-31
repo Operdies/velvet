@@ -213,7 +213,7 @@ static void ground_accept(struct vte *vte) {
     vte->pending_symbol = (struct utf8){0};
     return;
   }
-  struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush, .link = osc_get_hyperlink_handle(vte->current_link) };
+  struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush, .link = vte->current_link };
   screen_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = symbol;
   vte->pending_symbol = (struct utf8){0};
@@ -585,7 +585,7 @@ void vte_process(struct vte *vte, struct u8_slice str) {
         struct screen_cell_style style = s->cursor.brush;
         bool wrap = vte->options.auto_wrap_mode;
         struct u8_slice run = u8_slice_range(str, i, j);
-        screen_insert_ascii_run(s, style, run, wrap, osc_get_hyperlink_handle(vte->current_link));
+        screen_insert_ascii_run(s, style, run, wrap, vte->current_link);
         vte->previous_symbol = (struct codepoint){.value = run.content[run.len - 1]};
         i = j;
       }
