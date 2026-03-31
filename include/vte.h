@@ -139,6 +139,12 @@ enum kitty_keyboard_options {
   KITTY_KEYBOARD_REPORT_ASSOCIATED_TEXT = 16,
 };
 
+struct kitty_options {
+    enum kitty_keyboard_options options;
+    enum kitty_keyboard_options ringbuf[10];
+    int head;
+};
+
 struct emulator_options {
   /* if wrapping, we should return the cursor to the beginning of the line when
    * inserting a character which would cause an overflow. Otherwise, the cursor
@@ -164,11 +170,7 @@ struct emulator_options {
   struct charset_options charset;
   struct cursor_options cursor;
   struct mouse_options mouse;
-
-  struct {
-    enum kitty_keyboard_options options;
-    struct vec /* kitty_keyboard_options */ stack;
-  } kitty[2];
+  struct kitty_options kitty[2];
 };
 
 /* finite state machine for parsing ansi escape codes */
@@ -201,7 +203,6 @@ struct vte {
 static const struct emulator_options emulator_options_default = {
     .auto_wrap_mode = true,
     .cursor.visible = true,
-    .kitty = {{.stack = vec(enum kitty_keyboard_options)}, {.stack = vec(enum kitty_keyboard_options)}},
 };
 
 static const struct vte vte_default = {

@@ -614,8 +614,6 @@ void vte_destroy(struct vte *vte) {
   screen_destroy(&vte->alternate);
   string_destroy(&vte->pending_input);
   string_destroy(&vte->command_buffer);
-  vec_destroy(&vte->options.kitty[0].stack);
-  vec_destroy(&vte->options.kitty[1].stack);
   struct osc_hyperlink **link;
   vec_foreach(link, vte->links)
     hyperlink_destroy(*link);

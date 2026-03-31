@@ -885,31 +885,34 @@ bool KITTY_KEYBOARD_QUERY(struct vte *vte, struct csi *csi) {
 static bool KITTY_KEYBOARD_PUSH(struct vte *vte, struct csi *csi) {
   struct emulator_options *o = &vte->options;
   enum kitty_keyboard_options flags = csi->params[0].primary;
-  struct vec *v = &o->kitty[o->alternate_screen].stack;
-  vec_push(v, &o->kitty[o->alternate_screen].options);
-  o->kitty[o->alternate_screen].options = flags;
-  /* limit stack size to 100 entries */
-  if (v->length > 100) vec_shift_left(v, 1);
+  struct kitty_options *k = &o->kitty[o->alternate_screen];
+  k->head = (k->head + 1) % LENGTH(k->ringbuf);
+  k->ringbuf[k->head] = k->options;
+  k->options = flags;
   return true;
 }
+
 static bool KITTY_KEYBOARD_POP(struct vte *vte, struct csi *csi) {
   struct emulator_options *o = &vte->options;
   enum kitty_keyboard_options new_flags = 0;
   int pop_count = csi->params[0].primary;
   if (pop_count < 0) return true;
   if (!pop_count) pop_count = 1;
-  void *popped = NULL;
 
-  while (pop_count && (popped = vec_pop(&o->kitty[o->alternate_screen].stack))) {
-    new_flags = *(enum kitty_keyboard_options *)popped;
-    pop_count--;
+  struct kitty_options *k = &o->kitty[o->alternate_screen];
+
+  /* pop at most LENGTH(k->ringbuf) times.
+   * This is bounded to a very small value, so there is no point in storing the count
+   * of the ringbuf. Popping the last value should reset options to 0, so this
+   * pattern covers edge cases correctly */
+  pop_count = MIN(pop_count, LENGTH(k->ringbuf));
+  for (; pop_count; pop_count--) {
+    new_flags = k->ringbuf[k->head];
+    k->ringbuf[k->head] = 0;
+    k->head = (k->head + LENGTH(k->ringbuf) - 1) % LENGTH(k->ringbuf);
   }
-  /* attempting to pop the stack while the stack is empty
-   * results in flags being 0'd */
-  if (pop_count) {
-    new_flags = 0;
-  }
-  o->kitty[o->alternate_screen].options = new_flags;
+
+  k->options = new_flags;
   return true;
 }
 
