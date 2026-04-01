@@ -1,10 +1,13 @@
 #include "collections.h"
 #include "csi.h"
+#include "platform.h"
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include "velvet_alloc.h"
 #include "velvet_lua.h"
 #include "velvet_scene.h"
 
@@ -942,6 +945,172 @@ void test_vec() {
 static void test_lua();
 static void test_lua_modules();
 
+static void test_shmem_allocator() {
+  size_t cap = sysconf(_SC_PAGESIZE);
+  struct velvet_alloc *ally = velvet_alloc_shmem_create(cap);
+
+  /* basic alloc returns non-null, zero-filled memory */
+  char *a = ally->calloc(ally, 64, 1);
+  assert(a != NULL);
+  for (int i = 0; i < 64; i++) assert(a[i] == 0);
+
+  /* multiple allocations return distinct, non-overlapping pointers */
+  char *b = ally->calloc(ally, 64, 1);
+  char *c = ally->calloc(ally, 64, 1);
+  assert(b != NULL && c != NULL);
+  assert(a != b && b != c && a != c);
+  assert(abs((int)(b - a)) >= 64);
+  assert(abs((int)(c - b)) >= 64);
+
+  /* data integrity across allocations */
+  memset(a, 'A', 64);
+  memset(b, 'B', 64);
+  memset(c, 'C', 64);
+  for (int i = 0; i < 64; i++) {
+    assert(a[i] == 'A');
+    assert(b[i] == 'B');
+    assert(c[i] == 'C');
+  }
+
+  /* free(NULL) is a no-op */
+  ally->free(ally, NULL);
+
+  /* free middle block, data in neighbors survives */
+  ally->free(ally, b);
+  for (int i = 0; i < 64; i++) {
+    assert(a[i] == 'A');
+    assert(c[i] == 'C');
+  }
+
+  /* reuse freed space */
+  char *d = ally->calloc(ally, 64, 1);
+  assert(d != NULL);
+  for (int i = 0; i < 64; i++) assert(d[i] == 0);
+
+  ally->free(ally, a);
+  ally->free(ally, c);
+  ally->free(ally, d);
+
+  /* coalescing: after freeing everything, one big alloc should work */
+  char *big = ally->calloc(ally, cap / 2, 1);
+  assert(big != NULL);
+  ally->free(ally, big);
+
+  /* exhaustion: allocation larger than capacity returns NULL */
+  char *too_big = ally->calloc(ally, cap, 1);
+  assert(too_big == NULL);
+
+  /* many small allocations then free all in reverse, verify coalescing recovers space */
+  size_t blksz = cap / 32;
+  char *ptrs[64];
+  int n = 0;
+  for (n = 0; n < 64; n++) {
+    ptrs[n] = ally->calloc(ally, blksz, 1);
+    if (!ptrs[n]) break;
+    memset(ptrs[n], (char)('a' + (n % 26)), blksz);
+  }
+  assert(n > 0);
+  for (int i = n - 1; i >= 0; i--) ally->free(ally, ptrs[i]);
+  big = ally->calloc(ally, cap / 2, 1);
+  assert(big != NULL);
+  ally->free(ally, big);
+
+  /* free in interleaved order to test non-adjacent coalescing */
+  for (n = 0; n < 64; n++) {
+    ptrs[n] = ally->calloc(ally, blksz, 1);
+    if (!ptrs[n]) break;
+  }
+  for (int i = 0; i < n; i += 2) ally->free(ally, ptrs[i]);
+  for (int i = 1; i < n; i += 2) ally->free(ally, ptrs[i]);
+  big = ally->calloc(ally, cap / 2, 1);
+  assert(big != NULL);
+  ally->free(ally, big);
+
+  /* non-adjacent free blocks must not coalesce: exhaust the allocator into
+   * uniform blocks, free alternating ones, then request more than any single
+   * gap — must fail because the free blocks are separated by live allocations */
+  {
+    char *e[64];
+    int ne = 0;
+    for (ne = 0; ne < 64; ne++) {
+      e[ne] = ally->calloc(ally, blksz, 1);
+      if (!e[ne]) break;
+    }
+    assert(ne >= 4);
+    /* measure actual stride to derive a request that can't fit in one gap */
+    size_t stride = (size_t)(e[0] - e[1]);
+    /* free every other block */
+    for (int i = 1; i < ne; i += 2) ally->free(ally, e[i]);
+    /* each freed block is ~stride bytes. the leftover at the front can coalesce
+     * with one adjacent freed block to form at most ~2*stride - 1 bytes.
+     * requesting 2*stride guarantees it won't fit in any contiguous gap. */
+    char *nope = ally->calloc(ally, 2 * stride, 1);
+    assert(nope == NULL);
+    /* clean up */
+    for (int i = 0; i < ne; i += 2) ally->free(ally, e[i]);
+  }
+
+  /* realloc: NULL ptr acts as calloc */
+  char *r1 = ally->realloc(ally, NULL, 32, 1);
+  assert(r1 != NULL);
+  for (int i = 0; i < 32; i++) assert(r1[i] == 0);
+
+  /* realloc: grow copies data */
+  memcpy(r1, "hello world!", 12);
+  char *r2 = ally->realloc(ally, r1, 128, 1);
+  assert(r2 != NULL);
+  assert(memcmp(r2, "hello world!", 12) == 0);
+
+  /* realloc: shrink preserves data */
+  char *r3 = ally->realloc(ally, r2, 16, 1);
+  assert(r3 != NULL);
+  assert(memcmp(r3, "hello world!", 12) == 0);
+  ally->free(ally, r3);
+
+  /* nmemb * size overflow returns NULL */
+  char *overflow = ally->calloc(ally, (size_t)-1, 2);
+  assert(overflow == NULL);
+
+  int fd = velvet_alloc_shmem_get_fd(ally);
+  /* remap: data visible through second mapping */
+  {
+    int fd2 = dup(fd);
+    assert(fd2 >= 0);
+    struct velvet_alloc *ally2 = velvet_alloc_shmem_remap(fd2);
+    assert(ally2 != NULL);
+
+    char *s1 = ally->calloc(ally, 64, 1);
+    assert(s1 != NULL);
+    memcpy(s1, "shared!", 7);
+
+    size_t offset = (uint8_t *)s1 - (uint8_t *)ally;
+    char *s1_via_remap = (char *)((uint8_t *)ally2 + offset);
+    assert(memcmp(s1_via_remap, "shared!", 7) == 0);
+
+    velvet_alloc_shmem_destroy(ally2, fd2);
+  }
+
+  /* remap: data visible through third mapping */
+  {
+    int fd2 = dup(fd);
+    assert(fd2 >= 0);
+    struct velvet_alloc * ally3 = velvet_alloc_shmem_remap(fd2);
+    assert( ally3 != NULL);
+
+    char *s1 = ally->calloc(ally, 64, 1);
+    assert(s1 != NULL);
+    memcpy(s1, "shared!", 7);
+
+    size_t offset = (uint8_t *)s1 - (uint8_t *)ally;
+    char *s1_via_remap = (char *)((uint8_t *) ally3 + offset);
+    assert(memcmp(s1_via_remap, "shared!", 7) == 0);
+
+    velvet_alloc_shmem_destroy(ally3, fd2);
+  }
+
+  velvet_alloc_shmem_destroy(ally, fd);
+}
+
 static void test_bitmap() {
   struct tabstop_bitmap bm = {0};
   bm.bits[0] = 0b1001000011;
@@ -992,6 +1161,7 @@ static void test_bitmap() {
 
 int main(void) {
   test_bitmap();
+  test_shmem_allocator();
   test_input_output();
   test_reflow();
   test_erase();

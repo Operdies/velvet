@@ -49,7 +49,7 @@ SUBMODULE_INIT = deps/utf8proc/utf8proc.c
 
 DEPS = $(UTF8PROC) $(LUA_LIBS)
 
-OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc dcs io velvet_scene velvet_input velvet_cmd velvet_lua velvet_api
+OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc dcs io velvet_scene velvet_input velvet_cmd velvet_lua velvet_api velvet_alloc
 OBJECT_DIR = src
 OBJECT_OUT  = $(patsubst $(OBJECT_DIR)/%.c, $(OUT_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 OBJECT_DEPS = $(OBJECT_OUT:.o=.d)
