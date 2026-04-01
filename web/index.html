@@ -83,6 +83,24 @@
       term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n');
     };
 
+    // xtermjs does not implement OSC 52 out of the box,
+    // so we intercept it to set the user clipboard.
+    // This is needed to showcase text copying.
+    // Note that this implementation is pretty sloppy, but it's all we need.
+    term.parser.registerOscHandler(52, (data) => {
+      const semi = data.indexOf(';');
+      if (semi === -1) return false;
+      const b64 = data.substring(semi + 1);
+      if (!b64 || b64 === '?') return true;
+      try {
+        navigator.clipboard.writeText(atob(b64));
+      } catch (e) {
+        console.error(e)
+      }
+      return true;
+    });
+
+
     // Translate Option+key to Alt (ESC prefix) since macOS browsers
     // produce special characters (å, π, etc.) instead of sending Meta
     term.attachCustomKeyEventHandler((event) => {
@@ -107,12 +125,6 @@
       fitAddon.fit();
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     });
-
-    const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-    });
-    resizeObserver.observe(document.getElementById('terminal'));
   </script>
 </body>
 </html>
