@@ -6,6 +6,7 @@ local vk = require('velvet.keymap.named_keys')
 -- create a custom event dispatched on the main event system
 keys.passthrough_changed = "custom.keymap.passthrough_changed"
 keys.chain_changed = "custom.keymap.chain_changed"
+keys.keymap_changed = "custom.keymap.keymap_changed"
 
 local keymap = {}
 local remapped_keys = {}
@@ -212,6 +213,7 @@ function keys.del(lhs)
     map.parent.children[map.key] = nil
     map = map.parent
   end
+  vv.events.emit_event(keys.keymap_changed)
 end
 
 --- @class velvet.keys.set.options
@@ -243,6 +245,7 @@ function keys.set(lhs, rhs, opts)
     xpcall(rhs, handler) 
   end
   map.options = opts or {}
+  vv.events.emit_event(keys.keymap_changed)
 end
 
 local function chain_str(map)
@@ -437,8 +440,9 @@ grp.session_on_key = keymap.on_key
 --- Introspect the keymap to see the available mappings in the provided
 --- sequence. If sequence is nil, the current chain is used.
 --- @param lhs string|nil the key sequence to introspect child mappings from
+--- @param recurse? boolean recursively get mappings
 --- @return which_key[] mappings
-function keys.which_key(lhs)
+function keys.which_key(lhs, recurse)
   local map = current_chain
   if lhs == '' then
     map = root_keymap
@@ -453,7 +457,11 @@ function keys.which_key(lhs)
   end
   local which_keys = {}
   for k, m in pairs(map.children) do
-    which_keys[#which_keys+1] = { description = m.options.description or k, keys = k }
+    which_keys[#which_keys + 1] = {
+      description = m.options.description or k, 
+      keys = k, terminal = not next(m.children), 
+      children = recurse and keys.which_key(lhs .. k, true) or nil 
+    }
   end
   table.sort(which_keys, function(a, b) return a.keys:upper() < b.keys:upper() end)
   return which_keys
