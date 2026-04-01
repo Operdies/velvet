@@ -86,8 +86,8 @@ end
 --- @type table<string,gen_type>
 local type_lookup = {
   any = { lua_type = "any", c_type = "void" },
-  ["string[]"] = { lua_type = "line[]", c_type = "char*[]" },
   ["int[]"] = { lua_type = "integer[]", c_type = "int[]" },
+  ["string|string[]"] = { lua_type = "string|string[]", c_type = "void*" },
   void = { c_type = "void", lua_type = "nil" },
   ["function"] = {
     c_type = "lua_Integer",
@@ -134,7 +134,7 @@ end
 
 local function is_manual(name) 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
-  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true, ["line[]"] = true }
+  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true, ["line[]"] = true, ["string|string[]"] = true }
   return manual_types[name]
 end
 
@@ -378,20 +378,20 @@ end
 for _, fn in ipairs(spec.api) do
   local required = {}
   local manual_return = is_manual(fn.returns.type)
-  local manual_params = false
+  local has_manual_param = false
   for _, p in ipairs(fn.params or {}) do
-    manual_params = manual_params or is_manual(p.type)
-    if manual_params then 
-      required = {}
-      break
+    if is_manual(p.type) then
+      has_manual_param = true
+      table.insert(required, "lua_Integer " .. p.name)
+    else
+      table.insert(required, c_type(p.type) .. " " .. p.name)
     end
-    table.insert(required, c_type(p.type) .. " " .. p.name)
   end
 
   local required_params = #required > 0 and ", " .. table.concat(required, ", ") or ""
 
   table.insert(h, ("/* %s */\n"):format(string_concatenate(fn.doc, "\n** ")))
-  if manual_params or manual_return then
+  if has_manual_param or manual_return then
     table.insert(h, ([[lua_Integer vv_api_%s(lua_State *L%s);
 ]]):format(fn.name, required_params))
   else
@@ -497,35 +497,37 @@ end
 -- C API function marshalling {{{3
 
 for _, fn in ipairs(spec.api) do
-  local params = {}
-  local manual_params = false
   local manual_return = is_manual(fn.returns.type)
+  local has_manual_param = false
 
   for _, p in ipairs(fn.params or {}) do
-    manual_params = manual_params or is_manual(p.type)
-    if manual_params then
-      params = {}
+    if is_manual(p.type) then
+      has_manual_param = true
       break
     end
-    table.insert(params, c_type(p.type) .. " " .. p.name)
   end
-
 
   table.insert(c, ([[
 
 static int l_vv_api_%s(lua_State *L) {
 ]])
     :format(fn.name))
-  if not manual_params and not manual_return then
+  if not has_manual_param and not manual_return then
     table.insert(c, '  struct velvet *v = *(struct velvet **)lua_getextraspace(L);\n')
   end
 
   local idx = 1
   local args = {}
   for _, p in ipairs(fn.params or {}) do
-    if manual_params then break end
     local t = type_lookup[p.type]
-    if t.composite then
+    if is_manual(p.type) then
+      -- pass the stack index; the implementation reads it from L
+      table.insert(c,
+        ("  lua_Integer %s = %d;\n"):format(p.name, idx)
+      )
+      table.insert(args, p.name)
+      idx = idx + 1
+    elseif t.composite then
       if not t.optional then
         table.insert(c, ([[
   luaL_checktype(L, %d, LUA_TTABLE);
@@ -543,21 +545,20 @@ static int l_vv_api_%s(lua_State *L) {
     lua_pop(L, 1); /* pop pushed table */
   }
 ]])
+      table.insert(args, p.name)
+      idx = idx + 1
     elseif t and t.enumeration then
       table.insert(c, ([[
   struct u8_slice %s_str = %s;
   %s %s = %s_slice_to_enum(%s_str);
 ]]):format(p.name, lua_check('string', idx), c_type(p.type), p.name, p.type, p.name))
-    elseif is_manual(t.lua_type) then
-      -- can't automatically marshal -- the implementation must read this parameter.
-      manual_params = true
+      table.insert(args, p.name)
+      idx = idx + 1
     else
       table.insert(c,
         ("  %s %s = %s;\n")
           :format(c_type(p.type), p.name, lua_check(p.type, idx))
       )
-    end
-    if not is_manual(t.lua_type) then
       table.insert(args, p.name)
       idx = idx + 1
     end
@@ -565,7 +566,7 @@ static int l_vv_api_%s(lua_State *L) {
 
   local argsstring = #args > 0 and ", " .. table.concat(args, ", ") or ""
   local t = type_lookup[fn.returns.type]
-  if manual_params or manual_return then
+  if has_manual_param or manual_return then
     table.insert(c, ([[
   return vv_api_%s(L%s);
 }

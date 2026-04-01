@@ -119,11 +119,13 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
   } while (w);
 }
 
-int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template) {
+static bool velvet_window_start(struct velvet_window *velvet_window, char * const *arglist);
+
+int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template, char * const *arglist) {
   assert(scene->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = velvet_scene_manage(scene, template);
   if (host) {
-    bool started = velvet_window_start(host);
+    bool started = velvet_window_start(host, arglist);
     if (!started) {
       velvet_scene_remove_window(scene, host);
       return 0;
@@ -1151,7 +1153,8 @@ bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
   return resized || moved;
 }
 
-bool velvet_window_start(struct velvet_window *velvet_window) {
+static bool velvet_window_start(struct velvet_window *velvet_window, char * const *arglist) {
+  assert(arglist && arglist[0] && arglist[0][0]);
   static const char *home = NULL;
   if (!home) home = getenv("HOME");
   struct rect c = velvet_window->geometry;
@@ -1200,17 +1203,28 @@ bool velvet_window_start(struct velvet_window *velvet_window) {
       chdir(home);
     }
 
-    string_ensure_null_terminated(&velvet_window->cmdline);
     char id[20];
     snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
     setenv("VELVET_WINID", id, true);
-    char *argv[] = {"sh", "-c", (char*)velvet_window->cmdline.content, NULL};
-    execvp("sh", argv);
-    velvet_die("execlp:");
+    execvp(arglist[0], arglist);
+    velvet_die("execvp:");
   }
   velvet_window->pid = pid;
   set_nonblocking(velvet_window->pty);
   fcntl(velvet_window->pty, F_SETFD, FD_CLOEXEC);
+
+  string_clear(&velvet_window->cmdline);
+  for (char *const *arg = arglist; *arg; arg++) {
+    if (arg != arglist) string_push_char(&velvet_window->cmdline, ' ');
+    /* don't care about quote escaping, cmdline is only constructed for convenience. */
+    if (strchr(*arg, ' ')) {
+      string_push_char(&velvet_window->cmdline, '\'');
+      string_push_cstr(&velvet_window->cmdline, *arg);
+      string_push_char(&velvet_window->cmdline, '\'');
+    } else {
+      string_push_cstr(&velvet_window->cmdline, *arg);
+    }
+  }
   return true;
 }
 

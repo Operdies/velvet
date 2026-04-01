@@ -30,7 +30,7 @@ Velvet is a fully scriptable terminal multiplexer which draws heavy inspiration 
 Like TMUX, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal window.
 Like neovim, velvet allows scripting nearly all behavior through a LUA API.
 
-Nearly all velvet behavior except the terminal emulator and process management is written in LUA, so it is possible
+Nearly all velvet behavior except the terminal emulator and system IO is written in LUA, so it is possible
 to create a truly custom velvet configuration. But 99% of users will want to use the default config included in this image.
 
 To get started, press <C-x>h (that's ctrl+x, followed by h) to view the current keybindings.

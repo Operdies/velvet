@@ -695,9 +695,10 @@ return {
     },
     {
       name = "window_create_process",
-      doc = "Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window id.",
+      doc =
+      "Create a new window with the process |cmd|. If |cmd| is |string|, the process is started as { 'sh', '-c', |cmd| }. Returns the window id.",
       params = {
-        { name = "cmd", type = "string", doc = "The process to spawn." },
+        { name = "cmd",     type = "string|string[]",       doc = "The process to spawn." },
         { name = "options", type = "window.create_options", doc = "Options for the created window." },
       },
       returns = { type = "int", doc = "The id of the new window" }

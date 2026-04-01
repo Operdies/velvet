@@ -52,14 +52,39 @@ struct velvet_window *check_process_window(struct velvet *v, int win) {
 }
 
 lua_Integer
-vv_api_window_create_process(struct velvet *v, struct u8_slice cmd, struct velvet_api_window_create_options options) {
+vv_api_window_create_process(lua_State *L, lua_Integer cmd, struct velvet_api_window_create_options options) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_window template = {.emulator = vte_default};
-  string_push_slice(&template.cmdline, cmd);
-
-  if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
 
-  return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template);
+  lua_pushvalue(L, cmd); /* push cmd to top of stack */
+  if (lua_isstring(L, -1)) {
+    if (luaL_len(L, -1) == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (string must not be empty)");
+    if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
+    char *arglist[] = {"sh", "-c", (char*)luaL_checkstring(L, -1), NULL};
+    return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+  } else if (lua_istable(L, -1)) {
+    int len = luaL_len(L, -1);
+    if (len == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (table must not be empty)");
+    char **arglist = velvet_calloc(len + 1, sizeof(char*));
+    arglist[len] = NULL;
+    for (int i = 1; i <= len; i++) {
+      lua_geti(L, -1, i);
+      if (!lua_isstring(L, -1)) {
+        free(arglist);
+        lua_bail(L, "bad argument #1 to 'window_create_process' (table must only contain strings)");
+      }
+      arglist[i - 1] = (char*)luaL_checkstring(L, -1);
+      lua_pop(L, 1);
+    }
+
+    if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
+    lua_Integer win =
+        (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+    free(arglist);
+    return win;
+  }
+  lua_bail(L, "bad argument #1 to 'window_create_process' (string or table expected, got %s)", lua_typename(L, -1));
 }
 
 lua_Integer vv_api_window_create(struct velvet *v, struct velvet_api_window_create_options options) {
@@ -982,12 +1007,13 @@ static void velvet_store_string(struct velvet *v, struct u8_slice key, struct u8
 
 /* Store a named value in the current session. Session values are preserved after reloading, but lost when the session
  * ends. */
-lua_Integer vv_api_session_store_value(lua_State *L) {
+lua_Integer vv_api_session_store_value(lua_State *L, struct u8_slice name, lua_Integer value) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
-  struct u8_slice name = luaL_checkslice(L, 1);
   struct emit_context ctx = {.recursion_guard = vec(void *)};
   string_push_cstr(&ctx.output, "return ");
+  lua_pushvalue(L, value); /* push value to top for emit_literal */
   emit_literal(L, &ctx);
+  lua_pop(L, 1);
   string_ensure_null_terminated(&ctx.output);
   velvet_store_string(v, name, string_as_u8_slice(ctx.output));
   string_destroy(&ctx.output);

@@ -388,8 +388,8 @@ function api.window_send_mouse_scroll(mouse_scroll) end
 --- @return integer ret The id of the new window
 function api.window_create(options) end
 
---- Create a new window with the process |cmd|, executed with 'sh -c'. Returns the window id.
---- @param cmd string The process to spawn.
+--- Create a new window with the process |cmd|. If |cmd| is |string|, the process is started as { 'sh', '-c', |cmd| }. Returns the window id.
+--- @param cmd string|string[] The process to spawn.
 --- @param options? velvet.api.window.create_options Options for the created window.
 --- @return integer ret The id of the new window
 function api.window_create_process(cmd, options) end
