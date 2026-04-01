@@ -744,6 +744,14 @@ return {
       params = { { name = "win_id", type = "int", doc = "Window id" } },
       returns = { type = "int", doc = "The number of lines below the bottom line of the window." }
     },
+    {
+      name = "window_set_scroll_offset",
+      doc = "Set the scroll offset of the window with id |win_id|",
+      params = { 
+        { name = "win_id", type = "int", doc = "Window id" },
+        { name = "scroll_offset", type = "int", doc = "The number of lines below the bottom line of the window." }
+      },
+    },
     --- drawing {{{1
     {
       name = "window_write",
