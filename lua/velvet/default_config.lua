@@ -1,24 +1,28 @@
 --- @param settings velvet.default_config.settings
 local function cfg(settings)
-  local pfx = settings.prefix
+  local pfx = settings.prefix or "<C-x>"
   local vv = require('velvet')
   local keymap = require('velvet.keymap')
   local default_shell = os.getenv("SHELL") or "bash"
 
-  local map = keymap.set
+  --- @param lhs string
+  --- @param func fun()
+  --- @param opt string|table
+  local map = function(lhs, func, opt) keymap.set(lhs, func, type(opt) == 'table' and opt or { description = opt }) end
+
   local map_prefix = function(mapping, ...) map(pfx .. mapping, ...) end
 
-  map_prefix("r", vv.api.reload, { description = "Reload the lua context. This fully wipes out all lua state including windows, keybinds, and any state. Configs will be reloaded after restarting." })
+  map_prefix("r", vv.api.reload, { description = "Reload config. Completely wipes global state." })
 
   map_prefix("c", function()
     local focus = vv.api.get_focused_window()
     local cwd = vv.api.window_is_valid(focus) and vv.api.window_get_working_directory(focus) or
     vv.api.get_startup_directory()
     vv.api.window_create_process(default_shell, { working_directory = cwd })
-  end, { description = "Create a new window running " .. default_shell })
+  end, { description = "Spawn " .. default_shell })
 
   map_prefix("d", function() vv.api.session_detach(vv.api.get_active_session()) end,
-    { description = "Detach the current terminal from the velvet session." })
+    { description = "Detach from velvet." })
 
   map_prefix(pfx, function() vv.api.window_send_keys(vv.api.get_focused_window(), pfx) end,
     { description = "Send the key <C-x> to the current window." })
@@ -27,25 +31,25 @@ local function cfg(settings)
 
   for i = 1, 9 do
     map_prefix(("%d"):format(i), function() dwm.toggle_tag(vv.api.get_focused_window(), i) end,
-      { description = ("Toggle tag %d for the focused window."):format(i) })
+      { description = ("Toggle window tag %d."):format(i) })
     map_prefix(("<M-%d>"):format(i), function() dwm.toggle_view(i) end,
-      { description = ("Toggle visibility of tag %d."):format(i) })
+      { description = ("Toggle view %d."):format(i) })
     map(("<M-%d>"):format(i), function() dwm.set_view(i) end,
-      { description = ("Set currently visible tags to %d."):format(i) })
+      { description = ("Select view %d."):format(i) })
     map(("<M-S-%d>"):format(i), function() dwm.set_tags(vv.api.get_focused_window(), i) end,
-      { description = ("Set tags to %d for the focused window."):format(i) })
+      { description = ("Set window tag %d."):format(i) })
   end
 
   map("<M-0>", function() dwm.set_view({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end,
-    { description = "Make all tags visible." })
+    { description = "Select all views." })
   map("<S-M-0>", function() dwm.set_tags(vv.api.get_focused_window(), { 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end,
-    { description = "Make current window visible on all tags." })
+    { description = "Set all tags on window." })
   map_prefix("t", function() dwm.set_layer(vv.api.get_focused_window(), dwm.layers.tiled) end,
-    { description = nil })
+    { description = "Tile current window." })
   map_prefix("f", function() 
     local win = vv.api.get_focused_window()
     dwm.set_layer(win, dwm.layers.floating) 
-  end, { description = nil })
+  end, { description = "Float current window." })
 
   local rect = require('velvet.ui.rect')
 
@@ -78,20 +82,17 @@ local function cfg(settings)
   map("<M-down>", apply(move, 0, 1), { description = "Move window down" })
   map("<M-S-up>", apply(resize, 0, -1), { description = "Make window shorter" })
   map("<M-S-down>", apply(resize, 0, 1), { description = "Make window taller" })
-  map_prefix("<C-j>", dwm.focus_next, { description = "Focus the next window.", repeatable = true })
-  map_prefix("<C-k>", dwm.focus_prev, { description = "Focus the previous window.", repeatable = true })
-  map_prefix("j", dwm.swap_next,
-    { description = "Swap the next current window with the next tiled window.", repeatable = true })
-  map_prefix("k", dwm.swap_prev,
-    { description = "Swap the next current window with the previous tiled window.", repeatable = true })
+  map_prefix("<C-j>", dwm.focus_next, { description = "Focus next window.", repeatable = true })
+  map_prefix("<C-k>", dwm.focus_prev, { description = "Focus previous window.", repeatable = true })
+  map_prefix("j", dwm.swap_next, { description = "Swap current and next window.", repeatable = true })
+  map_prefix("k", dwm.swap_prev, { description = "Swap current and previous window.", repeatable = true })
   map_prefix("g", dwm.zoom, { description = "Move window to top of tiling stack." })
-  map("<M-[>", apply(dwm.incmfact, -0.05), { description = "Make master stacking area narrower" })
-  map("<M-]>", apply(dwm.incmfact, 0.05), { description = "Make master stacking area wider" })
-  map("<M-i>", apply(dwm.incnmaster, 1), { description = "Increase number of windows in master stack" })
-  map("<M-o>", apply(dwm.incnmaster, -1), { description = "Decrease number of windows in master stack" })
+  map("<M-[>", apply(dwm.incmfact, -0.05), { description = "Make left stacking area narrower" })
+  map("<M-]>", apply(dwm.incmfact, 0.05), { description = "Make left stacking area wider" })
+  map("<M-i>", apply(dwm.incnmaster, 1), { description = "Increase number of windows in left stack" })
+  map("<M-o>", apply(dwm.incnmaster, -1), { description = "Decrease number of windows in left stack" })
   map("<M-`>", dwm.select_previous_view, { description = "Select the previous view" })
-  local ok, err = pcall(dwm.activate)
-  if not ok then dbg({ dwm_activate = err }) end
+  dwm.activate()
 
   local function any_process_windows()
     for _, id in ipairs(vv.api.get_windows()) do
