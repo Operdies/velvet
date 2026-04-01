@@ -13,6 +13,7 @@ local function cfg(settings)
   local map_prefix = function(mapping, ...) map(pfx .. mapping, ...) end
 
   map_prefix("r", vv.api.reload, { description = "Reload config. Completely wipes global state." })
+  map_prefix("h", require("velvet.shortcut-help").show, "Show shortcut help window")
 
   map_prefix("c", function()
     local focus = vv.api.get_focused_window()
