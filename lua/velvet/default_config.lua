@@ -1,19 +1,12 @@
---- @class default_settings
---- @field prefix string prefix to insert default keybindings in. Defaults to <C-x>
-
-local M = {
-  --- @type default_settings
-  settings = { prefix = "<C-x>" }
-}
-
-local function cfg()
-  M.settings.prefix = M.settings.prefix or "<C-x>"
+--- @param settings velvet.default_config.settings
+local function cfg(settings)
+  local pfx = settings.prefix
   local vv = require('velvet')
   local keymap = require('velvet.keymap')
   local default_shell = os.getenv("SHELL") or "bash"
 
   local map = keymap.set
-  local map_prefix = function(mapping, ...) map(M.settings.prefix .. mapping, ...) end
+  local map_prefix = function(mapping, ...) map(pfx .. mapping, ...) end
 
   map_prefix("r", vv.api.reload, { description = "Reload the lua context. This fully wipes out all lua state including windows, keybinds, and any state. Configs will be reloaded after restarting." })
 
@@ -27,7 +20,7 @@ local function cfg()
   map_prefix("d", function() vv.api.session_detach(vv.api.get_active_session()) end,
     { description = "Detach the current terminal from the velvet session." })
 
-  map_prefix(M.settings.prefix, function() vv.api.window_send_keys(vv.api.get_focused_window(), M.settings.prefix) end,
+  map_prefix(pfx, function() vv.api.window_send_keys(vv.api.get_focused_window(), pfx) end,
     { description = "Send the key <C-x> to the current window." })
 
   local dwm = require('velvet.layout.dwm')
@@ -102,15 +95,17 @@ local function cfg()
 
   local function any_process_windows()
     for _, id in ipairs(vv.api.get_windows()) do
-      if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) then return true end
+      if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) and vv.api.window_get_parent(id) == 0 then return true end
     end
     return false
   end
 
-  local event_manager = vv.events.create_group('default_config.close_if_all_exited', true)
-  event_manager.window_closed = function()
-    if not any_process_windows() then 
-      vv.api.quit() 
+  local event_manager = vv.events.create_group('default_config.shutdown', true)
+  if settings.shutdown.on_last_window_exit then
+    event_manager.window_closed = function()
+      if not any_process_windows() then 
+        vv.api.quit() 
+      end
     end
   end
 
@@ -120,16 +115,30 @@ local function cfg()
     end
   end
 
-  -- start a shell after sourcing the user's config, but only if the user config did not create any windows.
-  vv.api.schedule_after(0, function()
-    start_shell_if_no_windows()
-  end)
+  if settings.startup.spawn_shell then start_shell_if_no_windows() end
 end
 
---- @param opt default_settings
-function M.setup(opt)
-  M.settings = vv.deepcopy(opt or {}) -- todo: implement table merging
-  cfg()
-end
+--- @class velvet.default_config.settings
+--- @field prefix? string
+--- @field shutdown? velvet.default_config.settings.shutdown
+--- @field startup? velvet.default_config.settings.startup
 
-return M
+--- @class velvet.default_config.settings.shutdown
+--- @field on_last_window_exit? boolean
+
+--- @class velvet.default_config.settings.startup
+--- @field spawn_shell? boolean
+
+--- @class velvet.default_config.settings
+local default_settings = {
+  prefix = "<C-x>",
+  shutdown = { on_last_window_exit = true },
+  startup = { spawn_shell = true },
+}
+
+return {
+  --- @param opt? velvet.default_config.settings
+  setup = function(opt)
+    cfg(vv.tbl_deep_extend('force', default_settings, opt or {}))
+  end
+}
