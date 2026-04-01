@@ -208,6 +208,9 @@ struct vte {
   struct emulator_options options;
   struct screen primary;
   struct screen alternate;
+  /* pending input contains responses to requests sent processed during vte_process()
+   * The data in this buffer should be flushed (and ideally sent to the emulated PTY)
+   * after each call to vte_process. If the buffer is not flushed it will accumulate over time. */
   struct string pending_input;
   struct string command_buffer;
   struct {
@@ -226,6 +229,13 @@ struct vte {
   hyperlink_handle current_link;
   /* bitmap of tabstops. 64*16*x is a generous limit. It's okay if tabs break after that. */
   struct tabstop_bitmap tabstop;
+  /* caller controlled callback invoked when OSC 52 tries to set the clipboard.
+   * The `set` callback should validate that `base64` is a valid base64 string.
+   */
+  struct {
+    void *userdata;
+    void (*set)(struct u8_slice base64, enum osc_clipboard clipboard, void *userdata);
+  } clipboard;
 };
 
 static const struct emulator_options emulator_options_default = {

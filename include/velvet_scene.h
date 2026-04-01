@@ -16,6 +16,8 @@ struct velvet_window {
   struct string cmdline;
   struct string cwd;
   struct string title;
+  /* buffer which should be flushed to the emulator hosting velvet */
+  struct string emulator_output_buffer;
   bool is_lua_window;
   int pty, pid;
   int id, parent_window_id;

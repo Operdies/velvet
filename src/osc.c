@@ -103,6 +103,19 @@ static bool osc_set_icon(struct vte *vte, struct osc *osc) {
   return true;
 }
 
+static bool osc_dispatch_clipboard(struct vte *vte, struct osc *osc) {
+  (void)vte;
+  if (vte->clipboard.set && osc->clipboard) {
+    struct u8_slice b64 = osc->pt;
+    if (b64.len && b64.content[0] == '?') {
+      OMITTED("Clipboard query not planned.");
+    }
+    /* assume the payload is valid base64 and let the host emulator or callback handle it. */
+    vte->clipboard.set(b64, osc->clipboard, vte->clipboard.userdata);
+  }
+  return true;
+}
+
 bool osc_dispatch(struct vte *vte, struct osc *osc) {
   assert(osc->state == OSC_ACCEPT);
   switch (osc->ps) {
@@ -112,6 +125,7 @@ bool osc_dispatch(struct vte *vte, struct osc *osc) {
   case OSC_HYPERLINK: return osc_dispatch_hyperlink(vte, osc);
   case OSC_FOREGROUND_COLOR: return osc_dispatch_foreground_color(vte, osc);
   case OSC_BACKGROUND_COLOR: return osc_dispatch_background_color(vte, osc);
+  case OSC_SET_CLIPBOARD: return osc_dispatch_clipboard(vte, osc);
   default: return osc_dispatch_todo(vte, osc);
   };
 }
@@ -179,11 +193,28 @@ int osc_parse(struct osc *o, struct u8_slice str, const uint8_t *st) {
 
   o->ps = ps;
 
-  if (ps == 8) {
+  if (ps == OSC_HYPERLINK) {
     // OSC 8 can have optional parameters and thus use ane extra semicolon.
     i += osc_parse_parameters(o, str.content + i, str.len - i);
     if (o->state == OSC_REJECT) {
       return i;
+    }
+  }
+
+  if (ps == OSC_SET_CLIPBOARD) {
+    /* OSC 52 can optionally specify a specific clipboard. We only support p/c. If omitted, default to c. */
+    if ((i + 1) < str.len && str.content[i] == ';') {
+      i++; /* skip the semi colon */
+      char clipboard = str.content[i];
+      switch (clipboard) {
+        case 'c': o->clipboard = OSC_CLIPBOARD_SYSTEM; i++; break;
+        case 'p': o->clipboard = OSC_CLIPBOARD_X11_PRIMARY_SELECTION; i++; break;
+        case ';': o->clipboard = OSC_CLIPBOARD_SYSTEM; break; /* implicitly use the system clipboard and don't increment i */
+        default: {
+          o->state = OSC_REJECT;
+          return i;
+        } break;
+      }
     }
   }
 

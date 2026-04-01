@@ -21,6 +21,12 @@ enum osc_command {
   OSC_FOREGROUND_COLOR = 10,
   OSC_BACKGROUND_COLOR = 11,
   OSC_CURSOR_COLOR = 12,
+  OSC_SET_CLIPBOARD = 52,
+};
+
+enum osc_clipboard {
+  OSC_CLIPBOARD_SYSTEM = 'c',
+  OSC_CLIPBOARD_X11_PRIMARY_SELECTION = 'p',
 };
 
 struct osc_parameter {
@@ -46,6 +52,7 @@ struct osc {
   const uint8_t *st; // either BEL (\a) or ST (\x1b\)
   struct osc_parameter parameters[OSC_MAX_PARAMS];
   int n_parameters;
+  enum osc_clipboard clipboard;
 };
 
 struct vte;

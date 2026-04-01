@@ -1082,6 +1082,7 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
   string_destroy(&velvet_window->title);
   string_destroy(&velvet_window->cmdline);
   string_destroy(&velvet_window->cwd);
+  string_destroy(&velvet_window->emulator_output_buffer);
   velvet_window->pty = velvet_window->pid = 0;
 }
 
@@ -1090,10 +1091,23 @@ void velvet_scene_close_and_remove_window(struct velvet_scene *s, struct velvet_
     velvet_scene_remove_window(s, w);
 }
 
+static void on_set_clipboard(struct u8_slice base64, enum osc_clipboard clip, void *ud) {
+  assert(clip == 'c' || clip == 'p');
+  struct velvet_window *w = ud;
+  string_push_cstr(&w->emulator_output_buffer, "\x1b]52;");
+  string_push_char(&w->emulator_output_buffer, clip);
+  string_push_char(&w->emulator_output_buffer, ';');
+  /* let the host emulator figure out if the payload is valid */
+  string_push_slice(&w->emulator_output_buffer, base64);
+  string_push_char(&w->emulator_output_buffer, '\a');
+}
+
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str) {
   assert(velvet_window->emulator.ws.height == velvet_window->geometry.height);
   assert(velvet_window->emulator.ws.width == velvet_window->geometry.width);
   assert(velvet_window->geometry.height && velvet_window->geometry.width);
+  velvet_window->emulator.clipboard.userdata = velvet_window;
+  velvet_window->emulator.clipboard.set = on_set_clipboard;
   vte_process(&velvet_window->emulator, str);
 }
 

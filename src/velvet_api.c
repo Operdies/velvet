@@ -84,6 +84,10 @@ void vv_api_window_write(struct velvet *v, lua_Integer win_id, struct u8_slice t
   struct velvet_window *w = check_lua_window(v, win_id);
   if (w->geometry.height == 0 || w->geometry.width == 0) lua_bail(v->L, "Cannot write to window: size is 0");
   velvet_window_process_output(w, text);
+  /* Lua windows should not trigger emulator output. Clear it to be safe just to avoid accumulating buffers. */
+  string_clear(&w->emulator_output_buffer);
+  /* since lua windows don't have a pty, we also shouldn't allow their input buffer to accumulate. */
+  string_clear(&w->emulator.pending_input);
   if (window_visible(v, w)) velvet_invalidate_render(v, "write to window");
 }
 

@@ -288,6 +288,24 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     assert(vte);
     velvet_window_process_output(vte, str);
 
+    if (vte->emulator_output_buffer.len) {
+      struct velvet_session *session;
+      /* multicast output to all sessions. In practice, there will only be one session connected,
+       * but since there is no good way to determine if a session is a proper terminal emulator just send it to every
+       * session with an output pipe. The worst case is something like the system clipboard being set multiple times
+       * which is harmless. */
+      vec_where(session, v->sessions, session->output) {
+        string_push_string(&session->pending_output, vte->emulator_output_buffer);
+      }
+
+      /* Consider the output handled even if it was not transmitted to any client.
+       * We really don't want the buffer to accumulate when no sessions are connected,
+       * and allowing a process to e.g. set the clipboard when no client is connected
+       * is kind of an anti-feature anyway,
+       */
+      string_clear(&vte->emulator_output_buffer);
+    }
+
     vte->had_output = true;
 
     if (window_visible(v, vte)) {
