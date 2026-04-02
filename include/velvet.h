@@ -13,6 +13,14 @@ enum velvet_input_state {
   VELVET_INPUT_STATE_CSI,
 };
 
+/* used for sendning a lua chunk to the server via shared memory */
+#define VV_LUA_MAGIC 0xCAFEBEEF
+struct vv_lua_payload {
+  size_t magic;
+  size_t chunk_offset;
+  size_t chunk_length;
+};
+
 struct velvet_input_options {
   bool focus_follows_mouse;
   /* When a keybind repeatable mapping is triggered, allow retriggers within this window */
@@ -93,6 +101,7 @@ void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
+void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {
     .options =

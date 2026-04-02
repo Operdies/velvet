@@ -219,11 +219,10 @@ struct velvet_alloc *velvet_alloc_shmem_create(size_t commit) {
 
 struct velvet_alloc *velvet_alloc_shmem_remap(int fd) {
   struct stat st;
-  if (fstat(fd, &st) < 0) return NULL;
+  if (fstat(fd, &st) < 0) velvet_die("fstat:");
 
   struct shmem *s = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (s == MAP_FAILED) return NULL;
-  /* increment fcd on remap */
   s->fd = fd;
   return (struct velvet_alloc *)s;
 }
@@ -237,6 +236,6 @@ int velvet_alloc_shmem_get_fd(struct velvet_alloc *v) {
 /* close() and munmap() */
 void velvet_alloc_shmem_destroy(struct velvet_alloc *v, int fd) {
   struct shmem *sh = (struct shmem *)v;
-  if (close(fd) != 0) velvet_die("mmap close:");
   if (munmap(sh, sh->committed) != 0) velvet_die("munmap:");
+  if (close(fd) != 0) velvet_die("mmap close:");
 }

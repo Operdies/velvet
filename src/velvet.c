@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <pwd.h>
+#include "velvet_alloc.h"
 #include "velvet_lua.h"
 #include "platform.h"
 
@@ -75,6 +76,13 @@ static void session_handle_command_buffer(struct velvet *v, struct velvet_sessio
   string_clear(&src->command_buffer);
 }
 
+static void session_handle_lua_chunk(struct velvet *v, struct vv_lua_payload *chunk, int mapfd, int session_fd) {
+  struct velvet_alloc *a = velvet_alloc_shmem_remap(mapfd);
+  struct u8_slice code = { .content = (uint8_t*)a + chunk->chunk_offset, .len = chunk->chunk_length };
+  velvet_lua_execute_chunk(v, code, session_fd);
+  velvet_alloc_shmem_destroy(a, mapfd);
+}
+
 static void session_socket_callback(struct io_source *src) {
   struct velvet *velvet = src->data;
   char data_buf[8192] = {0};
@@ -118,6 +126,21 @@ static void session_socket_callback(struct io_source *src) {
   bool needs_render = false;
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
   if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+    /* if this is a lua chunk, the fd will be a shared memory map.
+     * Otherwise the fds will be in/out handles */
+    if (n == sizeof(struct vv_lua_payload)) {
+      struct vv_lua_payload *lua_chunk = (struct vv_lua_payload *)data_buf;
+      if (lua_chunk->magic == VV_LUA_MAGIC) {
+        int mapfd;
+        memcpy(&mapfd, CMSG_DATA(cmsg), sizeof(mapfd));
+        session_handle_lua_chunk(velvet, lua_chunk, mapfd, src->fd);
+        vec_find(session, velvet->sessions, session->socket == src->fd);
+        if (session && (!session->input || !session->output)) {
+          velvet_session_destroy(velvet, session);
+        }
+        return;
+      }
+    }
     memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
     session->input = fds[0];
     session->output = fds[1];
@@ -134,12 +157,13 @@ static void session_socket_callback(struct io_source *src) {
   string_push_slice(&session->command_buffer, cmd);
   session_handle_command_buffer(velvet, session);
 
-  if (!session->input) {
-    velvet_session_destroy(velvet, session);
-    return;
-  }
+  /* ensure the session still exists after handling the command */
+  vec_find(session, velvet->sessions, session->socket == src->fd);
+  if (!session) return;
 
-  if (needs_render) {
+  if (!session->input || !session->output) {
+    velvet_session_destroy(velvet, session);
+  } else if (needs_render) {
     velvet_scene_render_full(&velvet->scene, velvet_session_render, session);
   }
 }

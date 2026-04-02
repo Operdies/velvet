@@ -1,4 +1,3 @@
-/* velvet_alloc.h */
 #ifndef VELVET_ALLOC_H
 #define VELVET_ALLOC_H
 
@@ -27,6 +26,3 @@ int velvet_alloc_shmem_get_fd(struct velvet_alloc *v);
 extern struct velvet_alloc velvet_alloc_libc;
 
 #endif /* VELVET_ALLOC_H */
-
-/* velvet_alloc.c */
-

@@ -18,7 +18,7 @@ static int l_socket_print(lua_State *L) {
   return 0;
 }
 
-static void velvet_lua(struct velvet *v, struct u8_slice chunk, int source_socket) {
+void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket) {
   lua_State *L = v->L;
 
   // Build a custom env: setmetatable({print = socket_print}, {__index = _G})
@@ -95,6 +95,6 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
                          "or it could be a bug!");
   } else {
     struct u8_slice chunk = {.len = codelength, .content = chunk_start};
-    velvet_lua(v, chunk, source_socket);
+    velvet_lua_execute_chunk(v, chunk, source_socket);
   }
 }

@@ -11,6 +11,7 @@
 
 #include "utils.h"
 #include "velvet.h"
+#include "velvet_alloc.h"
 
 static int signal_write;
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
@@ -378,8 +379,8 @@ static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   if (written < (int)sizeof(sig)) velvet_die("signal write:");
 }
 
-static char cmdbuf[256];
 static void vv_attach_update_size(int sockfd) {
+  static char cmdbuf[256];
   struct rect size;
   platform_get_winsize(&size);
   char codebuf[200];
@@ -395,7 +396,24 @@ static void vv_attach_update_size(int sockfd) {
   io_write(sockfd, s);
 }
 
+static int socket_send_files(int sockfd, int *fds, int n_fds, void *payload, int n_payload) {
+  char cmsgbuf[CMSG_SPACE(sizeof(int) * n_fds)];
+
+  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = payload, .iov_len = n_payload}, .msg_iovlen = 1};
+
+  msg.msg_control = cmsgbuf;
+  msg.msg_controllen = sizeof(cmsgbuf);
+  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_len = CMSG_LEN(sizeof(int) * n_fds);
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * n_fds);
+
+  return sendmsg(sockfd, &msg, 0);
+}
+
 static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int output_fd) {
+  static char cmdbuf[256];
   int fds[2] = {input_fd, output_fd};
   bool no_repeat_wide_chars = false;
   char *term;
@@ -414,19 +432,8 @@ static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int 
                            size.x_pixel,
                            no_repeat_wide_chars ? "false" : "true");
   int n_cmdbuf = snprintf(cmdbuf, sizeof(cmdbuf), "%d%s", n_codebuf, codebuf);
-  char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
 
-  struct msghdr msg = {.msg_iov = &(struct iovec){.iov_base = cmdbuf, .iov_len = n_cmdbuf}, .msg_iovlen = 1};
-
-  msg.msg_control = cmsgbuf;
-  msg.msg_controllen = sizeof(cmsgbuf);
-  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-  cmsg->cmsg_len = CMSG_LEN(sizeof(fds));
-  cmsg->cmsg_level = SOL_SOCKET;
-  cmsg->cmsg_type = SCM_RIGHTS;
-  memcpy(CMSG_DATA(cmsg), fds, sizeof(fds));
-
-  if (sendmsg(sockfd, &msg, 0) == -1) {
+  if (socket_send_files(sockfd, fds, 2, cmdbuf, n_cmdbuf) == -1) {
     close(sockfd);
     velvet_die("sendmsg:");
   }
@@ -493,18 +500,33 @@ static void vv_send_lua_chunk(struct velvet_args args) {
     codelen = stdin_buf.len;
   }
 
-  struct string payload = {0};
-  string_push_int(&payload, codelen);
-  string_push_range(&payload, (uint8_t*)code, codelen);
+
+  /* overcommit 2x the memory we need. This is not wasteful because the pages don't get
+   * committed before they are written, but required because the allocator needs a small amount of
+   * space for metadata. This is basically a fix for the edge case where payload.len is exactly equal to the system
+   * page size. */
+  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * codelen);
+  char *chunk = shmem->calloc(shmem, codelen, 1);
+  memcpy(chunk, code, codelen);
+  struct vv_lua_payload magic_header = {
+    /* recipient needs to know the offset of the allocation */
+    .chunk_offset = chunk - (char*)shmem,
+    .chunk_length = codelen,
+    .magic = VV_LUA_MAGIC,
+  };
   string_destroy(&stdin_buf);
-  io_write(sockfd, string_as_u8_slice(payload));
-  string_destroy(&payload);
+
+  int fd = velvet_alloc_shmem_get_fd(shmem);
+  if (socket_send_files(sockfd, &fd, 1, &magic_header, sizeof(magic_header)) == -1) {
+    velvet_fatal("send mmap:");
+  }
+  /* the server owns the mmap now, so we can close it */
+  velvet_alloc_shmem_destroy(shmem, fd);
 
   int n = 0;
   do {
     n = 0;
     struct pollfd pfd = {.fd = sockfd, .events = POLL_IN};
-    /* TODO: Have server close the socket instead of polling. */
     if (poll(&pfd, 1, -1) > 0) {
       n = read(sockfd, buf, sizeof(buf));
       printf("%.*s", n, buf);
