@@ -328,7 +328,7 @@ function Window:create_child_window()
   return child
 end
 
---- @param cmd string process to start
+--- @param cmd string|string[] process to start
 --- @param opts? velvet.api.window.create_options initial window options
 --- @return velvet.window
 function Window:create_child_process_window(cmd, opts)
@@ -431,7 +431,7 @@ function Window.create(options)
 end
 
 --- Create a new window hosting a process
---- @param cmd string the name of the process
+--- @param cmd string|string[] the name of the process
 --- @param options? velvet.api.window.create_options initial window options
 --- @return velvet.window
 function Window.create_process(cmd, options)
