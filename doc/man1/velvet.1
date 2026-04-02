@@ -1,0 +1,203 @@
+.TH VELVET 1 "2026-04-01" "velvet" "General Commands Manual"
+.SH NAME
+velvet \- a scriptable terminal multiplexer
+.SH SYNOPSIS
+.B vv
+.RI [ options ]
+.RI [ command ]
+.SH DESCRIPTION
+.B Velvet
+is a fully scriptable terminal multiplexer which draws heavy inspiration from tmux and neovim.
+Like tmux, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal session.
+Like neovim, velvet supports scripting nearly all behavior through its lua API.
+
+.PP
+With no arguments,
+.B vv
+will start a new server and attach to it.
+If a server is already running,
+.B vv
+will attach to the existing session.
+.SH OPTIONS
+.TP
+.BI "\-S, \-\-socket " socket
+Specify the socket path instead of the default.
+.TP
+.B \-h, \-\-help
+Show usage information and exit.
+.SH COMMANDS
+.TP
+.B attach
+Attach to the server at the specified socket, or guess if omitted.
+.TP
+.B detach
+Detach the current terminal from the session.
+.TP
+.BI "lua " "[code|\-]"
+Execute
+.I code
+as a Lua chunk.
+If
+.I code
+is omitted or
+.B \-
+is specified, read from stdin.
+.TP
+.B quit
+Quit the velvet session, killing all windows.
+.SH CONFIGURATION
+.B velvet
+will look for a configuration file at 
+.B $HOME/.config/velvet/init.lua
+at startup. If no configuration file is found, it will source the bundled default_config.lua
+The recommended way to get started is to load the default config at the top of your own config file,
+and add adjustments on top.
+.SS Config example
+.nf
+-- prefix key configurable
+require('velvet.default_config').setup({ prefix = "<C-x>" })
+-- your config below
+.SS LSP support
+The lua API is fully annotated with EmmyLua style doc comments. I recommend
+setting up a lua LSP and pointing it to the Velvet lua distribution to get full
+autocompletion and inline documentation:
+.TP
+.B .luarc.json
+.nf
+{
+  "workspace.library": ["<velvet_path>/lua"],
+  "runtime": {
+    "version": "Lua 5.5"
+  }
+}
+.fi
+.PP
+.SS Reloading
+You can reload your config by pressing
+.B <prefix>R,
+or programatically by calling
+.B vv.api.reload()
+
+Reloading wipes all lua state and loads your config, but windows are preserved.
+This is convenient while tinkering with your config; it is almost never necessary to restart Velvet,
+and changes are immediately visible.
+
+To selectively preserve state during reload, see
+.BR velvet-session-storage (3)
+.SH KEYBINDINGS
+.B Velvet
+supports mapping any key sequence to a lua function. It follows similar syntax and conventions to neovim.
+.SS Example Keybinds
+.nf
+local map = require('velvet.keymap').set
+local spawn = vv.api.window_create_process
+.fi
+\-\- pressing Ctrl + Shift + F1 will open bash in the 
+.B $HOME
+directory.
+.nf
+map("<C-S-F1>",
+  function() spawn({"bash"}, { working_directory = os.getenv("HOME") }) end)
+.fi
+\-\- Pressing Ctrl + X and then C will open
+.B $SHELL
+in a new window.
+.nf
+map("<C-x>c", function() spawn(os.getenv("SHELL")) end)
+.fi
+
+.SS Modifiers
+.B Velvet
+supports the following modifiers:
+.TP
+.B S 
+Shift
+.TP
+.B M
+Alt
+.TP
+.B T
+Meta
+.br
+Velvet treats meta and alt interchangably.
+.TP
+.B D
+Super
+.br
+Most likely intercepted by your OS or hosting terminal.
+.br
+Refer to your terminal's documentation to learn how to pass this through.
+.TP
+.B C
+Control
+.PP
+Note that modifier support depends on the terminal hosting
+.B Velvet. Super,
+and combining
+.B Shift
+and
+.B Control
+requires the hosting terminal to implement the
+.I Kitty Keyboard Protocol.
+If the protocol is not available, Velvet falls back to basic modifier support.
+
+For detailed information about the keymap module, see
+.BR velvet-keymap (3)
+.SH SCRIPTING
+Since everything is just lua, it is fairly easy to script even moderately complex tasks via shell commands.
+Useful patterns include sending code to the server via heredocs or shell redirection:
+.SS Heredoc
+.nf
+-- Close all windows named 'zsh'
+vv lua <<LUA
+local windows = vv.api.get_windows()
+for _, id in ipairs(windows) do
+  local title = vv.api.window_get_title(id)
+  if title and title:match("^zsh$") then vv.api.window_close(id) end
+end
+LUA
+.SS Prepared scripts
+vv lua < myscript.lua
+.SS One-off commands
+vv lua 'vv.options.theme.blue = "#0000ff"'
+.SH ADVANCED USAGE
+The C engine tries to make as few assumptions as possible; in a nutshell, it performs the following tasks:
+
+1. Implements a VT220 compatible emulator, plus modern extensions,
+.br
+2. Dispatches system IO and timers on an event loop,
+.br
+3. Raises lua events when something happens (keyboard input, process output, etc.),
+.br
+4. Composites windows (based on Z index) and draws to the screen when buffer content changes,
+.br
+5. Provides a socket that clients can connect to.
+.br
+
+All other system behavior is defined in lua by interfacing with the low level api in the
+.B vv.api
+namespace.
+
+For example, the core engine raises an event on key input. If the lua side does
+not send that event to a window, it doesn't go anywhere. This makes it possible
+to define your own keybind implementation.
+
+As another example, the engine has no notion of a window border; the default
+configuration creates borders by spawning four lightweight windows (window
+objects with no backing process or pty), and setting their dimensions to [1x42]
+and [22x1] to cover a [20x40] window. It then hooks up an event to update the
+border positions whenever the attached window is moved or resized, and
+registers themselves as child windows of the attached window so they are
+automatically destroyed when the parent exits.
+
+All that is to say, the system is extremely flexible and extensible; any task
+performed by Velvet can be trivially scripted, such as sending mouse input and
+keystrokes to a window.
+
+The related pages attempt to thoroughly document the intended usage of each
+provided default module at a high level, but the best way to explore what is
+possible is to read the default config. (default_config.lua)
+
+.SH SEE ALSO
+.BR velvet-keymap (3)
+.BR velvet-session-storage (3)
