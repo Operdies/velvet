@@ -61,16 +61,20 @@ vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api
   if (lua_isstring(L, -1)) {
     if (luaL_len(L, -1) == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (string must not be empty)");
     if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
-    char *arglist[] = {"sh", "-c", (char*)luaL_checkstring(L, -1), NULL};
+    char *prog = (char*)luaL_checkstring(L, -1);
+    char *arglist[] = {"sh", "-c", prog, NULL};
     lua_Integer win = (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
-    if (win) {
-      lua_pushinteger(L, win);
-      return 1;
+    /* note: this error is unlikely to ever trigger because 'sh' will likely start correctly, but it will fail to start
+     * 'prog'. This error can't be detected without parsing the output of sh, so we don't. */
+    if (win < 0) {
+      lua_bail(L, "Error starting %s: %s", prog, strerror(-win));
     }
-    return 0;
+    lua_pushinteger(L, win);
+    return 1;
   } else if (lua_istable(L, -1)) {
     int len = luaL_len(L, -1);
     if (len == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (table must not be empty)");
+    char *prog;
     char **arglist = velvet_calloc(len + 1, sizeof(char*));
     arglist[len] = NULL;
     for (int i = 1; i <= len; i++) {
@@ -84,14 +88,14 @@ vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api
     }
 
     if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
-    lua_Integer win =
-        (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+    lua_Integer win = (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+    prog = arglist[0];
     free(arglist);
-    if (win) {
-      lua_pushinteger(L, win);
-      return 1;
+    if (win < 0) { 
+      lua_bail(L, "Error starting %s: %s", prog, strerror(-win));
     }
-    return 0;
+    lua_pushinteger(L, win);
+    return 1;
   }
   lua_bail(L, "bad argument #1 to 'window_create_process' (string or table expected, got %s)", lua_typename(L, -1));
 }

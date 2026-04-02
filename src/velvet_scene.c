@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "virtual_terminal_sequences.h"
 #include "vte.h"
+#include <errno.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <velvet_scene.h>
@@ -119,16 +120,17 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
   } while (w);
 }
 
-static bool velvet_window_start(struct velvet_window *velvet_window, char * const *arglist);
+/* returns 0 on success, otherwise the errno set by execlp */
+static int velvet_window_start(struct velvet_window *velvet_window, char * const *arglist);
 
 int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template, char * const *arglist) {
   assert(scene->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = velvet_scene_manage(scene, template);
   if (host) {
-    bool started = velvet_window_start(host, arglist);
-    if (!started) {
+    int started = velvet_window_start(host, arglist);
+    if (started != 0) {
       velvet_scene_remove_window(scene, host);
-      return 0;
+      return -started;
     }
   }
   return host ? host->id : 0;
@@ -1153,10 +1155,44 @@ bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
   return resized || moved;
 }
 
-static bool velvet_window_start(struct velvet_window *velvet_window, char * const *arglist) {
-  assert(arglist && arglist[0] && arglist[0][0]);
+static void restore_signals() {
+  /* restore default handlers for a couple of terminating signals.
+   * This is needed because their signal handlers would otherwise
+   * deliver signals to the parent process via a pipe until exec() is called.
+   * Now, if these signals are delivered before exec(), the child process should
+   * hopefully be reaped by the parent instead.
+   * */
+  int restore[] = {SIGTERM, SIGINT, SIGHUP};
+  struct sigaction sa = {0};
+  sa.sa_handler = SIG_DFL;
+  for (int i = 0; i < LENGTH(restore); i++) sigaction(restore[i], &sa, NULL);
+}
+
+_Noreturn static void velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, char * const *arglist) {
   static const char *home = NULL;
   if (!home) home = getenv("HOME");
+  /* close read side in fork */
+  if (velvet_window->cwd.len) {
+    string_ensure_null_terminated(&velvet_window->cwd);
+    if (chdir((char *)velvet_window->cwd.content) == -1) {
+      ERROR("chdir:");
+    }
+  } else if (home) {
+    chdir(home);
+  }
+
+  char id[20];
+  snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
+  setenv("VELVET_WINID", id, true);
+  execvp(arglist[0], arglist);
+  int exec_error = errno;
+  write(error_pipe, &exec_error, sizeof(int));
+  velvet_die("execvp:");
+  /* write side automatically cleaned up in child */
+}
+
+static int velvet_window_start(struct velvet_window *velvet_window, char * const *arglist) {
+  assert(arglist && arglist[0] && arglist[0][0]);
   struct rect c = velvet_window->geometry;
   struct winsize velvet_windowsize = {.ws_col = c.width, .ws_row = c.height, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
@@ -1166,52 +1202,53 @@ static bool velvet_window_start(struct velvet_window *velvet_window, char * cons
   sigfillset(&block);
   sigprocmask(SIG_BLOCK, &block, &sighandler);
 
+  /* create a pipe to get back errors from exec() */
+  int rw[2];
+  if (pipe(rw) < 0) { 
+    ERROR("Unable to create pipe:");
+    velvet_die("pipe:");
+  }
+
+  set_cloexec(rw[0]);
+  set_cloexec(rw[1]);
+
   /* forward declare forkpty since it's the only thing we need from its header,
    * and the header is different on Mac and Linux. On Mac it is <util.h> (????????) */
   extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
   pid_t pid = forkpty(&velvet_window->pty, NULL, NULL, &velvet_windowsize);
 
   if (pid == 0) {
-    /* restore default handlers for a couple of terminating signals.
-     * This is needed because their signal handlers would otherwise
-     * deliver signals to the parent process via a pipe until exec() is called.
-     * Now, if these signals are delivered before exec(), the child process should
-     * hopefully be reaped by the parent instead.
-     * */
-    int restore[] = { SIGTERM, SIGINT, SIGHUP };
-    struct sigaction sa = {0};
-    sa.sa_handler = SIG_DFL;
-    for (int i = 0; i < LENGTH(restore); i++)
-      sigaction(restore[i], &sa, NULL);
+    restore_signals();
   }
 
   /* restore signal generation in both child and parent */
   sigprocmask(SIG_SETMASK, &sighandler, &trash_signalset);
 
   if (pid < 0) {
+    close(rw[0]);
+    close(rw[1]);
     ERROR("Unable to spawn process:");
-    return false;
+    return errno;
   }
+
+
+  int exec_error;
 
   if (pid == 0) {
-    if (velvet_window->cwd.len) {
-      string_ensure_null_terminated(&velvet_window->cwd);
-      if (chdir((char *)velvet_window->cwd.content) == -1) {
-        ERROR("chdir:");
-      }
-    } else if (home) {
-      chdir(home);
-    }
-
-    char id[20];
-    snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
-    setenv("VELVET_WINID", id, true);
-    execvp(arglist[0], arglist);
-    velvet_die("execvp:");
+    /* close write side in child */
+    close(rw[0]);
+    velvet_window_setup_child(velvet_window, rw[1], arglist);
   }
+
+  /* Close write side in parent. Otherwise read(rw[0]) will block. */
+  close(rw[1]);
   velvet_window->pid = pid;
-  set_nonblocking(velvet_window->pty);
   set_cloexec(velvet_window->pty);
+  set_nonblocking(velvet_window->pty);
+  int read_count = read(rw[0], &exec_error, sizeof(int)); 
+  /* close read side in parent */
+  close(rw[0]);
+  if (read_count == sizeof(int)) return exec_error;
 
   string_clear(&velvet_window->cmdline);
   for (char *const *arg = arglist; *arg; arg++) {
@@ -1225,7 +1262,7 @@ static bool velvet_window_start(struct velvet_window *velvet_window, char * cons
       string_push_cstr(&velvet_window->cmdline, *arg);
     }
   }
-  return true;
+  return 0;
 }
 
 void velvet_scene_destroy(struct velvet_scene *m) {
