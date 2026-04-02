@@ -51,6 +51,97 @@ struct velvet_window *check_process_window(struct velvet *v, int win) {
   return w;
 }
 
+struct velvet_wordsplit_iterator {
+  struct u8_slice src;
+  size_t cursor;
+  struct string current;
+  bool reject;
+  char *reject_reason;
+};
+
+static int escape_char(char ch) {
+  switch (ch) {
+  case 'a': return '\a';   /* alert/bell */
+  case 'b': return '\b';   /* backspace */
+  case 'e': return '\033'; /* escape */
+  case 'f': return '\f';   /* form feed */
+  case 'n': return '\n';   /* newline */
+  case 'r': return '\r';   /* carriage return */
+  case 't': return '\t';   /* tab */
+  case 'v': return '\v';   /* vertical tab */
+  case '\\': return '\\';
+  case '\'': return '\'';
+  case ' ': return ' ';
+  case '$': return '$';
+  case '"': return '"';
+  case '0': return '\0'; /* null */
+  default: return -1;    /* unknown escape */
+  }
+}
+
+static bool wordsplit_iterator_next(struct velvet_wordsplit_iterator *it) {
+  struct string *s = &it->current;
+  string_clear(s);
+  for (; it->cursor < it->src.len && isspace(it->src.content[it->cursor]); it->cursor++);
+  if (it->cursor >= it->src.len) return false;
+
+  size_t cursor = it->cursor;
+
+  char quote = 0;
+  bool inhibit = false;
+  bool inhibit_inhibit = false;
+
+  for (; cursor < it->src.len; cursor++) {
+    char ch = it->src.content[cursor];
+    char peek = (cursor + 1) < it->src.len ? it->src.content[cursor + 1] : 0;
+    if (inhibit) {
+      /* unset prev if it was escaped. e.g. the word \$'xyz' should expand to $xyz, and
+       * ansi parsing should not be enabled inside the quotes. */
+      inhibit = false;
+      char esc = escape_char(ch);
+      /* invalid escape command */
+      if (esc == -1) {
+        it->reject = true;
+        it->reject_reason = "Invalid escape character.";
+        return false;
+      }
+      string_push_char(s, esc);
+    } else if (!quote && ch == '$' && peek == '\'') {
+      quote = '\'';
+      cursor++;
+    } else if (ch == '\\' && !inhibit_inhibit) {
+      inhibit = true;
+    } else if (quote && ch != quote) {
+      string_push_char(s, ch);
+    } else if (quote && ch == quote) {
+      quote = 0;
+      inhibit_inhibit = false;
+    } else if (ch == '\'' || ch == '"') {
+      quote = ch;
+      inhibit_inhibit = ch == '\'';
+    } else if (isspace(ch)) {
+      /* adjacent quotes and characters are joined as a single argument,
+       * so we should only break on end of string, or on whitespace. */
+      break;
+    } else {
+      string_push_char(s, ch);
+    }
+  }
+
+  if (inhibit) {
+    it->reject = true;
+    it->reject_reason = "trailing escape";
+  }
+
+  if (quote) {
+    it->reject = true;
+    it->reject_reason = "unterminated quote";
+  }
+
+  it->cursor = cursor;
+  return !it->reject;
+}
+
 lua_stackRetCount
 vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api_window_create_options options) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
@@ -60,18 +151,22 @@ vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
   if (lua_isstring(L, -1)) {
     if (luaL_len(L, -1) == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (string must not be empty)");
-    if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
-    char *prog = (char*)luaL_checkstring(L, -1);
-    char *arglist[] = {"sh", "-c", prog, NULL};
-    lua_Integer win = (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
-    /* note: this error is unlikely to ever trigger because 'sh' will likely start correctly, but it will fail to start
-     * 'prog'. This error can't be detected without parsing the output of sh, so we don't. */
-    if (win < 0) {
-      lua_bail(L, "Error starting %s: %s", prog, strerror(-win));
+    struct velvet_wordsplit_iterator it = {0};
+    it.src.content = (uint8_t*)luaL_checklstring(L, -1, &it.src.len);
+    lua_newtable(L);
+
+    int index = 1;
+    while (wordsplit_iterator_next(&it)) {
+      lua_pushlstring(L, (char*)it.current.content, it.current.len);
+      lua_seti(L, -2, index++);
     }
-    lua_pushinteger(L, win);
-    return 1;
-  } else if (lua_istable(L, -1)) {
+    string_destroy(&it.current);
+    if (it.reject) {
+      lua_bail(L, "Invalid command: %s", it.reject_reason); /* TODO: Explain the problem */
+    }
+  }
+
+  if (lua_istable(L, -1)) {
     int len = luaL_len(L, -1);
     if (len == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (table must not be empty)");
     char *prog;
@@ -756,12 +851,6 @@ lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string
     result += utf8proc_charwidth(it.current.value);
   }
   return result;
-}
-
-static struct u8_slice luaL_checkslice(lua_State *L, lua_Integer idx) {
-  struct u8_slice s;
-  s.content = (const uint8_t *)luaL_checklstring(L, idx, &s.len);
-  return s;
 }
 
 static bool needs_quote(const char *ch) {
