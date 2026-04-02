@@ -1,25 +1,37 @@
 #include "velvet.h"
 #include "lauxlib.h"
 #include "utils.h"
+#include <errno.h>
 
 
 static int l_socket_print(lua_State *L) {
+  static struct string linebuf = {0};
+  string_clear(&linebuf);
   int source_socket = lua_tointeger(L, lua_upvalueindex(1));
   if (source_socket == 0) return 0;
   int n = lua_gettop(L);
   for (int i = 1; i <= n; i++) {
-    size_t len = 0;
-    const char *s = luaL_tolstring(L, i, &len);
-    if (i > 1) write(source_socket, "\t", 1);
-    write(source_socket, s, len);
+    struct u8_slice s;
+    s.content = (uint8_t*)luaL_tolstring(L, i, &s.len);
+    if (i > 1) string_push_char(&linebuf, '\t');
+    string_push_slice(&linebuf, s);
     lua_pop(L, 1);
   }
-  write(source_socket, "\n", 1);
+  string_push_char(&linebuf, '\n');
+  /* the socket is nonblocking, so if the write is too large it won't go through.
+   * the alternative is to lock the while server, so let's just drop some messages instead.
+   *
+   * The golden solution would be to make velvet_dispatch() re-entrant. Maybe later.
+   * But really, if someone wants to extract huge chunks of text, maybe they should use
+   * io instead of print()
+   * */
+  write(source_socket, linebuf.content, linebuf.len);
   return 0;
 }
 
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket) {
   lua_State *L = v->L;
+  set_nonblocking(source_socket);
 
   // Build a custom env: setmetatable({print = socket_print}, {__index = _G})
   lua_pushinteger(L, source_socket);

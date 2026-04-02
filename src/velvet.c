@@ -412,10 +412,60 @@ static void velvet_ensure_render_scheduled(struct velvet *velvet) {
   velvet->_render_invalidated = false;
 }
 
+static void velvet_dispatch(struct velvet *velvet) {
+  struct io *const loop = &velvet->event_loop;
+  struct velvet_session *focus = velvet_get_focused_session(velvet);
+  if (focus) velvet_align_and_arrange(velvet, focus);
+  if (velvet->_render_invalidated) velvet_ensure_render_scheduled(velvet);
+
+  // Set up IO
+  vec_clear(&loop->sources);
+
+  struct io_source signal_src = {
+      .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = on_signal, .data = velvet};
+  struct velvet_window *h;
+  vec_where(h, velvet->scene.windows, h->pty && h->pid) {
+    struct io_source read_src = {
+        .data = velvet,
+        .fd = h->pty,
+        .events = IO_SOURCE_POLLIN,
+        .on_read = on_window_output,
+        .on_writable = on_window_writable,
+    };
+    if (h->emulator.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
+
+    io_add_source(loop, read_src);
+  }
+
+  io_add_source(loop, signal_src);
+
+  struct io_source socket_src = {
+      .fd = velvet->socket, .events = IO_SOURCE_POLLIN, .on_readable = socket_accept, .data = velvet};
+  io_add_source(loop, socket_src);
+
+  struct velvet_session *session;
+  vec_foreach(session, velvet->sessions) {
+    struct io_source socket_src = {
+        .fd = session->socket, .events = IO_SOURCE_POLLIN, .on_readable = session_socket_callback, .data = velvet};
+    io_add_source(loop, socket_src);
+    struct io_source input_src = {
+        .fd = session->input, .events = IO_SOURCE_POLLIN, .on_read = on_session_input, .data = velvet};
+    if (input_src.fd) io_add_source(loop, input_src);
+    if (session->pending_output.len) {
+      struct io_source output_src = {
+          .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_session_writable, .data = velvet};
+      if (output_src.fd) io_add_source(loop, output_src);
+    }
+  }
+
+  // Dispatch all pending io
+  io_dispatch(loop);
+  velvet_raise_window_output_events(velvet);
+}
+
 void velvet_loop(struct velvet *velvet) {
   // Set an initial dummy size. This will be controlled by clients once they connect.
   struct rect ws = {.width = 80, .height = 24, .x_pixel = 800, .y_pixel = 600};
-  struct io *const loop = &velvet->event_loop;
   velvet_scene_resize(&velvet->scene, ws);
   /* We need to pass in a velvet reference to the scene so it can raise events.
    * TODO: Get rid of `velvet_scene` and store windows directly in `velvet`.
@@ -433,52 +483,9 @@ void velvet_loop(struct velvet *velvet) {
   velvet->min_ms_per_frame = 1000 * (1.0 / 40);
   velvet_invalidate_render(velvet, "initial render");
 
-  for (;!velvet->quit;) {
+  for (; !velvet->quit;) {
     velvet_log("Main loop"); // mostly here to detect misbehaving polls.
-    struct velvet_session *focus = velvet_get_focused_session(velvet);
-    if (focus) velvet_align_and_arrange(velvet, focus);
-    if (velvet->_render_invalidated) velvet_ensure_render_scheduled(velvet);
-
-    // Set up IO
-    vec_clear(&loop->sources);
-
-    struct io_source signal_src = { .fd = velvet->signal_read, .events = IO_SOURCE_POLLIN, .on_read = on_signal, .data = velvet};
-    struct velvet_window *h;
-    vec_where(h, velvet->scene.windows, h->pty && h->pid) {
-      struct io_source read_src = {
-        .data = velvet,
-        .fd = h->pty,
-        .events = IO_SOURCE_POLLIN,
-        .on_read = on_window_output,
-        .on_writable = on_window_writable,
-      };
-      if (h->emulator.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
-
-      io_add_source(loop, read_src);
-    }
-
-    io_add_source(loop, signal_src);
-
-    struct io_source socket_src = { .fd = velvet->socket, .events = IO_SOURCE_POLLIN, .on_readable = socket_accept, .data = velvet };
-    io_add_source(loop, socket_src);
-
-    struct velvet_session *session;
-    vec_foreach(session, velvet->sessions) {
-      struct io_source socket_src = { .fd = session->socket, .events = IO_SOURCE_POLLIN, .on_readable = session_socket_callback, .data = velvet };
-      io_add_source(loop, socket_src);
-      struct io_source input_src = { .fd = session->input, .events = IO_SOURCE_POLLIN, .on_read = on_session_input, .data = velvet};
-      if (input_src.fd)
-        io_add_source(loop, input_src);
-      if (session->pending_output.len) {
-        struct io_source output_src = { .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_session_writable, .data = velvet};
-        if (output_src.fd)
-          io_add_source(loop, output_src);
-      }
-    }
-
-    // Dispatch all pending io
-    io_dispatch(loop);
-    velvet_raise_window_output_events(velvet);
+    velvet_dispatch(velvet);
   }
 }
 
