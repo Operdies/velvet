@@ -37,7 +37,11 @@ session_options.state = session_options.state or {
   --- @type boolean[]
   prev_view = { true, false, false, false, false, false, false, false, false },
   --- @type integer[]
-  focus_order = {}
+  focus_order = {},
+  --- @type integer
+  nmaster = 1,
+  --- @type number
+  mfact = 0.5,
 }
 local state = session_options.state
 
@@ -172,8 +176,6 @@ end
 local tiled_z = vv.layers.tiled
 local floating_z = vv.layers.floating
 
-local nmaster = 1
-local mfact = 0.5
 local dim_inactive = 0
 
 --- @return velvet.window
@@ -307,7 +309,7 @@ local function tile()
       end
       if not floating then
         win:set_z_index(tiled_z)
-        if #master < nmaster then
+        if #master < state.nmaster then
           table.insert(master, win)
         else
           table.insert(stack, win)
@@ -322,7 +324,7 @@ local function tile()
     win:set_z_index(i + z)
   end
 
-  local master_width = #stack > 0 and math.floor(term.width * mfact) or term.width
+  local master_width = #stack > 0 and math.floor(term.width * state.mfact) or term.width
   if #master == 0 then master_width = 0 end
 
   local left = 1 + r_left
@@ -472,12 +474,12 @@ local function clamp(v, lo, hi)
 end
 
 function dwm.incmfact(v)
-  mfact = clamp(mfact + v, 0.10, 0.90)
+  state.mfact = clamp(state.mfact + v, 0.10, 0.90)
   arrange()
 end
 
 function dwm.incnmaster(v)
-  nmaster = clamp(nmaster + v, 0, 10)
+  state.nmaster = clamp(state.nmaster + v, 0, 10)
   arrange()
 end
 
