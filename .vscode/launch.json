@@ -5,7 +5,7 @@
       "name": "attach",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
+      "program": "${workspaceFolder}/debug/vv",
       "args": [ "attach", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
@@ -15,10 +15,23 @@
       ]
     },
     {
+      "name": "chunk",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/debug/vv",
+      "args": [ "--socket", "dummy.sock", "lua", "vv.api.window_create_process('bash')" ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "make all",
+      "initCommands": [
+        "command source ${workspaceFolder}/scripts/lldb-config"
+      ]
+    },
+    {
       "name": "foreground",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/vv",
+      "program": "${workspaceFolder}/debug/vv",
       "args": [ "foreground", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
@@ -31,7 +44,7 @@
       "name": "Debug tests",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/test",
+      "program": "${workspaceFolder}/debug/test",
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make all",
       "console": "integratedTerminal",

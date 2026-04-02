@@ -30,11 +30,11 @@ LUA_LIBS = $(LUA_DIR)/src/liblua.a
 LUA_INCLUDE = $(LUA_DIR)/src/
 LUA = $(LUA_DIR)/src/lua
 
-BUILD ?= debug
+BUILD ?= release
 
 RELEASE_TARGET ?= release
 PROFILE_TARGET ?= profile
-RELEASE_LTO_TARGET ?= release_lto
+DEBUG_TARGET ?= debug
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/deps -I$(LUA_INCLUDE) -I$(abspath .)/$(GEN_DIR)
 OUT_DIR ?= bin
 COMMANDS = vv test
@@ -63,9 +63,6 @@ DEBUG_LDFLAGS = -fsanitize=address
 RELEASE_CFLAGS = -Os -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD
 RELEASE_LDFLAGS = 
 
-RELEASE_LTO_CFLAGS = -O3 -flto -mtune=native -march=native -DNDEBUG -DRELEASE_BUILD
-RELEASE_LTO_LDFLAGS = -flto
-
 PROFILE_CFLAGS = -fprofile-instr-generate -fcoverage-mapping
 PROFILE_LDFLAGS = 
 
@@ -74,7 +71,8 @@ ifeq ($(BUILD),debug)
 	LDFLAGS += $(DEBUG_LDFLAGS)
 	# @true: silenced noop
 	STRIP = @true
-	OUT_DIR = bin
+	OUT_DIR = debug
+	DEBUG_TARGET = hack
 endif
 ifeq ($(BUILD),release)
 	CFLAGS += $(RELEASE_CFLAGS)
@@ -82,13 +80,6 @@ ifeq ($(BUILD),release)
 	STRIP = strip
 	OUT_DIR = release
 	RELEASE_TARGET = hack
-endif
-ifeq ($(BUILD),release_lto)
-	CFLAGS += $(RELEASE_LTO_CFLAGS)
-	LDFLAGS += $(RELEASE_LTO_LDFLAGS)
-	STRIP = strip
-	OUT_DIR = release_lto
-	RELEASE_LTO_TARGET = hack
 endif
 ifeq ($(BUILD),profile)
 	CFLAGS += $(RELEASE_CFLAGS) $(PROFILE_CFLAGS)
@@ -131,9 +122,9 @@ scan-debug:
 	scan-build make all
 scan: scan-debug scan-release
 
-.PHONY: $(RELEASE_LTO_TARGET)
-$(RELEASE_LTO_TARGET):
-	@$(MAKE) BUILD=release_lto all
+.PHONY: $(DEBUG_TARGET)
+$(DEBUG_TARGET):
+	@$(MAKE) BUILD=debug all
 
 .PHONY: $(PROFILE_TARGET)
 $(PROFILE_TARGET):

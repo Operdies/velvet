@@ -1,7 +1,7 @@
 bin/
 release/
 profile/
-release_lto/
+debug/
 .cache/
 compile_commands.json
 *.ansi
