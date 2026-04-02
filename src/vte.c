@@ -541,11 +541,8 @@ void vte_set_size(struct vte *vte, struct rect sz) {
   vte->ws = sz;
 
   if (g->cells == NULL || g->w != sz.width || g->h != sz.height) {
-    if (vte->options.alternate_screen) {
-      vte_init_alternate_screen(vte);
-    } else {
-      vte_init_primary_screen(vte);
-    }
+    vte_init_alternate_screen(vte);
+    vte_init_primary_screen(vte);
   }
 }
 
