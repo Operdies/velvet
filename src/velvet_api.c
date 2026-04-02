@@ -51,8 +51,8 @@ struct velvet_window *check_process_window(struct velvet *v, int win) {
   return w;
 }
 
-lua_Integer
-vv_api_window_create_process(lua_State *L, lua_Integer cmd, struct velvet_api_window_create_options options) {
+lua_stackRetCount
+vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api_window_create_options options) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_window template = {.emulator = vte_default};
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
@@ -62,7 +62,12 @@ vv_api_window_create_process(lua_State *L, lua_Integer cmd, struct velvet_api_wi
     if (luaL_len(L, -1) == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (string must not be empty)");
     if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
     char *arglist[] = {"sh", "-c", (char*)luaL_checkstring(L, -1), NULL};
-    return (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+    lua_Integer win = (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+    if (win) {
+      lua_pushinteger(L, win);
+      return 1;
+    }
+    return 0;
   } else if (lua_istable(L, -1)) {
     int len = luaL_len(L, -1);
     if (len == 0) lua_bail(L, "bad argument #1 to 'window_create_process' (table must not be empty)");
@@ -82,7 +87,11 @@ vv_api_window_create_process(lua_State *L, lua_Integer cmd, struct velvet_api_wi
     lua_Integer win =
         (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
     free(arglist);
-    return win;
+    if (win) {
+      lua_pushinteger(L, win);
+      return 1;
+    }
+    return 0;
   }
   lua_bail(L, "bad argument #1 to 'window_create_process' (string or table expected, got %s)", lua_typename(L, -1));
 }
@@ -160,7 +169,7 @@ bool vv_api_window_is_valid(struct velvet *v, lua_Integer winid) {
   return w ? true : false;
 }
 
-lua_Integer vv_api_get_windows(lua_State *L) {
+lua_stackRetCount vv_api_get_windows(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   lua_newtable(L);
   lua_Integer index = 1;
@@ -178,7 +187,7 @@ struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
   return geom;
 }
 
-lua_Integer vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velvet_api_rect region) {
+lua_stackRetCount vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velvet_api_rect region) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_window *w = check_window(v, win_id);
   region.left = region.left - 1;
@@ -335,7 +344,7 @@ void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, struct u8_sli
   string_push_slice(&w->title, title);
 }
 
-lua_Integer vv_api_get_sessions(lua_State *L) {
+lua_stackRetCount vv_api_get_sessions(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   lua_newtable(L);
   lua_Integer index = 1;
@@ -1007,7 +1016,7 @@ static void velvet_store_string(struct velvet *v, struct u8_slice key, struct u8
 
 /* Store a named value in the current session. Session values are preserved after reloading, but lost when the session
  * ends. */
-lua_Integer vv_api_session_store_value(lua_State *L, struct u8_slice name, lua_Integer value) {
+lua_stackRetCount vv_api_session_store_value(lua_State *L, struct u8_slice name, lua_stackIndex value) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct emit_context ctx = {.recursion_guard = vec(void *)};
   string_push_cstr(&ctx.output, "return ");
@@ -1022,7 +1031,7 @@ lua_Integer vv_api_session_store_value(lua_State *L, struct u8_slice name, lua_I
 }
 
 /* Load a value from the current session by name. */
-lua_Integer vv_api_session_load_value(lua_State *L, struct u8_slice name) {
+lua_stackRetCount vv_api_session_load_value(lua_State *L, struct u8_slice name) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_kvp *it = NULL;
   vec_find(it, v->stored_strings, u8_slice_equals(name, string_as_u8_slice(it->key)));

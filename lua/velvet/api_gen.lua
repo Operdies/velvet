@@ -325,6 +325,8 @@ table.insert(h, ([[
 #include "utils.h"
 #include "collections.h"
 
+typedef lua_Integer lua_stackIndex;
+typedef lua_Integer lua_stackRetCount;
 struct velvet;
 
 ]]):format("VELVET_API_H", "VELVET_API_H"))
@@ -382,7 +384,7 @@ for _, fn in ipairs(spec.api) do
   for _, p in ipairs(fn.params or {}) do
     if is_manual(p.type) then
       has_manual_param = true
-      table.insert(required, "lua_Integer " .. p.name)
+      table.insert(required, "lua_stackIndex " .. p.name)
     else
       table.insert(required, c_type(p.type) .. " " .. p.name)
     end
@@ -392,7 +394,7 @@ for _, fn in ipairs(spec.api) do
 
   table.insert(h, ("/* %s */\n"):format(string_concatenate(fn.doc, "\n** ")))
   if has_manual_param or manual_return then
-    table.insert(h, ([[lua_Integer vv_api_%s(lua_State *L%s);
+    table.insert(h, ([[lua_stackRetCount vv_api_%s(lua_State *L%s);
 ]]):format(fn.name, required_params))
   else
     table.insert(h,
@@ -435,17 +437,17 @@ table.insert(c, [[
 
 /* Instead of creating a real gc handle, we only store a reference to the function.
 Cleaning up the handle in codegen is complicated, so instead the consumer must create its own handle. */
-static lua_Integer luaL_checkfunction(lua_State *L, lua_Integer idx) {
+static lua_Integer luaL_checkfunction(lua_State *L, lua_stackIndex idx) {
   luaL_checktype(L, idx, LUA_TFUNCTION);
   return idx;
 }
 
-static bool luaL_checkboolean(lua_State *L, lua_Integer idx) {
+static bool luaL_checkboolean(lua_State *L, lua_stackIndex idx) {
   luaL_checktype(L, idx, LUA_TBOOLEAN);
   return lua_toboolean(L, idx);
 }
 
-static struct u8_slice luaL_checkslice(lua_State *L, lua_Integer idx) {
+static struct u8_slice luaL_checkslice(lua_State *L, lua_stackIndex idx) {
   struct u8_slice s;
   s.content = (const uint8_t*)luaL_checklstring(L, idx, &s.len);
   return s;
