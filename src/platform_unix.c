@@ -149,3 +149,7 @@ void set_nonblocking(int fd) {
     velvet_die("fcntl:");
   }
 }
+
+void set_cloexec(int fd) {
+  if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) ERROR("fcntl cloexec:");
+}

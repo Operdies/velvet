@@ -28,8 +28,8 @@ static void signal_trap(int sig, siginfo_t *siginfo, void *context) {
 static void install_signal_handlers(int *pipes) {
   if (pipe(pipes) < 0) velvet_die("pipe:");
 
-  fcntl(pipes[0], F_SETFD, FD_CLOEXEC);
-  fcntl(pipes[1], F_SETFD, FD_CLOEXEC);
+  set_cloexec(pipes[0]);
+  set_cloexec(pipes[1]);
 
   struct sigaction sig_handle = {0};
   sig_handle.sa_sigaction = &signal_handler;
@@ -526,7 +526,7 @@ static void vv_send_lua_chunk(struct velvet_args args) {
   int n = 0;
   do {
     n = 0;
-    struct pollfd pfd = {.fd = sockfd, .events = POLL_IN};
+    struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
     if (poll(&pfd, 1, -1) > 0) {
       n = read(sockfd, buf, sizeof(buf));
       printf("%.*s", n, buf);

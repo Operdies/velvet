@@ -197,7 +197,7 @@ struct velvet_alloc *velvet_alloc_shmem_create(size_t commit) {
   /* MacOS does not support O_CLOEXEC in the flags to shm_open(), so we set it with fcntl instead. It's okay if the
    * platform does not support this. We leak some file descriptors in child processes, but that shouldn't be a problem.
    * We intentionally silently ignore errors here. */
-  fcntl(shm_fd, F_SETFD, FD_CLOEXEC); 
+  set_cloexec(shm_fd);
   shm_unlink(shm_name);
   if (ftruncate(shm_fd, commit) == -1) velvet_fatal("truncate:");
   struct shmem *a = mmap(0, commit, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);

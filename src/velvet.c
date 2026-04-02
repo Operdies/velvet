@@ -133,6 +133,7 @@ static void session_socket_callback(struct io_source *src) {
       if (lua_chunk->magic == VV_LUA_MAGIC) {
         int mapfd;
         memcpy(&mapfd, CMSG_DATA(cmsg), sizeof(mapfd));
+        set_cloexec(mapfd);
         session_handle_lua_chunk(velvet, lua_chunk, mapfd, src->fd);
         vec_find(session, velvet->sessions, session->socket == src->fd);
         if (session && (!session->input || !session->output)) {
@@ -144,6 +145,8 @@ static void session_socket_callback(struct io_source *src) {
     memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
     session->input = fds[0];
     session->output = fds[1];
+    set_cloexec(session->input);
+    set_cloexec(session->output);
 
     set_nonblocking(session->output);
 
@@ -176,6 +179,7 @@ static void socket_accept(struct io_source *src) {
     ERROR("accept:");
     return;
   }
+  set_cloexec(client_fd);
 
   struct velvet_session c = { .socket = client_fd };
   vec_push(&velvet->sessions, &c);

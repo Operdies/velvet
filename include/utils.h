@@ -17,6 +17,7 @@ void *velvet_erealloc(void *array, size_t nmemb, size_t size) __attribute__((all
 void terminal_setup(void (*reset)(void));
 void terminal_reset(void);
 void set_nonblocking(int fd);
+void set_cloexec(int fd);
 
 #define mB(x) ((x) << 20)
 #define kB(x) ((x) << 10)

@@ -1211,7 +1211,7 @@ static bool velvet_window_start(struct velvet_window *velvet_window, char * cons
   }
   velvet_window->pid = pid;
   set_nonblocking(velvet_window->pty);
-  fcntl(velvet_window->pty, F_SETFD, FD_CLOEXEC);
+  set_cloexec(velvet_window->pty);
 
   string_clear(&velvet_window->cmdline);
   for (char *const *arg = arglist; *arg; arg++) {
