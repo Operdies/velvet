@@ -1,17 +1,24 @@
 ---@class vv
 local vv = {
-  arrange_group_name = 'velvet.arrange',
-  --- This is mostly a hint for managiging z indices
-  layers = {
+  --- This is a hint for managiging z indices.
+  --- They are defined at this level so different window managers can make a reasonable
+  --- guess about Z planes to use so user-defined windows (popups, statusbars, etc.)
+  --- can work with different window managers.
+  z_hint = {
     --- windows which should appear behind other windows,
-    --- such as wallpapers and desktop elements
-    background = -10000,
+    --- such as wallpapers and desktop elements. Works best when windows in higher layers 
+    background = -100000,
     --- tiled windows, if a tiling layout scheme is used
-    tiled = -1000,
+    tiled = -10000,
+    --- tstatus bars, power lines, etc. Should appear above tiled windows but below floating windows and popups
+    statusbar = -1000, 
     --- floating windows, if a layout scheme with stacking capabilities is used
-    floating = 0,
-    --- elements which require user attention
-    popup = 1000,
+    floating = 1000,
+    --- elements which require user attention. Should appear above everything else.
+    popup = 10000,
+    --- Special overlays which should affect everything. One example of this is the mouse-copy implementation
+    --- which tints all content and intercepts mouse input
+    overlay = 100000,
   },
 
   --- Emit an error message to all system_message listeners

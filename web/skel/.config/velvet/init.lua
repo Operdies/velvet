@@ -1,1 +1,1 @@
-require("velvet.default_config").setup()
+require("velvet.presets.dwm").setup()

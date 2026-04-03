@@ -1,10 +1,9 @@
-local dwm = {}
---- @enum dwm.layer
-dwm.layers = {
-  tiled = 1, floating = 2,
-}
 
-local vv = require('velvet')
+--- @alias dwm.layer
+--- | 'tiled' window is managed in the tiling layer
+--- | 'floating' window floats above tiled windows and is not managed
+local dwm = {}
+
 local window = require('velvet.window')
 
 local r_left = 0
@@ -169,12 +168,12 @@ end
 
 --- @param id integer
 local function tiled(id)
-  return state.layers[id] == dwm.layers.tiled
+  return state.layers[id] == 'tiled'
 end
 
 -- arbitrarily decide where floating and tiled windows begin
-local tiled_z = vv.layers.tiled
-local floating_z = vv.layers.floating
+local tiled_z = vv.z_hint.tiled
+local floating_z = vv.z_hint.floating
 
 local dim_inactive = 0
 
@@ -291,7 +290,7 @@ local function tile()
     local win = window.from_handle(id)
     local vis = visibleontags(id)
     win:set_visibility(vis)
-    local floating = state.layers[win.id] == dwm.layers.floating
+    local floating = state.layers[win.id] == 'floating'
     if floating then
       win:set_transparency_mode('all')
       win:set_alpha(floating_alpha)
@@ -348,7 +347,7 @@ local function add_window(id, init)
   windows[#windows + 1] = win.id
   if not state.tags[win.id] then
     table.insert(state.focus_order, 1, win.id)
-    state.layers[win.id] = dwm.layers.tiled
+    state.layers[win.id] = 'tiled'
     state.tags[win.id] = table.move(state.view, 1, #state.view, 1, {})
     if not init then
       arrange()
@@ -436,7 +435,7 @@ function dwm.toggle_tag(id, tag)
 end
 
 function dwm.activate()
-  local event_handler = vv.events.create_group(vv.arrange_group_name, true)
+  local event_handler = vv.events.create_group('dwm.arrange', true)
   local lst = vv.api.get_windows()
   for _, id in ipairs(lst) do
     add_window(id, true)
@@ -473,18 +472,25 @@ local function clamp(v, lo, hi)
   return v
 end
 
+--- Increase width of the left stack by |v|
+--- @param v number delta
 function dwm.incmfact(v)
   state.mfact = clamp(state.mfact + v, 0.10, 0.90)
   arrange()
 end
 
+--- Increase the number of windows in the left stack
+--- @param v integer delta
 function dwm.incnmaster(v)
   state.nmaster = clamp(state.nmaster + v, 0, 10)
   arrange()
 end
 
-function dwm.set_layer(id, layer)
-  local win = window.from_handle(id)
+--- set the layer of window |win| to |layer|
+--- @param win integer|velvet.window window
+--- @param layer dwm.layer new layer
+function dwm.set_layer(win, layer)
+  win = type(win) == 'number' and window.from_handle(win) or win
   state.layers[win.id] = layer
   arrange()
 end

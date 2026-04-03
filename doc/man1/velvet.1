@@ -49,13 +49,14 @@ Quit the velvet session, killing all windows.
 .B velvet
 will look for a configuration file at 
 .B $HOME/.config/velvet/init.lua
-at startup. If no configuration file is found, it will source the bundled default_config.lua
-The recommended way to get started is to load the default config at the top of your own config file,
-and add adjustments on top.
+at startup. If no configuration file is found, it will source the bundled
+default preset. The recommended way to get started is to 
+.B require()
+a preset at
+the top of your own config file, and add your own adjustments.
 .SS Config example
 .nf
--- prefix key configurable
-require('velvet.default_config').setup({ prefix = "<C-x>" })
+require('velvet.presets.dwm').setup({ prefix = "<C-x>" })
 -- your config below
 .SS LSP support
 The lua API is fully annotated with EmmyLua style doc comments. I recommend
@@ -87,6 +88,8 @@ To selectively preserve state during reload, see
 .SH KEYBINDINGS
 .B Velvet
 supports mapping any key sequence to a lua function. It follows similar syntax and conventions to neovim.
+By default, you can view your current keybinds with the shortcut
+.B <C-x>h
 .SS Example Keybinds
 .nf
 local map = require('velvet.keymap').set

@@ -23,21 +23,31 @@ alias grep='grep --color=auto'
 export EDITOR=nvim
 export VISUAL=nvim
 
+yellow=$(printf '\x1b[33m')
+red=$(printf '\x1b[31m')
+blue=$(printf '\x1b[34m')
+bold=$(printf '\x1b[1m')
+italic=$(printf '\x1b[3m')
+reset=$(printf '\x1b[m')
 cat <<MOTD
-Welcome to Velvet! 
+${bold}Welcome to Velvet!${reset}
 
-Velvet is a fully scriptable terminal multiplexer which draws heavy inspiration from TMUX and Neovim.
-Like TMUX, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal window.
-Like neovim, velvet allows scripting nearly all behavior through a LUA API.
+Velvet is a fully scriptable terminal multiplexer which draws heavy inspiration from tmux and neovim.
+Like tmux, velvet enables controlling multiple terminals from the same screen.
+Like neovim, velvet enables scripting nearly all system behavior through a LUA API.
 
-Nearly all velvet behavior except the terminal emulator and system IO is written in LUA, so it is possible
-to create a truly custom velvet configuration. But 99% of users will want to use the default config included in this image.
+To view current keybindings, press ${red}${bold}<C-x>h${reset}. This menu is automatically updated if you add ned bindings.
 
-To get started, press <C-x>h (that's ctrl+x, followed by h) to view the current keybindings.
-Then take a look at the lua examples in this directory.
+To get started, check out the samples in the home directory.
+If you edit config.lua, you can apply the changes with the reload hot key: ${red}${bold}<C-x>r${reset}
 
-For more detailed information, check the man page! (man velvet)
+Neovim is installed with a lua LSP configured with Velvet autocomplete,
+so you can explore the samples if you wish.
+You can get a fresh environment by refreshing the page or reloading with ${red}${bold}<C-x>r${reset}.
 
-Don't be afraid to experiment. You can always get back to a clean state by invoking the Reload hotkey: <C-x>r
-Otherwise you can just refresh the page!
+You can also reload by sending a chunk to the socket with 
+${blue}${italic} > vv lua 'vv.api.reload()' ${reset}
+
+For more detailed information, check the man page.
+${blue}${italic} > man velvet${reset}
 MOTD
