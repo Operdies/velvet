@@ -8,7 +8,7 @@
       "program": "${workspaceFolder}/debug/vv",
       "args": [ "attach", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "make all",
+      "preLaunchTask": "make debug",
       "console": "externalTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/scripts/lldb-config"
@@ -22,7 +22,7 @@
       "args": [ "--socket", "dummy.sock", "lua", "vv.api.window_create_process('bash')" ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "preLaunchTask": "make all",
+      "preLaunchTask": "make debug",
       "initCommands": [
         "command source ${workspaceFolder}/scripts/lldb-config"
       ]
@@ -34,7 +34,7 @@
       "program": "${workspaceFolder}/debug/vv",
       "args": [ "foreground", "--socket", "/tmp/velvet-debug" ],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "make all",
+      "preLaunchTask": "make debug",
       "console": "integratedTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/scripts/lldb-config"
@@ -46,7 +46,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/debug/test",
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "make all",
+      "preLaunchTask": "make debug",
       "console": "integratedTerminal",
       "initCommands": [
         "command source ${workspaceFolder}/scripts/lldb-config"

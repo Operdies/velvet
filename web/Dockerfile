@@ -6,7 +6,7 @@ COPY web/skel /etc/skel
 COPY . /etc/skel/velvet
 # Override cflags. The makefile builds with native optimizations, but this is not
 # supported in containers.
-RUN make -C /etc/skel/velvet release -j$(nproc) RELEASE_CFLAGS="-Os -DNDEBUG -DRELEASE_BUILD"
+RUN make -C /etc/skel/velvet release -j$(nproc)
 WORKDIR /home/demo
 RUN ln -s /etc/skel/.config/velvet/init.lua /home/demo/config.lua && \
     chown -R demo:demo /home/demo

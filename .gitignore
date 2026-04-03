@@ -1,7 +1,6 @@
-bin/
 release/
-profile/
 debug/
+gen/
 .cache/
 compile_commands.json
 *.ansi

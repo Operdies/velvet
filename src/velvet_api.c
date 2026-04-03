@@ -98,7 +98,7 @@ static bool wordsplit_iterator_next(struct velvet_wordsplit_iterator *it) {
       /* unset prev if it was escaped. e.g. the word \$'xyz' should expand to $xyz, and
        * ansi parsing should not be enabled inside the quotes. */
       inhibit = false;
-      char esc = escape_char(ch);
+      int esc = escape_char(ch);
       /* invalid escape command */
       if (esc == -1) {
         it->reject = true;

@@ -2,10 +2,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "make all",
+            "label": "make debug",
             "command": "make",
             "type": "shell",
-            "args": [ "debug", "-j8" ],
+            "args": [ "debug" ],
             "group": "build"
         }
     ]
