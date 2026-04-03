@@ -14,6 +14,7 @@
 --- @field borders velvet.window.border borders
 --- @field child_windows velvet.window[] child windows
 --- @field title? string user provided title
+--- @field bottom_text? string text showed on the bottom border
 local Window = {}
 
 local vv = require('velvet')
@@ -144,6 +145,12 @@ local function update_borders(self)
   t:set_cursor(geom.width + 2, 1)
   t:draw('┐')
 
+  if self.bottom_text then
+    local width = vv.api.string_display_width(self.bottom_text)
+    local align = geom.width // 2 - width // 2
+    b:set_cursor(align, 1)
+    b:draw(self.bottom_text)
+  end
 
   do
     local title_geom = t:get_geometry()
@@ -274,7 +281,7 @@ local function route_mouse_events(event, args)
   local win = args.win_id and args.win_id > 0 and win_registry[args.win_id]
   if dragged and dragged:valid() then win = dragged end
 
-  if win then
+  if win and win:valid() then
     if args.event_type and args.event_type == 'mouse_down' then
       dragged = win
     elseif args.event_type and args.event_type == 'mouse_up' then
