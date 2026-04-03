@@ -143,10 +143,71 @@ If the protocol is not available, Velvet falls back to basic modifier support.
 
 For detailed information about the keymap module, see
 .BR velvet-keymap (3)
+.SH LUA MODULES
+.B Velvet
+includes a number of lua modules by default; some general purpose, and some highly
+specific. The most important ones are briefly described here, but each have
+more detailed information in dedicated sections.
+.TP
+.BR velvet-keymap (3)
+.B require('velvet.keymap')
+.br
+Implements a key event handler which intercepts all keyboard input. This is the
+recommended way to create keybindings for creating and manipulating windows (or
+doing just about anything, really). It has similar key chain semantics to neovim,
+including conflict resolution when one or more keybinds prefix each other.
+
+Note that this module is responsible not only for executing keybinds, but also
+for forwarding unbound keys to the focused window. If you don't use the default
+config, you must either provide an input forwarder, or require velvet.keymap.
+
+Unless you really disagree with the keymap implementation, you always want to include this.
+.TP
+.BR velvet-dwm (3)
+.B require('velvet.dwm')
+.br
+Implements a tiling window manager with similar semantics to the X11 window
+manager by the same name. It hooks into the low level event system and updates
+the screen layout as needed. The default config sets up dwm, including keybinds
+for manipulating window layout and tags (workspaces).
+
+A window manager is absolutely required to use Velvet. Otherwise windows will
+just stack randomly on top of each other. Currently, dwm is the only available
+window manager, but a tmux-like window manager is planned in a future release.
+.TP
+.BR velvet-window (3)
+.B require('velvet.window')
+.br
+Provides windowing abstraction for routing input events to windows, and otherwise manipulate them. This is easier to interface with
+than the integer handles returned by the low level API.
+
+You generally want to use this for creating custom UIs.
+.TP
+.BR velvet-events (3)
+.B require('velvet.events')
+.br
+Allows creating and deleting event listeners. See
+.BR velvet-events (3)
+for a list of available events.
+
+Also supports emitting and subscribing to custom events provided by other modules.
+For example,
+.BR velvet-keymap (3)
+fires custom events when keymap related information changes, which can be used
+to implement functionality similar to the legendary neovim plugin
+.B which-key
+by Folke.
+.TP
+.BR velvet-session-storage (3)
+.B require('velvet.session_storage') 
+.br
+Defines a friendly interface for storing named lua tables and serializes them
+when a reload event is raised.
 .SH SCRIPTING
 Since everything is just lua, it is fairly easy to script even moderately complex tasks via shell commands.
 Useful patterns include sending code to the server via heredocs or shell redirection:
-.SS Heredoc
+.TP
+.B Heredoc
 .nf
 -- Close all windows named 'zsh'
 vv lua <<LUA
@@ -156,10 +217,31 @@ for _, id in ipairs(windows) do
   if title and title:match("^zsh$") then vv.api.window_close(id) end
 end
 LUA
-.SS Prepared scripts
+.fi
+.TP
+.B Prepared scripts
 vv lua < myscript.lua
-.SS One-off commands
+.TP
+.B One-off commands
 vv lua 'vv.options.theme.blue = "#0000ff"'
+.PP
+Note that
+.B vv
+is a global. It is always in scope, and contains the velvet C API functions,
+in addition to some helpful utility functions also found in neovim, such as
+.TP
+.B vv.inspect()
+to convert a table to a readable string,
+.TP
+.B vv.deep_extend()
+to merge tables, useful for passing options to a module setup() function, and
+.TP
+.B vv.deepcopy()
+to clone a table in order to make changes without touching the original.
+.TP
+.B vv.api.*
+to access the low-level API everything else is built around. See
+.BR velvet-api (3)
 .SH ADVANCED USAGE
 The C engine tries to make as few assumptions as possible; in a nutshell, it performs the following tasks:
 
@@ -196,8 +278,11 @@ keystrokes to a window.
 
 The related pages attempt to thoroughly document the intended usage of each
 provided default module at a high level, but the best way to explore what is
-possible is to read the default config. (default_config.lua)
-
+possible is to read the default config and the stock modules:
 .SH SEE ALSO
+.BR velvet-api (3)
+.BR velvet-dwm (3)
+.BR velvet-events (3)
 .BR velvet-keymap (3)
 .BR velvet-session-storage (3)
+.BR velvet-window (3)
