@@ -844,7 +844,7 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
   }
 
   if (focused && !focused->hidden) {
-    if (should_emulate_cursor(focused->emulator.options.cursor)) {
+    if (should_emulate_cursor(focused->emulator.options.cursor) || !focused->emulator.options.cursor.visible) {
       velvet_render_set_cursor_visible(r, false);
     } else if (focused->emulator.options.cursor.visible) {
       struct screen *screen = vte_get_current_screen(&focused->emulator);
