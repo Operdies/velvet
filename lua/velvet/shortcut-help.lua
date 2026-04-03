@@ -13,12 +13,19 @@ w:set_frame_enabled(true)
 local arrow = " ➤ "
 
 local shown = false
-e.session_on_key = function(key)
+e.session_on_key = function(args)
   -- create a new event listener to close the window on *any* keypress.
   -- This is done to handle the case where focus is changed with the mouse
   -- and then typing.
-  if shown and key.key.event_type == 'press' then
-    M.hide()
+  if shown and args.key.event_type == 'press' or args.key.event_type == 'repeat' then
+    local k = args.key.name
+    if k == 'k' then
+      vv.api.window_set_scroll_offset(w.id, vv.api.window_get_scroll_offset(w.id) + 1)
+    elseif k == 'j' then
+      vv.api.window_set_scroll_offset(w.id, vv.api.window_get_scroll_offset(w.id) + -1)
+    else
+      M.hide()
+    end
   end
 end
 
@@ -45,9 +52,9 @@ local function draw()
   local width = math.floor(sz.width * 0.7)
   local height = math.floor(sz.height * 0.8)
   w:draw("\x1b[2J\x1b[3J")
-  w:set_geometry({ left = 1 + sz.width // 2 - width // 2, top = 1 + sz.height // 2 - height // 2, width = width, height = height })
   w:clear()
   w:set_cursor(1, 1)
+  w.bottom_text = "j ▼  k ▲"
 
   local columns = {}
   local max_desc = 0
@@ -63,6 +70,9 @@ local function draw()
   for _, col in ipairs(columns) do
     display_width = display_width + col + #arrow
   end
+
+  width = math.min(width, display_width + max_desc)
+  w:set_geometry({ left = 1 + sz.width // 2 - width // 2, top = 1 + sz.height // 2 - height // 2, width = width, height = height })
 
   for _, map in ipairs(flat_map) do
     local _end = 0

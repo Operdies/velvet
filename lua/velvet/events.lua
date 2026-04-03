@@ -39,7 +39,7 @@ local events = {
   --- @param ... any depends on the event
   emit_event = function(event_name, ...)
     local data = ...
-    if event_name == 'window_on_key' then 
+    if event_name == 'window_on_key' or event_name == 'session_on_key' then 
       -- The C api does not set a name for regular characters, such as latin letters or
       -- normal letters from other scripts. For ease of use, we convert the codepoints
       -- of such characters to a string containing the character.
