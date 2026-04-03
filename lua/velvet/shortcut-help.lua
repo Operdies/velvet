@@ -45,8 +45,7 @@ local function draw()
   local width = math.floor(sz.width * 0.7)
   local height = math.floor(sz.height * 0.8)
   w:draw("\x1b[2J\x1b[3J")
-  w:set_geometry({ left = 1 + sz.width // 2 - width // 2, top = 1 + sz.height // 2 - height // 2, width = width, height =
-  height })
+  w:set_geometry({ left = 1 + sz.width // 2 - width // 2, top = 1 + sz.height // 2 - height // 2, width = width, height = height })
   w:clear()
   w:set_cursor(1, 1)
 

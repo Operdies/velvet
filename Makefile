@@ -8,6 +8,13 @@ ifeq ($(UNAME_S),Darwin)
 	OBJECTS += platform_macos
 endif
 
+PREFIX ?= /usr/local
+INSTALL_BIN = $(PREFIX)/bin
+INSTALL_MAN = $(PREFIX)/share/man
+INSTALL_VELVET = $(PREFIX)/share/velvet
+INSTALL_LUA = $(INSTALL_VELVET)/lua
+INSTALL_BIN2 = $(INSTALL_VELVET)/bin
+
 GEN_DIR = gen
 GEN_LUA_AUTOGEN = $(GEN_DIR)/velvet_lua_autogen.c
 GEN_C_HEADER = $(GEN_DIR)/velvet_api.h
@@ -119,5 +126,19 @@ $(GEN_LUA_AUTOGEN): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
 $(GEN_C_HEADER): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
 	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
 
+install: release
+	mkdir -p $(INSTALL_LUA) $(INSTALL_BIN) $(INSTALL_BIN2) $(INSTALL_MAN)/man1 $(INSTALL_MAN)/man3
+	install -m 755 $(RELEASE_DIR)/vv $(INSTALL_BIN2)/vv
+	ln -sf ../share/velvet/bin/vv $(INSTALL_BIN)/vv
+	install -m 644 doc/man1/velvet.1 $(INSTALL_MAN)/man1/
+	install -m 644 doc/man3/*.3 $(INSTALL_MAN)/man3/
+	cp -r lua/velvet $(INSTALL_LUA)/
+
+uninstall:
+	rm -f $(INSTALL_BIN)/vv
+	rm -f $(INSTALL_MAN)/man1/velvet.1
+	rm -f $(INSTALL_MAN)/man3/velvet*.3
+	rm -rf $(INSTALL_VELVET)
+	
 -include $(OBJECT_DEPS) $(CMD_DEPS)
 
