@@ -434,31 +434,35 @@ function dwm.toggle_tag(id, tag)
   arrange()
 end
 
+local activated = false
 function dwm.activate()
-  local event_handler = vv.events.create_group('dwm.arrange', true)
-  local lst = vv.api.get_windows()
-  for _, id in ipairs(lst) do
-    add_window(id, true)
-  end
-  taskbar = create_status_window()
-  -- dwm.reserve(0, 0, 1, 0)
-  dwm.reserve(0, 0, 0, 0)
-  event_handler.screen_resized = arrange
-  event_handler.window_created = function(args)
-    if ignore_window(args.win_id) then return end
-    add_window(args.win_id, false)
-  end
+  if not activated then
+    activated = true
+    local event_handler = vv.events.create_group('dwm.arrange', true)
+    local lst = vv.api.get_windows()
+    for _, id in ipairs(lst) do
+      add_window(id, true)
+    end
+    taskbar = create_status_window()
+    -- dwm.reserve(0, 0, 1, 0)
+    dwm.reserve(0, 0, 0, 0)
+    event_handler.screen_resized = arrange
+    event_handler.window_created = function(args)
+      if ignore_window(args.win_id) then return end
+      add_window(args.win_id, false)
+    end
 
-  event_handler.window_closed = function(_) remove_window() end
-  event_handler.window_focus_changed = function(args)
-    if ignore_window(args.new_focus) then return end
+    event_handler.window_closed = function(_) remove_window() end
+    event_handler.window_focus_changed = function(args)
+      if ignore_window(args.new_focus) then return end
+      arrange()
+    end
     arrange()
-  end
-  arrange()
-  event_handler[km.passthrough_changed] = status_update
-  event_handler[km.chain_changed] = function(new_chain)
-    chain = new_chain
-    status_update()
+    event_handler[km.passthrough_changed] = status_update
+    event_handler[km.chain_changed] = function(new_chain)
+      chain = new_chain
+      status_update()
+    end
   end
 end
 
