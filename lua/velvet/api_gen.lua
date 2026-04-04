@@ -6,7 +6,6 @@ local out_dir = assert(arg[2], "usage: lua api_gen.lua <api_spec.lua> <out_dir>"
 local spec = dofile(spec_path)
 
 local inspect = dofile("lua/velvet/inspect.lua")
-local dbg = function(x) print(inspect(x)) end
 
 out_dir = out_dir:gsub("/$", "", 1)
 

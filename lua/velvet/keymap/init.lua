@@ -277,7 +277,7 @@ end
 local sequence_id = 0
 local chain_unwind_timeout = 2000
 
-local dbg_oneline = function(x) dbg(x, { indent = ' ', newline = '', depth = 4 }) end
+local dbg_oneline = function(x) vv.log(vv.inspect(x, { indent = ' ', newline = '', depth = 4 })) end
 
 local function keymap_unwind()
   -- unwind is called when a key did not match any mappings.

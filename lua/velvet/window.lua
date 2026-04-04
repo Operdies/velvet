@@ -98,7 +98,7 @@ local function set_real_home()
 end
 
 local ok, err = pcall(set_real_home)
-if not ok then dbg { set_real_home = err } end
+if not ok then vv.log({ set_real_home = err }, 'error') end
 
 --- @param self velvet.window
 local function update_borders(self)
