@@ -1,3 +1,15 @@
+--- @alias window.drag_event
+--- | 'move_start'
+--- | 'move_continue'
+--- | 'move_end'
+
+--- @class window.drag_args
+--- @field type window.drag_event
+--- @field global_pos velvet.api.coordinate screen-local mouse coordinates
+--- @field delta_pos velvet.api.coordinate delta coordinates since drag start
+--- @field local_pos velvet.api.coordinate window-local mouse coordinates
+--- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
+
 --- @class window.focus_changed
 --- @field old? velvet.window previous focus or nil
 --- @field new? velvet.window new focus or nil
@@ -15,6 +27,8 @@
 --- @field child_windows velvet.window[] child windows
 --- @field title? string user provided title
 --- @field bottom_text? string text showed on the bottom border
+--- @field on_drag? fun(self: velvet.window, args: window.drag_args): nil
+--- @field is_border? boolean if set, this is a border of |self.parent|
 local Window = {}
 
 local vv = require('velvet')
@@ -256,10 +270,24 @@ local function top_border_drag(brd, args, event_name)
   local geom = brd:get_geometry()
   local pg = brd.parent:get_geometry()
   local gcol, grow = args.pos.col + geom.left, args.pos.row + geom.top
+
+  local function dispatch_evt(drg, evt)
+    if brd.parent.on_drag then
+      brd.parent.on_drag(brd.parent, {
+        type = evt,
+        delta_pos = { col = gcol - drg.col, row = grow - drg.row },
+        global_pos = { col = args.pos.col + geom.left, row = args.pos.row + geom.top },
+        modifiers = args.modifiers,
+        local_pos = args.pos,
+      })
+    end
+  end
+
   if event_name == 'mouse_click' then
     if args.event_type == 'mouse_up' then
+      if border_drag then dispatch_evt(border_drag, 'move_end') end
       border_drag = nil
-    else 
+    else
       border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
     end
   end
@@ -268,6 +296,7 @@ local function top_border_drag(brd, args, event_name)
   local dcol = gcol - border_drag.col
   local drow = grow - border_drag.row
   brd.parent:set_geometry({ left = border_drag.left + dcol, top = border_drag.top + drow, width = pg.width, height = pg.height })
+  dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'move_start' or 'move_continue')
 end
 
 --- @type velvet.window | nil
@@ -284,8 +313,12 @@ local function route_mouse_events(event, args)
     elseif args.event_type and args.event_type == 'mouse_up' then
       dragged = nil
     end
-    if event == 'mouse_click' then 
-      win:focus() 
+    if event == 'mouse_click' then
+      if win.is_border then
+        win.parent:focus()
+      else
+        win:focus()
+      end
     end
     -- Translate event coordinates to be window local
     local geom = win:get_geometry()
@@ -450,6 +483,9 @@ local function set_decmode(self, mode, on)
   self:draw(('\x1b[?%d%s'):format(mode, on and 'h' or 'l'))
 end
 
+--- @param self velvet.window
+--- @param mode integer
+--- @param on boolean
 local function set_ansimode(self, mode, on)
   self:draw(('\x1b[%d%s'):format(mode, on and 'h' or 'l'))
 end
@@ -488,6 +524,7 @@ end
 --- Create an automatically managed frame for the window. The frame will occupy one cell around the window.
 --- @param enabled boolean set 
 function Window:set_frame_enabled(enabled)
+  assert(not self.is_border, "Bad argument #0 (self is a border)")
   self.frame_visible = enabled
   if enabled and not self.borders then
     self.borders = {
@@ -499,9 +536,8 @@ function Window:set_frame_enabled(enabled)
 
     for _, brd in pairs(self.borders) do
       brd:set_alternate_screen(true)
+      brd.is_border = true
       brd:set_cursor_visible(false)
-      brd:on_mouse_move(function(_)
-      end)
     end
     self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
     self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse_move") end)

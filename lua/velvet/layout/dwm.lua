@@ -11,6 +11,21 @@ local dwm = {
   }
 }
 
+--- @param v number
+--- @param lo number
+--- @param hi number
+--- @return number
+local function clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+local function round(x)
+  return math.floor(x + 0.5)
+end
+
+
 local window = require('velvet.window')
 
 local r_left = 0
@@ -69,21 +84,36 @@ end
 
 --- @type velvet.window
 local taskbar = nil
+
+--- @param left integer leftmost column of stacking area
+--- @param top integer topmost row of stacking area
+--- @param width integer width of stacking area
+--- @param height integer height of stacking area
+--- @param count integer number of windows to stack
+local function calc_win_stack(left, top, width, height, count)
+  local geoms = {}
+  local offset = top
+  for i = 1, count do
+    local height_left = 1 + height - offset
+    local num_items_left = 1 + count - i
+    local win_height = height_left // num_items_left
+    if win_height < 3 then win_height = 3 end
+    local geom = { width = width, height = win_height, left = left, top = offset }
+    offset = offset + geom.height
+    geoms[#geoms + 1] = geom
+  end
+  return geoms
+end
+
 --- @param left integer leftmost column of stacking area
 --- @param top integer topmost row of stacking area
 --- @param width integer width of stacking area
 --- @param height integer height of stacking area
 --- @param lst velvet.window[] windows to stack
 local function win_stack(left, top, width, height, lst)
-  local offset = top
+  local geoms = calc_win_stack(left, top, width, height, #lst)
   for i, win in ipairs(lst) do
-    local height_left = 1 + height - offset
-    local num_items_left = 1 + #lst - i
-    local win_height = math.floor(height_left / num_items_left)
-    if win_height < 3 then win_height = 3 end
-    local geom = { width = width, height = win_height, left = left, top = offset }
-    win_move(win, geom)
-    offset = offset + geom.height
+    win_move(win, geoms[i])
   end
 end
 
@@ -268,6 +298,9 @@ local function status_update()
   taskbar:on_mouse_click(view_mouse_hit)
 end
 
+local left_stack = {}
+local right_stack = {}
+
 local function tile()
   local num_visible = 0
   for _, win in ipairs(windows) do
@@ -291,8 +324,8 @@ local function tile()
   term.height = term.height - (r_top + r_bottom)
 
   focused_id = vv.api.get_focused_window()
-  local master = {}
-  local stack = {}
+  left_stack = {}
+  right_stack = {}
   for _, id in ipairs(windows) do
     local win = window.from_handle(id)
     local vis = visibleontags(id)
@@ -315,10 +348,10 @@ local function tile()
       end
       if not floating then
         win:set_z_index(tiled_z)
-        if #master < state.nmaster then
-          table.insert(master, win)
+        if #left_stack < state.nmaster then
+          table.insert(left_stack, win)
         else
-          table.insert(stack, win)
+          table.insert(right_stack, win)
         end
       end
     end
@@ -330,14 +363,14 @@ local function tile()
     win:set_z_index(i + z)
   end
 
-  local master_width = #stack > 0 and math.floor(term.width * state.mfact) or term.width
-  if #master == 0 then master_width = 0 end
+  local master_width = #right_stack > 0 and math.floor(term.width * state.mfact) or term.width
+  if #left_stack == 0 then master_width = 0 end
 
   local left = 1 + r_left
   local top = 1 + r_top
-  win_stack(left, top, master_width, term.height, master)
-  if #stack > 0 then
-    win_stack(master_width + left, top, term.width - master_width, term.height, stack)
+  win_stack(left, top, master_width, term.height, left_stack)
+  if #right_stack > 0 then
+    win_stack(master_width + left, top, term.width - master_width, term.height, right_stack)
   end
 
   ensure_focus_visible()
@@ -347,10 +380,114 @@ local function arrange()
   tile()
 end
 
+local drop_hint = window.create()
+drop_hint:set_visibility(false)
+
+local function drop_or_show_hint(w, args)
+  local sz = vv.api.get_screen_geometry()
+  local lw = #right_stack > 0 and math.floor(sz.width * state.mfact) or sz.width
+  if #left_stack == 0 then lw = 0 end
+  local rw = sz.width - lw
+
+  sz.width = sz.width - (r_left + r_right)
+  sz.height = sz.height - (r_top + r_bottom)
+
+  local left_bias = round(sz.width / 3)
+  local right_bias = 2 * round(sz.width / 3)
+
+  local function get_drop_location()
+    local side = nil
+    if #left_stack > 0 and #right_stack > 0 then
+      side = args.global_pos.col <= lw and 'left' or 'right'
+    elseif #left_stack > 0 then
+      side = args.global_pos.col <= right_bias and 'left' or 'right'
+    elseif #right_stack > 0 then
+      side = args.global_pos.col <= left_bias and 'left' or 'right'
+    else
+      side = 'left'
+    end
+
+    local left = side == 'left' and 1 or lw
+    local width = side == 'left' and lw or rw
+    if side == 'right' and #right_stack == 0 then
+      left = sz.width // 2
+      width = 1 + sz.width - left
+    elseif side == 'left' and #left_stack == 0 then
+      left = 1
+      width = sz.width // 2
+    end
+
+    local stack_count = 1 + (side == 'left' and #left_stack or #right_stack)
+    local stack = calc_win_stack(left, 1 + r_top, width, sz.height, stack_count)
+    local r = args.global_pos.row
+    for i, geom in ipairs(stack) do
+      if r >= geom.top and r <= geom.top + geom.height then 
+        return side, i, geom
+      end
+    end
+  end
+
+  local side, index, geom = get_drop_location()
+
+  local function show_drop_hint()
+    drop_hint:set_geometry(geom)
+    drop_hint:set_visibility(true)
+    drop_hint:set_alpha(0.5)
+    drop_hint:set_background_color('red')
+    drop_hint:set_z_index(vv.z_hint.overlay)
+    drop_hint:clear()
+  end
+
+  local function drop_window()
+    local current = table_index(windows, w.id)
+    if current then table.remove(windows, current) end
+    if side == 'left' then
+      state.nmaster = state.nmaster + 1
+    end
+    local before = nil
+    if side == 'left' then before = left_stack[index] or right_stack[1] 
+    elseif side == 'right' then before = right_stack[index] or nil end
+    local idx = before and table_index(windows, before.id) or (#windows + 1)
+    table.insert(windows, idx, w.id)
+    state.layers[w.id] = 'tiled'
+  end
+
+  if args.type == 'move_end' then
+    drop_window()
+  elseif args.type == 'move_continue' then
+    show_drop_hint()
+  end
+end
+
+local dragging = nil
 local function add_window(id, init)
   if ignore_window(id) then return end
   local win = window.from_handle(id)
   win:set_frame_enabled(true)
+  win.on_drag = function(w, args)
+    drop_hint:set_visibility(false)
+    if args.type == 'move_end' then 
+      drop_hint:set_visibility(false)
+      dragging = nil 
+    end
+    if args.type == 'move_end' and args.modifiers.alt then
+      drop_or_show_hint(w, args)
+      state.layers[w.id] = 'tiled'
+      arrange()
+    elseif args.type == 'move_continue' then
+      if not dragging then
+        dragging = w
+        if table_index(left_stack, w) then 
+          state.nmaster = clamp(state.nmaster - 1, 0, 10)
+        end
+        state.layers[w.id] = 'floating'
+        w:set_z_index(vv.z_hint.overlay - 1)
+        arrange()
+      end
+      if args.modifiers.alt then drop_or_show_hint(w, args) end
+    else -- if argstype == 'resize_*'
+    end
+  end
   windows[#windows + 1] = win.id
   if not state.tags[win.id] then
     table.insert(state.focus_order, 1, win.id)
@@ -485,29 +622,21 @@ function dwm.activate()
 
     local win_under_cursor = nil
     event_handler.mouse_move = function(args)
+      if args.win_id == 0 then 
+        dragging = nil
+        return 
+      end
+      if dragging then return end
       local id = args.win_id
       if not dwm.options.focus_follows_mouse then return end
       local win = window.from_handle(id)
-      if win:is_lua() and win.parent and win.parent.borders then
-        -- ad-hoc check if this is window border of a managed window. 
-        id = win.parent.id
-      end
+      if win.is_border then id = win.parent.id end
       -- don't keep setting focus if the cursor hasn't moved away from the window
       if id == win_under_cursor then return end
       win_under_cursor = id
       vv.api.set_focused_window(id)
     end
   end
-end
-
---- @param v number
---- @param lo number
---- @param hi number
---- @return number
-local function clamp(v, lo, hi)
-  if v < lo then return lo end
-  if v > hi then return hi end
-  return v
 end
 
 --- Increase width of the left stack by |v|
