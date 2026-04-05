@@ -22,10 +22,7 @@ struct vv_lua_payload {
 };
 
 struct velvet_input_options {
-  bool focus_follows_mouse;
-  /* When a keybind repeatable mapping is triggered, allow retriggers within this window */
-  uint64_t key_repeat_timeout_ms;
-  /* how many lines are scrolled at a time */
+  /* The number of lines scrolled per scroll wheel tick */
   int scroll_multiplier;
 };
 
@@ -86,7 +83,7 @@ void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
  * This input will not be parsed for CSI sequences or any current keymap. */
-void velvet_input_send_key_event(struct velvet *v, struct velvet_api_window_key_event key_event, int win_id);
+void velvet_input_send_key_to_window(struct velvet *v, struct velvet_api_window_key_event key_event, struct velvet_window *win);
 void velvet_input_send_keys(struct velvet *v, struct u8_slice str, int win_id);
 void velvet_input_paste_text(struct velvet *v, struct u8_slice str, int win_id);
 void velvet_input_send_mouse_move(struct velvet *v, struct velvet_api_mouse_move_event_args move);
@@ -103,13 +100,6 @@ void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket);
 
-[[maybe_unused]] static struct velvet_input velvet_input_default = {
-    .options =
-        {
-            .focus_follows_mouse = true,
-            .key_repeat_timeout_ms = 500,
-            .scroll_multiplier = 3,
-        },
-};
+[[maybe_unused]] static struct velvet_input velvet_input_default = {0};
 
 #endif

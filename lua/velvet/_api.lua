@@ -490,32 +490,19 @@ function api.session_store_value(name, value) end
 --- @return any ret The loaded value.
 function api.session_load_value(name) end
 
---- Get focus_follows_mouse
---- @return boolean ret The current value
-function api.get_focus_follows_mouse() end
+--- Enable damage tracking when the screen is updated. (debugging feature)
+--- @param mode boolean Damage display mode
+--- @return nil ret 
+function api.debug_set_display_damage(mode) end
 
---- Set focus_follows_mouse. Returns the new value.
---- @param new_value boolean Automatically focus a window when the mouse moves over it.
---- @return boolean ret The value after the update
-function api.set_focus_follows_mouse(new_value) end
-
---- Get key_repeat_timeout
+--- Get scrollback_scroll_multiplier
 --- @return integer ret The current value
-function api.get_key_repeat_timeout() end
+function api.get_scrollback_scroll_multiplier() end
 
---- Set key_repeat_timeout. Returns the new value.
---- @param new_value integer Time in milliseconds before pending keybinds time out
+--- Set scrollback_scroll_multiplier. Returns the new value.
+--- @param new_value integer The number of lines scrolled per scroll wheel tick.
 --- @return integer ret The value after the update
-function api.set_key_repeat_timeout(new_value) end
-
---- Get display_damage
---- @return boolean ret The current value
-function api.get_display_damage() end
-
---- Set display_damage. Returns the new value.
---- @param new_value boolean Enable damage tracking when the screen is updated. (debugging feature)
---- @return boolean ret The value after the update
-function api.set_display_damage(new_value) end
+function api.set_scrollback_scroll_multiplier(new_value) end
 
 --- Get theme
 --- @return velvet.api.theme ret The current value

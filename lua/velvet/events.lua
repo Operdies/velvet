@@ -49,7 +49,8 @@ local events = {
           end
           return e
         end
-        xpcall(group_func_table[event_name], error_handler, ...)
+        local args = table.pack(...)
+        xpcall(group_func_table[event_name], error_handler, table.unpack(vv.deepcopy(args), 1, args.n))
       end
     end
   end

@@ -1218,9 +1218,10 @@ void test_lua() {
   }
 
   /* test that options are wired up correctly */
-  lua_assert(L, "assert(vv.options.key_repeat_timeout == 500)");
-  v.input.options.key_repeat_timeout_ms = 1234;
-  lua_assert(L, "assert(vv.options.key_repeat_timeout == 1234)");
+  v.scene.theme.palette[4] = (struct color){ .blue = 0, .kind = COLOR_RGB };
+  lua_assert(L, "assert(vv.options.theme.blue ~= 0.0)");
+  v.scene.theme.palette[4] = (struct color){ .blue = 255, .kind = COLOR_RGB };
+  lua_assert(L, "assert(vv.options.theme.blue ~= 1.0)");
 
   velvet_destroy(&v);
 }

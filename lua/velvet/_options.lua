@@ -2,17 +2,9 @@ error("Cannot require meta file")
 --- @meta
 --- @class velvet.options
 local options = {}
---- Automatically focus a window when the mouse moves over it.
---- @type boolean
-options.focus_follows_mouse = true
-
---- Time in milliseconds before pending keybinds time out
+--- The number of lines scrolled per scroll wheel tick.
 --- @type integer
-options.key_repeat_timeout = 500
-
---- Enable damage tracking when the screen is updated. (debugging feature)
---- @type boolean
-options.display_damage = false
+options.scrollback_scroll_multiplier = 3
 
 --- The 16 numbered terminal colors.
 --- @type velvet.api.theme

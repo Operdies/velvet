@@ -20,14 +20,6 @@ _Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   assert(!"Unreachable");
 }
 
-lua_Integer vv_api_get_key_repeat_timeout(struct velvet *v) {
-  return v->input.options.key_repeat_timeout_ms;
-}
-lua_Integer vv_api_set_key_repeat_timeout(struct velvet *v, lua_Integer new_value) {
-  v->input.options.key_repeat_timeout_ms = new_value;
-  return v->input.options.key_repeat_timeout_ms;
-}
-
 struct velvet_window *check_lua_window(struct velvet *v, int win) {
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
   if (!w) lua_bail(v->L, "Window id %I is not valid.", win);
@@ -388,12 +380,8 @@ lua_Integer vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integ
   return io_schedule(&v->event_loop, delay, schedule_execute, (void *)(lua_Integer)ref);
 }
 
-bool vv_api_get_display_damage(struct velvet *v) {
-  return v->scene.renderer.options.display_damage;
-}
-bool vv_api_set_display_damage(struct velvet *v, bool new_value) {
+void vv_api_debug_set_display_damage(struct velvet *v, bool new_value) {
   velvet_scene_set_display_damage(&v->scene, new_value);
-  return v->scene.renderer.options.display_damage;
 }
 
 void vv_api_window_paste_text(struct velvet *v, lua_Integer winid, struct u8_slice text) {
@@ -408,14 +396,6 @@ void vv_api_set_focused_window(struct velvet *v, lua_Integer winid) {
   struct velvet_window *w = check_window(v, winid);
   if (v->scene.focus != winid) velvet_invalidate_render(v, "focus changed");
   velvet_scene_set_focus(&v->scene, w);
-}
-
-bool vv_api_get_focus_follows_mouse(struct velvet *v) {
-  return v->input.options.focus_follows_mouse;
-}
-bool vv_api_set_focus_follows_mouse(struct velvet *v, bool new_value) {
-  v->input.options.focus_follows_mouse = new_value;
-  return new_value;
 }
 
 lua_Integer vv_api_get_current_tick(struct velvet *v) {
@@ -753,8 +733,7 @@ void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct
 }
 
 void vv_api_window_send_raw_key(struct velvet *v, lua_Integer win_id, struct velvet_api_window_key_event key) {
-  check_window(v, win_id);
-  velvet_input_send_key_event(v, key, win_id);
+  velvet_input_send_key_to_window(v, key, check_window(v, win_id));
 }
 
 static void reload_callback(void *data) {
@@ -1175,4 +1154,11 @@ void vv_api_clipboard_set(struct velvet *v, struct u8_slice text) {
     string_push_string(&s->pending_output, osc_buffer);
   }
   string_destroy(&osc_buffer);
+}
+
+lua_Integer vv_api_get_scrollback_scroll_multiplier(struct velvet *v) {
+  return v->input.options.scroll_multiplier;
+}
+lua_Integer vv_api_set_scrollback_scroll_multiplier(struct velvet *v, lua_Integer new_value) {
+  return v->input.options.scroll_multiplier = new_value;
 }

@@ -1,4 +1,6 @@
-local vv = require('velvet')
+--- @class velvet.keymap.options
+--- @field repeat_timeout integer The interval in ms in which mappings with { repeatable=true } will be repeated without resetting the chain state. (Default 300)
+--- @field chain_unwind_timeout integer The timeout in ms before incomplete chains will start unwinding. (Default 2000)
 
 local keys = {}
 local vk = require('velvet.keymap.named_keys')
@@ -8,7 +10,10 @@ keys.passthrough_changed = "custom.keymap.passthrough_changed"
 keys.chain_changed = "custom.keymap.chain_changed"
 keys.keymap_changed = "custom.keymap.keymap_changed"
 
-local keymap = {}
+local keymap = {
+  repeat_timeout = 300,
+  chain_unwind_timeout = 2000,
+}
 local remapped_keys = {}
 
 --- @class chord
@@ -267,7 +272,7 @@ function keys.del(lhs)
 end
 
 --- @class velvet.keys.set.options
---- @field repeatable? boolean if true, the mapping may be repeated by pressing the last key again within |key_repeat_timeout| ms
+--- @field repeatable? boolean if true, the mapping may be repeated by pressing the last key again within |repeat_timeout| ms
 --- @field description? string optional description of the mapping
 
 --- Map |lhs| to function |rhs|
@@ -325,7 +330,6 @@ local function send_key_to_window(args)
 end
 
 local sequence_id = 0
-local chain_unwind_timeout = 2000
 
 local dbg_oneline = function(x) vv.log(vv.inspect(x, { indent = ' ', newline = '', depth = 4 })) end
 
@@ -368,7 +372,7 @@ local function keymap_unwind()
 end
 
 local function schedule_unwind(seq)
-  vv.api.schedule_after(chain_unwind_timeout, function()
+  vv.api.schedule_after(keymap.chain_unwind_timeout, function()
     if sequence_id == seq then
       keymap_unwind()
     end
@@ -428,7 +432,7 @@ function keymap.on_key(args)
   if last_repeat > 0 and next_chain then
     if not next_chain.options.repeatable then
       next_chain = nil
-    elseif now - last_repeat > vv.options.key_repeat_timeout then
+    elseif now - last_repeat > keymap.repeat_timeout then
       next_chain = nil
     end
   end

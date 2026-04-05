@@ -256,9 +256,6 @@ local function top_border_drag(brd, args, event_name)
   local geom = brd:get_geometry()
   local pg = brd.parent:get_geometry()
   local gcol, grow = args.pos.col + geom.left, args.pos.row + geom.top
-  if vv.options.focus_follows_mouse then
-    brd.parent:focus()
-  end
   if event_name == 'mouse_click' then
     if args.event_type == 'mouse_up' then
       border_drag = nil
@@ -287,7 +284,7 @@ local function route_mouse_events(event, args)
     elseif args.event_type and args.event_type == 'mouse_up' then
       dragged = nil
     end
-    if event == 'mouse_click' or vv.options.focus_follows_mouse then 
+    if event == 'mouse_click' then 
       win:focus() 
     end
     -- Translate event coordinates to be window local
@@ -504,12 +501,6 @@ function Window:set_frame_enabled(enabled)
       brd:set_alternate_screen(true)
       brd:set_cursor_visible(false)
       brd:on_mouse_move(function(_)
-        -- focus parent when mouse hovers borders
-        if vv.options.focus_follows_mouse then
-          if self:valid() then
-            self:focus()
-          end
-        end
       end)
     end
     self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
@@ -694,6 +685,28 @@ end
 
 function Window:clear()
   self:draw('\x1b[2J')
+end
+
+--- Return a list of windows under |cord|, ordered by Z index.
+--- @param cord velvet.api.coordinate
+--- @return velvet.window[] windows Windows under |cord|
+function Window.get_window_at_coordinate(cord)
+  local windows = {}
+  for _, win in pairs(win_registry) do
+    if win:get_visibility() then
+      local g = win:get_geometry()
+      if cord.col >= g.left and cord.col < g.left + g.width
+          and cord.row >= g.top and cord.row < g.top + g.height then
+        windows[#windows + 1] = win
+      end
+    end
+  end
+  table.sort(windows, function(x, y)
+    local xz, yz = x:get_z_index(), y:get_z_index()
+    if xz == yz then return x.id < y.id end
+    return xz < yz
+  end)
+  return windows
 end
 
 return Window

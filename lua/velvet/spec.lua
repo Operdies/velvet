@@ -67,22 +67,10 @@ return {
   --- options {{{1
   options = {
     {
-      name = "focus_follows_mouse",
-      type = "bool",
-      default = true,
-      doc = "Automatically focus a window when the mouse moves over it."
-    },
-    {
-      name = "key_repeat_timeout",
+      name = "scrollback_scroll_multiplier",
       type = "int",
-      default = 500,
-      doc = "Time in milliseconds before pending keybinds time out",
-    },
-    {
-      name = "display_damage",
-      type = "bool",
-      default = false,
-      doc = "Enable damage tracking when the screen is updated. (debugging feature)",
+      default = 3,
+      doc = "The number of lines scrolled per scroll wheel tick.",
     },
     {
       name = 'theme',
@@ -829,6 +817,11 @@ return {
       doc = "Load a value from the current session by name.",
       params = { { name = "name", type = "string", doc = "The name of the session value." } },
       returns = { type = "any", doc = "The loaded value." },
+    },
+    {
+      name = "debug_set_display_damage",
+      doc = "Enable damage tracking when the screen is updated. (debugging feature)",
+      params = { { name = "mode", type = "bool", doc = "Damage display mode" } },
     },
     -- {
     --   name = "disk_store_value",

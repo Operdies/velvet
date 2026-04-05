@@ -1,8 +1,15 @@
+--- @class dwm.options
+--- @field focus_follows_mouse boolean if set, focus windows on mouseover
 
 --- @alias dwm.layer
 --- | 'tiled' window is managed in the tiling layer
 --- | 'floating' window floats above tiled windows and is not managed
-local dwm = {}
+local dwm = {
+  --- @type dwm.options
+  options = {
+    focus_follows_mouse = true,
+  }
+}
 
 local window = require('velvet.window')
 
@@ -355,19 +362,31 @@ local function add_window(id, init)
   end
 end
 
+function table.remove_if(t, pred)
+  local j = 1
+  for i = 1, #t do
+    if not pred(t[i]) then
+      t[j] = t[i]
+      j = j + 1
+    end
+  end
+  for i = j, #t do
+    t[i] = nil
+  end
+end
+
+function table.unset_if_key(t, pred)
+  for k, _ in pairs(t) do
+    if pred(k) then t[k] = nil end
+  end
+end
+
 local function remove_window()
-  for i, id in ipairs(windows) do
-    if not vv.api.window_is_valid(id) then table.remove(windows, i) end
-  end
-  for i, id in ipairs(state.focus_order) do
-    if not vv.api.window_is_valid(id) then table.remove(state.focus_order, i) end
-  end
-  for id, _ in pairs(state.layers) do
-    if not vv.api.window_is_valid(id) then state.layers[id] = nil end
-  end
-  for id, _ in pairs(state.tags) do
-    if not vv.api.window_is_valid(id) then state.tags[id] = nil end
-  end
+  local function win_invalid(id) return not vv.api.window_is_valid(id) end
+  table.remove_if(windows, win_invalid)
+  table.remove_if(state.focus_order, win_invalid)
+  table.unset_if_key(state.layers, win_invalid)
+  table.unset_if_key(state.tags, win_invalid)
   arrange()
 end
 
@@ -462,6 +481,21 @@ function dwm.activate()
     event_handler[km.chain_changed] = function(new_chain)
       chain = new_chain
       status_update()
+    end
+
+    local win_under_cursor = nil
+    event_handler.mouse_move = function(args)
+      local id = args.win_id
+      if not dwm.options.focus_follows_mouse then return end
+      local win = window.from_handle(id)
+      if win:is_lua() and win.parent and win.parent.borders then
+        -- ad-hoc check if this is window border of a managed window. 
+        id = win.parent.id
+      end
+      -- don't keep setting focus if the cursor hasn't moved away from the window
+      if id == win_under_cursor then return end
+      win_under_cursor = id
+      vv.api.set_focused_window(id)
     end
   end
 end

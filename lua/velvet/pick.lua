@@ -94,10 +94,7 @@ function pick.select(items, opts)
   end
 
   local did_submit = false
-  local tmp = vv.options.focus_follows_mouse
-  vv.options.focus_follows_mouse = false
   local function dispose(no_restore_focus)
-    vv.options.focus_follows_mouse = tmp
     picker:set_visibility(false)
     if not no_restore_focus and vv.api.window_is_valid(prev_focus) then vv.api.set_focused_window(prev_focus) end
     if not did_submit and opts.on_cancel then

@@ -967,7 +967,6 @@ static struct velvet_key_event key_event_from_api_key(struct velvet_api_window_k
   return k;
 }
 
-void velvet_input_send_key_event(struct velvet *v, struct velvet_api_window_key_event key_event, int win_id) {
-  struct velvet_window *win = velvet_scene_get_window_from_id(&v->scene, win_id);
+void velvet_input_send_key_to_window(struct velvet *v, struct velvet_api_window_key_event key_event, struct velvet_window *win) {
   velvet_input_send_vk_to_window(key_event_from_api_key(key_event), win, v);
 }
