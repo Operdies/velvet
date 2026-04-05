@@ -38,28 +38,14 @@ local events = {
   --- @param event_name string the raised event
   --- @param ... any depends on the event
   emit_event = function(event_name, ...)
-    local data = ...
-    if event_name == 'window_on_key' or event_name == 'session_on_key' then 
-      -- The C api does not set a name for regular characters, such as latin letters or
-      -- normal letters from other scripts. For ease of use, we convert the codepoints
-      -- of such characters to a string containing the character.
-      if data.key.name == nil then
-        local cp = data.key.codepoint
-        -- if alternate codepoint is set, the character is shifted, and we should
-        -- use the shifted key for the name instead.
-        if data.key.alternate_codepoint ~= 0 then
-          cp = data.key.alternate_codepoint
-        end
-        data.key.name = utf8.char(cp)
-      end
-    end
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
       if group_func_table[event_name] then
         local error_handler = function(e)
           -- prevent recursion if message handlers have errors
           if event_name ~= 'system_message' then
-            vv.system_error(debug.traceback(e, 2))
+            vv.log(("Unhandled error in event handler. (event %s)"):format(event_name), 'error')
+            vv.log(debug.traceback(e, 2), 'debug')
           end
           return e
         end

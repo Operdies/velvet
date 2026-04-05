@@ -61,30 +61,30 @@ struct codepoint utf8_to_codepoint(const uint8_t utf8[4], int *len) {
   return cp;
 }
 
-int codepoint_to_utf8(uint32_t cp, struct utf8 *u) {
+int codepoint_to_utf8(uint32_t cp, uint8_t u[4]) {
   if (cp <= 0x7F) {
-    u->utf8[0] = cp;
+    u[0] = cp;
     return 1;
   } else if (cp <= 0x7FF) {
-    u->utf8[0] = 0xC0 | (cp >> 6);
-    u->utf8[1] = 0x80 | (cp & 0x3F);
+    u[0] = 0xC0 | (cp >> 6);
+    u[1] = 0x80 | (cp & 0x3F);
     return 2;
   } else if (cp <= 0xFFFF) {
-    u->utf8[0] = 0xE0 | (cp >> 12);
-    u->utf8[1] = 0x80 | ((cp >> 6) & 0x3F);
-    u->utf8[2] = 0x80 | (cp & 0x3F);
+    u[0] = 0xE0 | (cp >> 12);
+    u[1] = 0x80 | ((cp >> 6) & 0x3F);
+    u[2] = 0x80 | (cp & 0x3F);
     return 3;
   } else if (cp <= 0x10FFFF) {
-    u->utf8[0] = 0xF0 | (cp >> 18);
-    u->utf8[1] = 0x80 | ((cp >> 12) & 0x3F);
-    u->utf8[2] = 0x80 | ((cp >> 6) & 0x3F);
-    u->utf8[3] = 0x80 | (cp & 0x3F);
+    u[0] = 0xF0 | (cp >> 18);
+    u[1] = 0x80 | ((cp >> 12) & 0x3F);
+    u[2] = 0x80 | ((cp >> 6) & 0x3F);
+    u[3] = 0x80 | (cp & 0x3F);
     return 4;
   } else {
     // Invalid Unicode scalar value → U+FFFD
-    u->utf8[0] = 0xEF;
-    u->utf8[1] = 0xBF;
-    u->utf8[2] = 0xBD;
+    u[0] = 0xEF;
+    u[1] = 0xBF;
+    u[2] = 0xBD;
     return 3;
   }
 }

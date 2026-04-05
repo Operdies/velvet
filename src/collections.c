@@ -72,9 +72,9 @@ void string_push(struct string *str, const uint8_t *src) {
 }
 
 void string_push_codepoint(struct string *str, uint32_t codepoint) {
-  struct utf8 u;
-  int n = codepoint_to_utf8(codepoint, &u);
-  string_push_range(str, u.utf8, n);
+  uint8_t buf[4];
+  int n = codepoint_to_utf8(codepoint, buf);
+  string_push_range(str, buf, n);
 }
 
 void string_push_char(struct string *str, uint8_t ch) {
@@ -517,7 +517,10 @@ bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s) {
   s->cursor += len;
 
   /* do the implemnetations agree? */
-  assert(len == expected_length);
+  if (len != expected_length) {
+    s->reject = true;
+    return false;
+  }
   return true;
 }
 

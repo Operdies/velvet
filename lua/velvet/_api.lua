@@ -137,7 +137,7 @@ local api = {}
 --- @class velvet.api.window.key_event
 --- @field codepoint integer Unicode codepoint of the key generating the event.
 --- @field alternate_codepoint integer Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted.
---- @field name? string Key name, such as 'F1'
+--- @field name string Key name, such as 'F1'
 --- @field event_type velvet.api.key_event_type Event type, such as key press, repeat, and release.
 --- @field modifiers velvet.api.key_modifiers Key modifier such as super, shift, control, alt
 

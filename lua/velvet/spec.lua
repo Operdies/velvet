@@ -309,7 +309,7 @@ return {
       fields = {
         { name = "codepoint",           type = "int",            doc = "Unicode codepoint of the key generating the event." },
         { name = "alternate_codepoint", type = "int",            doc = "Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted." },
-        { name = "name",                type = "string",         doc = "Key name, such as 'F1'", optional = true },
+        { name = "name",                type = "string",         doc = "Key name, such as 'F1'" },
         { name = "event_type",          type = "key_event_type", doc = "Event type, such as key press, repeat, and release." },
         { name = "modifiers",           type = "key_modifier",   doc = "Key modifier such as super, shift, control, alt" },
       },

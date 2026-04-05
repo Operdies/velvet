@@ -314,13 +314,20 @@ static bool is_modifier(uint32_t codepoint) {
 static bool is_modifier(uint32_t codepoint);
 
 static void raise_key_event(struct velvet *v, struct velvet_key_event e) {
-  struct u8_slice name = u8_slice_from_cstr(e.key.name);
+  uint8_t buf[4];
+  struct u8_slice name = {0};
+  if (e.key.name) {
+    name = u8_slice_from_cstr(e.key.name);
+  } else {
+    name.len = codepoint_to_utf8(e.key.alternate_codepoint ? e.key.alternate_codepoint : e.key.codepoint, buf);
+    name.content = buf;
+  }
   struct velvet_api_session_key_event_args event_args = {
       .key = {.codepoint = e.key.codepoint,
               .alternate_codepoint = e.key.alternate_codepoint,
               .event_type = e.type,
               .modifiers = e.modifiers,
-              .name = {.set = e.key.name, .value = name}},
+              .name = name}
   };
   velvet_api_raise_session_on_key(v, event_args);
 }
@@ -411,9 +418,8 @@ static void dispatch_esc(struct velvet *v, uint32_t codepoint) {
 
 static void
 velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enum velvet_api_key_modifier m) {
-  int n = 0;
-  struct utf8 buf = {0};
-  char *escape = NULL;
+  uint8_t buf[4] = {0};
+  struct u8_slice sendbuf = {0};
   if (m & VELVET_API_KEY_MODIFIER_CAPS_LOCK) {
     if (m & VELVET_API_KEY_MODIFIER_SHIFT)
       vk.codepoint = utf8proc_tolower(vk.codepoint);
@@ -422,14 +428,14 @@ velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enu
   }
   if (vk.kitty_terminator == 'u' && vk.codepoint) {
     uint32_t send = vk.alternate_codepoint ? vk.alternate_codepoint : vk.codepoint;
-    n = codepoint_to_utf8(send, &buf);
-    escape = (char *)buf.utf8;
+    sendbuf.len = codepoint_to_utf8(send, buf);
+    sendbuf.content = buf;
   } else if (vk.escape && vk.escape[0]) {
-    escape = vk.escape;
-    n = strlen(escape);
+    sendbuf.len = strlen(vk.escape);
+    sendbuf.content = (uint8_t *)vk.escape;
   }
 
-  if (escape && escape[0]) {
+  if (sendbuf.content && sendbuf.content[0]) {
     scroll_to_bottom(sink);
     if (vk.codepoint == ESC) {
       send_byte(sink, ESC);
@@ -438,12 +444,12 @@ velvet_input_send_vk_basic(struct velvet_window *sink, struct velvet_key vk, enu
       bool is_cntrl = m & VELVET_API_KEY_MODIFIER_CONTROL;
 
       if (is_meta) send_byte(sink, ESC);
-      bool is_byte = !escape[1];
+      bool is_byte = !sendbuf.content[1];
       if (is_byte && is_cntrl) {
-        char ch = escape[0] & 0x1f;
+        char ch = sendbuf.content[0] & 0x1f;
         send_byte(sink, ch);
       } else {
-        for (int i = 0; i < n; i++) send_byte(sink, escape[i]);
+        send(sink, sendbuf);
       }
     }
   }
@@ -565,7 +571,7 @@ static void velvet_input_send_vk_to_window(struct velvet_key_event e, struct vel
                 .alternate_codepoint = e.key.alternate_codepoint,
                 .event_type = e.type,
                 .modifiers = e.modifiers,
-                .name = { .set = e.key.name, .value = name },
+                .name = name,
             },
     };
     velvet_api_raise_window_on_key(v, event_args);
@@ -806,9 +812,7 @@ void velvet_input_destroy(struct velvet_input *in) {
   string_destroy(&in->command_buffer);
 }
 
-static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
-  assert(s.len > 0);
-
+static bool named_key_from_slice(struct u8_slice s, struct velvet_key *result) {
   for (int i = 0; i < LENGTH(named_keys); i++) {
     struct velvet_key n = named_keys[i];
     if (!n.name) continue;
@@ -817,6 +821,15 @@ static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
       *result = n;
       return true;
     }
+  }
+  return false;
+}
+
+static bool key_from_slice(struct u8_slice s, struct velvet_key *result) {
+  assert(s.len > 0);
+
+  if (named_key_from_slice(s, result)) {
+    return true;
   }
 
   struct u8_slice_codepoint_iterator it = {.src = s};
@@ -934,7 +947,6 @@ void velvet_input_send_keys(struct velvet *in, struct u8_slice str, int win_id) 
 void velvet_input_paste_text(struct velvet *in, struct u8_slice str, int win_id) {
   struct velvet_window *win = velvet_scene_get_window_from_id(&in->scene, win_id);
   if (win) window_paste(win, str);
-  
 }
 
 static struct velvet_key_event key_event_from_api_key(struct velvet_api_window_key_event e) {
@@ -944,11 +956,9 @@ static struct velvet_key_event key_event_from_api_key(struct velvet_api_window_k
     .modifiers = e.modifiers,
   };
 
-  if (e.name.set && e.name.value.content) {
-    struct velvet_key out;
-    if (key_from_slice(e.name.value, &out)) {
-      k.key = out;
-    }
+  struct velvet_key out;
+  if (named_key_from_slice(e.name, &out)) {
+    k.key = out;
   } else {
     uint32_t associated_text = e.alternate_codepoint ? e.alternate_codepoint : e.codepoint;
     k.associated_text.n = 1;

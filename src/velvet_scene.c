@@ -446,9 +446,9 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         velvet_render_set_style(r, cell_style, c->cp.value == ' ');
         velvet_render_set_hyperlink(r, c->link);
 
-        struct utf8 sym;
-        uint8_t utf8_len = codepoint_to_utf8(c->cp.value, &sym);
-        struct u8_slice text = {.content = sym.utf8, .len = utf8_len};
+        uint8_t buf[4];
+        uint8_t utf8_len = codepoint_to_utf8(c->cp.value, buf);
+        struct u8_slice text = {.content = buf, .len = utf8_len};
         string_push_slice(&r->draw_buffer, text);
 
         bool wide = c->cp.is_wide;

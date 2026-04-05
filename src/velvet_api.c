@@ -844,18 +844,17 @@ void vv_api_reload(struct velvet *v) {
 }
 
 lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string) {
-  (void)v;
   lua_Integer result = 0;
   struct u8_slice_codepoint_iterator it = {.src = string};
   while (u8_slice_codepoint_iterator_next(&it)) {
     result += utf8proc_charwidth(it.current.value);
   }
+  if (it.reject) lua_bail(v->L, "Could not determine display width of '%s': Invalid utf8 sequence.", string.content);
   return result;
 }
 
 static struct string stringbuf = {0};
 struct u8_slice vv_api_string_lower(struct velvet *v, struct u8_slice string) {
-  (void)v;
   struct string *s = &stringbuf;
   string_clear(s);
   struct u8_slice_codepoint_iterator it = { .src = string };
@@ -863,10 +862,10 @@ struct u8_slice vv_api_string_lower(struct velvet *v, struct u8_slice string) {
     uint32_t cp = utf8proc_tolower(it.current.value);
     string_push_codepoint(s, cp);
   }
+  if (it.reject) lua_bail(v->L, "Could not lower '%s': Invalid utf8 sequence.", string.content);
   return string_as_u8_slice(*s);
 }
 struct u8_slice vv_api_string_upper(struct velvet *v, struct u8_slice string) {
-  (void)v;
   struct string *s = &stringbuf;
   string_clear(s);
   struct u8_slice_codepoint_iterator it = { .src = string };
@@ -874,6 +873,7 @@ struct u8_slice vv_api_string_upper(struct velvet *v, struct u8_slice string) {
     uint32_t cp = utf8proc_toupper(it.current.value);
     string_push_codepoint(s, cp);
   }
+  if (it.reject) lua_bail(v->L, "Could not upper '%s': Invalid utf8 sequence.", string.content);
   return string_as_u8_slice(*s);
 }
 

@@ -39,7 +39,21 @@ local short_mods = {
   Num = 'num_lock',
 }
 
+--- @param flags integer
+--- @return velvet.api.key_modifiers mods
+local function modifiers_from_flags(flags)
+  local mods = {}
+  for name, flag in pairs(mflags) do
+    if (flags & flag) > 0 then
+      mods[name] = true
+    end
+  end
+  return mods
+end
+
+
 --- @param mods velvet.api.key_modifiers
+--- @return integer flags
 local function flags_from_modifiers(mods)
   local flags = 0
   for name, flag in pairs(mflags) do
@@ -76,6 +90,38 @@ local function chord_from_key_event(key)
   -- Prevent modifiers from modifying themselves. This can only cause confusion.
   if modifier_keys[primary_key] then mods = mods & ~modifier_keys[primary_key] end
   return { key = primary_key, mods = mods, alt_key = alt_key }
+end
+
+--- @param x string
+--- @return integer[]
+local function string_to_codepoints(x)
+  local cc = {}
+  for _, c in utf8.codes(x) do
+    cc[#cc+1] = c
+  end
+  return cc
+end
+
+--- @param chord chord
+--- @return velvet.api.window.key_event key
+local function chord_to_key_event(chord)
+  local upper, lower = vv.api.string_upper(chord.key), vv.api.string_lower(chord.key)
+  local mods = modifiers_from_flags(chord.mods)
+  if vk[upper] then
+    return { name = upper, codepoint = 0, alternate_codepoint = 0, event_type = 'press', modifiers = mods }
+  else
+    local alt = 0
+    if chord.key == upper and upper ~= lower then
+      alt = string_to_codepoints(upper)[1]
+    end
+    return {
+      name = lower, 
+      modifiers = mods,
+      codepoint = string_to_codepoints(lower)[1],
+      alternate_codepoint = alt,
+      event_type = 'press',
+    }
+  end
 end
 
 --- @param chord chord
@@ -150,14 +196,15 @@ local function chords_from_string(lhs)
       seq = seq:sub(3, -1)
     end
 
-    if #seq > 1 then
-      local known = vk[seq:upper()]
+    local rem = string_to_codepoints(seq)
+    if #rem > 1 then
+      local known = vk[vv.api.string_upper(seq)]
       if not known then
         error("Unknown key: " .. seq)
       end
       key = known
-    else
-      key = seq:lower()
+    elseif #rem == 1 then
+      key = vv.api.string_lower(seq)
     end
 
     if not key then error("Mapping is missing a key: " .. sequence) end
@@ -174,12 +221,15 @@ local function chords_from_string(lhs)
       lhs = lhs:sub(_end + 1, -1)
       chord = parse_modifiers(str)
     else
-      local str = lhs:sub(1, 1)
-      lhs = lhs:sub(2, -1)
-      -- lua's string.upper() only handles ascii characters.
-      -- TODO: expose utf8proc functions in spec.lua to improve this.
-      local is_shifted = str:upper() == str and str:lower() ~= str:upper()
-      chord = { key = str:lower(), mods = is_shifted and mflags.shift or 0 }
+      start, _end = lhs:find('^' .. utf8.charpattern)
+      if not (start and _end) then
+        error("no char pattern!!");
+      end
+      local str = lhs:sub(start, _end)
+      lhs = lhs:sub(_end + 1, -1)
+      local upper, lower = vv.api.string_upper(str), vv.api.string_lower(str)
+      local is_shifted = str == upper and upper ~= lower
+      chord = { key = lower, mods = is_shifted and mflags.shift or 0 }
     end
     table.insert(sequence, chord)
   end
@@ -239,8 +289,8 @@ function keys.set(lhs, rhs, opts)
   map.execute = function() 
     local handler = function(e)
       local traceback = debug.traceback(e, 2)
-      local msg = "Unhandled error in mapping " .. lhs .. ":\n" .. traceback
-      vv.system_error(msg)
+      vv.log("Unhandled error in mapping " .. lhs, 'error')
+      vv.log(traceback, 'debug')
     end
     xpcall(rhs, handler) 
   end
@@ -335,12 +385,26 @@ local function is_modifier(args)
   return modifier_keys[args.key.name] and true or false
 end
 
+--- @param key velvet.api.window.key_event
+--- @return velvet.api.window.key_event
+local function maybe_remap(key)
+  local chord = clean_chord(chord_from_key_event(key))
+  local chord_key, alt_key = chord_to_string(chord)
+  local remap = remapped_keys[chord_key] or remapped_keys[alt_key]
+  if remap then
+    local new_chord = chords_from_string(remap)[1]
+    local new_event = chord_to_key_event(new_chord)
+    new_event.event_type = key.event_type
+    return new_event
+  end
+  return key
+end
+
 local passthrough = false
 local last_repeat = 0
 --- @param args velvet.api.session.key.event_args
 function keymap.on_key(args)
-  args.key.codepoint = remapped_keys[args.key.codepoint] or args.key.codepoint
-  args.key.alternate_codepoint = remapped_keys[args.key.alternate_codepoint] or args.key.alternate_codepoint
+  args.key = maybe_remap(args.key)
   if passthrough or args.key.event_type == 'release' then
     -- TODO: Only send a release event if we previously sent pressed/repeat events to the recipient.
     -- This is a bit tricky because it involves tracking if the press/repeat event was blocked due
@@ -471,21 +535,16 @@ end
 --- @param from string key
 --- @param to string key to map |from| to
 function keys.remap_key(from, to)
-  local function codes(x)
-    local cc = {}
-    for _, c in utf8.codes(x) do
-      cc[#cc+1] = c
-    end
-    return cc
-  end
   assert(type(from) == "string", "bad argument #1 (string expected)")
   assert(type(to) == "string", "bad argument #1 (string expected)")
-  local f = codes(from)
-  local t = codes(to)
-  assert(#f == 1, "bad argument #1 (expected exactly one character)")
-  assert(#t == 1, "bad argument #2 (expected exactly one character)")
 
-  remapped_keys[f[1]] = t[1]
+  local ch1 = chords_from_string(from)
+  local ch2 = chords_from_string(to)
+
+  assert(#ch1 == 1, "bad argument #1 (expected a single chord")
+  assert(#ch2 == 1, "bad argument #2 (expected a single chord")
+
+  remapped_keys[chord_to_string(ch1[1])] = chord_to_string(ch2[1])
 end
 
 --- Enable or disable passthrough mode. In passthrouh mode, the current keymap is ignored.
