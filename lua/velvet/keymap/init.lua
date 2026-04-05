@@ -86,15 +86,19 @@ local modifier_keys = {
 --- @param key velvet.api.window.key_event
 --- @return chord chord
 local function chord_from_key_event(key)
-  local primary_key = key.name and key.name or utf8.char(key.codepoint)
+  local base_key = key.name and key.name or utf8.char(key.codepoint)
   -- Mappings such as <S-2> which (on a us layout) can also
   -- be specified as <S-@>. By checking the alternate codepoint, we can match both mappings.
   local alt_key = key.alternate_codepoint > 0 and utf8.char(key.alternate_codepoint)
   local mods = flags_from_modifiers(key.modifiers)
 
+  if base_key == alt_key and base_key == key.name and key.codepoint then
+    base_key = utf8.char(key.codepoint)
+  end
+
   -- Prevent modifiers from modifying themselves. This can only cause confusion.
-  if modifier_keys[primary_key] then mods = mods & ~modifier_keys[primary_key] end
-  return { key = primary_key, mods = mods, alt_key = alt_key }
+  if modifier_keys[base_key] then mods = mods & ~modifier_keys[base_key] end
+  return { key = base_key, mods = mods, alt_key = alt_key }
 end
 
 --- @param x string
@@ -394,7 +398,7 @@ end
 local function maybe_remap(key)
   local chord = clean_chord(chord_from_key_event(key))
   local chord_key, alt_key = chord_to_string(chord)
-  local remap = remapped_keys[chord_key] or remapped_keys[alt_key]
+  local remap = remapped_keys[alt_key] or remapped_keys[chord_key]
   if remap then
     local new_chord = chords_from_string(remap)[1]
     local new_event = chord_to_key_event(new_chord)
@@ -428,7 +432,7 @@ function keymap.on_key(args)
   local now = vv.api.get_current_tick()
 
   --- @type keymap|nil
-  local next_chain = current_chain.children[chord_key] or current_chain.children[alt_key]
+  local next_chain = current_chain.children[alt_key] or current_chain.children[chord_key]
   if last_repeat > 0 and next_chain then
     if not next_chain.options.repeatable then
       next_chain = nil
