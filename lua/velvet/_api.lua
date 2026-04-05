@@ -469,6 +469,16 @@ function api.clipboard_set(text) end
 --- @return integer ret The display width of |string|
 function api.string_display_width(string) end
 
+--- Get a copy of |string| converted to lower case. Unlike |string.lower|, this function correctly maps the entire unicode range.
+--- @param string string Input string.
+--- @return string ret Lower case string.
+function api.string_lower(string) end
+
+--- Get a copy of |string| converted to upper case. Unlike |string.upper|, this function correctly maps the entire unicode range.
+--- @param string string Input string.
+--- @return string ret Upper case string.
+function api.string_upper(string) end
+
 --- Store a named value in the current session. Session values are preserved after reloading, but lost when the session ends.
 --- @param name string The name of the stored value.
 --- @param value any The value to store.

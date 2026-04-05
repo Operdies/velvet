@@ -804,6 +804,18 @@ return {
       returns = { type = "int", doc = "The display width of |string|" },
     },
     {
+      name = "string_lower",
+      doc = "Get a copy of |string| converted to lower case. Unlike |string.lower|, this function correctly maps the entire unicode range.",
+      params = { { name = "string", type = "string", doc = "Input string." } },
+      returns = { type = "string", doc = "Lower case string." },
+    },
+    {
+      name = "string_upper",
+      doc = "Get a copy of |string| converted to upper case. Unlike |string.upper|, this function correctly maps the entire unicode range.",
+      params = { { name = "string", type = "string", doc = "Input string." } },
+      returns = { type = "string", doc = "Upper case string." },
+    },
+    {
       name = "session_store_value",
       doc =
       "Store a named value in the current session. Session values are preserved after reloading, but lost when the session ends.",

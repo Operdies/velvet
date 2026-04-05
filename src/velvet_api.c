@@ -853,6 +853,30 @@ lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string
   return result;
 }
 
+static struct string stringbuf = {0};
+struct u8_slice vv_api_string_lower(struct velvet *v, struct u8_slice string) {
+  (void)v;
+  struct string *s = &stringbuf;
+  string_clear(s);
+  struct u8_slice_codepoint_iterator it = { .src = string };
+  while (u8_slice_codepoint_iterator_next(&it)) {
+    uint32_t cp = utf8proc_tolower(it.current.value);
+    string_push_codepoint(s, cp);
+  }
+  return string_as_u8_slice(*s);
+}
+struct u8_slice vv_api_string_upper(struct velvet *v, struct u8_slice string) {
+  (void)v;
+  struct string *s = &stringbuf;
+  string_clear(s);
+  struct u8_slice_codepoint_iterator it = { .src = string };
+  while (u8_slice_codepoint_iterator_next(&it)) {
+    uint32_t cp = utf8proc_toupper(it.current.value);
+    string_push_codepoint(s, cp);
+  }
+  return string_as_u8_slice(*s);
+}
+
 static bool needs_quote(const char *ch) {
   if (*ch == 0) return true;
   if (isdigit(*ch)) return true;
