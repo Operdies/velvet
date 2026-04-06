@@ -86,18 +86,18 @@ local modifier_keys = {
 --- @param key velvet.api.window.key_event
 --- @return chord chord
 local function chord_from_key_event(key)
-  local base_key = key.name and key.name or utf8.char(key.codepoint)
+  local mods = flags_from_modifiers(key.modifiers)
+  if vk[key.name] then
+    local base_key = vk[key.name]
+    -- Prevent modifiers from modifying themselves. This can only cause confusion.
+    if modifier_keys[base_key] then mods = mods & ~modifier_keys[base_key] end
+    return { key = base_key, mods = mods }
+  end
+
+  local base_key = utf8.char(key.codepoint)
   -- Mappings such as <S-2> which (on a us layout) can also
   -- be specified as <S-@>. By checking the alternate codepoint, we can match both mappings.
   local alt_key = key.alternate_codepoint > 0 and utf8.char(key.alternate_codepoint)
-  local mods = flags_from_modifiers(key.modifiers)
-
-  if base_key == alt_key and base_key == key.name and key.codepoint then
-    base_key = utf8.char(key.codepoint)
-  end
-
-  -- Prevent modifiers from modifying themselves. This can only cause confusion.
-  if modifier_keys[base_key] then mods = mods & ~modifier_keys[base_key] end
   return { key = base_key, mods = mods, alt_key = alt_key }
 end
 
@@ -137,8 +137,6 @@ end
 --- @return chord clean chord with unsupported modifiers stripped
 local function clean_chord(chord)
   local clean = vv.deepcopy(chord)
-  clean.key = chord.key:lower()
-  clean.alt_key = chord.key:upper()
   clean.mods = chord.mods & ~(mflags.num_lock | mflags.caps_lock | mflags.hyper | mflags.meta)
   if (chord.mods & mflags.meta) == mflags.meta then clean.mods = clean.mods | mflags.alt end
   return clean
@@ -396,14 +394,26 @@ end
 --- @param key velvet.api.window.key_event
 --- @return velvet.api.window.key_event
 local function maybe_remap(key)
-  local chord = clean_chord(chord_from_key_event(key))
-  local chord_key, alt_key = chord_to_string(chord)
-  local remap = remapped_keys[alt_key] or remapped_keys[chord_key]
+  -- if a raw key (no modifiers, etc.) such as 'x' or 'F1' was specified,
+  -- the mapping applies regardless of modifiers.
+  local remap = remapped_keys[key.name]
   if remap then
     local new_chord = chords_from_string(remap)[1]
-    local new_event = chord_to_key_event(new_chord)
-    new_event.event_type = key.event_type
-    return new_event
+    local new_key = chord_to_key_event(new_chord)
+    new_key.modifiers = key.modifiers
+    new_key.event_type = key.event_type
+    return new_key
+  end
+
+  -- Otherwise the mapping applies to the specific modifiers of the remapping
+  local chord = clean_chord(chord_from_key_event(key))
+  local chord_key, alt_key = chord_to_string(chord)
+  remap = remapped_keys[alt_key] or remapped_keys[chord_key]
+  if remap then
+    local new_chord = chords_from_string(remap)[1]
+    local new_key = chord_to_key_event(new_chord)
+    new_key.event_type = key.event_type
+    return new_key
   end
   return key
 end
