@@ -738,9 +738,11 @@ function Window.get_window_at_coordinate(cord)
     end
   end
   table.sort(windows, function(x, y)
-    local xz, yz = x:get_z_index(), y:get_z_index()
-    if xz == yz then return x.id < y.id end
-    return xz < yz
+    local xz = x:get_z_index()
+    local yz = y:get_z_index()
+    -- id tiebreaker to ensure stable sorting on across calls
+    if xz == yz then return x.id > y.id end
+    return xz > yz
   end)
   return windows
 end
