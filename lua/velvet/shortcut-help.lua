@@ -9,6 +9,7 @@ w:set_title("Shortcuts")
 w:set_cursor_visible(false)
 w:set_frame_color('green')
 w:set_frame_enabled(true)
+w:set_alpha(0.9)
 
 local arrow = " ➤ "
 
@@ -147,6 +148,7 @@ local function draw()
   end
 
   width = math.min(width, display_width + max_desc)
+  height = math.min(height, #flat_map + 1)
   w:set_geometry({ left = 1 + sz.width // 2 - width // 2, top = 1 + sz.height // 2 - height // 2, width = width, height = height })
 
   for _, map in ipairs(flat_map) do
