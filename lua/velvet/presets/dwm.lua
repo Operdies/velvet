@@ -32,13 +32,13 @@ local function cfg(settings)
 
   for i = 1, 9 do
     map_prefix(("%d"):format(i), function() dwm.toggle_tag(vv.api.get_focused_window(), i) end,
-      { description = ("Toggle window tag %d."):format(i) })
+      { description = "Toggle window tag {}." })
     map_prefix(("<M-%d>"):format(i), function() dwm.toggle_view(i) end,
-      { description = ("Toggle view %d."):format(i) })
+      { description = "Toggle view {}." })
     map(("<M-%d>"):format(i), function() dwm.set_view(i) end,
-      { description = ("Select view %d."):format(i) })
+      { description = "Select view {}." })
     map(("<M-S-%d>"):format(i), function() dwm.set_tags(vv.api.get_focused_window(), i) end,
-      { description = ("Set window tag %d."):format(i) })
+      { description = "Set window tag {}." })
   end
 
   map("<M-0>", function() dwm.set_view({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }) end,

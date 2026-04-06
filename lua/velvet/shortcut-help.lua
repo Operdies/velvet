@@ -35,7 +35,8 @@ end
 
 local function flatten_maps(map)
   local flat = {}
-  if map.terminal then return { { text = map.keys, keys = { map.keys .. (map.repeatable and " (repeats)" or "") }, description = map.description } } end
+  local descriptions = {}
+  if map.terminal then return { { text = map.keys, keys = { map.keys }, description = map.description } } end
   for _, m in ipairs(map.children) do
     for _, sub in ipairs(flatten_maps(m)) do
       local text = #map.keys > 0 and map.keys or ""
@@ -43,9 +44,79 @@ local function flatten_maps(map)
         sub.text = text .. arrow .. sub.text
         table.insert(sub.keys, 1, map.keys)
       end
+      if sub.description and sub.description:find('{}') then
+        local lst = descriptions[sub.description] or {}
+        descriptions[sub.description] = lst
+        lst[#lst+1] = sub
+      else
       flat[#flat + 1] = sub
+      end
     end
   end
+
+  for desc, items in pairs(descriptions) do
+    local keys = {}
+    local pattern = '^<.*-(.+)>$'
+    local template_key = nil
+    for _, item in ipairs(items) do
+      local k = item.keys[#item.keys]
+      local x = k:match(pattern) or k
+      keys[#keys + 1] = x
+      template_key = template_key or k
+    end
+
+    local function compute_template_string(keys)
+      table.sort(keys, function(x, y) 
+        if #x == #y then 
+          return x < y 
+        else 
+          return #x < #y 
+        end
+      end)
+      local runs = {}
+
+      local function is_succcessor(x, y)
+        return #x == 1 and #y == 1 and (1 + string.byte(x, 1, 1)) == string.byte(y, 1, 1)
+      end
+
+      for i = 1, #keys do
+        local k = keys[i]
+        if #k == 1 and runs[#runs] then
+          local run = runs[#runs]
+          if is_succcessor(run[#run], k) then
+            run[#run + 1] = k
+          else
+            runs[#runs + 1] = { k }
+          end
+        else
+          runs[#runs + 1] = { k }
+        end
+      end
+      local templates = {}
+      for _, run in ipairs(runs) do
+        if #run > 2 then
+          templates[#templates + 1] = ('%s-%s'):format(run[1], run[#run])
+        else
+          templates[#templates + 1] = table.concat(run, ',')
+        end
+      end
+      return ('{%s}'):format(table.concat(templates, ','))
+    end
+
+    local template_string = compute_template_string(keys)
+    if template_key:match(pattern) then
+      template_key = template_key:gsub('^(<.*-).+(>)$', "%1" .. template_string .. "%2")
+    else
+      template_key = template_string
+    end
+    local template_desc = desc:gsub('{}', template_string)
+    local it = vv.deepcopy(items[1])
+    it.keys[#it.keys] = template_key
+    it.description = template_desc
+    flat[#flat + 1] = it
+  end
+
+  -- vv.log(descriptions)
   return flat
 end
 
