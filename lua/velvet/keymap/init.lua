@@ -541,7 +541,9 @@ function keys.which_key(lhs, recurse)
   for k, m in pairs(map.children) do
     which_keys[#which_keys + 1] = {
       description = m.options.description or k, 
-      keys = k, terminal = not next(m.children), 
+      keys = k, 
+      terminal = not next(m.children), 
+      repeatable = m.options.repeatable,
       children = recurse and keys.which_key(lhs .. k, true) or nil 
     }
   end

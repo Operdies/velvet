@@ -52,47 +52,20 @@ local function cfg(settings)
     dwm.set_layer(win, 'floating') 
   end, { description = "Float current window." })
 
-  local rect = require('velvet.ui.rect')
-
-  local function move_and_resize(x, y, dx, dy)
-    local win = vv.api.get_focused_window()
-    local geom = rect.translate(rect.grow(vv.api.window_get_geometry(win), dx, dy), x, y)
-    dwm.set_layer(win, 'floating') 
-    local w = require('velvet.window').from_handle(win)
-    w:set_geometry(geom)
-  end
-
-  local function resize(dx, dy)
-    move_and_resize(0, 0, dx, dy)
-  end
-
-  local function move(x, y)
-    move_and_resize(x, y, 0, 0)
-  end
-
   local function apply(func, ...)
     local args = { ... }
     return function() func(table.unpack(args)) end
   end
 
-  map("<M-right>", apply(move, 2, 0), { description = "Move window right" })
-  map("<M-left>", apply(move, -2, 0), { description = "Move window left" })
-  map("<M-S-right>", apply(resize, 2, 0), { description = "Make window wider" })
-  map("<M-S-left>", apply(resize, -2, 0), { description = "Make window narrower" })
-  map("<M-up>", apply(move, 0, -1), { description = "Move window up" })
-  map("<M-down>", apply(move, 0, 1), { description = "Move window down" })
-  map("<M-S-up>", apply(resize, 0, -1), { description = "Make window shorter" })
-  map("<M-S-down>", apply(resize, 0, 1), { description = "Make window taller" })
   map_prefix("<C-j>", dwm.focus_next, { description = "Focus next window.", repeatable = true })
   map_prefix("<C-k>", dwm.focus_prev, { description = "Focus previous window.", repeatable = true })
   map_prefix("j", dwm.swap_next, { description = "Swap current and next window.", repeatable = true })
   map_prefix("k", dwm.swap_prev, { description = "Swap current and previous window.", repeatable = true })
-  map_prefix("g", dwm.zoom, { description = "Move window to top of tiling stack." })
-  map("<M-[>", apply(dwm.incmfact, -0.05), { description = "Make left stacking area narrower" })
-  map("<M-]>", apply(dwm.incmfact, 0.05), { description = "Make left stacking area wider" })
-  map("<M-i>", apply(dwm.incnmaster, 1), { description = "Increase number of windows in left stack" })
-  map("<M-o>", apply(dwm.incnmaster, -1), { description = "Decrease number of windows in left stack" })
-  map("<M-`>", dwm.select_previous_view, { description = "Select the previous view" })
+  map_prefix("g", dwm.zoom, { description = "Move window to top of tiling stack.", repeatable = true })
+  map_prefix("[", apply(dwm.incmfact, -0.05), { description = "Make left stacking area narrower", repeatable = true })
+  map_prefix("]", apply(dwm.incmfact, 0.05), { description = "Make left stacking area wider", repeatable = true })
+  map_prefix("i", apply(dwm.incnmaster, 1), { description = "Increase number of windows in left stack", repeatable = true })
+  map_prefix("o", apply(dwm.incnmaster, -1), { description = "Decrease number of windows in left stack", repeatable = true })
   dwm.activate()
 
   local function any_process_windows()

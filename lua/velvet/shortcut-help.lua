@@ -35,7 +35,7 @@ end
 
 local function flatten_maps(map)
   local flat = {}
-  if map.terminal then return { { text = map.keys, keys = { map.keys }, description = map.description } } end
+  if map.terminal then return { { text = map.keys, keys = { map.keys .. (map.repeatable and " (repeats)" or "") }, description = map.description } } end
   for _, m in ipairs(map.children) do
     for _, sub in ipairs(flatten_maps(m)) do
       local text = #map.keys > 0 and map.keys or ""

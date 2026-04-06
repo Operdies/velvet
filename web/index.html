@@ -48,6 +48,7 @@
 
     const term = new Terminal({
       allowProposedApi: true,
+      macOptionIsMeta: true,
       cursorBlink: true,
       fontSize: fontSize,
       fontFamily: '"MesloLGS Nerd Font", Menlo, Monaco, "Courier New", monospace',
@@ -98,23 +99,6 @@
         navigator.clipboard.writeText(atob(b64));
       } catch (e) {
         console.error(e)
-      }
-      return true;
-    });
-
-
-    // Translate Option+key to Alt (ESC prefix) since macOS browsers
-    // produce special characters (å, π, etc.) instead of sending Meta
-    term.attachCustomKeyEventHandler((event) => {
-      const isLetter = event.code.startsWith('Key');
-      const isDigit = event.code.startsWith('Digit');
-      if (event.altKey && (isLetter || isDigit)) {
-        if (event.type === 'keydown') {
-          const key = isLetter ? event.code.charAt(3).toLowerCase() : event.code.charAt(5);
-          ws.send(JSON.stringify({ type: 'data', data: '\x1b' + key }));
-        }
-        // Block both keydown and keypress to prevent composed char
-        return false;
       }
       return true;
     });
