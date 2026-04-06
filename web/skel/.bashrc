@@ -39,13 +39,17 @@ Like neovim, velvet enables scripting nearly all system behavior through a LUA A
 
 To view current keybindings, press ${red}${bold}<C-x>h${reset}. This menu is automatically updated if you add new bindings.
 
+The default window manager has some basic mouse support. After spawning a few windows, try dragging
+them around by dragging their title bars. This pops them out of the tiling layout. To re-tile them,
+hold ${bold}${red}Alt${reset} when you drop them, or use the ${red}${bold}<C-x>t${reset} hotkey to tile the focused window.
+
 Neovim is installed with a lua LSP configured with Velvet autocomplete, so you can explore the API by editing config.lua if you wish.
 
 If you edit config.lua, you can apply the changes with the reload hot key: ${red}${bold}<C-x>r${reset}
 You can get a fresh environment by refreshing the page, or reloading with ${red}${bold}<C-x>r${reset}.
 
-You can also reload by sending a chunk to the socket with 
-${blue}${italic} > vv lua 'vv.api.reload()' ${reset}
+You can also reload by via the vv CLI:
+${blue}${italic} > vv reload ${reset}
 
 For more detailed information, check the man page.
 ${blue}${italic} > man velvet${reset}
