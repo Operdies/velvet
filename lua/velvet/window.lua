@@ -385,8 +385,8 @@ end
 
 --- Close the window. The instance wi
 function Window:close()
-  a.window_close(self.id)
   win_registry[self.id] = nil
+  if vv.api.window_is_valid(self.id) then a.window_close(self.id) end
 end
 
 --- Create a new window whose lifetime is tied to the parent window. If the parent window is closed, the child window is also closed. Otherwise, the windows are completely independent.
