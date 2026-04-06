@@ -391,20 +391,33 @@ drop_hint:set_visibility(false)
 
 local function drop_or_show_hint(w, args)
   local sz = vv.api.get_screen_geometry()
+  sz.width = sz.width - (r_left + r_right)
+  sz.height = sz.height - (r_top + r_bottom)
+
   local lw = #right_stack > 0 and math.floor(sz.width * state.mfact) or sz.width
   if #left_stack == 0 then lw = 0 end
   local rw = sz.width - lw
-
-  sz.width = sz.width - (r_left + r_right)
-  sz.height = sz.height - (r_top + r_bottom)
 
   local left_bias = round(sz.width / 3)
   local right_bias = 2 * round(sz.width / 3)
 
   local function get_drop_location()
+    local c = args.global_pos.col
     local side = nil
     if #left_stack > 0 and #right_stack > 0 then
-      side = args.global_pos.col <= lw and 'left' or 'right'
+      side = c <= lw and 'left' or 'right'
+    elseif #left_stack == 0 or #right_stack == 0 then
+      if c <= sz.width // 3 then
+        side = 'left'
+        state.nmaster = 0
+        arrange()
+      elseif c >= (2 * sz.width // 3) then
+        side = 'right'
+        state.nmaster = #left_stack + #right_stack
+        arrange()
+      else
+        side = #left_stack > 0 and 'left' or 'right'
+      end
     elseif #left_stack > 0 then
       side = args.global_pos.col <= right_bias and 'left' or 'right'
     elseif #right_stack > 0 then
@@ -415,7 +428,10 @@ local function drop_or_show_hint(w, args)
 
     local left = side == 'left' and 1 or lw
     local width = side == 'left' and lw or rw
-    if side == 'right' and #right_stack == 0 then
+    if #left_stack == 0 and #right_stack == 0 then
+      left = 1
+      width = sz.width
+    elseif side == 'right' and #right_stack == 0 then
       left = sz.width // 2
       width = 1 + sz.width - left
     elseif side == 'left' and #left_stack == 0 then
@@ -574,6 +590,7 @@ function dwm.set_view(view_tags)
   for i = 1, 9 do
     if new_view[i] ~= state.view[i] then
       set_view(new_view)
+      if dragging and not visibleontags(dragging.id) then state.tags[dragging.id] = vv.deepcopy(new_view) end
       arrange()
       return
     end
