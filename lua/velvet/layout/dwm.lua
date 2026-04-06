@@ -243,7 +243,13 @@ local function status_update()
   taskbar:set_visibility(show_status)
   if not show_status then return end
   local sz = vv.api.get_screen_geometry()
-  taskbar:set_geometry({ left = 1, top = sz.height, width = sz.width, height = 1 })
+  -- width-1: hack to allow grabbing the bottom right corner of a window.
+  -- This is not perfect because the bottom right corner in the middle of the taskbar
+  -- still cannot be grabbed, but better than nothing and not currently noticable.
+  -- The better solution would either be for a window to request mouse passthrough. 
+  -- (overlays could exist without intereferring with mouse input?)
+  local tgeom = { left = 1, top = sz.height, width = sz.width - 1, height = 1 }
+  taskbar:set_geometry(tgeom)
   taskbar:clear_background_color()
   taskbar:set_transparency_mode('clear')
   taskbar:set_alpha(0)
@@ -443,6 +449,8 @@ local function drop_or_show_hint(w, args)
     if current then table.remove(windows, current) end
     if side == 'left' then
       state.nmaster = state.nmaster + 1
+    elseif side == 'right' and state.nmaster > #left_stack then
+      state.nmaster = #left_stack
     end
     local before = nil
     if side == 'left' then before = left_stack[index] or right_stack[1] 
@@ -466,7 +474,7 @@ local function add_window(id, init)
   win:set_frame_enabled(true)
   win.on_drag = function(w, args)
     drop_hint:set_visibility(false)
-    if args.type == 'move_end' then 
+    if args.type == 'move_end' or args.type == 'resize_end' then 
       drop_hint:set_visibility(false)
       dragging = nil 
     end
@@ -485,7 +493,14 @@ local function add_window(id, init)
         arrange()
       end
       if args.modifiers.alt then drop_or_show_hint(w, args) end
-    else -- if argstype == 'resize_*'
+    elseif args.type == 'resize_continue' then
+      dragging = w
+      if state.layers[w.id] ~= 'floating' then
+        state.layers[w.id] = 'floating'
+        arrange()
+      end
+    elseif args.type == 'resize_end' then
+      dragging = nil
     end
   end
   windows[#windows + 1] = win.id

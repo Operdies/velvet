@@ -204,7 +204,7 @@ local function update_borders(self)
   b:set_cursor(1, 1)
   b:draw('└')
   b:set_cursor(geom.width + 2, 1)
-  b:draw('┘')
+  b:draw('╝')
 end
 
 local hooks = require('velvet.events').create_group('velvet_window_callback_manager', true)
@@ -297,6 +297,39 @@ local function top_border_drag(brd, args, event_name)
   local drow = grow - border_drag.row
   brd.parent:set_geometry({ left = border_drag.left + dcol, top = border_drag.top + drow, width = pg.width, height = pg.height })
   dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'move_start' or 'move_continue')
+end
+
+--- @param brd velvet.window
+--- @param args velvet.api.mouse.click.event_args|velvet.api.mouse.move.event_args
+--- @param event_name string
+local function corner_resize_drag(brd, args, event_name)
+  local geom = brd:get_geometry()
+  local pg = brd.parent:get_geometry()
+  local gcol, grow = args.pos.col + geom.left, args.pos.row + geom.top
+
+  local function dispatch_evt(drg, evt)
+    if brd.parent.on_drag then
+      brd.parent.on_drag(brd.parent, {
+        type = evt,
+        delta_pos = { col = gcol - drg.col, row = grow - drg.row },
+        global_pos = { col = args.pos.col + geom.left, row = args.pos.row + geom.top },
+        modifiers = args.modifiers,
+        local_pos = args.pos,
+      })
+    end
+  end
+
+  if event_name == 'mouse_click' and args.pos.col == geom.width and args.event_type == 'mouse_down' then
+    border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
+  elseif args.event_type == 'mouse_up' then
+    if border_drag then dispatch_evt(border_drag, 'resize_end') end
+    border_drag = nil
+  end
+  if not border_drag then return end
+
+  dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'resize_start' or 'resize_continue')
+  local new_geom = { left = border_drag.left, top = border_drag.top, width = gcol - border_drag.left - 1, height = grow - border_drag.top - 1 }
+  brd.parent:set_geometry(new_geom)
 end
 
 --- @type velvet.window | nil
@@ -541,6 +574,8 @@ function Window:set_frame_enabled(enabled)
     end
     self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
     self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse_move") end)
+    self.borders.bottom:on_mouse_click(function(win, args) corner_resize_drag(win, args, "mouse_click") end)
+    self.borders.bottom:on_mouse_move(function(win, args) corner_resize_drag(win, args, "mouse_move") end)
   end
   if not enabled and self.borders then
     for _, brd in pairs(self.borders) do
@@ -725,15 +760,18 @@ end
 
 --- Return a list of windows under |cord|, ordered by Z index.
 --- @param cord velvet.api.coordinate
+--- @param below_z integer? optional parameter to exclude windows above |below_z|
 --- @return velvet.window[] windows Windows under |cord|
-function Window.get_window_at_coordinate(cord)
+function Window.get_window_at_coordinate(cord, below_z)
   local windows = {}
   for _, win in pairs(win_registry) do
     if win:get_visibility() then
       local g = win:get_geometry()
       if cord.col >= g.left and cord.col < g.left + g.width
           and cord.row >= g.top and cord.row < g.top + g.height then
-        windows[#windows + 1] = win
+        if below_z == nil or win:get_z_index() < below_z then
+          windows[#windows + 1] = win
+        end
       end
     end
   end
