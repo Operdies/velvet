@@ -116,6 +116,7 @@ struct velvet_args {
   bool attach;
   bool foreground;
   bool quit;
+  bool reload;
   bool detach;
   char *lua;
   char *socket;
@@ -132,6 +133,7 @@ static void usage(char *arg0) {
          "  foreground              Start a server as a foreground process.\n"
          "  lua [<code>|-]          Execute <code> as a lua chunk. If <code> is not provided, or '-' is specified, read from stdin.\n"
          "  quit                    Quit the velvet session, killing all windows\n"
+         "  reload                  Reload the velvet session, resourcing configs\n"
          "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
          "  -h, --help              Show this help text and exit.\n"
          , arg0);
@@ -170,6 +172,10 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       n_commands++;
       if (a.detach) velvet_fatal("detach specified multiple times.");
       a.detach = true;
+    } else if (F(reload)) {
+      n_commands++;
+      if (a.reload) velvet_fatal("reload specified multiple times.");
+      a.reload = true;
     } else if (F(quit)) {
       n_commands++;
       if (a.quit) velvet_fatal("quit specified multiple times.");
@@ -189,6 +195,8 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
 
   if (a.quit) {
     a.lua = "vv.api.quit()";
+  } else if (a.reload) {
+    a.lua = "vv.api.reload()";
   } else if (a.detach) {
     a.lua = "vv.api.session_detach(vv.api.get_active_session())";
   }
