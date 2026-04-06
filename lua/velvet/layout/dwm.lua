@@ -456,7 +456,7 @@ local function drop_or_show_hint(w, args)
     drop_hint:set_visibility(true)
     drop_hint:set_alpha(0.5)
     drop_hint:set_background_color('red')
-    drop_hint:set_z_index(vv.z_hint.overlay)
+    drop_hint:set_z_index(vv.z_hint.floating - 1)
     drop_hint:clear()
   end
 
