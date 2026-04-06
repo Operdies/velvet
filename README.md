@@ -9,6 +9,10 @@ to create a truly custom velvet configuration. But 99% of users will want to use
 
 Velvet is tested on Linux and macOS. It may or may not work on other unixes. (Makefile patching required for sure)
 
+## Try it out
+
+Try the live web demo at https://velvet.opie.lol
+
 ## Dependencies
 
 Velvet depends on [lua version 5.5](https://www.lua.org/download.html)
@@ -21,15 +25,15 @@ I also recommend installing a [patched nerd font](https://github.com/ryanoasis/n
 
 ## Installation
 
-Velvet is not yet packaged anywhere, and does not provide a `make install` target. (Coming soon!)
-
-To get started, install `make` and a C compiler (tested with gcc and clang), and run release/vv
+Velvet is not packaged. You will need to compile from source. This should be simple since Velvet only depends on `make` and
+a C compiler. (tested with gcc and clang)
 
 ```sh
-$ make
-$ ./release/vv
+$ make install
 ```
+
+This installs velvet to PREFIX (default /usr/local)
 
 ## Documentation
 
-For documentation, check the manual pages. `man doc/velvet.1`
+For documentation, check the manual pages. `man doc/velvet.1`, included with `make install`.
