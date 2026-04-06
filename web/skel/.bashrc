@@ -29,6 +29,7 @@ blue=$(printf '\x1b[34m')
 bold=$(printf '\x1b[1m')
 italic=$(printf '\x1b[3m')
 reset=$(printf '\x1b[m')
+
 cat <<MOTD
 ${bold}Welcome to Velvet!${reset}
 
@@ -36,14 +37,12 @@ Velvet is a fully scriptable terminal multiplexer which draws heavy inspiration 
 Like tmux, velvet enables controlling multiple terminals from the same screen.
 Like neovim, velvet enables scripting nearly all system behavior through a LUA API.
 
-To view current keybindings, press ${red}${bold}<C-x>h${reset}. This menu is automatically updated if you add ned bindings.
+To view current keybindings, press ${red}${bold}<C-x>h${reset}. This menu is automatically updated if you add new bindings.
 
-To get started, check out the samples in the home directory.
+Neovim is installed with a lua LSP configured with Velvet autocomplete, so you can explore the API by editing config.lua if you wish.
+
 If you edit config.lua, you can apply the changes with the reload hot key: ${red}${bold}<C-x>r${reset}
-
-Neovim is installed with a lua LSP configured with Velvet autocomplete,
-so you can explore the samples if you wish.
-You can get a fresh environment by refreshing the page or reloading with ${red}${bold}<C-x>r${reset}.
+You can get a fresh environment by refreshing the page, or reloading with ${red}${bold}<C-x>r${reset}.
 
 You can also reload by sending a chunk to the socket with 
 ${blue}${italic} > vv lua 'vv.api.reload()' ${reset}
