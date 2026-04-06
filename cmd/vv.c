@@ -54,24 +54,6 @@ static void install_signal_handlers(int *pipes) {
   signal(SIGTSTP, SIG_IGN);
 }
 
-static void add_bindir_to_path(void) {
-  char *exe_path = platform_get_exe_path();
-  char *path_var = getenv("PATH");
-  if (!path_var) { free(exe_path); return; }
-
-  // trim exe path to directory
-  char *last_slash = strrchr(exe_path, '/');
-  if (last_slash) *last_slash = 0;  // truncate in place
-
-  struct string new_path = {0};
-  string_join(&new_path, ':', exe_path, path_var);
-  string_ensure_null_terminated(&new_path);
-  setenv("PATH", (char*)new_path.content, true);
-
-  string_destroy(&new_path);
-  free(exe_path);
-}
-
 static bool file_exists(const char *path) {
   struct stat st;
   return stat(path, &st) == 0;
@@ -298,7 +280,6 @@ int main(int argc, char **argv) {
     printf("Server listening at %s\n", getenv("VELVET"));
   }
 
-  add_bindir_to_path();
   int signal_pipes[2];
   install_signal_handlers(signal_pipes);
   signal_write = signal_pipes[1];
