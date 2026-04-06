@@ -24,7 +24,11 @@ e.session_on_key = function(args)
     elseif k == 'j' then
       vv.api.window_set_scroll_offset(w.id, vv.api.window_get_scroll_offset(w.id) + -1)
     else
-      M.hide()
+      -- schedule: inhibit the key event which closed the window.
+      -- This is needed because session_on_key is more low level than window_on_key,
+      -- so it may not have been routed to the help window yet. By scheduling the hide() call,
+      -- we ensure it is swallowed only if the help window would be the target.
+      vv.api.schedule_after(0, M.hide)
     end
   end
 end
