@@ -12,6 +12,7 @@ local pick = {}
 --- @class pick.options
 --- @field prompt? string
 --- @field on_choice fun(pick.item): nil
+--- @field on_preview? fun(pick.item): nil
 --- @field on_cancel? fun(): nil
 --- @field mappings? pick.mapping[]
 --- @field initial_selection? integer initial selection
@@ -54,6 +55,7 @@ function pick.select(items, opts)
   local prev_focus = vv.api.get_focused_window()
   picker:focus()
 
+  local prev_selection = nil
   local index = opts.initial_selection or 1
   local snapshot = {}
   local filter = ''
@@ -90,6 +92,14 @@ function pick.select(items, opts)
       end
       picker:set_cursor(1, idx)
       picker:draw(("\x1b[K%s"):format(snapshot[idx].text))
+    end
+
+    if opts.on_preview then
+      local item = index > 0 and index <= #snapshot and snapshot[index]
+      if item and item ~= prev_selection then
+        opts.on_preview(item)
+      end
+      prev_selection = item
     end
   end
 
@@ -172,6 +182,10 @@ function pick.select(items, opts)
 
   draw()
 
+end
+
+function pick.get_active_picker()
+  return picker and picker:valid() and picker:get_visibility() and picker
 end
 
 return pick

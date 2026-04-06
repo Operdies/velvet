@@ -215,7 +215,7 @@ end
 
 hooks.window_closed = function(win)
   local w = win_registry[win.win_id]
-  if w.on_window_closed_handler then pcall(w.on_window_closed_handler, win) end
+  if w and w.on_window_closed_handler then pcall(w.on_window_closed_handler, win) end
   win_registry[win.win_id] = nil
 end
 
@@ -705,6 +705,11 @@ function Window:set_alpha(alpha)
     end
   end
   a.window_set_alpha(self.id, alpha)
+end
+
+--- @return number alpha Window alpha (0.0 - 1.0)
+function Window:get_alpha()
+  return a.window_get_alpha(self.id)
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.mouse.click.event_args)
