@@ -426,13 +426,13 @@ local function drop_or_show_hint(w, args)
       side = 'left'
     end
 
-    local left = side == 'left' and 1 or lw
+    local left = side == 'left' and 1 or 1 + lw
     local width = side == 'left' and lw or rw
     if #left_stack == 0 and #right_stack == 0 then
       left = 1
       width = sz.width
     elseif side == 'right' and #right_stack == 0 then
-      left = sz.width // 2
+      left = 1 + sz.width // 2
       width = 1 + sz.width - left
     elseif side == 'left' and #left_stack == 0 then
       left = 1
