@@ -25,8 +25,10 @@ I also recommend installing a [patched nerd font](https://github.com/ryanoasis/n
 
 ## Installation
 
-Velvet is not packaged. You will need to compile from source. This should be simple since Velvet only depends on `make` and
-a C compiler. (tested with gcc and clang)
+Velvet is not packaged. You need to compile it from source. This should be
+simple since building Velvet only requires `make`, `git`, and a C compiler
+(tested with `gcc` and `clang`). An internet connection is required on the first
+build to pull utf8proc.
 
 ```sh
 $ make install
@@ -36,4 +38,8 @@ This installs velvet to PREFIX (default /usr/local)
 
 ## Documentation
 
-For documentation, check the manual pages. `man doc/velvet.1`, included with `make install`.
+For documentation, check the manual pages installedby `make install`.
+
+``` sh
+$ man velvet
+```
