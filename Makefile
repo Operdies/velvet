@@ -32,7 +32,7 @@ BUILD ?= release
 INCLUDE_DIR = -I$(abspath .)/include -I$(abspath .)/deps -I$(LUA_INCLUDE) -I$(abspath .)/$(GEN_DIR)
 DEBUG_DIR ?= debug
 RELEASE_DIR ?= release
-COMMANDS = vv test
+COMMANDS = vv test throughput
 CMD_DIR = cmd
 
 DEBUG_CMD_OBJECTS  = $(patsubst $(CMD_DIR)/%.c, $(DEBUG_DIR)/%.c.o, $(COMMANDS:%=$(CMD_DIR)/%.c))
