@@ -206,7 +206,7 @@ static void ground_accept(struct vte *vte) {
     vte->pending_symbol = (struct utf8){0};
     return;
   }
-  struct screen_cell c = { .cp = symbol, .style = vte_get_current_screen(vte)->cursor.brush, .link = vte->current_link };
+  struct screen_cell c = { .cp = symbol, .style = g->cursor.brush, .link = vte->current_link };
   screen_insert(g, c, vte->options.auto_wrap_mode);
   vte->previous_symbol = symbol;
   vte->pending_symbol = (struct utf8){0};
@@ -566,6 +566,30 @@ void vte_process(struct vte *vte, struct u8_slice str) {
         vte->previous_symbol = (struct codepoint){.value = run.content[run.len - 1]};
         i = j;
       }
+
+      { /* unicode fastpath */
+        struct screen *g = vte_get_current_screen(vte);
+        struct codepoint cp = {0};
+        bool wrap = vte->options.auto_wrap_mode;
+        struct screen_cell_style brush = g->cursor.brush;
+        hyperlink_handle link = vte->current_link;
+        int n = 0;
+        for (; j + 3 < str.len; j += n) {
+          cp = utf8_to_codepoint(&str.content[j], &n);
+          if (n < 2) break;
+          int width = utf8proc_charwidth(cp.value);
+          if (width == 0) {
+            TODO("grapheme clusters");
+            continue;
+          }
+          struct screen_cell c = { .cp = cp, .style = brush, .link = link };
+          screen_insert(g, c, wrap);
+        }
+        if (cp.value) vte->previous_symbol = cp;
+        vte->pending_symbol = (struct utf8){0};
+        i = j;
+      }
+
       if (j >= str.len) break;
     }
     uint8_t ch = str.content[i];

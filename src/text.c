@@ -57,7 +57,8 @@ struct codepoint utf8_to_codepoint(const uint8_t utf8[4], int *len) {
     *len = 1;
   }
 
-  cp.is_wide = utf8proc_charwidth(cp.value) > 1;
+  /* exploit the fact that all wide chars are 3 or more bytes */
+  cp.is_wide = *len > 2 && utf8proc_charwidth(cp.value) > 1;
   return cp;
 }
 
