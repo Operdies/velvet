@@ -47,8 +47,6 @@ function pick.select(items, opts)
   picker:set_frame_color('red')
   picker:set_z_index(vv.z_hint.popup)
   picker:clear_background_color()
-  picker:set_alpha(0.8)
-  picker:set_transparency_mode('all')
   picker:set_cursor_visible(false)
   picker:set_visibility(true)
 

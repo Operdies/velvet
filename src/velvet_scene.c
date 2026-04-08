@@ -713,7 +713,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         }
 
         bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
-                     (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above));
+                     (trns.transparency && (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above)));
 
         if (a_norm.style.bg.transparency) {
           above = normalize_cell(t, above);
