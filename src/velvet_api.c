@@ -342,13 +342,8 @@ struct velvet_api_mouse_settings vv_api_window_get_mouse_settings(struct velvet 
   return s;
 }
 
-static int traceback_msgh(lua_State *L) {
-  luaL_traceback(L, L, lua_tostring(L, 1), 1);
-  return 1;
-}
-
 static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
-  lua_pushcfunction(L, traceback_msgh);
+  lua_pushcfunction(L, lua_debug_traceback_handler);
   int msgh = lua_gettop(L);
   lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
 

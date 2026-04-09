@@ -19,6 +19,11 @@ static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   return ptr;
 }
 
+int lua_debug_traceback_handler(lua_State *L) {
+  luaL_traceback(L, L, lua_tostring(L, 1), 1);
+  return 1;
+}
+
 static int l_velvet_log(lua_State *L) {
   const char *str = luaL_checkstring(L, 1);
   velvet_log("lua: %s", str);

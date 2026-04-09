@@ -1,5 +1,6 @@
 local ev = require('velvet.events')
 local inspect = require('velvet.inspect').inspect
+local cli = require('velvet.cli_commands')
 ---@class vv
 local vv = {
   --- This is a hint for managiging z indices.
@@ -22,6 +23,8 @@ local vv = {
     --- which tints all content and intercepts mouse input
     overlay = 100000,
   },
+
+  cli = cli,
 
   --- Emit a log message, possibly picked up by log listeners.
   --- @param message any
@@ -127,6 +130,21 @@ vv.options = setmetatable(vv.options, {
     end
     return vv.api["set_" .. k](v, {})
   end,
+})
+
+-- quit() and reload() are wrapped because the vv functions have not been loaded yet.
+cli.add_command({ name = "quit", action = function() vv.api.quit() end, description = "Quit the velvet session, killing all windows" });
+cli.add_command({ name = "reload", action = function() vv.api.reload() end, description = "Reload the velvet session, resourcing configs" });
+cli.add_command({
+  name = "detach",
+  action = function() vv.api.session_detach(vv.api.get_active_session()) end,
+  description =
+  "Detach the current terminal from the session"
+});
+cli.add_command({
+  name = "spawn",
+  action = function(_, args) vv.api.window_create_process(args) end,
+  description = "Spawn a new window running the provided command."
 })
 
 --- @class inspect.format_options

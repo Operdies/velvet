@@ -1178,14 +1178,8 @@ int main(void) {
 #include "lauxlib.h"
 #include "lua.h"
 
-static int traceback_handler(lua_State *L) {
-  const char *msg = lua_tostring(L, 1);
-  luaL_traceback(L, L, msg, 1);
-  return 1;
-}
-
 static void lua_assert(lua_State *L, char *cmd) {
-  lua_pushcfunction(L, traceback_handler);
+  lua_pushcfunction(L, lua_debug_traceback_handler);
   int handler_idx = lua_gettop(L);
 
   if (luaL_loadstring(L, cmd) != LUA_OK) {

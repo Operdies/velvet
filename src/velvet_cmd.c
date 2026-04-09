@@ -1,6 +1,7 @@
 #include "velvet.h"
 #include "lauxlib.h"
 #include "utils.h"
+#include "velvet_lua.h"
 #include <errno.h>
 
 
@@ -33,6 +34,8 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   lua_State *L = v->L;
   set_nonblocking(source_socket);
 
+  lua_pushcfunction(L, lua_debug_traceback_handler);
+  int msgh = lua_gettop(L);
   // Build a custom env: setmetatable({print = socket_print}, {__index = _G})
   lua_pushinteger(L, source_socket);
   lua_pushcclosure(L, l_socket_print, 1); // socket_print (socket as upvalue)
@@ -58,13 +61,26 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   } else {
     lua_pushvalue(L, env_idx);
     lua_setupvalue(L, -2, 1); // chunk._ENV = env
-    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+    if (lua_pcall(L, 0, 1, msgh) != LUA_OK) {
       size_t len = 0;
       const char *err = lua_tolstring(L, -1, &len);
       if (source_socket)
         write(source_socket, err, len);
       else
         velvet_log("lua cmd error: %s", err);
+    } else {
+      struct u8_slice s = {0};
+      if (!lua_isnoneornil(L, -1)) {
+        if (lua_istable(L, -1)) {
+          lua_getglobal(L, "vv");
+          lua_getfield(L, -1, "inspect");
+          lua_pushvalue(L, -3);
+          lua_pcall(L, 1, 1, 0);
+        }
+        s.content = (uint8_t*)lua_tolstring(L, -1, &s.len);
+        if (s.content && source_socket)
+          write(source_socket, s.content, s.len);
+      }
     }
   }
 

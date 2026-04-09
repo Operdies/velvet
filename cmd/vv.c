@@ -115,14 +115,12 @@ static int create_socket(char *path) {
 struct velvet_args {
   bool attach;
   bool foreground;
-  bool quit;
-  bool reload;
-  bool detach;
   char *lua;
   char *socket;
-  int n_rest;
+  char **cmd;
 };
 
+static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload);
 static void vv_send_lua_chunk(struct velvet_args args);
 static void vv_attach(struct velvet_args args);
 
@@ -168,40 +166,31 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       n_commands++;
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
       a.foreground = true;
-    } else if (F(detach)) {
-      n_commands++;
-      if (a.detach) velvet_fatal("detach specified multiple times.");
-      a.detach = true;
-    } else if (F(reload)) {
-      n_commands++;
-      if (a.reload) velvet_fatal("reload specified multiple times.");
-      a.reload = true;
-    } else if (F(quit)) {
-      n_commands++;
-      if (a.quit) velvet_fatal("quit specified multiple times.");
-      a.quit = true;
     } else if (F(attach)) {
       if (nested) velvet_fatal("Nesting velvet sessions is not supported.");
       n_commands++;
       if (a.attach) velvet_fatal("attach specified multiple times.");
       a.attach = true;
+    } else if (F(--)) {
+      /* double dash terminates argument parsing.
+       * Assume the rest of the command line is intended for the lua cli api.
+       * This way, it becomes possible to create a lua cli command with
+       * the name 'foreground' for example, or any other word which velvet might reserve in the future.
+       */
+      if (!NEXT()) velvet_fatal("No command specified");
+      n_commands++;
+      a.cmd = &argv[i];
+      break;
     } else {
-      usage(argv[0]);
-      exit(1);
+      n_commands++;
+      a.cmd = &argv[i];
+      break;
     }
   }
 
   if (n_commands > 1) velvet_fatal("Multiple commands specified.");
 
-  if (a.quit) {
-    a.lua = "vv.api.quit()";
-  } else if (a.reload) {
-    a.lua = "vv.api.reload()";
-  } else if (a.detach) {
-    a.lua = "vv.api.session_detach(vv.api.get_active_session())";
-  }
-
-  if (a.lua) {
+  if (a.lua || a.cmd) {
     if (!a.socket) a.socket = getenv("VELVET");
     if (!a.socket) velvet_fatal("Unable to send command; Either specify the --socket or set $VELVET to a socket path.");
   }
@@ -241,6 +230,18 @@ static bool daemonize(void) {
   }
 }
 
+static void vv_send_cmd(struct velvet_args args) {
+  struct string lua_buf = {0};
+  string_push_format_slow(&lua_buf, "return vv.cli.execute([==[%s]==], {", args.cmd[0]);
+  for (char **cmd = &args.cmd[1]; *cmd; cmd++) {
+    string_push_format_slow(&lua_buf, "[==[%s]==], ", *cmd);
+  }
+  string_push_cstr(&lua_buf, "})\n");
+
+  vv_send_lua_payload(args, u8_slice_from_string(lua_buf));
+  string_destroy(&lua_buf);
+}
+
 int main(int argc, char **argv) {
   setlocale(LC_CTYPE, "");
   setenv("TERM", "xterm-256color", true);
@@ -257,6 +258,11 @@ int main(int argc, char **argv) {
 
   if (args.lua) {
     vv_send_lua_chunk(args);
+    return 0;
+  }
+
+  if (args.cmd) {
+    vv_send_cmd(args);
     return 0;
   }
 
@@ -473,9 +479,48 @@ struct vv_source {
   struct io loop;
 };
 
-static void vv_send_lua_chunk(struct velvet_args args) {
+static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload) {
   char buf[4096];
   int sockfd = vv_connect(args.socket);
+
+  /* overcommit 2x the memory we need. This is not wasteful because the pages don't get
+   * committed before they are written, but required because the allocator needs a small amount of
+   * space for metadata. This is basically a fix for the edge case where payload.len is exactly equal to the system
+   * page size. */
+  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * payload.len);
+  char *chunk = shmem->calloc(shmem, payload.len, 1);
+  memcpy(chunk, payload.content, payload.len);
+  struct vv_lua_payload magic_header = {
+      /* recipient needs to know the offset of the allocation */
+      .chunk_offset = chunk - (char *)shmem,
+      .chunk_length = payload.len,
+      .magic = VV_LUA_MAGIC,
+  };
+
+  int fd = velvet_alloc_shmem_get_fd(shmem);
+  if (socket_send_files(sockfd, &fd, 1, &magic_header, sizeof(magic_header)) == -1) {
+    velvet_fatal("send mmap:");
+  }
+  /* the server owns the mmap now, so we can close it */
+  velvet_alloc_shmem_destroy(shmem, fd);
+
+  int n = 0;
+  do {
+    n = 0;
+    struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
+    /* if polling takes more than a second, assume the server is stuck --
+     * this could be caused by trying to write to the window hosting this very 
+     * process, so let's be kind and unfreeze it */
+    if (poll(&pfd, 1, 1000) > 0) {
+      n = read(sockfd, buf, sizeof(buf));
+      printf("%.*s", n, buf);
+    }
+  } while (n > 0);
+  close(sockfd);
+}
+
+static void vv_send_lua_chunk(struct velvet_args args) {
+  char buf[4096];
 
   struct string stdin_buf = {0};
   const char *code = args.lua;
@@ -489,39 +534,8 @@ static void vv_send_lua_chunk(struct velvet_args args) {
     codelen = stdin_buf.len;
   }
 
-
-  /* overcommit 2x the memory we need. This is not wasteful because the pages don't get
-   * committed before they are written, but required because the allocator needs a small amount of
-   * space for metadata. This is basically a fix for the edge case where payload.len is exactly equal to the system
-   * page size. */
-  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * codelen);
-  char *chunk = shmem->calloc(shmem, codelen, 1);
-  memcpy(chunk, code, codelen);
-  struct vv_lua_payload magic_header = {
-    /* recipient needs to know the offset of the allocation */
-    .chunk_offset = chunk - (char*)shmem,
-    .chunk_length = codelen,
-    .magic = VV_LUA_MAGIC,
-  };
+  vv_send_lua_payload(args, (struct u8_slice) { .content = (uint8_t*)code, .len = codelen });
   string_destroy(&stdin_buf);
-
-  int fd = velvet_alloc_shmem_get_fd(shmem);
-  if (socket_send_files(sockfd, &fd, 1, &magic_header, sizeof(magic_header)) == -1) {
-    velvet_fatal("send mmap:");
-  }
-  /* the server owns the mmap now, so we can close it */
-  velvet_alloc_shmem_destroy(shmem, fd);
-
-  int n = 0;
-  do {
-    n = 0;
-    struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
-    if (poll(&pfd, 1, -1) > 0) {
-      n = read(sockfd, buf, sizeof(buf));
-      printf("%.*s", n, buf);
-    }
-  } while (n > 0);
-  close(sockfd);
 }
 
 struct vv_attach_context {
