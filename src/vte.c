@@ -550,47 +550,62 @@ static bool is_ascii(uint8_t ch) {
   return ch >= SPC && ch < DEL;
 }
 
+static int ascii_fastpath(struct vte *vte, struct u8_slice str, size_t i) {
+  /* consume as many ascii characters as we can in a single run.
+   * In a pure ascii run, grid insertion can be made much faster because
+   * we don't need to account for state machine changes, such as cell style and wrapping behavior. */
+  size_t j = i;
+  for (; j < str.len && is_ascii(str.content[j]); j++);
+  if (j > i) {
+    struct screen *s = vte_get_current_screen(vte);
+    struct screen_cell_style style = s->cursor.brush;
+    bool wrap = vte->options.auto_wrap_mode;
+    struct u8_slice run = u8_slice_range(str, i, j);
+    screen_insert_ascii_run(s, style, run, wrap, vte->current_link);
+    vte->previous_symbol = (struct codepoint){.value = run.content[run.len - 1]};
+  }
+  return j;
+}
+
+static int unicode_fastpath(struct vte *vte, struct u8_slice str, size_t j) {
+  /* consume as many unicode characters as we can.
+   * This is not as dramatic as the ascii fastpath because we now need to account
+   * for character width, and collecting a "run" of characters would require copying the variable-length
+   * encoded input to a fixed-length buffer.
+
+   * The primary win here is spending less time going through the state machine,
+   * and more time decoding characters. (measured ~2x performance boost)
+   * */
+  struct screen *g = vte_get_current_screen(vte);
+  struct codepoint cp = {0};
+  bool wrap = vte->options.auto_wrap_mode;
+  struct screen_cell_style brush = g->cursor.brush;
+  hyperlink_handle link = vte->current_link;
+  int n = 0;
+  for (; j + 3 < str.len; j += n) {
+    cp = utf8_to_codepoint(&str.content[j], &n);
+    if (n < 2) break;
+    int width = utf8proc_charwidth(cp.value);
+    if (width == 0) {
+      TODO("grapheme clusters");
+      continue;
+    }
+    struct screen_cell c = {.cp = cp, .style = brush, .link = link};
+    screen_insert(g, c, wrap);
+  }
+  if (cp.value) vte->previous_symbol = cp;
+  vte->pending_symbol = (struct utf8){0};
+  return j;
+}
+
 void vte_process(struct vte *vte, struct u8_slice str) {
   assert(vte->ws.height);
   assert(vte->ws.width);
   for (size_t i = 0; i < str.len; i++) {
     if (vte->state == vte_ground) {
-      size_t j = i;
-      for (; j < str.len && is_ascii(str.content[j]); j++);
-      if (j > i) {
-        struct screen *s = vte_get_current_screen(vte);
-        struct screen_cell_style style = s->cursor.brush;
-        bool wrap = vte->options.auto_wrap_mode;
-        struct u8_slice run = u8_slice_range(str, i, j);
-        screen_insert_ascii_run(s, style, run, wrap, vte->current_link);
-        vte->previous_symbol = (struct codepoint){.value = run.content[run.len - 1]};
-        i = j;
-      }
-
-      { /* unicode fastpath */
-        struct screen *g = vte_get_current_screen(vte);
-        struct codepoint cp = {0};
-        bool wrap = vte->options.auto_wrap_mode;
-        struct screen_cell_style brush = g->cursor.brush;
-        hyperlink_handle link = vte->current_link;
-        int n = 0;
-        for (; j + 3 < str.len; j += n) {
-          cp = utf8_to_codepoint(&str.content[j], &n);
-          if (n < 2) break;
-          int width = utf8proc_charwidth(cp.value);
-          if (width == 0) {
-            TODO("grapheme clusters");
-            continue;
-          }
-          struct screen_cell c = { .cp = cp, .style = brush, .link = link };
-          screen_insert(g, c, wrap);
-        }
-        if (cp.value) vte->previous_symbol = cp;
-        vte->pending_symbol = (struct utf8){0};
-        i = j;
-      }
-
-      if (j >= str.len) break;
+      i = ascii_fastpath(vte, str, i);
+      i = unicode_fastpath(vte, str, i);
+      if (i >= str.len) break;
     }
     uint8_t ch = str.content[i];
     switch (vte->state) {
