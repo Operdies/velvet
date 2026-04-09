@@ -525,6 +525,11 @@ return {
       doc = "Get the directory whcih velvet was started in.",
       returns = { type = "string", doc = "startup directory" },
     },
+    {
+      name = "get_mouse_position",
+      doc = "Get the last recorded mouse position",
+      returns = { type = "coordinate", doc = "The last recorded mouse position" },
+    },
     --- Windows {{{2
     {
       name = "get_windows",

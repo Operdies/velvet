@@ -266,6 +266,10 @@ function api.reload() end
 --- @return string ret startup directory
 function api.get_startup_directory() end
 
+--- Get the last recorded mouse position
+--- @return velvet.api.coordinate ret The last recorded mouse position
+function api.get_mouse_position() end
+
 --- Get the IDs of all windows.
 --- @return integer[] ret List of window IDs
 function api.get_windows() end

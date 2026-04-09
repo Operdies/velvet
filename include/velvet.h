@@ -27,6 +27,7 @@ struct velvet_input_options {
 };
 
 struct velvet_input {
+  struct velvet_api_coordinate last_mouse_position;
   enum velvet_input_state state;
   struct string command_buffer;
   struct velvet_input_options options;

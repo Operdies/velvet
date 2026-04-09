@@ -774,6 +774,7 @@ void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_sc
 
 static void emit_mouse_event(struct velvet *v, struct mouse_sgr sgr, int win_id) {
   struct velvet_api_coordinate pos = {.col = sgr.column, .row = sgr.row};
+  v->input.last_mouse_position = pos;
   enum velvet_api_mouse_event_type evt = sgr.click_state;
   enum velvet_api_mouse_button btn = sgr.button_state;
   enum velvet_api_scroll_direction sd = sgr.scroll_direction;

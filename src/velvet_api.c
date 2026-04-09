@@ -1166,3 +1166,7 @@ lua_Integer vv_api_get_scrollback_scroll_multiplier(struct velvet *v) {
 lua_Integer vv_api_set_scrollback_scroll_multiplier(struct velvet *v, lua_Integer new_value) {
   return v->input.options.scroll_multiplier = new_value;
 }
+
+struct velvet_api_coordinate vv_api_get_mouse_position(struct velvet *v) {
+  return v->input.last_mouse_position;
+}
