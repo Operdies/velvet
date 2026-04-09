@@ -27,6 +27,7 @@ end
 
 
 local window = require('velvet.window')
+local rect = require('velvet.ui.rect')
 
 local r_left = 0
 local r_top = 0
@@ -70,7 +71,6 @@ local state = session_options.state
 --- @param to velvet.api.rect
 local function win_move(win, to)
   local a = require('velvet.ui.animation')
-  local rect = require('velvet.ui.rect')
   local client_area = to
   -- if this window has a frame, shrink the client area.
   if win:get_frame_enabled() then client_area = rect.inset(to, 1) end
@@ -105,13 +105,10 @@ local function calc_win_stack(left, top, width, height, count)
   return geoms
 end
 
---- @param left integer leftmost column of stacking area
---- @param top integer topmost row of stacking area
---- @param width integer width of stacking area
---- @param height integer height of stacking area
+--- @param geom velvet.api.rect geometry
 --- @param lst velvet.window[] windows to stack
-local function win_stack(left, top, width, height, lst)
-  local geoms = calc_win_stack(left, top, width, height, #lst)
+local function win_stack(geom, lst)
+  local geoms = calc_win_stack(geom.left, geom.top, geom.width, geom.height, #lst)
   for i, win in ipairs(lst) do
     win_move(win, geoms[i])
   end
@@ -374,9 +371,21 @@ local function tile()
 
   local left = 1 + r_left
   local top = 1 + r_top
-  win_stack(left, top, master_width, term.height, left_stack)
+  local left_geom = { left = left, top = top, width = master_width, height = term.height }
+  if #left_stack == 1 and #right_stack == 0 then 
+    left_geom.width = master_width + 2
+    left_geom.left = left - 1
+    left_geom.top = top - 1
+  end
+  win_stack(left_geom, left_stack)
   if #right_stack > 0 then
-    win_stack(master_width + left, top, term.width - master_width, term.height, right_stack)
+    local g = { left = master_width + left, top = top, width = term.width - master_width, height = term.height }
+    if #left_stack == 0 and #right_stack == 1 then
+      g.left = g.left - 1
+      g.width = g.width + 2
+      g.top = g.top - 1
+    end
+    win_stack(g, right_stack)
   end
 
   ensure_focus_visible()
