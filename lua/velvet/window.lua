@@ -248,6 +248,12 @@ hooks.window_focus_changed = function(args)
   end
 end
 
+hooks.screen_resized = function (args)
+  for _, w in pairs(win_registry) do
+    if w.on_screen_resized_handler then w:on_screen_resized_handler(args) end
+  end
+end
+
 --- @alias mouse_event
 --- | 'mouse_click'
 --- | 'mouse_move'
@@ -725,6 +731,11 @@ end
 --- @param handler fun(self: velvet.window, args: velvet.api.mouse.move.event_args)
 function Window:on_mouse_move(handler)
   self.on_mouse_move_handler = handler
+end
+
+--- @param handler fun(self: velvet.window, args: velvet.api.screen.resized.event_args)
+function Window:on_screen_resized(handler)
+  self.on_screen_resized_handler = handler
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.window.closed.event_args)
