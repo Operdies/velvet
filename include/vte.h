@@ -121,7 +121,6 @@ struct mouse_options {
   enum mouse_tracking tracking;
   enum mouse_mode mode;
   bool alternate_scroll_mode; // 1007
-  bool urxv5;                 // 1015
   bool readline_mouse1;       // 2001
   bool readline_mouse2;       // 2002
   bool readline_mouse3;       // 2003

@@ -333,6 +333,15 @@ lua_stackRetCount vv_api_window_get_text(lua_State *L, lua_Integer win_id, struc
   return 1;
 }
 
+struct velvet_api_mouse_settings vv_api_window_get_mouse_settings(struct velvet *v, lua_Integer win_id) {
+  struct velvet_window *w = check_window(v, win_id);
+  struct velvet_api_mouse_settings s = {
+      .protocol = (enum velvet_api_mouse_protocol)w->emulator.options.mouse.mode,
+      .reporting = (enum velvet_api_mouse_reporting)w->emulator.options.mouse.tracking,
+  };
+  return s;
+}
+
 static int traceback_msgh(lua_State *L) {
   luaL_traceback(L, L, lua_tostring(L, 1), 1);
   return 1;

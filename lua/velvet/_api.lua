@@ -14,6 +14,19 @@ local api = {}
 ---| 'warning' 
 ---| 'error' 
 
+---@alias velvet.api.mouse_reporting string Mouse reporting mode.
+---| 'off' Never report mouse events.
+---| 'click' Report mouse click events.
+---| 'cell_motion' Report mouse events on move while a mouse button is down.
+---| 'all_motion' Report mouse events on move.
+
+---@alias velvet.api.mouse_protocol string The protocol to use for mouse reporting
+---| 'off' No mouse reporting.
+---| 'sgr' Coordinates encoded as SGR sequences.
+---| 'utf8' Coordinates encoded as utf8.
+---| 'urxvt' urxvt encoding
+---| 'sgr_pixel' Coordinates encoded as SGR sequences. Encoded as pixel positions instead of cell coordinates.
+
 ---@alias velvet.api.brush string A named brush
 ---| 'background' 
 ---| 'foreground' 
@@ -64,6 +77,10 @@ local api = {}
 ---| 'mouse_down' 
 ---| 'mouse_up' 
 
+
+--- @class velvet.api.mouse_settings
+--- @field reporting velvet.api.mouse_reporting nil
+--- @field protocol velvet.api.mouse_protocol nil
 
 --- @class velvet.api.rgb_color
 --- @field red number nil
@@ -285,6 +302,11 @@ function api.window_get_alpha(win_id) end
 --- @param region velvet.api.rect The region to get text from
 --- @return velvet.api.line[] ret The text in the specified region.
 function api.window_get_text(win_id, region) end
+
+--- Get the mouse settings of |win_id|
+--- @param win_id integer Window id
+--- @return velvet.api.mouse_settings ret The mouse settings of |win_id|.
+function api.window_get_mouse_settings(win_id) end
 
 --- Set window alpha. The effect of this depends on the value of |window_get_transparency_mode|
 --- @param win_id integer Window id

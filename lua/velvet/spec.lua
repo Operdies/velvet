@@ -115,6 +115,30 @@ return {
       },
     },
     {
+      name = "mouse_reporting",
+      doc = "Mouse reporting mode.",
+      flags = false,
+      values = {
+        { name = "off",         value = 0,    doc = "Never report mouse events." },
+        { name = "click",       value = 1000, doc = "Report mouse click events." },
+        { name = "cell_motion", value = 1002, doc = "Report mouse events on move while a mouse button is down." },
+        { name = "all_motion",  value = 1003, doc = "Report mouse events on move." },
+      },
+    },
+    {
+      name = "mouse_protocol",
+      doc = "The protocol to use for mouse reporting",
+      flags = false,
+      values = {
+        { name = "off",       value = 0,    doc = "No mouse reporting." },
+        { name = "sgr",       value = 1006, doc = "Coordinates encoded as SGR sequences." },
+        -- Other protocols included for completeness -- not supported
+        { name = "utf8",      value = 1005, doc = "Coordinates encoded as utf8." },
+        { name = "urxvt",     value = 1015, doc = "urxvt encoding" },
+        { name = "sgr_pixel", value = 1016, doc = "Coordinates encoded as SGR sequences. Encoded as pixel positions instead of cell coordinates." },
+      },
+    },
+    {
       name = "brush",
       doc = "A named brush",
       flags = false,
@@ -188,6 +212,14 @@ return {
 
   --- types {{{1
   types = {
+    {
+      name = "mouse_settings",
+      doc = "The mouse settings used by a specific window.",
+      fields = {
+        { name = "reporting", type = "mouse_reporting" },
+        { name = "protocol",  type = "mouse_protocol" },
+      },
+    },
     {
       name = "rgb_color",
       doc = "rgb color with colors values in the range 0 < |col| < 1",
@@ -541,6 +573,14 @@ return {
         { name = "region", type = "rect", doc = "The region to get text from" },
       },
       returns = { type = "line[]", doc = "The text in the specified region." },
+    },
+    {
+      name = "window_get_mouse_settings",
+      doc = "Get the mouse settings of |win_id|",
+      params = {
+        { name = "win_id",  type = "int",   doc = "Window id" },
+      },
+      returns = { type = "mouse_settings", doc = "The mouse settings of |win_id|." },
     },
     {
       name = "window_set_alpha",
