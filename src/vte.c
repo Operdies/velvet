@@ -577,23 +577,21 @@ static int unicode_fastpath(struct vte *vte, struct u8_slice str, size_t j) {
    * and more time decoding characters. (measured ~2x performance boost)
    * */
   struct screen *g = vte_get_current_screen(vte);
-  struct codepoint cp = {0};
   bool wrap = vte->options.auto_wrap_mode;
-  struct screen_cell_style brush = g->cursor.brush;
-  hyperlink_handle link = vte->current_link;
+  struct screen_cell c = {.style = g->cursor.brush, .link = vte->current_link};
   int n = 0;
   for (; j + 3 < str.len; j += n) {
-    cp = utf8_to_codepoint(&str.content[j], &n);
+    struct codepoint cp = utf8_to_codepoint(&str.content[j], &n);
     if (n < 2) break;
     int width = utf8proc_charwidth(cp.value);
     if (width == 0) {
       TODO("grapheme clusters");
       continue;
     }
-    struct screen_cell c = {.cp = cp, .style = brush, .link = link};
+    c.cp = cp;
     screen_insert(g, c, wrap);
   }
-  if (cp.value) vte->previous_symbol = cp;
+  if (c.cp.value) vte->previous_symbol = c.cp;
   vte->pending_symbol = (struct utf8){0};
   return j;
 }
