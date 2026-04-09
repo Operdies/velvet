@@ -706,7 +706,7 @@ for _, type in ipairs(spec.types) do
 --- @class %s
 ]]):format(lua_name))
   for _, fld in ipairs(type.fields) do
-    local lt = lua_type(fld.type)
+    local lt = lua_type(fld.type) .. (fld.alias and ('|velvet.api.' .. fld.alias) or '')
     local t = type_lookup[fld.type]
     if t.enumeration and t.enumeration.flags then
       lt = ('%ss'):format(lt)

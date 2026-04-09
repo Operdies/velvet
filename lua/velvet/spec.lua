@@ -30,6 +30,7 @@
 --- @field type string the name of the member type
 --- @field doc? spec_doc member description
 --- @field optional? boolean if true, this member can be omitted
+--- @field alias? string if set, the lua type shall have this alias.
 
 --- @class spec_type
 --- @field name string the name of the type
@@ -329,7 +330,7 @@ return {
       fields = {
         { name = "codepoint",           type = "int",            doc = "Unicode codepoint of the key generating the event." },
         { name = "alternate_codepoint", type = "int",            doc = "Shifted unicode codepoint of the key generating the event. This is only set if the key was shifted." },
-        { name = "name",                type = "string",         doc = "Key name, such as 'F1'" },
+        { name = "name",                type = "string",         doc = "Key name, such as 'F1'",                                                                             alias = "key_name" },
         { name = "event_type",          type = "key_event_type", doc = "Event type, such as key press, repeat, and release." },
         { name = "modifiers",           type = "key_modifier",   doc = "Key modifier such as super, shift, control, alt" },
       },
