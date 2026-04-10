@@ -79,5 +79,3 @@ end
 torch:on_screen_resized(invalidate)
 -- only draw on pre-render because mouse events are extremely busy.
 torch_render.pre_render = function() draw() end
-
-return dispose
