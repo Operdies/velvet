@@ -28,7 +28,9 @@ local function draw()
   pos.col = clamp(pos.col, 1, sz.width)
   pos.row = clamp(pos.row, 1, sz.height)
   torch:set_geometry({left = 1, top = 1, width = sz.width, height = sz.height })
-  torch:set_background_color('#000000ff')
+  local max_alpha = 0.9
+  local color = { red = 0, green = 0, blue = 0, alpha = max_alpha }
+  torch:set_background_color(color)
   torch:clear()
 
   local function dist(c1, c2)
@@ -37,14 +39,13 @@ local function draw()
     return math.sqrt(a * a + (4 * b * b))
   end
 
-  local span = 30
-  local color = { red = 0, green = 0, blue = 0, alpha = 0 }
-  for row = math.max(pos.row - span, 1), math.min(pos.row + span, sz.height) do
-    local col1 = math.max(pos.col - span, 1)
+  local radius = 30
+  for row = math.max(pos.row - radius, 1), math.min(pos.row + radius, sz.height) do
+    local col1 = math.max(pos.col - radius, 1)
     torch:set_cursor(col1, row)
-    for col = col1, math.min(pos.col + span, sz.width) do
+    for col = col1, math.min(pos.col + radius, sz.width) do
       local d = dist(pos, { col = col, row = row })
-      color.alpha = d / span
+      color.alpha = math.min(d / radius, max_alpha)
       torch:set_background_color(color)
       torch:draw(' ')
     end
