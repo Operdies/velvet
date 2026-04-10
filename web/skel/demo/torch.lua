@@ -1,4 +1,8 @@
-#!/usr/bin/env -S vv lua
+#!/bin/sh
+_=[[
+exec vv lua "$0" "$@"
+]]
+
 --[[
 -- This script demonstrates how overlays can be used to draw user attention.
 --]]

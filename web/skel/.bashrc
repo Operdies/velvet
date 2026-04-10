@@ -52,4 +52,7 @@ ${blue}${italic} > vv reload ${reset}
 
 For more detailed information, check the man page.
 ${blue}${italic} > man velvet${reset}
+
+To get started, try running one of the examples:
+${blue}${italic} > ./demo/torch.lua ${reset}
 MOTD
