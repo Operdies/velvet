@@ -240,12 +240,7 @@ local function status_update()
   taskbar:set_visibility(show_status)
   if not show_status then return end
   local sz = vv.api.get_screen_geometry()
-  -- width-1: hack to allow grabbing the bottom right corner of a window.
-  -- This is not perfect because the bottom right corner in the middle of the taskbar
-  -- still cannot be grabbed, but better than nothing and not currently noticable.
-  -- The better solution would either be for a window to request mouse passthrough. 
-  -- (overlays could exist without intereferring with mouse input?)
-  local tgeom = { left = 1, top = sz.height, width = sz.width - 1, height = 1 }
+  local tgeom = { left = 1, top = sz.height, width = sz.width, height = 1 }
   taskbar:set_geometry(tgeom)
   taskbar:clear_background_color()
   taskbar:set_transparency_mode('clear')
@@ -292,11 +287,14 @@ local function status_update()
         local lcol, rcol, fun  = table.unpack(clk)
         if col >= lcol and col <= rcol then 
           fun()
-          break
+          return nil
         end
       end
     end
+    -- bubble events up if the taskbar did not handle them -- this lets us click things below the transparent sections.
+    return 'passthrough'
   end
+
   taskbar:on_mouse_move(view_mouse_hit)
   taskbar:on_mouse_click(view_mouse_hit)
 end
@@ -662,6 +660,9 @@ function dwm.activate()
     end
 
     local win_under_cursor = nil
+    -- TODO: dwm must manage borders for this to work properly.
+    -- Since window.lua now supports forwarding mouse events, the raw handler
+    -- doesn't know if a mouse event should actually go to an overlay or a window/border.
     event_handler.mouse_move = function(args)
       if args.win_id == 0 then 
         dragging = nil

@@ -359,14 +359,28 @@ local function route_mouse_events(event, args)
         win:focus()
       end
     end
+
     -- Translate event coordinates to be window local
     local geom = win:get_geometry()
-    args.pos.col = 1 + args.pos.col - geom.left
-    args.pos.row = 1 + args.pos.row - geom.top
+    local gpos = args.pos
+    args.pos = { col = 1 + gpos.col - geom.left, row = 1 + gpos.row - geom.top }
+    args.win_id = win.id
 
     local window_func = 'on_' .. event .. '_handler'
     if win[window_func] then
-      win[window_func](win, args)
+      local ret = win[window_func](win, args)
+      if ret == 'passthrough' then
+        dragged = nil
+        local above = Window.get_window_at_coordinate(gpos, win:get_z_index())
+        for _, next in ipairs(above) do
+          if next.id ~= win.id then
+            args.pos = gpos
+            args.win_id = next.id
+            route_mouse_events(event, args)
+            return
+          end
+        end
+      end
     else
       vv.api['window_send_' .. event](args)
     end
