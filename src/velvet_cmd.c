@@ -34,22 +34,14 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   lua_State *L = v->L;
   set_nonblocking(source_socket);
 
+  lua_getglobal(L, "print");
+  int global_print = lua_gettop(L);
   lua_pushcfunction(L, lua_debug_traceback_handler);
   int msgh = lua_gettop(L);
-  // Build a custom env: setmetatable({print = socket_print}, {__index = _G})
   lua_pushinteger(L, source_socket);
   lua_pushcclosure(L, l_socket_print, 1); // socket_print (socket as upvalue)
-  lua_newtable(L);                        // env = {}
-  lua_pushvalue(L, -2);
-  lua_setfield(L, -2, "print"); // env.print = socket_print
-  lua_newtable(L);              // mt = {}
-  lua_getglobal(L, "_G");
-  lua_setfield(L, -2, "__index"); // mt.__index = _G
-  lua_setmetatable(L, -2);        // setmetatable(env, mt)
-  // stack: [socket_print, env]
-
-  int socket_print_idx = lua_gettop(L) - 1;
-  int env_idx = lua_gettop(L);
+  int socket_print_idx = lua_gettop(L);
+  lua_setglobal(L, "print");
 
   if (luaL_loadbuffer(L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
     size_t len = 0;
@@ -59,8 +51,6 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
     else
       velvet_log("lua cmd error: %s", err);
   } else {
-    lua_pushvalue(L, env_idx);
-    lua_setupvalue(L, -2, 1); // chunk._ENV = env
     if (lua_pcall(L, 0, 1, msgh) != LUA_OK) {
       size_t len = 0;
       const char *err = lua_tolstring(L, -1, &len);
@@ -87,6 +77,9 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   // Invalidate socket_print by zeroing the upvalue
   lua_pushinteger(L, 0);
   lua_setupvalue(L, socket_print_idx, 1);
+
+  lua_pushvalue(L, global_print);
+  lua_setglobal(L, "print");
 
   lua_pop(L, lua_gettop(L));
 }

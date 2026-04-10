@@ -1,33 +1,29 @@
 #compdef vv
 
 _arguments -C \
-  '--socket[Specify the socket to use]:socket path:_files' \
-  '--help[Show help and exit]' \
+  '(-S --socket)'{-S,--socket}'[Specify the socket to use]:socket path:_files' \
+  '(-h --help)'{-h,--help}'[Show help and exit]' \
   '1:mode:->mode' \
-  '*:argument:' \
+  '*:argument:->args' \
   && return
 
 case $state in
   mode)
     local -a modes
     modes=(
-      'attach:Attach to a velvet session'
-      'lua:Execute lua code in a velvet session'
+      'attach:Attach to the server at <socket> or $VELVET'
+      'lua:Evaluate <file> or stdin on the server'
       'foreground:Start a velvet session without daemonizing'
-      'quit:Quit the velvet session, killing all windows' 
-      'detach:Detach the current terminal from the session' 
+      'quit:Quit the velvet session, killing all windows'
+      'detach:Detach the current terminal from the session'
+      'reload:Reload the velvet session, resourcing configs'
     )
     _describe 'mode' modes
     ;;
   args)
-    case $words[1] in
+    case $words[2] in
       lua)
-        _arguments \
-          '1:lua code:'
-        ;;
-      *)
-        _arguments \
-          '*:arguments:'
+        _arguments '2:lua file:_files -g "*.lua"'
         ;;
     esac
     ;;

@@ -129,7 +129,7 @@ static void usage(char *arg0) {
          "  attach                  Attach to the server at <socket> if present.\n"
          "  detach                  Detach the current terminal from the session\n"
          "  foreground              Start a server as a foreground process.\n"
-         "  lua [<code>|-]          Execute <code> as a lua chunk. If <code> is not provided, or '-' is specified, read from stdin.\n"
+         "  lua [<file>|-]          Evaluate <file> or stdin on the server.\n"
          "  quit                    Quit the velvet session, killing all windows\n"
          "  reload                  Reload the velvet session, resourcing configs\n"
          "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
@@ -157,11 +157,7 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     } else if (F(lua)) {
       n_commands++;
       a.lua = NEXT();
-      if (!a.lua || a.lua[0] == '-') {
-        /* no inline code — read from stdin. re-push consumed token if it was an option. */
-        if (a.lua) i--;
-        a.lua = "";
-      }
+      if (!a.lua) a.lua = "";
     } else if (F(foreground)) {
       n_commands++;
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
@@ -519,22 +515,37 @@ static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload
   close(sockfd);
 }
 
+static void read_fd_to_file(int fd, struct string *s) {
+  char buf[4096];
+  ssize_t n;
+  while ((n = read(fd, buf, sizeof(buf))) > 0)
+    string_push_slice(s, (struct u8_slice){.content = (uint8_t *)buf, .len = (size_t)n});
+  string_ensure_null_terminated(s);
+}
+
 static void vv_send_lua_chunk(struct velvet_args args) {
   char buf[4096];
 
   struct string stdin_buf = {0};
-  const char *code = args.lua;
-  size_t codelen = strlen(code);
-  if (codelen == 0) {
-    ssize_t n;
-    while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0)
-      string_push_slice(&stdin_buf, (struct u8_slice){.content = (uint8_t *)buf, .len = (size_t)n});
-    string_ensure_null_terminated(&stdin_buf);
-    code = (char *)stdin_buf.content;
-    codelen = stdin_buf.len;
+  if (args.lua && args.lua[0] && args.lua[0] != '-') {
+    struct u8_slice s = u8_slice_from_cstr(args.lua);
+    if (u8_slice_starts_with_cstr(s, "/dev/fd/")) {
+      /* this file is only available here -- probably provided in the shell with pipe redirection or similar
+       * Just read the content instead. */
+      int fd = open(args.lua, O_RDONLY);
+      read_fd_to_file(fd, &stdin_buf);
+      close(fd);
+    } else {
+      if (!realpath(args.lua, buf) || !file_exists(args.lua)) {
+        velvet_fatal("Could not open %s:", args.lua);
+      }
+      string_push_format_slow(&stdin_buf, "return dofile([[%s]])", buf);
+    }
+  } else {
+    read_fd_to_file(STDIN_FILENO, &stdin_buf);
   }
 
-  vv_send_lua_payload(args, (struct u8_slice) { .content = (uint8_t*)code, .len = codelen });
+  vv_send_lua_payload(args, string_as_u8_slice(stdin_buf));
   string_destroy(&stdin_buf);
 }
 

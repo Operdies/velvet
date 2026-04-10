@@ -33,15 +33,10 @@ Attach to the server at the specified socket, or guess if omitted.
 .B detach
 Detach the current terminal from the session.
 .TP
-.BI "lua " "[code|\-]"
-Execute
-.I code
-as a Lua chunk.
-If
-.I code
-is omitted or
-.B \-
-is specified, read from stdin.
+.BI "lua " "[<file>|\-]"
+Evaluate
+.I <file>
+or stdin on the server.
 .TP
 .B reload
 Reload the velvet session, resourcing configs
@@ -226,10 +221,10 @@ LUA
 .fi
 .TP
 .B Prepared scripts
-vv lua < myscript.lua
+vv lua myscript.lua
 .TP
 .B One-off commands
-vv lua 'vv.options.theme.blue = "#0000ff"'
+vv lua <(echo 'vv.options.theme.blue = "#0000ff"')
 .PP
 Note that
 .B vv

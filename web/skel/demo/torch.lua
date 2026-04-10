@@ -1,3 +1,4 @@
+#!/usr/bin/env -S vv lua
 --[[
 -- This script demonstrates how overlays can be used to draw user attention.
 --]]

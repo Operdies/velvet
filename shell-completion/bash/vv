@@ -4,11 +4,15 @@ _vv() {
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-  modes="attach lua foreground quit detach"
+  modes="attach lua foreground quit detach reload"
 
   case "$prev" in
-    --socket)
+    --socket|-S)
       COMPREPLY=($(compgen -f -- "$cur"))
+      return
+      ;;
+    lua)
+      COMPREPLY=($(compgen -f -X '!*.lua' -- "$cur"))
       return
       ;;
   esac

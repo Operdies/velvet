@@ -1,3 +1,4 @@
+#!/usr/bin/env -S vv lua
 --[[
 -- This script demonstrates how windows can be unobtrusively scripted.
 -- Try executing it by running `vv lua < demo/animated_text.lua
