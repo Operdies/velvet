@@ -36,16 +36,20 @@ local function draw()
   local function dist(c1, c2)
     local a = c1.col - c2.col
     local b = c1.row - c2.row
-    return math.sqrt(a * a + (4 * b * b))
+    return math.sqrt(a * a + b * b)
   end
 
-  local radius = 30
-  for row = math.max(pos.row - radius, 1), math.min(pos.row + radius, sz.height) do
-    local col1 = math.max(pos.col - radius, 1)
+  local rx = 30
+  -- the exact ratio varies, but 16/34 is the ratio between cell width/height in my setup.
+  local ry = math.floor(rx * (16 / 34))
+  local norm_pos = { col = pos.col / rx, row = pos.row / ry }
+
+  for row = math.max(pos.row - ry, 1), math.min(pos.row + ry, sz.height) do
+    local col1 = math.max(pos.col - rx, 1)
     torch:set_cursor(col1, row)
-    for col = col1, math.min(pos.col + radius, sz.width) do
-      local d = dist(pos, { col = col, row = row })
-      color.alpha = math.min(d / radius, max_alpha)
+    for col = col1, math.min(pos.col + rx, sz.width) do
+      local d = dist(norm_pos, { col = col / rx, row = row / ry })
+      color.alpha = math.min(d, max_alpha)
       torch:set_background_color(color)
       torch:draw(' ')
     end
