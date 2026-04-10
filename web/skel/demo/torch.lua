@@ -19,6 +19,12 @@ torch:focus()
 local function draw()
   local pos = vv.api.get_mouse_position()
   local sz = vv.api.get_screen_geometry()
+  if pos.col == 0 and pos.row == 0 then
+    -- mouse position is 1-indexed, so 0 indicates the mouse never moved.
+    -- In that case, just center it for aesthetics.
+    pos.col = sz.width // 2
+    pos.row = sz.height // 2
+  end
   torch:set_geometry({left = 1, top = 1, width = sz.width, height = sz.height })
   torch:set_background_color('#000000ff')
   torch:clear()
