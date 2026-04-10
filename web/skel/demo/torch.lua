@@ -16,15 +16,17 @@ torch:set_line_wrapping(false)
 torch:set_auto_return(false)
 torch:focus()
 
+local function clamp(x, l, h)
+  if x < l then return l end
+  if x > h then return h end
+  return x
+end
+
 local function draw()
   local pos = vv.api.get_mouse_position()
   local sz = vv.api.get_screen_geometry()
-  if pos.col == 0 and pos.row == 0 then
-    -- mouse position is 1-indexed, so 0 indicates the mouse never moved.
-    -- In that case, just center it for aesthetics.
-    pos.col = sz.width // 2
-    pos.row = sz.height // 2
-  end
+  pos.col = clamp(pos.col, 1, sz.width)
+  pos.row = clamp(pos.row, 1, sz.height)
   torch:set_geometry({left = 1, top = 1, width = sz.width, height = sz.height })
   torch:set_background_color('#000000ff')
   torch:clear()
@@ -35,12 +37,14 @@ local function draw()
     return math.sqrt(a * a + (4 * b * b))
   end
 
+  local span = 30
   local color = { red = 0, green = 0, blue = 0, alpha = 0 }
-  for row = 1, sz.height do
-    torch:set_cursor(1, row)
-    for col = 1, sz.width do
+  for row = math.max(pos.row - span, 1), math.min(pos.row + span, sz.height) do
+    local col1 = math.max(pos.col - span, 1)
+    torch:set_cursor(col1, row)
+    for col = col1, math.min(pos.col + span, sz.width) do
       local d = dist(pos, { col = col, row = row })
-      color.alpha = 0 + (d / 30)
+      color.alpha = d / span
       torch:set_background_color(color)
       torch:draw(' ')
     end
