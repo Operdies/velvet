@@ -60,15 +60,24 @@ local function invalidate()
   -- force invalidate to trigger the pre_render
   torch:draw(' ')
 end
+local function pass()
+  invalidate()
+  return 'passthrough'
+end
 
-torch:on_mouse_move(invalidate)
-torch:on_window_on_key(function(_, k)
-  if k.key.name == 'ESCAPE' then
-    vv.events.delete_group(torch_render)
-    torch:close()
-  end
-end)
+local function dispose()
+  vv.events.delete_group(torch_render)
+  torch:close()
+end
+
+torch:on_mouse_click(pass)
+torch:on_mouse_move(pass)
+torch:on_mouse_scroll(pass)
+torch_render.session_on_key = function (key)
+  if key.key.name == 'ESCAPE' then dispose() end
+end
 torch:on_screen_resized(invalidate)
 -- only draw on pre-render because mouse events are extremely busy.
 torch_render.pre_render = function() draw() end
 
+return dispose
