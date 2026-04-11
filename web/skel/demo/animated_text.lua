@@ -66,28 +66,24 @@ And that has made all the difference.]]
   anchor()
 
   local pos = 1
-  local write; write = function()
-    if pos > #poem or not win:valid() then
-      vv.api.schedule_after(5000, dispose)
-      return
-    end
+  while pos <= #poem and win:valid() do
     -- grab next chunk: a run of spaces, a newline, or a word
     local s, e = poem:find("[ ]+", pos)
     local delay = 0
-    if s ~= pos then 
-      s, e = poem:find("\n", pos) 
+    if s ~= pos then
+      s, e = poem:find("\n", pos)
       delay = 800
     end
-    if s ~= pos then 
+    if s ~= pos then
       s, e = poem:find("[%w]+", pos)
       delay = e and s and (e - s) * 30 or 0
     end
-    if s ~= pos then 
-      s, e = poem:find("[%p]+", pos) 
+    if s ~= pos then
+      s, e = poem:find("[%p]+", pos)
       delay = 500
     end
-    if s ~= pos then 
-      s, e = poem:find(".", pos) 
+    if s ~= pos then
+      s, e = poem:find(".", pos)
       delay = 500
     end
     if not s or s ~= pos then return end
@@ -104,10 +100,10 @@ And that has made all the difference.]]
     elseif chunk:find("^[ ]+$") then
       delay = 0
     end
-
-    vv.api.schedule_after(delay, write)
+    vv.async.wait(delay)
   end
-  write()
+  vv.async.wait(5000)
+  dispose()
 end
 
 animated_typing()
