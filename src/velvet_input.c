@@ -952,9 +952,12 @@ void velvet_input_paste_text(struct velvet *in, struct u8_slice str, int win_id)
 
 static struct velvet_key_event key_event_from_api_key(struct velvet_api_window_key_event e) {
   struct velvet_key_event k = {
-    .key = { .codepoint = e.codepoint, .alternate_codepoint = e.alternate_codepoint, .kitty_terminator = 'u' },
-    .type = e.event_type,
-    .modifiers = e.modifiers,
+      .key = {.codepoint = e.codepoint,
+              .alternate_codepoint = e.alternate_codepoint,
+              .kitty_terminator = 'u',
+              .name = (char *)e.name.content},
+      .type = e.event_type,
+      .modifiers = e.modifiers,
   };
 
   struct velvet_key out;
