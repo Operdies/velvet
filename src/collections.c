@@ -95,6 +95,10 @@ bool u8_slice_starts_with(struct u8_slice slice, struct u8_slice prefix) {
   return memcmp(slice.content, prefix.content, prefix.len) == 0;
 }
 
+bool string_starts_with_cstr(struct string *str, const char *cstr) {
+  return string_starts_with(str, u8_slice_from_cstr(cstr));
+}
+
 bool string_starts_with(struct string *str, struct u8_slice slice) {
   return u8_slice_starts_with(string_as_u8_slice(*str), slice);
 }

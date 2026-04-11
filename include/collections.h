@@ -70,6 +70,7 @@ void string_destroy(struct string *str);
 /* base64 encode the content of `in` and push it to `out` */
 void u8_slice_encode_base64(struct u8_slice in, struct string *out);
 void string_push_csi(struct string *str, uint8_t prefix, struct int_slice params, const char *const final);
+bool string_starts_with_cstr(struct string *str, const char *cstr);
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_shift_left(struct string *str, size_t n);

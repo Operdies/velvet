@@ -515,34 +515,30 @@ static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload
   close(sockfd);
 }
 
-static void read_fd_to_file(int fd, struct string *s) {
+static void string_read_fd(int fd, struct string *s) {
   char buf[4096];
   ssize_t n;
-  while ((n = read(fd, buf, sizeof(buf))) > 0)
+  while ((n = read(fd, buf, sizeof(buf))) > 0) {
     string_push_slice(s, (struct u8_slice){.content = (uint8_t *)buf, .len = (size_t)n});
+  }
+  if (string_starts_with_cstr(s, "#!")) {
+    /* if the file starts with a shebang, comment it. Otherwise lua loadbuffer() will reject it. */
+    s->content[0] = '-';
+    s->content[1] = '-';
+  }
   string_ensure_null_terminated(s);
 }
 
 static void vv_send_lua_chunk(struct velvet_args args) {
-  char buf[4096];
-
   struct string stdin_buf = {0};
   if (args.lua && args.lua[0] && args.lua[0] != '-') {
-    struct u8_slice s = u8_slice_from_cstr(args.lua);
-    if (u8_slice_starts_with_cstr(s, "/dev/fd/")) {
-      /* this file is only available here -- probably provided in the shell with pipe redirection or similar
-       * Just read the content instead. */
-      int fd = open(args.lua, O_RDONLY);
-      read_fd_to_file(fd, &stdin_buf);
-      close(fd);
-    } else {
-      if (!realpath(args.lua, buf) || !file_exists(args.lua)) {
-        velvet_fatal("Could not open %s:", args.lua);
-      }
-      string_push_format_slow(&stdin_buf, "return dofile([[%s]])", buf);
-    }
+    /* this file is only available here -- probably provided in the shell with pipe redirection or similar
+     * Just read the content instead. */
+    int fd = open(args.lua, O_RDONLY);
+    string_read_fd(fd, &stdin_buf);
+    close(fd);
   } else {
-    read_fd_to_file(STDIN_FILENO, &stdin_buf);
+    string_read_fd(STDIN_FILENO, &stdin_buf);
   }
 
   vv_send_lua_payload(args, string_as_u8_slice(stdin_buf));
