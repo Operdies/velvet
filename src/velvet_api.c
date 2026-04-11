@@ -773,7 +773,7 @@ static void reload_callback(void *data) {
   struct lua_State *L = v->L;
   assert(L);
   /* unassign the lua state to ensure lua functions cannot be called during shutdown. */
-  v->L = NULL;
+  v->L = v->current = NULL;
 
   for (size_t idx = 0; idx < v->scene.windows.length; idx++) {
     struct velvet_window *w = vec_nth(v->scene.windows, idx);
@@ -787,6 +787,10 @@ static void reload_callback(void *data) {
     }
   }
 
+  struct velvet_coroutine *co;
+  vec_foreach(co, v->coroutines) {
+    velvet_coroutine_destroy(v, co);
+  }
   vec_clear(&v->event_loop.scheduled_actions);
   lua_close(L);
   velvet_lua_init(v);
