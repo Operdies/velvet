@@ -1,5 +1,6 @@
 #include "velvet.h"
 #include "utils.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -103,7 +104,8 @@ static void session_socket_callback(struct io_source *src) {
 
   struct velvet_session *session;
   vec_find(session, velvet->sessions, session->socket == src->fd);
-  assert(session);
+  /* this happens because the session was converted to a coroutine */
+  if (!session) return;
 
   if (n >= (int)sizeof(data_buf)) {
     const char *err = "error: lua chunk too large (max 8kb); use dofile() for larger scripts\n";
@@ -131,6 +133,12 @@ static void session_socket_callback(struct io_source *src) {
     if (n == sizeof(struct vv_lua_payload)) {
       struct vv_lua_payload *lua_chunk = (struct vv_lua_payload *)data_buf;
       if (lua_chunk->magic == VV_LUA_MAGIC) {
+        /* convert this velvet_session to a coroutine */
+        struct velvet_coroutine *co = vec_new_element(&velvet->coroutines);
+        co->socket = src->fd;
+        set_nonblocking(src->fd);
+        session->socket = 0;
+        velvet_session_destroy(velvet, session);
         int mapfd;
         memcpy(&mapfd, CMSG_DATA(cmsg), sizeof(mapfd));
         set_cloexec(mapfd);
@@ -271,6 +279,24 @@ static void on_session_input(struct io_source *src, struct u8_slice str) {
   if (session) v->input.input_socket = session->socket;
   velvet_input_process(v, str);
   v->input.input_socket = 0;
+}
+
+static void on_coroutine_writable(struct io_source *src) {
+  struct velvet *velvet = src->data;
+  struct velvet_coroutine *co;
+  vec_find(co, velvet->coroutines, co->socket == src->fd);
+  if (co && co->pending_output.len) {
+    ssize_t written = io_write(co->socket, string_as_u8_slice(co->pending_output));
+    if (written == 0) velvet_coroutine_destroy(velvet, co); /* socket closed */
+    if (written > 0) {
+      string_shift_left(&co->pending_output, written);
+    }
+    if (written == -1 && errno == EPIPE ) {
+      velvet_coroutine_destroy(velvet, co);
+    } else if (co->pending_output.len == 0 && co->coroutine == NULL) {
+      velvet_coroutine_destroy(velvet, co);
+    }
+  }
 }
 
 static void on_session_writable(struct io_source *src) {
@@ -456,6 +482,13 @@ static void velvet_dispatch(struct velvet *velvet) {
           .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_session_writable, .data = velvet};
       if (output_src.fd) io_add_source(loop, output_src);
     }
+  }
+
+  struct velvet_coroutine *co;
+  vec_where(co, velvet->coroutines, co->pending_output.len) {
+    struct io_source co_src = {
+        .fd = co->socket, .events = IO_SOURCE_POLLOUT, .on_writable = on_coroutine_writable, .data = velvet};
+    io_add_source(loop, co_src);
   }
 
   // Dispatch all pending io

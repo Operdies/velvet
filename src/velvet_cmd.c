@@ -1,94 +1,102 @@
 #include "velvet.h"
 #include "lauxlib.h"
 #include "utils.h"
-#include "velvet_lua.h"
 #include <errno.h>
 
-
 static int l_socket_print(lua_State *L) {
-  static struct string linebuf = {0};
-  string_clear(&linebuf);
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  struct velvet_coroutine *ctx;
   int source_socket = lua_tointeger(L, lua_upvalueindex(1));
+  vec_find(ctx, v->coroutines, ctx->socket == source_socket);
+  if (!ctx) return 0;
+
   if (source_socket == 0) return 0;
+  struct string *linebuf = &ctx->pending_output;
+
   int n = lua_gettop(L);
   for (int i = 1; i <= n; i++) {
     struct u8_slice s;
     s.content = (uint8_t*)luaL_tolstring(L, i, &s.len);
-    if (i > 1) string_push_char(&linebuf, '\t');
-    string_push_slice(&linebuf, s);
+    if (i > 1) string_push_char(linebuf, '\t');
+    string_push_slice(linebuf, s);
     lua_pop(L, 1);
   }
-  string_push_char(&linebuf, '\n');
-  /* the socket is nonblocking, so if the write is too large it won't go through.
-   * the alternative is to lock the while server, so let's just drop some messages instead.
-   * */
-  write(source_socket, linebuf.content, linebuf.len);
+  string_push_char(linebuf, '\n');
+  return 0;
+}
+
+static int l_coroutine_setup(lua_State *co) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(co);
+  struct velvet_coroutine *ctx;
+  int source_socket = lua_tointeger(co, lua_upvalueindex(1));
+  vec_find(ctx, v->coroutines, ctx->socket == source_socket);
+  if (!ctx) return 0;
+  ctx->coroutine = co;
+  /* print functions are set up on the lua side */
+  return 0;
+}
+
+static void coroutine_cleanup(lua_State *co) {
+  // COROUTINE_PRINT[co] = nil
+  lua_getglobal(co, "COROUTINE_PRINT");
+  lua_pushthread(co);
+  lua_pushnil(co);
+  lua_settable(co, -3);
+  lua_pop(co, 1);
+
+  // vv.async.cancel(co)
+  lua_getglobal(co, "vv");
+  lua_getfield(co, -1, "async");
+  lua_getfield(co, -1, "cancel");
+  lua_pushthread(co);
+  lua_call(co, 1, 0);
+  lua_pop(co, 2);
+}
+
+static int l_coroutine_cleanup(lua_State *co) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(co);
+  struct velvet_coroutine *ctx;
+  vec_find(ctx, v->coroutines, ctx->coroutine == co);
+
+  coroutine_cleanup(co);
+
+  if (ctx) {
+    /* indicate this coroutine is done and the socket can be closed after flushing */
+    ctx->coroutine = NULL;
+    if (ctx->pending_output.len == 0) {
+      velvet_coroutine_destroy(v, ctx);
+    }
+  }
+
   return 0;
 }
 
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket) {
-  lua_State *L = v->L;
-  set_nonblocking(source_socket);
+  struct velvet_coroutine *ctx;
+  vec_find(ctx, v->coroutines, ctx->socket == source_socket);
 
-  lua_pushcfunction(L, lua_debug_traceback_handler);
-  int msgh = lua_gettop(L);
-  // Build a custom env: setmetatable({print = socket_print}, {__index = _G})
-  lua_pushinteger(L, source_socket);
-  lua_pushcclosure(L, l_socket_print, 1); // socket_print (socket as upvalue)
-
-  lua_newtable(L);                        // env = {}
-  lua_pushvalue(L, -2);
-  lua_setfield(L, -2, "print"); // env.print = socket_print
-  lua_newtable(L);              // mt = {}
-  lua_getglobal(L, "_G");
-  lua_setfield(L, -2, "__index"); // mt.__index = _G
-  lua_setmetatable(L, -2);        // setmetatable(env, mt)
-  // stack: [socket_print, env]
-
-  int socket_print_idx = lua_gettop(L) - 1;
-  int env_idx = lua_gettop(L);
-
-  lua_getglobal(L, "coroutine");
-  lua_getfield(L, -1, "wrap");
-  if (luaL_loadbuffer(L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
+  lua_rawgeti(v->L, LUA_REGISTRYINDEX, v->coroutine_wrapper_function);
+  if (luaL_loadbuffer(v->L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
     size_t len = 0;
-    const char *err = lua_tolstring(L, -1, &len);
+    const char *err = lua_tolstring(v->L, -1, &len);
     if (source_socket)
       write(source_socket, err, len);
     else
       velvet_log("lua cmd error: %s", err);
   } else {
-    lua_pushvalue(L, env_idx);
-    lua_setupvalue(L, -2, 1); // chunk._ENV = env
-    lua_call(L, 1, 1); // coroutine.wrap(chunk)
-    if (lua_pcall(L, 0, 1, msgh) != LUA_OK) {
-      size_t len = 0;
-      const char *err = lua_tolstring(L, -1, &len);
-      if (source_socket)
-        write(source_socket, err, len);
-      else
-        velvet_log("lua cmd error: %s", err);
-    } else {
-      struct u8_slice s = {0};
-      if (!lua_isnoneornil(L, -1)) {
-        if (lua_istable(L, -1)) {
-          lua_getglobal(L, "vv");
-          lua_getfield(L, -1, "inspect");
-          lua_pushvalue(L, -3);
-          lua_pcall(L, 1, 1, 0);
-        }
-        s.content = (uint8_t*)lua_tolstring(L, -1, &s.len);
-        if (s.content && source_socket)
-          write(source_socket, s.content, s.len);
-      }
+    lua_pushinteger(v->L, source_socket);
+    lua_pushcclosure(v->L, l_coroutine_setup, 1);
+    lua_pushcfunction(v->L, l_coroutine_cleanup);
+    lua_pushinteger(v->L, source_socket);
+    lua_pushcclosure(v->L, l_socket_print, 1);
+    lua_Integer status = lua_pcall(v->L, 4, 0, 0);
+    if (status != LUA_OK) {
+      const char *err = lua_tostring(v->L, -1);
+      velvet_log("pcall: %s", err);
+      if (ctx) string_push_cstr(&ctx->pending_output, err);
     }
   }
-
-  // Invalidate socket_print by zeroing the upvalue
-  lua_pushinteger(L, 0);
-  lua_setupvalue(L, socket_print_idx, 1);
-
-  lua_pop(L, lua_gettop(L));
+  lua_pop(v->L, lua_gettop(v->L));
 }
 
 static int read_digit(struct u8_slice s, int *i32) {
@@ -126,3 +134,13 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
     velvet_lua_execute_chunk(v, chunk, source_socket);
   }
 }
+
+void velvet_coroutine_destroy(struct velvet *velvet, struct velvet_coroutine *s) {
+  if (s->coroutine) coroutine_cleanup(s->coroutine);
+  if (s->socket) close(s->socket);
+  string_destroy(&s->pending_output);
+  *s = (struct velvet_coroutine){0};
+  size_t idx = vec_index(&velvet->coroutines, s);
+  vec_remove_at(&velvet->coroutines, idx);
+}
+

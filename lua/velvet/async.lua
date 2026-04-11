@@ -9,6 +9,18 @@ local M = {}
 local e = require('velvet.events').create_group('velvet.async', true)
 local registered_waits = {}
 local sequence_callbacks = {}
+local co_to_seq = {}
+
+--- Cancel all continuations for |co|
+--- @param co thread the thread to cancel
+function M.cancel(co)
+  local seq = co_to_seq[co]
+  if seq then
+    co_to_seq[co] = nil
+    sequence_callbacks[seq] = nil
+  end
+  vv.log(vv.inspect(sequence_callbacks))
+end
 
 local function resolve(name, ...)
   local tbl = registered_waits[name] or {}
@@ -64,7 +76,19 @@ function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
   sequence = sequence + 1
-  sequence_callbacks[sequence] = function(evt, ...)
+  -- local capture to preserve the sequence number
+  local seq = sequence
+
+  local args = {...}
+  if #args == 0 then error("No events specified.") end
+  for i, evt in ipairs(args) do
+    if type(evt) ~= 'number' and type(evt) ~= 'string' then
+      error(("Bad argument #%d (number or string expected)"):format(i))
+    end
+  end
+
+  co_to_seq[co] = seq
+  sequence_callbacks[seq] = function(evt, ...)
     if timeout then vv.api.schedule_cancel(timeout) end
     local ok, error = coroutine.resume(co, evt, ...)
     if not ok then
@@ -73,10 +97,12 @@ function M.wait(...)
     end
   end
 
-  for _, evt in ipairs({...}) do
+  for _, evt in ipairs(args) do
     if type(evt) == 'number' then
       timeout = vv.api.schedule_after(evt, function()
-        sequence_callbacks[sequence] = nil
+        -- if sequence_callbacks was unset, that means this coroutine was cancelled.
+        if not sequence_callbacks[seq] then return end
+        sequence_callbacks[seq] = nil
         local ok, error = coroutine.resume(co, "timeout")
         if not ok then
           vv.log(("Unhandled error in coroutine: %s (event: timeout)"):format(error), 'error')
@@ -86,9 +112,10 @@ function M.wait(...)
     else
       local tbl = registered_waits[evt]
       if not tbl then tbl = {} ; registered_waits[evt] = tbl end
-      tbl[sequence] = true
+      tbl[seq] = true
     end
   end
+
   return coroutine.yield()
 end
 

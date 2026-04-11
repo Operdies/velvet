@@ -96,7 +96,7 @@ void io_dispatch(struct io *io) {
     struct pollfd *pfd = vec_nth(io->pollfds, i);
     struct io_source *src = vec_nth(io->sources, i);
     assert((pfd->revents & POLLNVAL) == 0);
-    for (int repeats = 0; pfd->revents & (POLLIN | POLLOUT) && repeats < io->max_iterations; repeats++) {
+    for (int repeats = 0; pfd->revents && repeats < io->max_iterations; repeats++) {
       // Read output
       if ((pfd->revents & POLLIN) && src->on_readable) {
         src->on_readable(src);
@@ -153,7 +153,7 @@ ssize_t io_write(int fd, struct u8_slice s) {
   /* clearly a bug */
   assert(s.len < (1 << 30));
   ssize_t written = write(fd, s.content, s.len);
-  if (written == -1 && errno != EAGAIN && errno != EINTR)
+  if (written == -1 && errno != EAGAIN && errno != EINTR && errno != EPIPE)
     velvet_die("io_write:");
   return written;
 }

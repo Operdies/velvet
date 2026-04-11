@@ -313,6 +313,7 @@ int main(int argc, char **argv) {
       .scene = velvet_scene_default,
       .input = velvet_input_default,
       .sessions = vec(struct velvet_session),
+      .coroutines = vec(struct velvet_coroutine),
       .stored_strings = vec(struct velvet_kvp),
       .socket = sock_fd,
       .event_loop = io_default,
@@ -504,10 +505,7 @@ static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload
   do {
     n = 0;
     struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
-    /* if polling takes more than a second, assume the server is stuck --
-     * this could be caused by trying to write to the window hosting this very 
-     * process, so let's be kind and unfreeze it */
-    if (poll(&pfd, 1, 1000) > 0) {
+    if (poll(&pfd, 1, -1) > 0) {
       n = read(sockfd, buf, sizeof(buf));
       printf("%.*s", n, buf);
     }

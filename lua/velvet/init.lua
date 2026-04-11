@@ -134,6 +134,20 @@ vv.options = setmetatable(vv.options, {
   end,
 })
 
+--- The main use case here is for sockets to redirect all print statements
+--- in their execution context. _ENV.print was almost a good solution, but not quite since it doesn't capture
+--- prints from other modules.
+_G.COROUTINE_PRINT = {}
+local real_print = _G.print
+_G.print = function(...)
+  local co = coroutine.running()
+  if _G.COROUTINE_PRINT[co] then
+    _G.COROUTINE_PRINT[co](...)
+  else
+    real_print(...)
+  end
+end
+
 -- quit() and reload() are wrapped because the vv functions have not been loaded yet.
 cli.add_command({ name = "quit", action = function() vv.api.quit() end, description = "Quit the velvet session, killing all windows" });
 cli.add_command({ name = "reload", action = function() vv.api.reload() end, description = "Reload the velvet session, resourcing configs" });

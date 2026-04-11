@@ -41,6 +41,30 @@ static void velvet_lua_init_log(struct velvet *v) {
   lua_pop(L, lua_gettop(L));
 }
 
+static void velvet_lua_init_coroutine_helper(struct velvet *v) {
+  char coroutine_helper[] = {
+      "return function(chunk, setup, cleanup, print_function)\n"
+      "  local co = coroutine.create(function()\n"
+      "    setup()\n"
+      "    COROUTINE_PRINT[coroutine.running()] = print_function\n"
+      "    local ok, result = xpcall(chunk, debug.traceback)\n"
+      "    if not ok then\n"
+      "      print('Unhandled error in lua chunk: ' .. vv.inspect(result))\n"
+      "    elseif result ~= nil then\n"
+      "      if type(result) ~= 'string' then result = vv.inspect(result) end\n"
+      "      print(result)\n"
+      "    end\n"
+      "    cleanup()\n"
+      "  end)\n"
+      "  coroutine.resume(co)\n"
+      "end",
+  };
+  int status = luaL_dostring(v->L, coroutine_helper);
+  assert(status == LUA_OK);
+  assert(lua_type(v->L, -1) == LUA_TFUNCTION);
+  v->coroutine_wrapper_function = luaL_ref(v->L, LUA_REGISTRYINDEX);
+}
+
 static void velvet_lua_init_api(struct velvet *v) {
   lua_State *L = v->L;
   lua_getglobal(L, "vv");
@@ -117,6 +141,7 @@ void velvet_lua_init(struct velvet *v) {
   }
 
   velvet_lua_init_api(v);
+  velvet_lua_init_coroutine_helper(v);
   velvet_lua_init_log(v);
   velvet_lua_set_default_options(v);
 }

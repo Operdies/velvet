@@ -38,6 +38,12 @@ struct velvet_session_features {
   bool no_repeat_multibyte_graphemes; // compatibility with some terminals with poor multibyte handling
 };
 
+struct velvet_coroutine {
+  int socket; // socket connection. lua print output and return values are sent here.
+  struct string pending_output;
+  lua_State *coroutine;
+};
+
 struct velvet_session {
   int socket;                   // socket connection
   struct string pending_output; // buffered output
@@ -61,7 +67,8 @@ struct velvet {
   struct velvet_scene scene;
   struct velvet_input input;
   struct io event_loop;
-  struct vec /* struct session */ sessions;
+  struct vec /* struct velvet_session */ sessions;
+  struct vec /* struct velvet_coroutine */ coroutines;
   /* this is modified by events such as receiving focus IN/OUT events, new sessions attaching, etc */
   int focused_socket;
   int socket_cmd_sender;
@@ -79,6 +86,8 @@ struct velvet {
   bool _render_invalidated;
   const char *render_invalidate_reason;
   struct vec /* velvet_kvp */ stored_strings;
+  /* defined at init time in velvet_lua.c */
+  lua_Integer coroutine_wrapper_function;
 };
 
 void velvet_force_full_redraw(struct velvet *scene);
@@ -97,6 +106,7 @@ void velvet_input_send_mouse_scroll(struct velvet *v, struct velvet_api_mouse_sc
  * current keymap. */
 void velvet_input_process(struct velvet *in, struct u8_slice str);
 void velvet_input_destroy(struct velvet_input *v);
+void velvet_coroutine_destroy(struct velvet *velvet, struct velvet_coroutine *s);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
