@@ -1,6 +1,7 @@
 local ev = require('velvet.events')
 local inspect = require('velvet.inspect').inspect
 local cli = require('velvet.cli_commands')
+local async = require('velvet.async')
 ---@class vv
 local vv = {
   --- This is a hint for managiging z indices.
@@ -25,6 +26,7 @@ local vv = {
   },
 
   cli = cli,
+  async = async,
 
   --- Emit a log message, possibly picked up by log listeners.
   --- @param message any
