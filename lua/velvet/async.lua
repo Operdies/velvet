@@ -10,6 +10,8 @@ local e = require('velvet.events').create_group('velvet.async', true)
 local registered_waits = {}
 local sequence_callbacks = {}
 local co_to_seq = {}
+-- Monotonically increasing sequence number used to invalidate multi-waits
+local sequence = 1
 
 --- Cancel all continuations for |co|
 --- @param co thread the thread to cancel
@@ -19,20 +21,25 @@ function M.cancel(co)
     co_to_seq[co] = nil
     sequence_callbacks[seq] = nil
   end
-  vv.log(vv.inspect(sequence_callbacks))
 end
 
 local function resolve(name, ...)
   local tbl = registered_waits[name] or {}
-  for sequence, _ in pairs(tbl) do
-    local waiter = sequence_callbacks[sequence]
-    if waiter then
-      sequence_callbacks[sequence] = nil
-      waiter(name, ...)
+  -- capture the current sequence number and ensure we don't resolve anything higher.
+  -- Otherwise a waiter() invocation can trigger on the currently processing event.
+  local current_sequence = sequence
+  for seq, _ in pairs(tbl) do
+    if seq <= current_sequence then
+      local waiter = sequence_callbacks[seq]
+      if waiter then
+        sequence_callbacks[seq] = nil
+        waiter(name, ...)
+      end
+      tbl[seq] = nil
     end
-    tbl[sequence] = nil
   end
 end
+
 e['session_on_key'] = function(...) resolve('session_on_key', ...) end
 e['window_created'] = function(...) resolve('window_created', ...) end
 e['window_closed'] = function(...) resolve('window_closed', ...) end
@@ -65,9 +72,6 @@ e['pre_reload'] = function(...) resolve('pre_reload', ...) end
 ---| 'system_message' Raised when the system logs an error message
 ---| 'pre_render' Raised right before content is rendered. This is useful for applying updates just-in-time.
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
-
--- Monotonically increasing sequence number used to invalidate multi-waits
-local sequence = 1
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.

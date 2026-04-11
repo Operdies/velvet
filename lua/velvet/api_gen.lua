@@ -834,6 +834,8 @@ local e = require('velvet.events').create_group('velvet.async', true)
 local registered_waits = {}
 local sequence_callbacks = {}
 local co_to_seq = {}
+-- Monotonically increasing sequence number used to invalidate multi-waits
+local sequence = 1
 
 --- Cancel all continuations for |co|
 --- @param co thread the thread to cancel
@@ -847,15 +849,21 @@ end
 
 local function resolve(name, ...)
   local tbl = registered_waits[name] or {}
-  for sequence, _ in pairs(tbl) do
-    local waiter = sequence_callbacks[sequence]
-    if waiter then
-      sequence_callbacks[sequence] = nil
-      waiter(name, ...)
+  -- capture the current sequence number and ensure we don't resolve anything higher.
+  -- Otherwise a waiter() invocation can trigger on the currently processing event.
+  local current_sequence = sequence
+  for seq, _ in pairs(tbl) do
+    if seq <= current_sequence then
+      local waiter = sequence_callbacks[seq]
+      if waiter then
+        sequence_callbacks[seq] = nil
+        waiter(name, ...)
+      end
+      tbl[seq] = nil
     end
-    tbl[sequence] = nil
   end
 end
+
 ]]))
 
 --- set up event handlers for each event {{{3
@@ -875,9 +883,6 @@ for _, evt in ipairs(spec.events) do
 end
 
 table.insert(async, [[
-
--- Monotonically increasing sequence number used to invalidate multi-waits
-local sequence = 1
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
@@ -910,6 +915,8 @@ function M.wait(...)
   for _, evt in ipairs(args) do
     if type(evt) == 'number' then
       timeout = vv.api.schedule_after(evt, function()
+        -- if sequence_callbacks was unset, that means this coroutine was cancelled.
+        if not sequence_callbacks[seq] then return end
         sequence_callbacks[seq] = nil
         local ok, error = coroutine.resume(co, "timeout")
         if not ok then
