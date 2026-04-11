@@ -21,10 +21,6 @@ static int l_socket_print(lua_State *L) {
   string_push_char(&linebuf, '\n');
   /* the socket is nonblocking, so if the write is too large it won't go through.
    * the alternative is to lock the while server, so let's just drop some messages instead.
-   *
-   * The golden solution would be to make velvet_dispatch() re-entrant. Maybe later.
-   * But really, if someone wants to extract huge chunks of text, maybe they should use
-   * io instead of print()
    * */
   write(source_socket, linebuf.content, linebuf.len);
   return 0;
@@ -52,6 +48,8 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   int socket_print_idx = lua_gettop(L) - 1;
   int env_idx = lua_gettop(L);
 
+  lua_getglobal(L, "coroutine");
+  lua_getfield(L, -1, "wrap");
   if (luaL_loadbuffer(L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
     size_t len = 0;
     const char *err = lua_tolstring(L, -1, &len);
@@ -62,6 +60,7 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   } else {
     lua_pushvalue(L, env_idx);
     lua_setupvalue(L, -2, 1); // chunk._ENV = env
+    lua_call(L, 1, 1); // coroutine.wrap(chunk)
     if (lua_pcall(L, 0, 1, msgh) != LUA_OK) {
       size_t len = 0;
       const char *err = lua_tolstring(L, -1, &len);

@@ -38,6 +38,7 @@ local events = {
   --- @param event_name string the raised event
   --- @param ... any depends on the event
   emit_event = function(event_name, ...)
+    local args = table.pack(...)
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
       if group_func_table[event_name] then
@@ -49,8 +50,8 @@ local events = {
           end
           return e
         end
-        local args = table.pack(...)
-        xpcall(group_func_table[event_name], error_handler, table.unpack(vv.deepcopy(args), 1, args.n))
+        local co = coroutine.create(function() xpcall(group_func_table[event_name], error_handler, table.unpack(vv.deepcopy(args), 1, args.n)) end)
+        coroutine.resume(co)
       end
     end
   end

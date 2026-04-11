@@ -345,7 +345,12 @@ struct velvet_api_mouse_settings vv_api_window_get_mouse_settings(struct velvet 
 static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_pushcfunction(L, lua_debug_traceback_handler);
   int msgh = lua_gettop(L);
+
+  /* wrap the callback in a coroutine to make vv.async functions available */
+  lua_getglobal(L, "coroutine");
+  lua_getfield(L, -1, "wrap");
   lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
+  lua_call(L, 1, 1);
 
   if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
     struct velvet *v = *(struct velvet **)lua_getextraspace(L);
@@ -358,7 +363,7 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
     velvet_api_raise_system_message(v, event_args);
     lua_pop(L, 1);
   }
-  lua_pop(L, 1); // msgh
+  lua_pop(L, 2); // msgh, coroutine
 }
 
 struct schedule_data {
