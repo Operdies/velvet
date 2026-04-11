@@ -299,7 +299,7 @@ function keys.set(lhs, rhs, opts)
       vv.log("Unhandled error in mapping " .. lhs, 'error')
       vv.log(traceback, 'debug')
     end
-    xpcall(rhs, handler) 
+    coroutine.wrap(function() xpcall(rhs, handler) end)()
   end
   map.options = opts or {}
   vv.events.emit_event(keys.keymap_changed)
