@@ -867,11 +867,10 @@ end
 ]]))
 
 --- set up event handlers for each event {{{3
-for _, evt in ipairs(spec.events) do
-  table.insert(async, ([[
-e['%s'] = function(...) resolve('%s', ...) end
-]]):format(evt.name, evt.name))
-end
+
+table.insert(async, [[
+e.fallback = resolve
+]])
 
 --- Event name type alias {{{3
 table.insert(async, [[

@@ -20,6 +20,11 @@
 --- @field top velvet.window left border
 --- @field bottom velvet.window left border
 
+--- @class velvet.window.events
+--- @field mouse_click velvet.async.event
+--- @field mouse_move velvet.async.event
+--- @field mouse_scroll velvet.async.event
+
 --- @class velvet.window
 --- @field id integer window handle
 --- @field parent velvet.window handle of parent window
@@ -29,6 +34,7 @@
 --- @field bottom_text? string text showed on the bottom border
 --- @field on_drag? fun(self: velvet.window, args: window.drag_args): nil
 --- @field is_border? boolean if set, this is a border of |self.parent|
+--- @field event velvet.window.events async event names which can be used with the async system.
 local Window = {}
 
 local vv = require('velvet')
@@ -384,6 +390,7 @@ local function route_mouse_events(event, args)
     else
       vv.api['window_send_' .. event](args)
     end
+    vv.events.emit_event(("%s:%d"):format(event, args.win_id), args)
   end
 end
 
@@ -507,6 +514,11 @@ function Window.from_handle(id)
   local self = { id = id, child_windows = {} }
   local instance = setmetatable(self, Window)
   win_registry[id] = instance
+  instance.event = {
+    mouse_click = 'mouse_click:' .. id,
+    mouse_move = 'mouse_move:' .. id,
+    mouse_scroll = 'mouse_scroll:' .. id
+  }
   return instance
 end
 

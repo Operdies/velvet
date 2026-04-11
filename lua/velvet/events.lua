@@ -41,7 +41,13 @@ local events = {
     local args = table.pack(...)
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
-      if group_func_table[event_name] then
+      local handler = group_func_table[event_name]
+      local prefix = false
+      if not handler then
+        handler = group_func_table["fallback"]
+        prefix = true
+      end
+      if handler then
         local error_handler = function(e)
           -- prevent recursion if message handlers have errors
           if event_name ~= 'system_message' then
@@ -50,8 +56,13 @@ local events = {
           end
           return e
         end
-        local co = coroutine.create(function() xpcall(group_func_table[event_name], error_handler, table.unpack(vv.deepcopy(args), 1, args.n)) end)
-        coroutine.resume(co)
+        coroutine.wrap(function() 
+          if prefix == true then
+            xpcall(handler, error_handler, event_name, table.unpack(vv.deepcopy(args), 1, args.n)) 
+          else
+            xpcall(handler, error_handler, table.unpack(vv.deepcopy(args), 1, args.n)) 
+          end
+        end)()
       end
     end
   end

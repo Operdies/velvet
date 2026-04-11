@@ -40,21 +40,7 @@ local function resolve(name, ...)
   end
 end
 
-e['session_on_key'] = function(...) resolve('session_on_key', ...) end
-e['window_created'] = function(...) resolve('window_created', ...) end
-e['window_closed'] = function(...) resolve('window_closed', ...) end
-e['window_output'] = function(...) resolve('window_output', ...) end
-e['window_moved'] = function(...) resolve('window_moved', ...) end
-e['window_resized'] = function(...) resolve('window_resized', ...) end
-e['window_on_key'] = function(...) resolve('window_on_key', ...) end
-e['window_focus_changed'] = function(...) resolve('window_focus_changed', ...) end
-e['screen_resized'] = function(...) resolve('screen_resized', ...) end
-e['mouse_move'] = function(...) resolve('mouse_move', ...) end
-e['mouse_click'] = function(...) resolve('mouse_click', ...) end
-e['mouse_scroll'] = function(...) resolve('mouse_scroll', ...) end
-e['system_message'] = function(...) resolve('system_message', ...) end
-e['pre_render'] = function(...) resolve('pre_render', ...) end
-e['pre_reload'] = function(...) resolve('pre_reload', ...) end
+e.fallback = resolve
 
 --- @alias velvet.async.event
 ---| 'session_on_key' Raised when a key is pressed.
