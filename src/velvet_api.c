@@ -361,15 +361,22 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_pop(L, 1); // msgh
 }
 
-/* This is kind of a hack to avoid having to heap allocate every schedule.
- * There's no issue now because velvet is single threaded and only ever uses one velvet instance,
- * but we should move to heap allocating schedules or passing a 2nd context object if this changes. */
-static struct velvet *VELVET;
+struct schedule_data {
+  lua_State *state;
+  lua_Integer function;
+  lua_Integer state_ref;
+};
+
 void schedule_execute(void *data) {
-  assert(VELVET);
-  lua_Integer func = (lua_Integer)data;
-  pcall_func_ref(VELVET->L, func);
-  luaL_unref(VELVET->L, LUA_REGISTRYINDEX, func);
+  struct schedule_data d = *(struct schedule_data*)data;
+  free(data);
+  pcall_func_ref(d.state, d.function);
+  // unpin function
+  luaL_unref(d.state, LUA_REGISTRYINDEX, d.function);
+  if (d.state_ref) {
+    // unpin coroutine thread
+    luaL_unref(d.state, LUA_REGISTRYINDEX, d.state_ref);
+  }
 }
 
 bool vv_api_schedule_cancel(struct velvet *v, lua_Integer cancellation_id) {
@@ -377,11 +384,27 @@ bool vv_api_schedule_cancel(struct velvet *v, lua_Integer cancellation_id) {
 }
 
 lua_Integer vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func) {
-  VELVET = v;
-  luaL_checktype(v->L, func, LUA_TFUNCTION);
-  lua_pushvalue(v->L, func);
-  lua_Integer ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
-  return io_schedule(&v->event_loop, delay, schedule_execute, (void *)(lua_Integer)ref);
+  lua_Integer func_ref, state_ref;
+  func_ref = state_ref = 0;
+
+  luaL_checktype(v->current, func, LUA_TFUNCTION);
+  lua_pushvalue(v->current, func);
+  /* if this was called from a coroutine, move the function from the coroutine stack to the main stack */
+  if (v->current != v->L)
+    lua_xmove(v->current, v->L, 1); 
+  func_ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
+  if (v->current != v->L) {
+    // pin the coroutine thread to ensure it does not get garbage collected
+    lua_pushthread(v->current);
+    lua_xmove(v->current, v->L, 1);
+    state_ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
+  }
+
+  struct schedule_data *alloc = calloc(1, sizeof(*alloc));
+  alloc->function = func_ref;
+  alloc->state = v->L;
+  alloc->state_ref = state_ref;
+  return io_schedule(&v->event_loop, delay, schedule_execute, alloc);
 }
 
 void vv_api_debug_set_display_damage(struct velvet *v, bool new_value) {

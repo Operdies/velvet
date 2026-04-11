@@ -514,7 +514,10 @@ static int l_vv_api_%s(lua_State *L) {
 ]])
     :format(fn.name))
   if not has_manual_param and not manual_return then
-    table.insert(c, '  struct velvet *v = *(struct velvet **)lua_getextraspace(L);\n')
+    table.insert(c, [[
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  v->current = L;
+]])
   end
 
   local idx = 1

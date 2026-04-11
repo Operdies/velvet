@@ -54,7 +54,10 @@ struct velvet_kvp {
 };
 
 struct velvet {
+  /* main lua context */
   lua_State *L;
+  /* executing lua context. set when using coroutines */
+  lua_State *current;
   struct velvet_scene scene;
   struct velvet_input input;
   struct io event_loop;
