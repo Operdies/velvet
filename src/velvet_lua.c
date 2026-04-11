@@ -24,22 +24,11 @@ int lua_debug_traceback_handler(lua_State *L) {
   return 1;
 }
 
-static int l_velvet_log(lua_State *L) {
-  const char *str = luaL_checkstring(L, 1);
-  velvet_log("lua: %s", str);
-  return 0;
-}
-
-static void velvet_lua_init_log(struct velvet *v) {
-  lua_State *L = v->L;
-  lua_getglobal(L, "vv");
-  lua_pushcfunction(L, l_velvet_log);
-  lua_setfield(L, -2, "print");
-  lua_pushglobaltable(L);
-  lua_pushcfunction(L, l_velvet_log);
-  lua_setfield(L, -2, "print");
-  lua_pop(L, lua_gettop(L));
-}
+// static int l_velvet_log(lua_State *L) {
+//   const char *str = luaL_checkstring(L, 1);
+//   velvet_log("lua: %s", str);
+//   return 0;
+// }
 
 static void velvet_lua_init_coroutine_helper(struct velvet *v) {
   char coroutine_helper[] = {
@@ -142,7 +131,7 @@ void velvet_lua_init(struct velvet *v) {
 
   velvet_lua_init_api(v);
   velvet_lua_init_coroutine_helper(v);
-  velvet_lua_init_log(v);
+  // velvet_lua_init_log(v);
   velvet_lua_set_default_options(v);
 }
 
