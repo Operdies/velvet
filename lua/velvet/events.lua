@@ -56,13 +56,13 @@ local events = {
           end
           return e
         end
-        coroutine.wrap(function() 
+        vv.async.run(function() 
           if prefix == true then
             xpcall(handler, error_handler, event_name, table.unpack(vv.deepcopy(args), 1, args.n)) 
           else
             xpcall(handler, error_handler, table.unpack(vv.deepcopy(args), 1, args.n)) 
           end
-        end)()
+        end)
       end
     end
   end

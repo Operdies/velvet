@@ -75,9 +75,9 @@ local function win_move(win, to)
   -- if this window has a frame, shrink the client area.
   if win:get_frame_enabled() then client_area = rect.inset(to, 1) end
   if move_duration > 0 then
-    coroutine.wrap(function()
+    vv.async.run(function()
       a.animate(win.id, client_area, move_duration, { easing_function = a.easing.spring, ms_per_frame = 10 })
-    end)()
+    end)
   else
     win:set_geometry(client_area)
     a.cancel(win.id)

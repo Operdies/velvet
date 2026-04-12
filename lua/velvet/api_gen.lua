@@ -889,6 +889,20 @@ table.insert(async, "---| 'any' Raised when any event is raised.\n")
 
 table.insert(async, [[
 
+--- Execute |f| as a coroutine.
+--- @param f fun(...): any
+--- @param ... any arguments passed to f
+--- @return nil
+function M.run(f, ...)
+  local args = table.pack(...)
+  coroutine.wrap(function()
+    local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
+    if not ok then
+      vv.log(("Unhandled error in coroutine: %s"):format(err), 'error')
+    end
+  end)()
+end
+
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event|'timeout', table The name of the event and the result, or nil on 'timeout'
