@@ -101,9 +101,15 @@ static int create_socket(char *name) {
   string_ensure_null_terminated(&path);
   ensure_parent_dir_exists((char*)path.content);
   if (path.len >= LENGTH(addr.sun_path)) velvet_fatal("Socket name too long.");
-  if (file_exists((char *)path.content))
-    unlink((char *)path.content);
+
   snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s", (int)path.len, (char*)path.content);
+  if (file_exists((char *)path.content)) {
+    if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) != -1) {
+      close(sockfd);
+      velvet_fatal("Session name %s is already in use.", namebuf);
+    }
+  }
+  unlink((char *)path.content);
   string_destroy(&path);
 
   if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
