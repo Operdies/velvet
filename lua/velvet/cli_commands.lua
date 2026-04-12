@@ -53,7 +53,7 @@ end
 function M.execute(name, args)
   local cmd = commands[name]
   if not cmd then return ("Unknown command '%s'\n\n%s"):format(name, describe()) end
-  return coroutine.wrap(cmd.action(name, args or {}))()
+  return cmd.action(name, args or {})
 end
 
 return M
