@@ -128,7 +128,8 @@ void io_dispatch(struct io *io) {
       }
       if (pfd->revents & POLLHUP) {
         struct u8_slice zero = {0};
-        if (src->on_read) src->on_read(src, zero);
+        if (src->on_hangup) src->on_hangup(src);
+        else if (src->on_read) src->on_read(src, zero);
         else if (src->on_readable) src->on_readable(src);
         else if (src->on_writable) src->on_writable(src);
         break;

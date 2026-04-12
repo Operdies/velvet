@@ -787,9 +787,8 @@ static void reload_callback(void *data) {
     }
   }
 
-  struct velvet_coroutine *co;
-  vec_foreach(co, v->coroutines) {
-    velvet_coroutine_destroy(v, co);
+  while (v->coroutines.length) {
+    velvet_coroutine_destroy(v, vec_nth(v->coroutines, 0));
   }
   vec_clear(&v->event_loop.scheduled_actions);
   lua_close(L);

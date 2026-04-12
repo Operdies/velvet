@@ -507,7 +507,7 @@ static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload
     struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
     if (poll(&pfd, 1, -1) > 0) {
       n = read(sockfd, buf, sizeof(buf));
-      printf("%.*s", n, buf);
+      if (n > 0) write(STDOUT_FILENO, buf, n);
     }
   } while (n > 0);
   close(sockfd);

@@ -266,6 +266,19 @@ static void velvet_render(struct u8_slice str, void *context) {
   vec_where(s, a->sessions, s->output) session_write_pending(s);
 }
 
+static void on_coroutine_hangup(struct io_source *src) {
+  struct velvet *velvet = src->data;
+  struct velvet_coroutine *co;
+  vec_find(co, velvet->coroutines, co->socket == src->fd);
+  if (co) {
+    velvet_coroutine_destroy(velvet, co);
+  }
+}
+
+static void on_coroutine_read(struct io_source *src, struct u8_slice str) {
+  if (str.len == 0) on_coroutine_hangup(src);
+}
+
 static void on_session_input(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   struct velvet_session *session;
@@ -485,10 +498,24 @@ static void velvet_dispatch(struct velvet *velvet) {
   }
 
   struct velvet_coroutine *co;
-  vec_where(co, velvet->coroutines, co->pending_output.len) {
-    struct io_source co_src = {
-        .fd = co->socket, .events = IO_SOURCE_POLLOUT, .on_writable = on_coroutine_writable, .data = velvet};
-    io_add_source(loop, co_src);
+  vec_foreach(co, velvet->coroutines) {
+    struct io_source src = {
+        .data = velvet,
+        .fd = co->socket,
+        /* monitor the socket closing. This disposes the coroutine */
+        .on_hangup = on_coroutine_hangup,
+        /* on MacOS, POLLHUP isn't raised when .events=0. To fix this, we always listen for POLLIN.
+         * This is fine since coroutine sockets don't communicate after the initial connection.
+         */
+        .on_read = on_coroutine_read,
+        .events = IO_SOURCE_POLLIN,
+    };
+    /* flush buffered content to the socket */
+    if (co->pending_output.len > 0) {
+      src.events |= IO_SOURCE_POLLOUT;
+      src.on_writable = on_coroutine_writable;
+    }
+    io_add_source(loop, src);
   }
 
   // Dispatch all pending io
@@ -528,6 +555,9 @@ void velvet_destroy(struct velvet *velvet) {
   velvet_input_destroy(&velvet->input);
   while (velvet->sessions.length) {
     velvet_session_destroy(velvet, vec_nth(velvet->sessions, 0));
+  }
+  while (velvet->coroutines.length) {
+    velvet_coroutine_destroy(velvet, vec_nth(velvet->coroutines, 0));
   }
   vec_destroy(&velvet->sessions);
   struct velvet_kvp *kvp;

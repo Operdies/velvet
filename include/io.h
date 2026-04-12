@@ -7,7 +7,8 @@
 struct io_source;
 typedef void (*io_on_read)(struct io_source *src);
 typedef void (*io_on_readable)(struct io_source *src, struct u8_slice str);
-typedef void (*io_on_ritable)(struct io_source *src);
+typedef void (*io_on_writable)(struct io_source *src);
+typedef void (*io_on_hangup)(struct io_source *src);
 typedef uint64_t io_schedule_id;
 
 enum IO_SOURCE_EVENT {
@@ -25,7 +26,9 @@ struct io_source {
   /* called in lieu of read_callback in case the client needs to manually read */
   io_on_read on_readable;
   /* called when the file descriptor is ready for writing */
-  io_on_ritable on_writable;
+  io_on_writable on_writable;
+  /* called when POLLHUP is triggered */
+  io_on_hangup on_hangup;
   /* user data */
   void *data;
 };
