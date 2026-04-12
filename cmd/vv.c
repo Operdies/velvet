@@ -539,10 +539,36 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
   /* the server owns the mmap now, so we can close it */
   velvet_alloc_shmem_destroy(shmem, shmem_fd);
 
+  char discard[4096];
   int exit_code = 0;
-  while (read(sockfd, &exit_code, 4) == -1) {
-    if (errno != EINTR) break;
-  }
+  do {
+    struct pollfd pfd[2] = {
+        {.events = POLLIN, .fd = sockfd},
+        {.events = POLLIN, .fd = STDIN_FILENO},
+    };
+
+    int n = poll(pfd, LENGTH(pfd), -1);
+    if (n == -1 && errno != EINTR) break;
+    int r;
+    if ((r = pfd[0].revents)) {
+      if (r & POLLIN) {
+        read(sockfd, &exit_code, 4);
+        break;
+      }
+      /* server exited ? */
+      if (r & POLLHUP) {
+        exit_code = VELVET_COROUTINE_SERVER_EXITED;
+        break;
+      }
+    }
+
+    if ((r = pfd[1].revents)) {
+      if (r & POLLIN) {
+        read(STDIN_FILENO, discard, sizeof(discard));
+      }
+      /* ignore POLLHUP */
+    }
+  } while (true);
   close(sockfd);
   return exit_code;
 }

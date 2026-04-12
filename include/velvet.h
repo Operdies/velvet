@@ -15,6 +15,8 @@ enum velvet_coroutine_exit_code {
   VELVET_COROUTINE_ERROR = 2,
   /* set when the server kills the chunk */
   VELVET_COROUTINE_KILLED_RELOAD = 3,
+  /* set when the server exits */
+  VELVET_COROUTINE_SERVER_EXITED = 4,
 };
 
 enum velvet_input_state {
