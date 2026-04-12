@@ -463,6 +463,11 @@ static int vv_connect(char *vv_socket) {
       snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s",
                (int)socket_path.len, (char *)socket_path.content);
     }
+    if (!file_is_socket(addr.sun_path)) {
+      terminal_reset();
+      fprintf(stderr, "No session named '%s'.\n", vv_socket);
+      exit(1);
+    }
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
       close(sockfd);
       velvet_fatal("connect:");
