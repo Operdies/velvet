@@ -6,6 +6,17 @@
 #include "lua.h"
 #include "velvet_scene.h"
 
+enum velvet_coroutine_exit_code {
+  /* set when the chunk succesfully runs to completion */
+  VELVET_COROUTINE_SUCCESS = 0,
+  /* set when the lua chunk fails to compile */
+  VELVET_COROUTINE_SYNTAX_ERROR = 1,
+  /* set when the provided chunk throws an error */
+  VELVET_COROUTINE_ERROR = 2,
+  /* set when the server kills the chunk */
+  VELVET_COROUTINE_KILLED_RELOAD = 3,
+};
+
 enum velvet_input_state {
   VELVET_INPUT_STATE_NORMAL,
   VELVET_INPUT_STATE_ESC,
@@ -39,9 +50,12 @@ struct velvet_session_features {
 };
 
 struct velvet_coroutine {
-  int socket; // socket connection. lua print output and return values are sent here.
+  int socket; /* Socket connection. Used for the status code on close */
+  int out_fd, err_fd; /* stdout / stderr for the coroutine */
   struct string pending_output;
+  struct string pending_error;
   lua_State *coroutine;
+  enum velvet_coroutine_exit_code status;
 };
 
 struct velvet_session {

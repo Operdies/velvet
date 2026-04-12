@@ -11,13 +11,14 @@ static int l_socket_print(lua_State *L) {
   if (!ctx) return 0;
 
   if (source_socket == 0) return 0;
-  struct string *linebuf = &ctx->pending_output;
 
   int n = lua_gettop(L);
-  for (int i = 1; i <= n; i++) {
+  int out_stream = luaL_checkinteger(L, 1);
+  struct string *linebuf = out_stream == 1 ? &ctx->pending_output : &ctx->pending_error;
+  for (int i = 2; i <= n; i++) {
     struct u8_slice s;
     s.content = (uint8_t*)luaL_tolstring(L, i, &s.len);
-    if (i > 1) string_push_char(linebuf, '\t');
+    if (i > 2) string_push_char(linebuf, '\t');
     string_push_slice(linebuf, s);
     lua_pop(L, 1);
   }
@@ -61,11 +62,10 @@ static int l_coroutine_cleanup(lua_State *co) {
   coroutine_cleanup(co);
 
   if (ctx) {
+    bool ok = lua_toboolean(co, 1);
     /* indicate this coroutine is done and the socket can be closed after flushing */
     ctx->coroutine = NULL;
-    if (ctx->pending_output.len == 0) {
-      velvet_coroutine_destroy(v, ctx);
-    }
+    ctx->status = ok ? VELVET_COROUTINE_SUCCESS : VELVET_COROUTINE_ERROR;
   }
 
   return 0;
@@ -80,7 +80,8 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
     size_t len = 0;
     const char *err = lua_tolstring(v->L, -1, &len);
     if (ctx) {
-      string_push_cstr(&ctx->pending_output, err);
+      string_push_cstr(&ctx->pending_error, err);
+      ctx->status = VELVET_COROUTINE_SYNTAX_ERROR;
     } else {
       velvet_log("lua cmd error: %s", err);
     }
@@ -94,7 +95,10 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
     if (status != LUA_OK) {
       const char *err = lua_tostring(v->L, -1);
       velvet_log("pcall: %s", err);
-      if (ctx) string_push_cstr(&ctx->pending_output, err);
+      if (ctx) { 
+        string_push_cstr(&ctx->pending_error, err);
+        ctx->status = VELVET_COROUTINE_ERROR;
+      }
     }
   }
   lua_pop(v->L, lua_gettop(v->L));
@@ -136,12 +140,18 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   }
 }
 
-void velvet_coroutine_destroy(struct velvet *velvet, struct velvet_coroutine *s) {
-  if (s->coroutine) coroutine_cleanup(s->coroutine);
-  if (s->socket) close(s->socket);
-  string_destroy(&s->pending_output);
-  *s = (struct velvet_coroutine){0};
-  size_t idx = vec_index(&velvet->coroutines, s);
+void velvet_coroutine_destroy(struct velvet *velvet, struct velvet_coroutine *co) {
+  if (co->coroutine) coroutine_cleanup(co->coroutine);
+  if (co->socket) {
+    /* ignore errors */
+    write(co->socket, &co->status, sizeof(co->status));
+    close(co->socket);
+  }
+  if (co->out_fd) close(co->out_fd);
+  if (co->err_fd) close(co->err_fd);
+  string_destroy(&co->pending_output);
+  string_destroy(&co->pending_error);
+  *co = (struct velvet_coroutine){0};
+  size_t idx = vec_index(&velvet->coroutines, co);
   vec_remove_at(&velvet->coroutines, idx);
 }
-

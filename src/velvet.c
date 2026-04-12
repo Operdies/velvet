@@ -87,8 +87,7 @@ static void session_handle_lua_chunk(struct velvet *v, struct vv_lua_payload *ch
 static void session_socket_callback(struct io_source *src) {
   struct velvet *velvet = src->data;
   char data_buf[8192] = {0};
-  int fds[2] = {0};
-  char cmsgbuf[CMSG_SPACE(sizeof(fds))] = {0};
+  char cmsgbuf[CMSG_SPACE(sizeof(int) * 3)] = {0};
   struct msghdr msg = {
       .msg_iov = &(struct iovec){.iov_base = data_buf, .iov_len = sizeof(data_buf)},
       .msg_iovlen = 1,
@@ -128,21 +127,26 @@ static void session_socket_callback(struct io_source *src) {
   bool needs_render = false;
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
   if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+    int *fds = (int*)CMSG_DATA(cmsg);
     /* if this is a lua chunk, the fd will be a shared memory map.
      * Otherwise the fds will be in/out handles */
     if (n == sizeof(struct vv_lua_payload)) {
       struct vv_lua_payload *lua_chunk = (struct vv_lua_payload *)data_buf;
       if (lua_chunk->magic == VV_LUA_MAGIC) {
         /* convert this velvet_session to a coroutine */
-        struct velvet_coroutine *co = vec_new_element(&velvet->coroutines);
-        co->socket = src->fd;
-        set_nonblocking(src->fd);
         session->socket = 0;
         velvet_session_destroy(velvet, session);
-        int mapfd;
-        memcpy(&mapfd, CMSG_DATA(cmsg), sizeof(mapfd));
-        set_cloexec(mapfd);
-        session_handle_lua_chunk(velvet, lua_chunk, mapfd, src->fd);
+        struct velvet_coroutine *co = vec_new_element(&velvet->coroutines);
+        co->socket = src->fd;
+        int map_fd = fds[0];
+        co->out_fd = fds[1];
+        co->err_fd = fds[2];
+        set_cloexec(map_fd);
+        set_cloexec(co->out_fd);
+        set_cloexec(co->err_fd);
+        set_nonblocking(co->out_fd);
+        set_nonblocking(co->err_fd);
+        session_handle_lua_chunk(velvet, lua_chunk, map_fd, src->fd);
         vec_find(session, velvet->sessions, session->socket == src->fd);
         if (session && (!session->input || !session->output)) {
           velvet_session_destroy(velvet, session);
@@ -150,7 +154,6 @@ static void session_socket_callback(struct io_source *src) {
         return;
       }
     }
-    memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
     session->input = fds[0];
     session->output = fds[1];
     set_cloexec(session->input);
@@ -275,7 +278,7 @@ static void on_coroutine_hangup(struct io_source *src) {
   }
 }
 
-static void on_coroutine_read(struct io_source *src, struct u8_slice str) {
+static void on_coroutine_socket_read(struct io_source *src, struct u8_slice str) {
   if (str.len == 0) on_coroutine_hangup(src);
 }
 
@@ -294,22 +297,39 @@ static void on_session_input(struct io_source *src, struct u8_slice str) {
   v->input.input_socket = 0;
 }
 
+static bool coroutine_maybe_destroy(struct velvet *v, struct velvet_coroutine *co) {
+  if (co->coroutine == NULL && co->pending_output.len == 0 && co->pending_error.len == 0) {
+    velvet_coroutine_destroy(v, co);
+    return true;
+  }
+  return false;
+}
+
+static void co_write(struct velvet *v, struct velvet_coroutine *co, int fd, struct string *buf) {
+  if (buf->len) {
+    ssize_t written = io_write(fd, string_as_u8_slice(*buf));
+    if (written > 0) {
+      string_shift_left(buf, written);
+    } else if (written == -1 && errno == EPIPE ) {
+      velvet_coroutine_destroy(v, co);
+      return;
+    }
+  }
+  coroutine_maybe_destroy(v, co);
+}
+
+static void on_coroutine_error_writable(struct io_source *src) {
+  struct velvet *velvet = src->data;
+  struct velvet_coroutine *co;
+  vec_find(co, velvet->coroutines, co->err_fd == src->fd);
+  if (co) co_write(velvet, co, co->err_fd, &co->pending_error);
+}
+
 static void on_coroutine_writable(struct io_source *src) {
   struct velvet *velvet = src->data;
   struct velvet_coroutine *co;
-  vec_find(co, velvet->coroutines, co->socket == src->fd);
-  if (co && co->pending_output.len) {
-    ssize_t written = io_write(co->socket, string_as_u8_slice(co->pending_output));
-    if (written == 0) velvet_coroutine_destroy(velvet, co); /* socket closed */
-    if (written > 0) {
-      string_shift_left(&co->pending_output, written);
-    }
-    if (written == -1 && errno == EPIPE ) {
-      velvet_coroutine_destroy(velvet, co);
-    } else if (co->pending_output.len == 0 && co->coroutine == NULL) {
-      velvet_coroutine_destroy(velvet, co);
-    }
-  }
+  vec_find(co, velvet->coroutines, co->out_fd == src->fd);
+  if (co) co_write(velvet, co, co->out_fd, &co->pending_output);
 }
 
 static void on_session_writable(struct io_source *src) {
@@ -498,24 +518,43 @@ static void velvet_dispatch(struct velvet *velvet) {
   }
 
   struct velvet_coroutine *co;
-  vec_foreach(co, velvet->coroutines) {
-    struct io_source src = {
+  vec_rforeach(co, velvet->coroutines) {
+    if (co->coroutine == NULL) {
+      /* handle finished coroutines which never had any output */
+      if (coroutine_maybe_destroy(velvet, co)) continue;
+    }
+    struct io_source socket_src = {
         .data = velvet,
         .fd = co->socket,
         /* monitor the socket closing. This disposes the coroutine */
         .on_hangup = on_coroutine_hangup,
         /* on MacOS, POLLHUP isn't raised when .events=0. To fix this, we always listen for POLLIN.
-         * This is fine since coroutine sockets don't communicate after the initial connection.
-         */
-        .on_read = on_coroutine_read,
+         * This is fine since coroutine sockets don't communicate after the initial connection. */
+        .on_read = on_coroutine_socket_read,
         .events = IO_SOURCE_POLLIN,
     };
-    /* flush buffered content to the socket */
+    /* unconditionally monitor socket for hangup */
+    io_add_source(loop, socket_src);
+
     if (co->pending_output.len > 0) {
-      src.events |= IO_SOURCE_POLLOUT;
-      src.on_writable = on_coroutine_writable;
+      struct io_source out_src = {
+          .data = velvet,
+          .fd = co->out_fd,
+          .events = IO_SOURCE_POLLOUT,
+          .on_writable = on_coroutine_writable,
+      };
+      io_add_source(loop, out_src);
     }
-    io_add_source(loop, src);
+
+    if (co->pending_error.len > 0) {
+      struct io_source err_src = {
+          .data = velvet,
+          .fd = co->err_fd,
+          .events = IO_SOURCE_POLLOUT,
+          .on_writable = on_coroutine_error_writable,
+      };
+      io_add_source(loop, err_src);
+    }
   }
 
   // Dispatch all pending io

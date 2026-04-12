@@ -135,8 +135,8 @@ struct velvet_args {
   char **cmd;
 };
 
-static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload);
-static void vv_send_lua_chunk(struct velvet_args args);
+static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload);
+static int vv_send_lua_chunk(struct velvet_args args);
 static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
@@ -235,7 +235,7 @@ static bool daemonize(void) {
   }
 }
 
-static void vv_send_cmd(struct velvet_args args) {
+static int vv_send_cmd(struct velvet_args args) {
   struct string lua_buf = {0};
   string_push_format_slow(&lua_buf, "return vv.cli.execute([==[%s]==], {", args.cmd[0]);
   for (char **cmd = &args.cmd[1]; *cmd; cmd++) {
@@ -243,8 +243,9 @@ static void vv_send_cmd(struct velvet_args args) {
   }
   string_push_cstr(&lua_buf, "})\n");
 
-  vv_send_lua_payload(args, u8_slice_from_string(lua_buf));
+  int success = vv_send_lua_payload(args, u8_slice_from_string(lua_buf));
   string_destroy(&lua_buf);
+  return success;
 }
 
 int main(int argc, char **argv) {
@@ -262,13 +263,11 @@ int main(int argc, char **argv) {
   }
 
   if (args.lua) {
-    vv_send_lua_chunk(args);
-    return 0;
+    return vv_send_lua_chunk(args);
   }
 
   if (args.cmd) {
-    vv_send_cmd(args);
-    return 0;
+    return vv_send_cmd(args);
   }
 
   // if (getenv("VELVET")) velvet_fatal("Nesting velvet is not supported.");
@@ -515,8 +514,7 @@ struct vv_source {
   struct io loop;
 };
 
-static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload) {
-  char buf[4096];
+static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload) {
   int sockfd = vv_connect(args.socket);
 
   /* overcommit 2x the memory we need. This is not wasteful because the pages don't get
@@ -533,23 +531,20 @@ static void vv_send_lua_payload(struct velvet_args args, struct u8_slice payload
       .magic = VV_LUA_MAGIC,
   };
 
-  int fd = velvet_alloc_shmem_get_fd(shmem);
-  if (socket_send_files(sockfd, &fd, 1, &magic_header, sizeof(magic_header)) == -1) {
+  int shmem_fd = velvet_alloc_shmem_get_fd(shmem);
+  int fds[] = { shmem_fd, STDOUT_FILENO, STDERR_FILENO };
+  if (socket_send_files(sockfd, fds, LENGTH(fds), &magic_header, sizeof(magic_header)) == -1) {
     velvet_fatal("send mmap:");
   }
   /* the server owns the mmap now, so we can close it */
-  velvet_alloc_shmem_destroy(shmem, fd);
+  velvet_alloc_shmem_destroy(shmem, shmem_fd);
 
-  int n = 0;
-  do {
-    n = 0;
-    struct pollfd pfd = {.fd = sockfd, .events = POLLIN};
-    if (poll(&pfd, 1, -1) > 0) {
-      n = read(sockfd, buf, sizeof(buf));
-      if (n > 0) write(STDOUT_FILENO, buf, n);
-    }
-  } while (n > 0);
+  int exit_code = 0;
+  while (read(sockfd, &exit_code, 4) == -1) {
+    if (errno != EINTR) break;
+  }
   close(sockfd);
+  return exit_code;
 }
 
 static void string_read_fd(int fd, struct string *s) {
@@ -566,7 +561,7 @@ static void string_read_fd(int fd, struct string *s) {
   string_ensure_null_terminated(s);
 }
 
-static void vv_send_lua_chunk(struct velvet_args args) {
+static int vv_send_lua_chunk(struct velvet_args args) {
   struct string stdin_buf = {0};
   if (args.lua && args.lua[0] && args.lua[0] != '-') {
     /* this file is only available here -- probably provided in the shell with pipe redirection or similar
@@ -578,8 +573,9 @@ static void vv_send_lua_chunk(struct velvet_args args) {
     string_read_fd(STDIN_FILENO, &stdin_buf);
   }
 
-  vv_send_lua_payload(args, string_as_u8_slice(stdin_buf));
+  int success = vv_send_lua_payload(args, string_as_u8_slice(stdin_buf));
   string_destroy(&stdin_buf);
+  return success;
 }
 
 struct vv_attach_context {
