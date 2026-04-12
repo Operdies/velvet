@@ -13,6 +13,22 @@ local co_to_seq = {}
 -- Monotonically increasing sequence number used to invalidate multi-waits
 local sequence = 1
 
+--- Execute |f| as a coroutine.
+--- @param f fun(...): any
+--- @param ... any arguments passed to f
+--- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
+function M.run(f, ...)
+  local args = table.pack(...)
+  local co = coroutine.create(function()
+    local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
+    if not ok then
+      vv.log(("Unhandled error in coroutine: %s"):format(err), 'error')
+    end
+  end)
+  coroutine.resume(co)
+  return co
+end
+
 --- Cancel all continuations for |co|
 --- @param co thread the thread to cancel
 function M.cancel(co)
@@ -64,20 +80,6 @@ e.any = resolve
 ---| 'pre_render' Raised right before content is rendered. This is useful for applying updates just-in-time.
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
 ---| 'any' Raised when any event is raised.
-
---- Execute |f| as a coroutine.
---- @param f fun(...): any
---- @param ... any arguments passed to f
---- @return nil
-function M.run(f, ...)
-  local args = table.pack(...)
-  coroutine.wrap(function()
-    local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
-    if not ok then
-      vv.log(("Unhandled error in coroutine: %s"):format(err), 'error')
-    end
-  end)()
-end
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
