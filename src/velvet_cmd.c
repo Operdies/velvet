@@ -79,10 +79,11 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   if (luaL_loadbuffer(v->L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
     size_t len = 0;
     const char *err = lua_tolstring(v->L, -1, &len);
-    if (source_socket)
-      write(source_socket, err, len);
-    else
+    if (ctx) {
+      string_push_cstr(&ctx->pending_output, err);
+    } else {
       velvet_log("lua cmd error: %s", err);
+    }
   } else {
     lua_pushinteger(v->L, source_socket);
     lua_pushcclosure(v->L, l_coroutine_setup, 1);
