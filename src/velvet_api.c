@@ -787,9 +787,12 @@ static void reload_callback(void *data) {
     }
   }
 
-  while (v->coroutines.length) {
-    velvet_coroutine_destroy(v, vec_nth(v->coroutines, 0));
+  struct velvet_coroutine *co;
+  vec_foreach(co, v->coroutines) {
+    co->coroutine = NULL;
+    string_push_cstr(&co->pending_output, "Coroutine exited due to lua reload.");
   }
+
   vec_clear(&v->event_loop.scheduled_actions);
   lua_close(L);
   velvet_lua_init(v);
