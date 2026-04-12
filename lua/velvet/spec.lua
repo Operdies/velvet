@@ -756,6 +756,14 @@ return {
       returns = { type = "int", doc = "The window id of the parent window." }
     },
     {
+      name = "window_set_parent",
+      doc = "Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to 0.",
+      params = {
+        { name = "win_id", type = "int", doc = "Window id" },
+        { name = "parent", type = "int", doc = "The window id of the new parent window." },
+      },
+    },
+    {
       name = "window_is_lua",
       doc = "Returns true if |win_id| exists and is a lua window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },

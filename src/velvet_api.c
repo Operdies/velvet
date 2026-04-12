@@ -740,6 +740,12 @@ struct u8_slice vv_api_window_get_foreground_process_name(struct velvet *v, lua_
   return (struct u8_slice){0};
 }
 
+void vv_api_window_set_parent(struct velvet *v, lua_Integer win_id, lua_Integer parent) {
+  struct velvet_window *w1 = check_window(v, win_id);
+  if (parent) check_window(v, parent);
+  w1->parent_window_id = parent;
+}
+
 lua_Integer vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
   return w->parent_window_id;

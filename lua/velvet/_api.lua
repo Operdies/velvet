@@ -435,6 +435,12 @@ function api.window_get_foreground_process_name(win_id) end
 --- @return integer ret The window id of the parent window.
 function api.window_get_parent(win_id) end
 
+--- Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to 0.
+--- @param win_id integer Window id
+--- @param parent integer The window id of the new parent window.
+--- @return nil ret 
+function api.window_set_parent(win_id, parent) end
+
 --- Returns true if |win_id| exists and is a lua window.
 --- @param win_id integer Window id
 --- @return boolean ret Bool indicating if |win_id| is naked.
