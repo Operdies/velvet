@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <locale.h>
 #include <signal.h>
 #include <string.h>
@@ -8,6 +9,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "platform.h"
+#include <stdio.h>
+#include <dirent.h>
 
 #include "utils.h"
 #include "velvet.h"
@@ -66,37 +69,43 @@ static bool file_is_socket(const char *path) {
 
 #define SOCKET_PATH_MAX (int)((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
 
-static int create_socket(char *path) {
+static void ensure_parent_dir_exists(char *base) {
+  char *last_slash = strrchr(base, '/');
+  if (last_slash) {
+    *last_slash = 0;
+    if (!file_exists(base)) {
+      ensure_parent_dir_exists(base);
+      if (mkdir(base, 0700) == -1) velvet_fatal("mkdir %s:", base);
+    }
+    *last_slash = '/';
+  }
+}
+
+static int create_socket(char *name) {
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
-  bool success = false;
   int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) velvet_die("socket:");
 
-  if (!path) {
-    char *base = "/tmp/velvet_sock";
-    for (int i = 1; i < 100 && !success; i++) {
-      snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
-      if (file_is_socket(addr.sun_path)) {
-        int temp_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (connect(temp_sock, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-          // socket is in use -- leave it be
-          close(temp_sock);
-          continue;
-        }
-        // socket is not in use -- use it
-        unlink(addr.sun_path);
-        close(temp_sock);
-      }
-      success = true;
-      break;
+  char namebuf[256] = {0};
+  if (name) {
+    if (name[0] == '/') {
     }
+    snprintf(namebuf, LENGTH(namebuf) - 1, "%s", name);
   } else {
-    if (strcmp(path, "/tmp/velvet-debug") == 0) unlink(path);
-    memcpy(addr.sun_path, path, strlen(path));
-    success = true;
+    snprintf(namebuf, LENGTH(namebuf) - 1, "sock.%d", getpid());
   }
 
-  if (!success) velvet_die("No free socket.");
+  struct string path = {0};
+  string_joinpath(&path, getenv("HOME"), ".local", "share", "velvet", "sockets",
+                  namebuf);
+  string_ensure_null_terminated(&path);
+  ensure_parent_dir_exists((char*)path.content);
+  if (path.len >= LENGTH(addr.sun_path)) velvet_fatal("Socket name too long.");
+  if (file_exists((char *)path.content))
+    unlink((char *)path.content);
+  snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s", (int)path.len, (char*)path.content);
+  string_destroy(&path);
+
   if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
     close(sockfd);
     velvet_fatal("bind:");
@@ -132,7 +141,7 @@ static void usage(char *arg0) {
          "  lua [<file>|-]          Evaluate <file> or stdin on the server.\n"
          "  quit                    Quit the velvet session, killing all windows\n"
          "  reload                  Reload the velvet session, resourcing configs\n"
-         "  -S, --socket <socket>   Specify the socket to use instead of guessing or auto-generating it.\n"
+         "  -S, --socket <name>     Specify the socket to use instead of guessing or auto-generating it.\n"
          "  -h, --help              Show this help text and exit.\n"
          , arg0);
 }
@@ -151,6 +160,8 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     if (F(--socket) || F(-S)) {
       if (a.socket) velvet_fatal("--socket specified multiple times.");
       GET(a.socket);
+      if (strchr(a.socket, '/')) velvet_fatal("Socket name must not contain the '/' character.");
+      if (strlen(a.socket) > 200) velvet_fatal("Socket name too long. Max 200 characters.");
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
@@ -189,14 +200,6 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
   if (a.lua || a.cmd) {
     if (!a.socket) a.socket = getenv("VELVET");
     if (!a.socket) velvet_fatal("Unable to send command; Either specify the --socket or set $VELVET to a socket path.");
-  }
-
-  if (a.socket && !file_is_socket(a.socket) && (a.lua || a.attach)) {
-    velvet_fatal("Socket '%s' is not a unix domain socket.", a.socket);
-  }
-
-  if (a.socket && strlen(a.socket) > SOCKET_PATH_MAX) {
-    velvet_fatal("Socket path max length exceeded. Max: %d", SOCKET_PATH_MAX);
   }
 
   return a;
@@ -433,6 +436,7 @@ static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int 
 
 static int vv_connect(char *vv_socket) {
   int sockfd;
+  bool connected = false;
   // Create the client socket
   sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) {
@@ -441,33 +445,62 @@ static int vv_connect(char *vv_socket) {
 
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
 
-  if (!vv_socket) {
-    char *base = "/tmp/velvet_sock";
-    bool connected = false;
-    for (int i = 1; i < 100 && !connected; i++) {
-      snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s.%d", base, i);
-      if (file_exists(addr.sun_path)) {
-        if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-          // if the socket exists but we cannot connect,
-          // delete it. This is likely from a dead server which did not shut down correctly.
-          unlink(addr.sun_path);
-        } else {
-          connected = true;
-        }
-      }
+  struct string socket_path = {0};
+  string_joinpath(&socket_path, getenv("HOME"), ".local", "share", "velvet", "sockets");
+  string_ensure_null_terminated(&socket_path);
+  if (vv_socket) {
+    /* if the specified socket starts with a '/', assume it is a fully qualified path */
+    if (vv_socket[0] == '/') {
+      snprintf(addr.sun_path, LENGTH(addr.sun_path), "%s", vv_socket);
+    } else {
+      /* otherwise assume it refers to a named session */
+      string_push_format_slow(&socket_path, "/%s", vv_socket);
+      snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s",
+               (int)socket_path.len, (char *)socket_path.content);
     }
-    if (!connected) {
-      terminal_reset();
-      fprintf(stderr, "No sessions.\n");
-      exit(1);
-    }
-  } else {
-    strncpy(addr.sun_path, vv_socket, sizeof(addr.sun_path) - 1);
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
       close(sockfd);
       velvet_fatal("connect:");
     }
+    connected = true;
+  } else {
+    DIR *dir = opendir((char *)socket_path.content);
+    if (!dir) {
+      if (errno == ENOENT)
+        velvet_fatal("no sessions");
+      velvet_fatal("Unable to enumerate sessions:");
+    }
+
+    struct dirent *entry;
+    struct string pathbuf = {0};
+    while ((entry = readdir(dir)) != NULL) {
+      string_clear(&pathbuf);
+      string_joinpath(&pathbuf, (char*)socket_path.content, entry->d_name);
+      string_ensure_null_terminated(&pathbuf);
+      const char *name = entry->d_name;
+
+      // Skip . and ..
+      if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+        continue;
+
+      if (file_is_socket((char *)pathbuf.content)) {
+        snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s", (int)pathbuf.len,
+                 (char *)pathbuf.content);
+        if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+          /* if the socket exists but we cannot connect, delete it. This is
+           * likely from a dead server which did not shut down correctly. */
+          unlink(addr.sun_path);
+        } else {
+          connected = true;
+          break;
+        }
+      }
+    }
+    string_destroy(&pathbuf);
+    closedir(dir);
   }
+  string_destroy(&socket_path);
+  if (!connected) velvet_fatal("No sessions");
   return sockfd;
 }
 
