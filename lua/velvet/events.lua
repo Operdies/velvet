@@ -44,7 +44,7 @@ local events = {
       local handler = group_func_table[event_name]
       local prefix = false
       if not handler then
-        handler = group_func_table["fallback"]
+        handler = group_func_table["any"]
         prefix = true
       end
       if handler then

@@ -5,6 +5,10 @@ error("Cannot require meta file")
 --- @type vv
 vv = {}
 
+-- additional 'any' event which is not emitted by the API generator.
+--- @class velvet.api.event_handler
+--- @field any fun(event_name: string, event_args?: table): nil Raised when any event is raised.
+
 -- convenient alias for named keys.
 -- Note that this alias intentionally omits non-special characters outside of the ascii range,
 -- such as æøå, accented characters, and all eastern glyphs.

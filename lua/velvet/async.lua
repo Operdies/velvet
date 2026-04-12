@@ -24,23 +24,28 @@ function M.cancel(co)
 end
 
 local function resolve(name, ...)
-  local tbl = registered_waits[name] or {}
-  -- capture the current sequence number and ensure we don't resolve anything higher.
-  -- Otherwise a waiter() invocation can trigger on the currently processing event.
   local current_sequence = sequence
-  for seq, _ in pairs(tbl) do
-    if seq <= current_sequence then
-      local waiter = sequence_callbacks[seq]
-      if waiter then
-        sequence_callbacks[seq] = nil
-        waiter(name, ...)
+  local function resolve_table(tbl, ...)
+    -- capture the current sequence number and ensure we don't resolve anything higher.
+    -- Otherwise a waiter() invocation can trigger on the currently processing event.
+    for seq, _ in pairs(tbl) do
+      if seq <= current_sequence then
+        local waiter = sequence_callbacks[seq]
+        if waiter then
+          sequence_callbacks[seq] = nil
+          waiter(name, ...)
+        end
+        tbl[seq] = nil
       end
-      tbl[seq] = nil
     end
   end
+  local named = registered_waits[name] or {}
+  resolve_table(named, ...)
+  local any = registered_waits.any or {}
+  resolve_table(any, ...)
 end
 
-e.fallback = resolve
+e.any = resolve
 
 --- @alias velvet.async.event
 ---| 'session_on_key' Raised when a key is pressed.
@@ -58,6 +63,7 @@ e.fallback = resolve
 ---| 'system_message' Raised when the system logs an error message
 ---| 'pre_render' Raised right before content is rendered. This is useful for applying updates just-in-time.
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
+---| 'any' Raised when any event is raised.
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.

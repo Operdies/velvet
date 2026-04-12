@@ -848,20 +848,25 @@ function M.cancel(co)
 end
 
 local function resolve(name, ...)
-  local tbl = registered_waits[name] or {}
-  -- capture the current sequence number and ensure we don't resolve anything higher.
-  -- Otherwise a waiter() invocation can trigger on the currently processing event.
   local current_sequence = sequence
-  for seq, _ in pairs(tbl) do
-    if seq <= current_sequence then
-      local waiter = sequence_callbacks[seq]
-      if waiter then
-        sequence_callbacks[seq] = nil
-        waiter(name, ...)
+  local function resolve_table(tbl, ...)
+    -- capture the current sequence number and ensure we don't resolve anything higher.
+    -- Otherwise a waiter() invocation can trigger on the currently processing event.
+    for seq, _ in pairs(tbl) do
+      if seq <= current_sequence then
+        local waiter = sequence_callbacks[seq]
+        if waiter then
+          sequence_callbacks[seq] = nil
+          waiter(name, ...)
+        end
+        tbl[seq] = nil
       end
-      tbl[seq] = nil
     end
   end
+  local named = registered_waits[name] or {}
+  resolve_table(named, ...)
+  local any = registered_waits.any or {}
+  resolve_table(any, ...)
 end
 
 ]]))
@@ -869,7 +874,7 @@ end
 --- set up event handlers for each event {{{3
 
 table.insert(async, [[
-e.fallback = resolve
+e.any = resolve
 ]])
 
 --- Event name type alias {{{3
@@ -880,6 +885,7 @@ table.insert(async, [[
 for _, evt in ipairs(spec.events) do
   table.insert(async, ("---| '%s' %s\n"):format(evt.name, evt.doc))
 end
+table.insert(async, "---| 'any' Raised when any event is raised.\n")
 
 table.insert(async, [[
 
