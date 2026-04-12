@@ -7,7 +7,6 @@ exec vv lua "$0" "$@"
 -- This script demonstrates how overlays can be used to draw user attention.
 --]]
 
-local torch_render = vv.events.create_group('torch_group', true)
 local torch = require('velvet.window').create()
 torch:set_cursor_visible(false)
 torch:set_alternate_screen(true)
@@ -56,26 +55,26 @@ local function draw()
   end
 end
 
-local function invalidate()
-  -- force invalidate to trigger the pre_render
-  torch:draw(' ')
-end
-local function pass()
-  invalidate()
-  return 'passthrough'
-end
-
-local function dispose()
-  vv.events.delete_group(torch_render)
-  torch:close()
-end
-
+-- pass all overlay mouse events through to the window below
+local function pass() return 'passthrough' end
 torch:on_mouse_click(pass)
 torch:on_mouse_move(pass)
 torch:on_mouse_scroll(pass)
-torch_render.session_on_key = function (key)
-  if key.key.name == 'ESCAPE' then dispose() end
+
+draw()
+while true do
+  local name, args = vv.async.wait('mouse_move', 'session_on_key', 'window_closed', 'screen_resized')
+  -- since async.wait() yields, the window could have been closed during the wait() call
+  if not torch:valid() then break end
+  if name == 'mouse_move' or name == 'screen_resized' then
+    -- force invalidate to trigger the pre_render
+    torch:draw(' ')
+    -- defer redrawing the screen until velvet schedules a render.
+    -- otherwise we waste time creating intermediate frames which will never be presented.
+    vv.async.wait_for_pre_render()
+    if not torch:valid() then break end
+    draw()
+  elseif name == 'session_on_key' then
+    if args.key.name == 'ESCAPE' then torch:close(); break; end
+  end
 end
-torch:on_screen_resized(invalidate)
--- only draw on pre-render because mouse events are extremely busy.
-torch_render.pre_render = function() draw() end
