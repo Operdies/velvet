@@ -3,62 +3,59 @@
 #include "platform.h"
 
 
-#define NUM_WRITES 10000
-
-void pretty_bytes(uint64_t nb, uint64_t *rb, char **pf) {
+void pretty_bytes(uint64_t nb, double *rb, char **pf) {
   static char *postfix[] = { "B", "kB", "mB", "gB", "tB" };
   int i = 0;
-  while (nb > 1024) {
-    nb /= 1024;
+  *rb = nb;
+  while (*rb > 1024) {
+    *rb /= 1024;
     i++;
   }
   *pf = postfix[i];
-  *rb = nb;
 }
 
+static void report(char *name, double secs, uint64_t bytes) {
+  double pb;
+  char *pfx;
+  pretty_bytes(bytes, &pb, &pfx);
+  double throughput = (double)bytes / secs;
+  double tb;
+  char *tpfx;
+  pretty_bytes((uint64_t)throughput, &tb, &tpfx);
+  printf("%s: %.1f %s in %.1fs (%.1f %s/s)\n", name, pb, pfx, secs, tb, tpfx);
+}
+
+uint64_t spam_write(int fd, char *buf, size_t bufsize, uint64_t timeout) {
+  uint64_t now = get_ms_since_startup();
+  uint64_t written = 0;
+  while ((get_ms_since_startup() - now) < timeout)
+    written += write(fd, buf, bufsize);
+  return written;
+}
+
+#define TIMEOUT 2000
 int main(void) {
-  uint64_t ascii_bytes;
-  char *ascii_prefix;
-  double ascii_secs;
+  uint64_t ascii_write = 0;
 
   char buf[1 << 16];
-  {
-    char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    for (int i = 0; i < LENGTH(buf); i++) {
-      buf[i] = alphabet[i % LENGTH(alphabet)];
-    }
-
-    uint64_t now = get_ms_since_startup();
-
-    for (int i = 0; i < NUM_WRITES; i++)
-      write(STDOUT_FILENO, buf, LENGTH(buf));
-
-    uint64_t end = get_ms_since_startup();
-    ascii_secs = ((double)end - now) / 1000;
-    pretty_bytes(NUM_WRITES * LENGTH(buf), &ascii_bytes, &ascii_prefix);
+  char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (int i = 0; i < LENGTH(buf); i++) {
+    buf[i] = alphabet[i % LENGTH(alphabet)];
   }
 
-  uint64_t multibyte_bytes;
-  char *multibyte_prefix;
-  double multibyte_secs;
-  {
-    char alphabet[] = "ø󰬄󰬞󱁬󱉈󰼃󰽗󱑶󰩡󰡾󱤞";
-    for (int i = 0; i < LENGTH(buf); i++) {
-      buf[i] = alphabet[i % LENGTH(alphabet)];
-    }
+  ascii_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), TIMEOUT);
 
-    uint64_t now = get_ms_since_startup();
-
-    for (int i = 0; i < NUM_WRITES; i++)
-      write(STDOUT_FILENO, buf, LENGTH(buf));
-
-    uint64_t end = get_ms_since_startup();
-    multibyte_secs = ((double)end - now) / 1000;
-    pretty_bytes(NUM_WRITES * LENGTH(buf), &multibyte_bytes, &multibyte_prefix);
+  uint64_t multibyte_write = 0;
+  char wide_alphabet[] =
+      "ø󰬄󰬞󱁬󱉈󰼃󰽗󱑶󰩡󰡾󱤞";
+  for (int i = 0; i < LENGTH(buf); i++) {
+    buf[i] = wide_alphabet[i % LENGTH(wide_alphabet)];
   }
+  multibyte_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), TIMEOUT);
 
-  printf("\n\nPure ascii: %llu%s in %fs\n", ascii_bytes, ascii_prefix, ascii_secs);
-  printf("\n\nPure multibyte: %llu%s in %fs\n", multibyte_bytes, multibyte_prefix, multibyte_secs);
+  printf("\x1b[2J\x1b[H");
+  report("ascii", (double)TIMEOUT / 1000, ascii_write);
+  report("glyphs", (double)TIMEOUT / 1000, multibyte_write);
 
   return 0;
 }
