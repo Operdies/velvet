@@ -1,7 +1,7 @@
 --- @alias window.drag_event
---- | 'move_start'
---- | 'move_continue'
---- | 'move_end'
+--- | 'move.start'
+--- | 'move.continue'
+--- | 'move.end'
 
 --- @class window.drag_args
 --- @field type window.drag_event
@@ -261,9 +261,9 @@ hooks.screen_resized = function (args)
 end
 
 --- @alias mouse_event
---- | 'mouse_click'
---- | 'mouse_move'
---- | 'mouse_scroll'
+--- | 'mouse.click'
+--- | 'mouse.move'
+--- | 'mouse.scroll'
 
 --- @class border_drag
 --- @field win velvet.window
@@ -295,9 +295,9 @@ local function top_border_drag(brd, args, event_name)
     end
   end
 
-  if event_name == 'mouse_click' then
+  if event_name == 'mouse.click' then
     if args.event_type == 'mouse_up' then
-      if border_drag then dispatch_evt(border_drag, 'move_end') end
+      if border_drag then dispatch_evt(border_drag, 'move.end') end
       border_drag = nil
     else
       border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
@@ -308,7 +308,7 @@ local function top_border_drag(brd, args, event_name)
   local dcol = gcol - border_drag.col
   local drow = grow - border_drag.row
   brd.parent:set_geometry({ left = border_drag.left + dcol, top = border_drag.top + drow, width = pg.width, height = pg.height })
-  dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'move_start' or 'move_continue')
+  dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'move.start' or 'move.continue')
 end
 
 --- @param brd velvet.window
@@ -331,34 +331,50 @@ local function corner_resize_drag(brd, args, event_name)
     end
   end
 
-  if event_name == 'mouse_click' and args.pos.col == geom.width and args.event_type == 'mouse_down' then
+  if event_name == 'mouse.click' and args.pos.col == geom.width and args.event_type == 'mouse_down' then
     border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
   elseif args.event_type == 'mouse_up' then
-    if border_drag then dispatch_evt(border_drag, 'resize_end') end
+    if border_drag then dispatch_evt(border_drag, 'resize.end') end
     border_drag = nil
   end
   if not border_drag then return end
 
-  dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'resize_start' or 'resize_continue')
+  dispatch_evt(border_drag, args.event_type == 'mouse_down' and 'resize.start' or 'resize.continue')
   local new_geom = { left = border_drag.left, top = border_drag.top, width = gcol - border_drag.left - 1, height = grow - border_drag.top - 1 }
   brd.parent:set_geometry(new_geom)
 end
 
+-- lock mouse to window during drag events. This is needed for features
+-- such as dragging a window by its border since moving the mouse off the
+-- border would cause the mouse to overlap some other window.
 --- @type velvet.window | nil
-local dragged = nil
+local mouse_locked_window = nil
+
 --- @param event mouse_event event name
 --- @param args velvet.api.mouse.click.event_args | velvet.api.mouse.move.event_args | velvet.api.mouse.scroll.event_args
 local function route_mouse_events(event, args)
   local win = args.win_id and args.win_id > 0 and win_registry[args.win_id]
-  if dragged and dragged:valid() then win = dragged end
+  if mouse_locked_window and mouse_locked_window:valid() then win = mouse_locked_window end
+  if not win then return end
+
+  vv.events.emit_event(("%s.%d"):format(event, args.win_id), args)
+  local window_func = win['on_' .. event:gsub('[.]', '_') .. '_handler']
 
   if win and win:valid() then
-    if args.event_type and args.event_type == 'mouse_down' then
-      dragged = win
-    elseif args.event_type and args.event_type == 'mouse_up' then
-      dragged = nil
+    if win:is_lua() then
+      -- don't lock lua windows with no handlers
+      if not window_func then return end
+    elseif event ~= 'mouse.scroll' then
+      -- don't lock regular windows with no reporting
+      local opt = vv.api.window_get_mouse_settings(win.id)
+      if opt.reporting == 'off' then return end
     end
-    if event == 'mouse_click' then
+    if args.event_type and args.event_type == 'mouse_down' then
+      mouse_locked_window = win
+    elseif args.event_type and args.event_type == 'mouse_up' then
+      mouse_locked_window = nil
+    end
+    if event == 'mouse.click' then
       if win.is_border then
         win.parent:focus()
       else
@@ -372,11 +388,12 @@ local function route_mouse_events(event, args)
     args.pos = { col = 1 + gpos.col - geom.left, row = 1 + gpos.row - geom.top }
     args.win_id = win.id
 
-    local window_func = 'on_' .. event .. '_handler'
-    if win[window_func] then
-      local ret = win[window_func](win, args)
+    if not win:is_lua() then
+      vv.api['window_send_' .. event:gsub('[.]', '_')](args)
+    elseif window_func then
+      local ret = window_func(win, args)
       if ret == 'passthrough' then
-        dragged = nil
+        mouse_locked_window = nil
         local above = Window.get_window_at_coordinate(gpos, win:get_z_index())
         for _, next in ipairs(above) do
           if next.id ~= win.id then
@@ -387,16 +404,13 @@ local function route_mouse_events(event, args)
           end
         end
       end
-    else
-      vv.api['window_send_' .. event](args)
     end
-    vv.events.emit_event(("%s:%d"):format(event, args.win_id), args)
   end
 end
 
-hooks.mouse_click = function(args) route_mouse_events('mouse_click', args) end
-hooks.mouse_move = function(args) route_mouse_events('mouse_move', args) end
-hooks.mouse_scroll = function(args) route_mouse_events('mouse_scroll', args) end
+hooks.mouse_click = function(args) route_mouse_events('mouse.click', args) end
+hooks.mouse_move = function(args) route_mouse_events('mouse.move', args) end
+hooks.mouse_scroll = function(args) route_mouse_events('mouse.scroll', args) end
 
 --- get window geometry
 --- @return velvet.api.rect
@@ -515,9 +529,9 @@ function Window.from_handle(id)
   local instance = setmetatable(self, Window)
   win_registry[id] = instance
   instance.event = {
-    mouse_click = 'mouse_click:' .. id,
-    mouse_move = 'mouse_move:' .. id,
-    mouse_scroll = 'mouse_scroll:' .. id
+    mouse_click = 'mouse_click.' .. id,
+    mouse_move = 'mouse_move.' .. id,
+    mouse_scroll = 'mouse_scroll.' .. id
   }
   return instance
 end
@@ -604,10 +618,10 @@ function Window:set_frame_enabled(enabled)
       brd.is_border = true
       brd:set_cursor_visible(false)
     end
-    self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
-    self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse_move") end)
-    self.borders.bottom:on_mouse_click(function(win, args) corner_resize_drag(win, args, "mouse_click") end)
-    self.borders.bottom:on_mouse_move(function(win, args) corner_resize_drag(win, args, "mouse_move") end)
+    self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse.click") end)
+    self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse.move") end)
+    self.borders.bottom:on_mouse_click(function(win, args) corner_resize_drag(win, args, "mouse.click") end)
+    self.borders.bottom:on_mouse_move(function(win, args) corner_resize_drag(win, args, "mouse.move") end)
   end
   if not enabled and self.borders then
     for _, brd in pairs(self.borders) do

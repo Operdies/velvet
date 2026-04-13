@@ -485,9 +485,9 @@ local function drop_or_show_hint(w, args)
     state.layers[w.id] = 'tiled'
   end
 
-  if args.type == 'move_end' then
+  if args.type == 'move.end' then
     drop_window()
-  elseif args.type == 'move_continue' then
+  elseif args.type == 'move.continue' then
     show_drop_hint()
   end
 end
@@ -499,15 +499,15 @@ local function add_window(id, init)
   win:set_frame_enabled(true)
   win.on_drag = function(w, args)
     drop_hint:set_visibility(false)
-    if args.type == 'move_end' or args.type == 'resize_end' then 
+    if args.type == 'move.end' or args.type == 'resize.end' then 
       drop_hint:set_visibility(false)
       dragging = nil 
     end
-    if args.type == 'move_end' and args.modifiers.alt then
+    if args.type == 'move.end' and args.modifiers.alt then
       drop_or_show_hint(w, args)
       state.layers[w.id] = 'tiled'
       arrange()
-    elseif args.type == 'move_continue' then
+    elseif args.type == 'move.continue' then
       if not dragging then
         dragging = w
         if table_index(left_stack, w) then 
@@ -518,13 +518,13 @@ local function add_window(id, init)
         arrange()
       end
       if args.modifiers.alt then drop_or_show_hint(w, args) end
-    elseif args.type == 'resize_continue' then
+    elseif args.type == 'resize.continue' then
       dragging = w
       if state.layers[w.id] ~= 'floating' then
         state.layers[w.id] = 'floating'
         arrange()
       end
-    elseif args.type == 'resize_end' then
+    elseif args.type == 'resize.end' then
       dragging = nil
     end
   end
