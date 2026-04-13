@@ -39,6 +39,8 @@ local floating_alpha = 0.8
 
 local move_duration = 0
 
+local monocle = false
+
 --- @alias arrange string arrange mode
 ---|'tiled' dwm-style master-stack tiling
 
@@ -150,7 +152,9 @@ end
 local function visibleontags(id)
   local win_tags = state.tags[id] or {}
   for i, v in ipairs(state.view) do
-    if v and win_tags[i] then return true end
+    if v and win_tags[i] then 
+      return true 
+    end
   end
   return false
 end
@@ -239,6 +243,7 @@ local km = require('velvet.keymap')
 local chain = nil
 --- @return nil
 local function status_update()
+  local tag_start = 3
   taskbar:set_visibility(show_status)
   if not show_status then return end
   local sz = vv.api.get_screen_geometry()
@@ -249,7 +254,7 @@ local function status_update()
   taskbar:set_alpha(0)
   taskbar:clear()
   taskbar:set_foreground_color('black')
-  taskbar:set_cursor(3, 1)
+  taskbar:set_cursor(tag_start, 1)
 
   local on_click = {}
 
@@ -259,6 +264,28 @@ local function status_update()
       local c1, c2 = taskbar:draw((" %d "):format(i))
       on_click[#on_click+1] = { c1.col, c2.col - 1, function() dwm.set_view(i) end }
     end
+  end
+
+  local transient_start = taskbar:get_cursor().col + 10
+
+  local passthrough = km.get_passthrough()
+  if passthrough then
+    local segment = " Direct Input "
+    taskbar:set_foreground_color('black')
+    taskbar:set_background_color('cyan')
+    taskbar:set_cursor(transient_start, 1)
+    local c1, c2 = taskbar:draw(segment)
+    on_click[#on_click+1] = { c1.col, c2.col - 1, function() km.set_passthrough(false) end }
+    transient_start = c2.col
+  end
+
+  if monocle then
+    local segment = " Monocle "
+    taskbar:set_foreground_color('black')
+    taskbar:set_background_color('magenta')
+    taskbar:set_cursor(transient_start, 1)
+    local _, c2 = taskbar:draw(segment)
+    transient_start = c2.col
   end
 
   if chain and #chain > 0 then 
@@ -271,15 +298,6 @@ local function status_update()
     taskbar:draw(' ' .. chain .. ' ')
   end
 
-  local passthrough = km.get_passthrough()
-  if passthrough then
-    local segment = " Direct Input "
-    taskbar:set_foreground_color('black')
-    taskbar:set_background_color('red')
-    taskbar:set_cursor(sz.width // 2 - vv.api.string_display_width(segment) // 2, 1)
-    local c1, c2 = taskbar:draw(segment)
-    on_click[#on_click+1] = { c1.col, c2.col - 1, function() km.set_passthrough(false) end }
-  end
 
   --- @param args velvet.api.mouse.move.event_args|velvet.api.mouse.click.event_args
   local function view_mouse_hit(_, args)
@@ -305,12 +323,6 @@ local left_stack = {}
 local right_stack = {}
 
 local function tile()
-  local num_visible = 0
-  for _, win in ipairs(windows) do
-    if visibleontags(win) then num_visible = num_visible + 1 end
-    if num_visible > 1 then break end
-  end
-
   status_update()
   local term = vv.api.get_screen_geometry()
 
@@ -329,9 +341,15 @@ local function tile()
   focused_id = vv.api.get_focused_window()
   left_stack = {}
   right_stack = {}
+
+  local function include(id)
+    if monocle then return id == focused_id and visibleontags(id) end
+    return visibleontags(id)
+  end
+
   for _, id in ipairs(windows) do
     local win = window.from_handle(id)
-    local vis = visibleontags(id)
+    local vis = include(id)
     win:set_visibility(vis)
     local floating = state.layers[win.id] == 'floating'
     if floating then
@@ -795,7 +813,7 @@ end
 
 --- Swap the selected window with the first tiled window.
 --- If the selected window is the first tiled window, swap with the next tiled window.
-function dwm.zoom()
+function dwm.swap_main()
   local focus_id = vv.api.get_focused_window()
   if focus_id == 0 then return end
   local focus_index = table_index(windows, focus_id)
@@ -808,6 +826,12 @@ function dwm.zoom()
     if new_focus then set_focus(windows[new_focus]) end
     arrange()
   end
+end
+
+--- Toggle monocle mode. In monocle mode, the focused window will fill the whole screen.
+function dwm.toggle_monocle()
+  monocle = not monocle
+  arrange()
 end
 
 --- reserve `n` lines/columns from top,left,bottom,right

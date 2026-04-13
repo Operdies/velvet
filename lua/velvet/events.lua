@@ -42,7 +42,7 @@ local events = {
     local args = table.pack(...)
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
-      local handler = group_func_table[lookup_key]
+      local handler = group_func_table[lookup_key] or group_func_table[event_name]
       local prefix = false
       if not handler then
         handler = group_func_table["**"]
