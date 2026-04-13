@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "collections.h"
 #include "platform.h"
 
@@ -33,9 +34,10 @@ uint64_t spam_write(int fd, char *buf, size_t bufsize, uint64_t timeout) {
   return written;
 }
 
-#define TIMEOUT 2000
-int main(void) {
+int main(int argc, char **argv) {
   uint64_t ascii_write = 0;
+
+  int timeout = argc > 1 ? atoi(argv[1]) : 1000;
 
   char buf[1 << 16];
   char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -43,7 +45,7 @@ int main(void) {
     buf[i] = alphabet[i % LENGTH(alphabet)];
   }
 
-  ascii_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), TIMEOUT);
+  ascii_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), timeout);
 
   uint64_t multibyte_write = 0;
   char wide_alphabet[] =
@@ -51,11 +53,11 @@ int main(void) {
   for (int i = 0; i < LENGTH(buf); i++) {
     buf[i] = wide_alphabet[i % LENGTH(wide_alphabet)];
   }
-  multibyte_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), TIMEOUT);
+  multibyte_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), timeout);
 
   printf("\x1b[2J\x1b[H");
-  report("ascii", (double)TIMEOUT / 1000, ascii_write);
-  report("glyphs", (double)TIMEOUT / 1000, multibyte_write);
+  report("ascii", (double)timeout / 1000, ascii_write);
+  report("glyphs", (double)timeout / 1000, multibyte_write);
 
   return 0;
 }
