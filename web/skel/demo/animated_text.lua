@@ -106,4 +106,6 @@ And that has made all the difference.]]
   dispose()
 end
 
-animated_typing()
+-- run the typing function async -- otherwise
+-- the command line would be occuppied until the function is done.
+vv.async.run(animated_typing)
