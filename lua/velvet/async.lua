@@ -138,7 +138,7 @@ function M.wait(...)
         -- if sequence_callbacks was unset, that means this coroutine was cancelled.
         if not sequence_callbacks[seq] then return end
         sequence_callbacks[seq] = nil
-        local ok, error = coroutine.resume(co, "timeout")
+        local ok, error = coroutine.resume(co, nil, "timeout")
         if not ok then
           vv.log(("Unhandled error in coroutine: %s (event: timeout)"):format(error), 'error')
           vv.log(debug.traceback(error, 0), 'debug')
