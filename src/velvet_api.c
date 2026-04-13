@@ -310,7 +310,7 @@ lua_stackRetCount vv_api_window_get_text(lua_State *L, lua_Integer win_id, struc
     lua_setfield(L, -2, "wraps");
     for (int col = region.left; col < region.left + region.width; col++) {
       struct screen_cell *c, *p;
-      c = &l->cells[col];
+      c = &screen_line_get_cells(screen, l)[col];
       p = col ? c - 1 : NULL;
       if (p && p->cp.is_wide) {
         /* If the left boundary is a wide char, insert a space instead

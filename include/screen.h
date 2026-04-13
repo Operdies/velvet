@@ -82,7 +82,7 @@ struct screen_line {
   // Track how many characters are significant on this line. This is needed for
   // reflowing when resizing screens.
   int eol;
-  struct screen_cell *cells;
+  struct screen_cell cells[];
 };
 
 // 0-indexed screen coordinates. This cursor points at a raw cell
@@ -124,8 +124,13 @@ struct screen {
      */
     int view_offset; /* 0 <= view_offset <= height */
   } scroll;
-  struct screen_cell *cells;
-  struct screen_line *lines;
+  struct {
+    /* buffer is screen_line[capacity], where each cells is screen_cell[w]
+     * It is stored as a void pointer to guard against unintentional access.
+     * Lines should only be accessed through the accessor functions. */
+    void *buffer;
+    int line_size;
+  };
   struct cursor cursor;
   struct cursor saved_cursor;
 };
@@ -174,5 +179,6 @@ void screen_copy_alternate(struct screen *restrict dst, const struct screen *con
 int screen_get_scroll_height(struct screen *s);
 int screen_get_scroll_offset(struct screen *s);
 void screen_set_scroll_offset(struct screen *s, int value);
+struct screen_cell *screen_line_get_cells(const struct screen *s, struct screen_line *l);
 
 #endif /*  SCREEN_H */

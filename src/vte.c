@@ -134,8 +134,9 @@ static void vte_dispatch_pnd(struct vte *vte, unsigned char ch) {
     struct screen *g = vte_get_current_screen(vte);
     for (int rowidx = 0; rowidx < g->h; rowidx++) {
       struct screen_line *row = screen_get_line(g, rowidx);
+      struct screen_cell *row_cells = screen_line_get_cells(g, row);
       for (int col = 0; col < g->w; col++) {
-        row->cells[col] = E;
+        row_cells[col] = E;
       }
       row->eol = g->w;
     }
@@ -499,7 +500,7 @@ static void vte_init_alternate_screen(struct vte *vte) {
   if (vte->alternate.w != vte->ws.width || vte->alternate.h != vte->ws.height) {
     struct screen new = {.w = vte->ws.width, .h =  vte->ws.height};
     screen_initialize(&new, vte->ws.width,  vte->ws.height);
-    if (vte->alternate.cells) {
+    if (vte->alternate.buffer) {
       screen_copy_alternate(&new, &vte->alternate);
     }
     screen_destroy(&vte->alternate);
@@ -522,7 +523,7 @@ static void vte_init_primary_screen(struct vte *vte) {
   if (vte->primary.w != vte->ws.width || vte->primary.h !=  vte->ws.height) {
     struct screen new = { .w = vte->ws.width, .h =  vte->ws.height, .scroll.max = vte->primary.scroll.max };
     screen_initialize(&new, vte->ws.width,  vte->ws.height);
-    if (vte->primary.cells) {
+    if (vte->primary.buffer) {
       screen_copy_primary(&new, &vte->primary);
     }
     screen_destroy(&vte->primary);
@@ -540,7 +541,7 @@ void vte_set_size(struct vte *vte, struct rect sz) {
   struct screen *g = vte_get_current_screen(vte);
   vte->ws = sz;
 
-  if (g->cells == NULL || g->w != sz.width || g->h != sz.height) {
+  if (g->buffer == NULL || g->w != sz.width || g->h != sz.height) {
     vte_init_alternate_screen(vte);
     vte_init_primary_screen(vte);
   }

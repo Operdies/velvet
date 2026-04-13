@@ -534,7 +534,8 @@ velvet_render_copy_cells_from_window(struct velvet_scene *scene, struct velvet_w
     int render_line = win->geometry.top + line;
     for (int column = c_start; column < c_end; column++) {
       int render_column = win->geometry.left + column;
-      struct screen_cell cell = screen_line->cells[column];
+      struct screen_cell *screen_line_cells = screen_line_get_cells(win_buf, screen_line);
+      struct screen_cell cell = screen_line_cells[column];
       if (r->options.display_eol) {
         if (screen_line->has_newline) {
           if (screen_line->eol == 0 && column == 0) {
