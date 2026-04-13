@@ -45,15 +45,19 @@ local function resolve(name, ...)
   local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
-    for seq, _ in pairs(tbl) do
+    for seq, when in pairs(tbl) do
       if type(seq) == 'number' then
         if seq <= current_sequence then
-          local waiter = sequence_callbacks[seq]
-          if waiter then
-            sequence_callbacks[seq] = nil
-            waiter(name, table.unpack(resolve_args))
+          local is_match = true
+          if type(when) == 'function' then is_match = when(name, table.unpack(resolve_args)) end
+          if is_match then
+            local waiter = sequence_callbacks[seq]
+            if waiter then
+              sequence_callbacks[seq] = nil
+              waiter(name, table.unpack(resolve_args))
+            end
+            tbl[seq] = nil
           end
-          tbl[seq] = nil
         end
       end
     end
@@ -104,9 +108,13 @@ e['**'] = resolve
 ---| '*' Raised when any dotless event is raised.
 ---| '**' Raised when any event is raised.
 
+--- @class velvet.async.event_registration
+--- @field event velvet.async.event|string event
+--- @field when fun(event: string, data: table): boolean predicate function
+
 --- Wait for one of the events to fire, or |timeout|.
---- @param ... velvet.async.event|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event|'timeout', table The name of the event and the result, or nil on 'timeout'
+--- @param ... velvet.async.event|velvet.async.event_registration|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
+--- @return velvet.async.event, table|'timeout' The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -117,8 +125,8 @@ function M.wait(...)
   local args = {...}
   if #args == 0 then error("No events specified.") end
   for i, evt in ipairs(args) do
-    if type(evt) ~= 'number' and type(evt) ~= 'string' then
-      error(("Bad argument #%d (number or string expected)"):format(i))
+    if type(evt) ~= 'number' and type(evt) ~= 'string' and type(evt) ~= 'table' then
+      error(("Bad argument #%d (number, string or table expected)"):format(i))
     end
   end
 
@@ -144,9 +152,21 @@ function M.wait(...)
           vv.log(debug.traceback(error, 0), 'debug')
         end
       end)
-    elseif type(evt) == 'string' then
+    elseif type(evt) == 'string' or type(evt) == 'table' then
+      local event = evt
+      --- @type boolean|function
+      local when = true
+      if type(evt) == 'table' then
+        assert(type(evt.event) == 'string', ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
+        if evt.when ~= nil then
+          assert(type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
+        end
+        event = evt.event
+        when = evt.when
+      end
+      assert(type(event) == 'string')
       local tbl = registered_waits
-      for segment in evt:gmatch('[^.]+') do
+      for segment in event:gmatch('[^.]+') do
         local sub = tbl[segment]
         if not sub then
           sub = {}; tbl[segment] = sub
@@ -154,9 +174,9 @@ function M.wait(...)
         tbl = sub
       end
       if tbl == registered_waits then 
-        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, evt))
+        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      tbl[seq] = true
+      tbl[seq] = when
     else 
       error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
@@ -167,106 +187,151 @@ end
 
 --- Wait for session.on_key
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.session.key.event_args): boolean predicate function
 --- @return velvet.api.session.key.event_args ret Result, or nil on timeout.
-function M.wait_for_session_on_key(timeout)
-  return select(2, M.wait('session.on_key', timeout))
+function M.wait_for_session_on_key(timeout, when)
+  local event = 'session.on_key'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.created
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.created.event_args): boolean predicate function
 --- @return velvet.api.window.created.event_args ret Result, or nil on timeout.
-function M.wait_for_window_created(timeout)
-  return select(2, M.wait('window.created', timeout))
+function M.wait_for_window_created(timeout, when)
+  local event = 'window.created'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.closed
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.closed.event_args): boolean predicate function
 --- @return velvet.api.window.closed.event_args ret Result, or nil on timeout.
-function M.wait_for_window_closed(timeout)
-  return select(2, M.wait('window.closed', timeout))
+function M.wait_for_window_closed(timeout, when)
+  local event = 'window.closed'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.output
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.output.event_args): boolean predicate function
 --- @return velvet.api.window.output.event_args ret Result, or nil on timeout.
-function M.wait_for_window_output(timeout)
-  return select(2, M.wait('window.output', timeout))
+function M.wait_for_window_output(timeout, when)
+  local event = 'window.output'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.moved
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.moved.event_args): boolean predicate function
 --- @return velvet.api.window.moved.event_args ret Result, or nil on timeout.
-function M.wait_for_window_moved(timeout)
-  return select(2, M.wait('window.moved', timeout))
+function M.wait_for_window_moved(timeout, when)
+  local event = 'window.moved'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.resized
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.resized.event_args): boolean predicate function
 --- @return velvet.api.window.resized.event_args ret Result, or nil on timeout.
-function M.wait_for_window_resized(timeout)
-  return select(2, M.wait('window.resized', timeout))
+function M.wait_for_window_resized(timeout, when)
+  local event = 'window.resized'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.on_key
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.on_key.event_args): boolean predicate function
 --- @return velvet.api.window.on_key.event_args ret Result, or nil on timeout.
-function M.wait_for_window_on_key(timeout)
-  return select(2, M.wait('window.on_key', timeout))
+function M.wait_for_window_on_key(timeout, when)
+  local event = 'window.on_key'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for window.focus_changed
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.focus_changed.event_args): boolean predicate function
 --- @return velvet.api.window.focus_changed.event_args ret Result, or nil on timeout.
-function M.wait_for_window_focus_changed(timeout)
-  return select(2, M.wait('window.focus_changed', timeout))
+function M.wait_for_window_focus_changed(timeout, when)
+  local event = 'window.focus_changed'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for screen.resized
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.screen.resized.event_args): boolean predicate function
 --- @return velvet.api.screen.resized.event_args ret Result, or nil on timeout.
-function M.wait_for_screen_resized(timeout)
-  return select(2, M.wait('screen.resized', timeout))
+function M.wait_for_screen_resized(timeout, when)
+  local event = 'screen.resized'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for mouse.move
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.mouse.move.event_args): boolean predicate function
 --- @return velvet.api.mouse.move.event_args ret Result, or nil on timeout.
-function M.wait_for_mouse_move(timeout)
-  return select(2, M.wait('mouse.move', timeout))
+function M.wait_for_mouse_move(timeout, when)
+  local event = 'mouse.move'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for mouse.click
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.mouse.click.event_args): boolean predicate function
 --- @return velvet.api.mouse.click.event_args ret Result, or nil on timeout.
-function M.wait_for_mouse_click(timeout)
-  return select(2, M.wait('mouse.click', timeout))
+function M.wait_for_mouse_click(timeout, when)
+  local event = 'mouse.click'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for mouse.scroll
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.mouse.scroll.event_args): boolean predicate function
 --- @return velvet.api.mouse.scroll.event_args ret Result, or nil on timeout.
-function M.wait_for_mouse_scroll(timeout)
-  return select(2, M.wait('mouse.scroll', timeout))
+function M.wait_for_mouse_scroll(timeout, when)
+  local event = 'mouse.scroll'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for system_message
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.system_message.event_args): boolean predicate function
 --- @return velvet.api.system_message.event_args ret Result, or nil on timeout.
-function M.wait_for_system_message(timeout)
-  return select(2, M.wait('system_message', timeout))
+function M.wait_for_system_message(timeout, when)
+  local event = 'system_message'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for pre_render
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.pre_render.event_args): boolean predicate function
 --- @return velvet.api.pre_render.event_args ret Result, or nil on timeout.
-function M.wait_for_pre_render(timeout)
-  return select(2, M.wait('pre_render', timeout))
+function M.wait_for_pre_render(timeout, when)
+  local event = 'pre_render'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 
 --- Wait for pre_reload
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.pre_reload.event_args): boolean predicate function
 --- @return velvet.api.pre_reload.event_args ret Result, or nil on timeout.
-function M.wait_for_pre_reload(timeout)
-  return select(2, M.wait('pre_reload', timeout))
+function M.wait_for_pre_reload(timeout, when)
+  local event = 'pre_reload'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
 return M

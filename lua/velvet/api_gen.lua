@@ -869,15 +869,19 @@ local function resolve(name, ...)
   local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
-    for seq, _ in pairs(tbl) do
+    for seq, when in pairs(tbl) do
       if type(seq) == 'number' then
         if seq <= current_sequence then
-          local waiter = sequence_callbacks[seq]
-          if waiter then
-            sequence_callbacks[seq] = nil
-            waiter(name, table.unpack(resolve_args))
+          local is_match = true
+          if type(when) == 'function' then is_match = when(name, table.unpack(resolve_args)) end
+          if is_match then
+            local waiter = sequence_callbacks[seq]
+            if waiter then
+              sequence_callbacks[seq] = nil
+              waiter(name, table.unpack(resolve_args))
+            end
+            tbl[seq] = nil
           end
-          tbl[seq] = nil
         end
       end
     end
@@ -928,9 +932,13 @@ table.insert(async, "---| '**' Raised when any event is raised.\n")
 
 table.insert(async, [[
 
+--- @class velvet.async.event_registration
+--- @field event velvet.async.event|string event
+--- @field when fun(event: string, data: table): boolean predicate function
+
 --- Wait for one of the events to fire, or |timeout|.
---- @param ... velvet.async.event|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event|'timeout', table The name of the event and the result, or nil on 'timeout'
+--- @param ... velvet.async.event|velvet.async.event_registration|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
+--- @return velvet.async.event, table|'timeout' The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -941,8 +949,8 @@ function M.wait(...)
   local args = {...}
   if #args == 0 then error("No events specified.") end
   for i, evt in ipairs(args) do
-    if type(evt) ~= 'number' and type(evt) ~= 'string' then
-      error(("Bad argument #%d (number or string expected)"):format(i))
+    if type(evt) ~= 'number' and type(evt) ~= 'string' and type(evt) ~= 'table' then
+      error(("Bad argument #%d (number, string or table expected)"):format(i))
     end
   end
 
@@ -968,9 +976,21 @@ function M.wait(...)
           vv.log(debug.traceback(error, 0), 'debug')
         end
       end)
-    elseif type(evt) == 'string' then
+    elseif type(evt) == 'string' or type(evt) == 'table' then
+      local event = evt
+      --- @type boolean|function
+      local when = true
+      if type(evt) == 'table' then
+        assert(type(evt.event) == 'string', ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
+        if evt.when ~= nil then
+          assert(type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
+        end
+        event = evt.event
+        when = evt.when
+      end
+      assert(type(event) == 'string')
       local tbl = registered_waits
-      for segment in evt:gmatch('[^.]+') do
+      for segment in event:gmatch('[^.]+') do
         local sub = tbl[segment]
         if not sub then
           sub = {}; tbl[segment] = sub
@@ -978,9 +998,9 @@ function M.wait(...)
         tbl = sub
       end
       if tbl == registered_waits then 
-        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, evt))
+        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      tbl[seq] = true
+      tbl[seq] = when
     else 
       error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
@@ -996,11 +1016,14 @@ for _, evt in ipairs(spec.events) do
 
 --- Wait for %s
 --- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.%s): boolean predicate function
 --- @return velvet.api.%s ret Result, or nil on timeout.
-function M.wait_for_%s(timeout)
-  return select(2, M.wait('%s', timeout))
+function M.wait_for_%s(timeout, when)
+  local event = '%s'
+  local registration = when and { event = event, when = when } or event
+  return select(2, M.wait(registration, timeout))
 end
-]]):format(evt.name, evt.args, evt.name:gsub('[.]', '_'), evt.name))
+]]):format(evt.name, evt.args, evt.args, evt.name:gsub('[.]', '_'), evt.name))
 end
 
 table.insert(async, "return M")
