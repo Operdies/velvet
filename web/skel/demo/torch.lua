@@ -65,10 +65,10 @@ torch:on_mouse_scroll(pass)
 vv.async.run(function()
   draw()
   while true do
-    local name, args = vv.async.wait('mouse_move', 'session_on_key', 'window_closed', 'screen_resized')
+    local name, args = vv.async.wait('mouse.move', 'session.on_key', 'window.closed', 'screen.resized')
     -- since async.wait() yields, the window could have been closed during the wait() call
     if not torch:valid() then break end
-    if name == 'mouse_move' or name == 'screen_resized' then
+    if name == 'mouse.move' or name == 'screen.resized' then
       -- force invalidate to trigger the pre_render
       torch:draw(' ')
       -- defer redrawing the screen until velvet schedules a render.
@@ -76,7 +76,7 @@ vv.async.run(function()
       vv.async.wait_for_pre_render()
       if not torch:valid() then break end
       draw()
-    elseif name == 'session_on_key' then
+    elseif name == 'session.on_key' then
       if args.key.name == 'ESCAPE' then torch:close(); break; end
     end
   end

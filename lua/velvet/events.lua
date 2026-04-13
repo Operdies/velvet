@@ -38,13 +38,14 @@ local events = {
   --- @param event_name string the raised event
   --- @param ... any depends on the event
   emit_event = function(event_name, ...)
+    local lookup_key = event_name:gsub('[.]', '_')
     local args = table.pack(...)
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
-      local handler = group_func_table[event_name]
+      local handler = group_func_table[lookup_key]
       local prefix = false
       if not handler then
-        handler = group_func_table["any"]
+        handler = group_func_table["**"]
         prefix = true
       end
       if handler then

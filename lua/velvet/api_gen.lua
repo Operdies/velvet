@@ -759,7 +759,7 @@ table.insert(lua, [[
 for _, evt in ipairs(spec.events) do
   table.insert(lua, ([[
 --- @field %s? fun(event_args: velvet.api.%s): nil %s
-]]):format(evt.name, evt.args, evt.doc))
+]]):format(evt.name:gsub('[.]', '_'), evt.args, evt.doc))
 end
 
 -- Write _api.lua {{{3
@@ -865,24 +865,46 @@ end
 
 local function resolve(name, ...)
   local current_sequence = sequence
-  local function resolve_table(tbl, ...)
+  local resolve_args = {...}
+  local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
     for seq, _ in pairs(tbl) do
-      if seq <= current_sequence then
-        local waiter = sequence_callbacks[seq]
-        if waiter then
-          sequence_callbacks[seq] = nil
-          waiter(name, ...)
+      if type(seq) == 'number' then
+        if seq <= current_sequence then
+          local waiter = sequence_callbacks[seq]
+          if waiter then
+            sequence_callbacks[seq] = nil
+            waiter(name, table.unpack(resolve_args))
+          end
+          tbl[seq] = nil
         end
-        tbl[seq] = nil
       end
     end
   end
-  local named = registered_waits[name] or {}
-  resolve_table(named, ...)
-  local any = registered_waits.any or {}
-  resolve_table(any, ...)
+
+  local segments = {}
+  for segment in name:gmatch('[^.]+') do
+    segments[#segments+1] = segment
+  end
+
+  local function recursive_resolve(level, word, ...)
+    local leaf = select('#', ...) == 0
+    local any = level['**']
+    if any then resolve_table(any) end
+    local star = level['*']
+    local match = level[word]
+
+    if leaf then
+      if star then resolve_table(star) end
+      if match then resolve_table(match) end
+    else
+      if star then recursive_resolve(star, ...) end
+      if match then recursive_resolve(match, ...) end
+    end
+  end
+
+  recursive_resolve(registered_waits, table.unpack(segments))
 end
 
 ]]))
@@ -890,7 +912,7 @@ end
 --- set up event handlers for each event {{{3
 
 table.insert(async, [[
-e.any = resolve
+e['**'] = resolve
 ]])
 
 --- Event name type alias {{{3
@@ -901,12 +923,13 @@ table.insert(async, [[
 for _, evt in ipairs(spec.events) do
   table.insert(async, ("---| '%s' %s\n"):format(evt.name, evt.doc))
 end
-table.insert(async, "---| 'any' Raised when any event is raised.\n")
+table.insert(async, "---| '*' Raised when any dotless event is raised.\n")
+table.insert(async, "---| '**' Raised when any event is raised.\n")
 
 table.insert(async, [[
 
 --- Wait for one of the events to fire, or |timeout|.
---- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
+--- @param ... velvet.async.event|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event|'timeout', table The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
@@ -933,7 +956,7 @@ function M.wait(...)
     end
   end
 
-  for _, evt in ipairs(args) do
+  for idx, evt in ipairs(args) do
     if type(evt) == 'number' then
       timeout = vv.api.schedule_after(evt, function()
         -- if sequence_callbacks was unset, that means this coroutine was cancelled.
@@ -945,10 +968,21 @@ function M.wait(...)
           vv.log(debug.traceback(error, 0), 'debug')
         end
       end)
-    else
-      local tbl = registered_waits[evt]
-      if not tbl then tbl = {} ; registered_waits[evt] = tbl end
+    elseif type(evt) == 'string' then
+      local tbl = registered_waits
+      for segment in evt:gmatch('[^.]+') do
+        local sub = tbl[segment]
+        if not sub then
+          sub = {}; tbl[segment] = sub
+        end
+        tbl = sub
+      end
+      if tbl == registered_waits then 
+        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, evt))
+      end
       tbl[seq] = true
+    else 
+      error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
   end
 
@@ -966,7 +1000,7 @@ for _, evt in ipairs(spec.events) do
 function M.wait_for_%s(timeout)
   return select(2, M.wait('%s', timeout))
 end
-]]):format(evt.name, evt.args, evt.name, evt.name))
+]]):format(evt.name, evt.args, evt.name:gsub('[.]', '_'), evt.name))
 end
 
 table.insert(async, "return M")

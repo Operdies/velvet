@@ -41,48 +41,71 @@ end
 
 local function resolve(name, ...)
   local current_sequence = sequence
-  local function resolve_table(tbl, ...)
+  local resolve_args = {...}
+  local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
     for seq, _ in pairs(tbl) do
-      if seq <= current_sequence then
-        local waiter = sequence_callbacks[seq]
-        if waiter then
-          sequence_callbacks[seq] = nil
-          waiter(name, ...)
+      if type(seq) == 'number' then
+        if seq <= current_sequence then
+          local waiter = sequence_callbacks[seq]
+          if waiter then
+            sequence_callbacks[seq] = nil
+            waiter(name, table.unpack(resolve_args))
+          end
+          tbl[seq] = nil
         end
-        tbl[seq] = nil
       end
     end
   end
-  local named = registered_waits[name] or {}
-  resolve_table(named, ...)
-  local any = registered_waits.any or {}
-  resolve_table(any, ...)
+
+  local segments = {}
+  for segment in name:gmatch('[^.]+') do
+    segments[#segments+1] = segment
+  end
+
+  local function recursive_resolve(level, word, ...)
+    local leaf = select('#', ...) == 0
+    local any = level['**']
+    if any then resolve_table(any) end
+    local star = level['*']
+    local match = level[word]
+
+    if leaf then
+      if star then resolve_table(star) end
+      if match then resolve_table(match) end
+    else
+      if star then recursive_resolve(star, ...) end
+      if match then recursive_resolve(match, ...) end
+    end
+  end
+
+  recursive_resolve(registered_waits, table.unpack(segments))
 end
 
-e.any = resolve
+e['**'] = resolve
 
 --- @alias velvet.async.event
----| 'session_on_key' Raised when a key is pressed.
----| 'window_created' Raised after a new window is created.
----| 'window_closed' Raised after a window is closed.
----| 'window_output' Raised when a window produces output.
----| 'window_moved' Raised after a window is moved.
----| 'window_resized' Raised after a window is resized.
----| 'window_on_key' Raised when a key is sent to a lua window.
----| 'window_focus_changed' Raised after focus changes.
----| 'screen_resized' Raised after the screen is resized.
----| 'mouse_move' Raised when the mouse moves.
----| 'mouse_click' Raised when the mouse is clicked.
----| 'mouse_scroll' Raised when the mouse scrolls.
+---| 'session.on_key' Raised when a key is pressed.
+---| 'window.created' Raised after a new window is created.
+---| 'window.closed' Raised after a window is closed.
+---| 'window.output' Raised when a window produces output.
+---| 'window.moved' Raised after a window is moved.
+---| 'window.resized' Raised after a window is resized.
+---| 'window.on_key' Raised when a key is sent to a lua window.
+---| 'window.focus_changed' Raised after focus changes.
+---| 'screen.resized' Raised after the screen is resized.
+---| 'mouse.move' Raised when the mouse moves.
+---| 'mouse.click' Raised when the mouse is clicked.
+---| 'mouse.scroll' Raised when the mouse scrolls.
 ---| 'system_message' Raised when the system logs an error message
 ---| 'pre_render' Raised right before content is rendered. This is useful for applying updates just-in-time.
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
----| 'any' Raised when any event is raised.
+---| '*' Raised when any dotless event is raised.
+---| '**' Raised when any event is raised.
 
 --- Wait for one of the events to fire, or |timeout|.
---- @param ... velvet.async.event|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
+--- @param ... velvet.async.event|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event|'timeout', table The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
@@ -109,7 +132,7 @@ function M.wait(...)
     end
   end
 
-  for _, evt in ipairs(args) do
+  for idx, evt in ipairs(args) do
     if type(evt) == 'number' then
       timeout = vv.api.schedule_after(evt, function()
         -- if sequence_callbacks was unset, that means this coroutine was cancelled.
@@ -121,98 +144,109 @@ function M.wait(...)
           vv.log(debug.traceback(error, 0), 'debug')
         end
       end)
-    else
-      local tbl = registered_waits[evt]
-      if not tbl then tbl = {} ; registered_waits[evt] = tbl end
+    elseif type(evt) == 'string' then
+      local tbl = registered_waits
+      for segment in evt:gmatch('[^.]+') do
+        local sub = tbl[segment]
+        if not sub then
+          sub = {}; tbl[segment] = sub
+        end
+        tbl = sub
+      end
+      if tbl == registered_waits then 
+        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, evt))
+      end
       tbl[seq] = true
+    else 
+      error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
   end
 
   return coroutine.yield()
 end
 
---- Wait for session_on_key
+--- Wait for session.on_key
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.session.key.event_args ret Result, or nil on timeout.
 function M.wait_for_session_on_key(timeout)
-  return select(2, M.wait('session_on_key', timeout))
+  return select(2, M.wait('session.on_key', timeout))
 end
 
---- Wait for window_created
+--- Wait for window.created
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.created.event_args ret Result, or nil on timeout.
 function M.wait_for_window_created(timeout)
-  return select(2, M.wait('window_created', timeout))
+  return select(2, M.wait('window.created', timeout))
 end
 
---- Wait for window_closed
+--- Wait for window.closed
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.closed.event_args ret Result, or nil on timeout.
 function M.wait_for_window_closed(timeout)
-  return select(2, M.wait('window_closed', timeout))
+  return select(2, M.wait('window.closed', timeout))
 end
 
---- Wait for window_output
+--- Wait for window.output
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.output.event_args ret Result, or nil on timeout.
 function M.wait_for_window_output(timeout)
-  return select(2, M.wait('window_output', timeout))
+  return select(2, M.wait('window.output', timeout))
 end
 
---- Wait for window_moved
+--- Wait for window.moved
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.moved.event_args ret Result, or nil on timeout.
 function M.wait_for_window_moved(timeout)
-  return select(2, M.wait('window_moved', timeout))
+  return select(2, M.wait('window.moved', timeout))
 end
 
---- Wait for window_resized
+--- Wait for window.resized
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.resized.event_args ret Result, or nil on timeout.
 function M.wait_for_window_resized(timeout)
-  return select(2, M.wait('window_resized', timeout))
+  return select(2, M.wait('window.resized', timeout))
 end
 
---- Wait for window_on_key
+--- Wait for window.on_key
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.on_key.event_args ret Result, or nil on timeout.
 function M.wait_for_window_on_key(timeout)
-  return select(2, M.wait('window_on_key', timeout))
+  return select(2, M.wait('window.on_key', timeout))
 end
 
---- Wait for window_focus_changed
+--- Wait for window.focus_changed
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.window.focus_changed.event_args ret Result, or nil on timeout.
 function M.wait_for_window_focus_changed(timeout)
-  return select(2, M.wait('window_focus_changed', timeout))
+  return select(2, M.wait('window.focus_changed', timeout))
 end
 
---- Wait for screen_resized
+--- Wait for screen.resized
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.screen.resized.event_args ret Result, or nil on timeout.
 function M.wait_for_screen_resized(timeout)
-  return select(2, M.wait('screen_resized', timeout))
+  return select(2, M.wait('screen.resized', timeout))
 end
 
---- Wait for mouse_move
+--- Wait for mouse.move
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.mouse.move.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_move(timeout)
-  return select(2, M.wait('mouse_move', timeout))
+  return select(2, M.wait('mouse.move', timeout))
 end
 
---- Wait for mouse_click
+--- Wait for mouse.click
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.mouse.click.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_click(timeout)
-  return select(2, M.wait('mouse_click', timeout))
+  return select(2, M.wait('mouse.click', timeout))
 end
 
---- Wait for mouse_scroll
+--- Wait for mouse.scroll
 --- @param timeout? integer Optional timeout.
 --- @return velvet.api.mouse.scroll.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_scroll(timeout)
-  return select(2, M.wait('mouse_scroll', timeout))
+  return select(2, M.wait('mouse.scroll', timeout))
 end
 
 --- Wait for system_message
