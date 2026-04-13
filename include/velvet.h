@@ -17,6 +17,8 @@ enum velvet_coroutine_exit_code {
   VELVET_COROUTINE_KILLED_RELOAD = 3,
   /* set when the server exits */
   VELVET_COROUTINE_SERVER_EXITED = 4,
+  /* An internal error has occurred if this happens. */
+  VELVET_COROUTINE_UNEXPECTED_WRITE = 5,
 };
 
 enum velvet_input_state {

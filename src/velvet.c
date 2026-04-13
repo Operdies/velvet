@@ -127,7 +127,9 @@ static void session_socket_callback(struct io_source *src) {
   bool needs_render = false;
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
   if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
-    int *fds = (int*)CMSG_DATA(cmsg);
+    int fds[3];
+    memcpy(fds, CMSG_DATA(cmsg), sizeof(fds));
+
     /* if this is a lua chunk, the fd will be a shared memory map.
      * Otherwise the fds will be in/out handles */
     if (n == sizeof(struct vv_lua_payload)) {
@@ -311,6 +313,9 @@ static void co_write(struct velvet *v, struct velvet_coroutine *co, int fd, stru
     if (written > 0) {
       string_shift_left(buf, written);
     } else if (written == -1 && errno == EPIPE ) {
+      velvet_coroutine_destroy(v, co);
+      return;
+    } else if (written == 0) {
       velvet_coroutine_destroy(v, co);
       return;
     }

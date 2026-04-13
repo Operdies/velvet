@@ -514,10 +514,43 @@ static int vv_connect(char *vv_socket) {
   return sockfd;
 }
 
-struct vv_source {
-  int source, sock;
-  struct io loop;
+static void restore_streams();
+static void ensure_streams_blocking();
+
+struct velvet_lua_payload_context {
+  bool quit;
+  enum velvet_coroutine_exit_code exit_code;
 };
+
+static void vv_lua_on_output(struct io_source *src, struct u8_slice str) {
+  (void)src;
+  io_write(STDOUT_FILENO, str);
+}
+
+static void vv_lua_on_error(struct io_source *src, struct u8_slice str) {
+  (void)src;
+  io_write(STDERR_FILENO, str);
+}
+static void vv_lua_on_input(struct io_source *src, struct u8_slice str) {
+  (void)src;
+  (void)str;
+}
+static void vv_lua_on_socket(struct io_source *src, struct u8_slice str) {
+  struct velvet_lua_payload_context *ctx = src->data;
+  if (!ctx->quit) {
+    /* POLLHUP can trigger after the server has already sent its 
+     * exit code. If we already entered once, the first exit 
+     * code is correct. */
+    ctx->quit = true;
+    if (str.len == 0) {
+      ctx->exit_code = VELVET_COROUTINE_SERVER_EXITED;
+    } else if (str.len == sizeof(int)) {
+      ctx->exit_code = *(int*)str.content;
+    } else {
+      ctx->exit_code = VELVET_COROUTINE_UNEXPECTED_WRITE;
+    }
+  }
+}
 
 static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload) {
   int sockfd = vv_connect(args.socket);
@@ -536,46 +569,59 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
       .magic = VV_LUA_MAGIC,
   };
 
+  int out_fd[2];
+  int err_fd[2];
+  if (pipe(out_fd) == -1) velvet_die("pipe:");
+  if (pipe(err_fd) == -1) velvet_die("pipe:");
   int shmem_fd = velvet_alloc_shmem_get_fd(shmem);
-  int fds[] = { shmem_fd, STDOUT_FILENO, STDERR_FILENO };
+  int fds[] = { shmem_fd, out_fd[1], err_fd[1] };
   if (socket_send_files(sockfd, fds, LENGTH(fds), &magic_header, sizeof(magic_header)) == -1) {
     velvet_fatal("send mmap:");
   }
   /* the server owns the mmap now, so we can close it */
   velvet_alloc_shmem_destroy(shmem, shmem_fd);
+  close(out_fd[1]);
+  close(err_fd[1]);
+  ensure_streams_blocking();
 
-  char discard[4096];
-  int exit_code = 0;
-  do {
-    struct pollfd pfd[2] = {
-        {.events = POLLIN, .fd = sockfd},
-        {.events = POLLIN, .fd = STDIN_FILENO},
+  struct velvet_lua_payload_context ctx = {0};
+  struct io io = io_default;
+  while (!ctx.quit) {
+    io_clear_sources(&io);
+    struct io_source out_src = {
+      .fd = out_fd[0],
+      .events = IO_SOURCE_POLLIN,
+      .on_read = vv_lua_on_output,
     };
+    io_add_source(&io, out_src);
+    struct io_source err_src = {
+      .fd = err_fd[0],
+      .events = IO_SOURCE_POLLIN,
+      .on_read = vv_lua_on_error,
+    };
+    io_add_source(&io, err_src);
+    struct io_source in_src = {
+      .fd = STDIN_FILENO,
+      .events = IO_SOURCE_POLLIN,
+      .on_read = vv_lua_on_input,
+    };
+    io_add_source(&io, in_src);
+    struct io_source socket_src = {
+      .data = &ctx,
+      .fd = sockfd,
+      .events = IO_SOURCE_POLLIN,
+      .on_read = vv_lua_on_socket,
+    };
+    io_add_source(&io, socket_src);
+    io_dispatch(&io);
+  }
 
-    int n = poll(pfd, LENGTH(pfd), -1);
-    if (n == -1 && errno != EINTR) break;
-    int r;
-    if ((r = pfd[0].revents)) {
-      if (r & POLLIN) {
-        read(sockfd, &exit_code, 4);
-        break;
-      }
-      /* server exited ? */
-      if (r & POLLHUP) {
-        exit_code = VELVET_COROUTINE_SERVER_EXITED;
-        break;
-      }
-    }
-
-    if ((r = pfd[1].revents)) {
-      if (r & POLLIN) {
-        read(STDIN_FILENO, discard, sizeof(discard));
-      }
-      /* ignore POLLHUP */
-    }
-  } while (true);
+  io_destroy(&io);
+  restore_streams();
   close(sockfd);
-  return exit_code;
+  close(out_fd[0]);
+  close(err_fd[0]);
+  return ctx.exit_code;
 }
 
 static void string_read_fd(int fd, struct string *s) {
@@ -648,12 +694,14 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
 
 static int stdin_flags = 0;
 static int stdout_flags = 0;
-static void restore_flags() {
+static int stderr_flags = 0;
+static void restore_streams() {
   fcntl(STDIN_FILENO, F_SETFL, stdin_flags);
   fcntl(STDOUT_FILENO, F_SETFL, stdout_flags);
+  fcntl(STDERR_FILENO, F_SETFL, stderr_flags);
 }
 
-static void ensure_input_output_blocking() {
+static void ensure_streams_blocking() {
   stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
   if (stdin_flags == -1 || fcntl(STDIN_FILENO, F_SETFL, stdin_flags & ~O_NONBLOCK) == -1) {
     velvet_die("fcntl:");
@@ -663,11 +711,13 @@ static void ensure_input_output_blocking() {
   if (stdout_flags == -1 || fcntl(STDOUT_FILENO, F_SETFL, stdout_flags & ~O_NONBLOCK) == -1) {
     velvet_die("fcntl:");
   }
+
+  stderr_flags = fcntl(STDERR_FILENO, F_GETFL);
+  if (stderr_flags == -1 || fcntl(STDERR_FILENO, F_SETFL, stderr_flags & ~O_NONBLOCK) == -1) {
+    velvet_die("fcntl:");
+  }
 }
 
-/* TODO: This loop sucks.
- * Update it to use `struct io` and proper signal handling.
- */
 static void vv_attach(struct velvet_args args) {
   int signal_pipes[2];
   if (pipe(signal_pipes) < 0) velvet_die("pipe:");
@@ -683,10 +733,10 @@ static void vv_attach(struct velvet_args args) {
   struct rect ws;
   platform_get_winsize(&ws);
 
-  terminal_setup(restore_flags);
+  terminal_setup(restore_streams);
 
   /* client logic depends on stdout being blocking for clean writes. */
-  ensure_input_output_blocking();
+  ensure_streams_blocking();
 
   int sockfd = vv_connect(args.socket);
 
