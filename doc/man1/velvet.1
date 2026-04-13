@@ -218,6 +218,16 @@ for _, id in ipairs(windows) do
   if title and title:match("^zsh$") then vv.api.window_close(id) end
 end
 LUA
+.TP
+.B Event listeners
+.nf
+-- Log all mouse events as json
+vv lua <<LUA | jq
+while true do
+  local event, data = vv.async.wait('mouse_move', 'mouse_scroll', 'mouse_click')
+  print(require('velvet.json').to_json({ event = event, data = data}))
+end
+LUA
 .fi
 .TP
 .B Prepared scripts
@@ -243,6 +253,10 @@ to clone a table in order to make changes without touching the original.
 .B vv.api.*
 to access the low-level API everything else is built around. See
 .BR velvet-api (3)
+.TP
+.B vv.async.*
+to asynchonously wait for events. See
+.BR velvet-async (3)
 .SH ADVANCED USAGE
 The C engine tries to make as few assumptions as possible; in a nutshell, it performs the following tasks:
 

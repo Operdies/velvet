@@ -1,6 +1,6 @@
 FROM alpine:latest
 # Generously install tools to demonstrate lsp autocomplete and inline docs
-RUN apk add --no-cache gcc musl-dev make linux-headers vim bash man-db \
+RUN apk add --no-cache gcc musl-dev make linux-headers vim bash man-db jq \
                       neovim neovim-doc lua-language-server \
                       tree-sitter tree-sitter-c tree-sitter-lua tree-sitter-markdown
 RUN adduser -D demo
