@@ -13,7 +13,6 @@ torch:set_alternate_screen(true)
 torch:set_z_index(vv.z_hint.overlay)
 torch:set_line_wrapping(false)
 torch:set_auto_return(false)
-torch:focus()
 
 local function clamp(x, l, h)
   if x < l then return l end
@@ -61,23 +60,21 @@ torch:on_mouse_click(pass)
 torch:on_mouse_move(pass)
 torch:on_mouse_scroll(pass)
 
--- run without blocking the terminal
-vv.async.run(function()
-  draw()
-  while true do
-    local _, event = vv.async.wait('mouse.move', 'session.on_key', 'window.closed', 'screen.resized')
-    -- since async.wait() yields, the window could have been closed during the wait() call
+vv.async.defer(function() torch:close() end)
+draw()
+while true do
+  local _, event = vv.async.wait('mouse.move', 'session.on_key', 'window.closed', 'screen.resized')
+  -- since async.wait() yields, the window could have been closed during the wait() call
+  if not torch:valid() then break end
+  if event.name == 'mouse.move' or event.name == 'screen.resized' then
+    -- force invalidate to trigger the pre_render
+    torch:draw(' ')
+    -- defer redrawing the screen until velvet schedules a render.
+    -- otherwise we waste time creating intermediate frames which will never be presented.
+    vv.async.wait_for_pre_render()
     if not torch:valid() then break end
-    if event.name == 'mouse.move' or event.name == 'screen.resized' then
-      -- force invalidate to trigger the pre_render
-      torch:draw(' ')
-      -- defer redrawing the screen until velvet schedules a render.
-      -- otherwise we waste time creating intermediate frames which will never be presented.
-      vv.async.wait_for_pre_render()
-      if not torch:valid() then break end
-      draw()
-    elseif event.name == 'session.on_key' then
-      if event.data.key.name == 'ESCAPE' then torch:close(); break; end
-    end
+    draw()
+  elseif event.name == 'session.on_key' then
+    if event.data.key.name == 'ESCAPE' then torch:close(); break; end
   end
-end)
+end
