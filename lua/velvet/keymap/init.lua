@@ -270,7 +270,7 @@ function keys.del(lhs)
     map.parent.children[map.key] = nil
     map = map.parent
   end
-  vv.events.emit_event(keys.keymap_changed)
+  vv.events.emit(keys.keymap_changed)
 end
 
 --- @class velvet.keys.set.options
@@ -302,7 +302,7 @@ function keys.set(lhs, rhs, opts)
     xpcall(rhs, handler)
   end
   map.options = opts or {}
-  vv.events.emit_event(keys.keymap_changed)
+  vv.events.emit(keys.keymap_changed)
 end
 
 local function chain_str(map)
@@ -321,7 +321,7 @@ local current_chain = root_keymap
 local function set_current_chain(chain)
   if chain ~= current_chain then
     current_chain = chain
-    vv.events.emit_event(keys.chain_changed, current_chain == root_keymap and nil or chain_str(current_chain))
+    vv.events.emit(keys.chain_changed, current_chain == root_keymap and nil or chain_str(current_chain))
   end
 end
 
@@ -576,7 +576,7 @@ function keys.set_passthrough(b)
     -- reset keymap on passthrough
     last_repeat = 0
     set_current_chain(root_keymap)
-    vv.events.emit_event(keys.passthrough_changed, passthrough)
+    vv.events.emit(keys.passthrough_changed, passthrough)
   end
 end
 function keys.get_passthrough() return passthrough end

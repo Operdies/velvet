@@ -357,7 +357,7 @@ local function route_mouse_events(event, args)
   if mouse_locked_window and mouse_locked_window:valid() then win = mouse_locked_window end
   if not win then return end
 
-  vv.events.emit_event(("%s.%d"):format(event, args.win_id), args)
+  vv.events.emit(("%s.%d"):format(event, args.win_id), args)
   local window_func = win['on_' .. event:gsub('[.]', '_') .. '_handler']
 
   if win and win:valid() then

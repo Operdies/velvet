@@ -632,14 +632,14 @@ void velvet_api_raise_%s(struct velvet *v, [[maybe_unused]] struct %s args) {
   if (!L) return;
   lua_getglobal(L, "vv");
   lua_getfield(L, -1, "events");
-  lua_getfield(L, -1, "emit_event");
+  lua_getfield(L, -1, "emit");
   lua_pushlstring(L, "%s", %d); /* event name */
 ]=]):format(event_name, event_arg_name, evt.name, #evt.name))
 
   push_field(c, evt.args, "args")
 
   table.insert(c, [[
-  /* vv.events.emit_event(args) */
+  /* vv.events.emit(args) */
   if (lua_pcall(L, 2, 0, 0) != LUA_OK) { 
     const char *err = lua_tostring(L, -1);
     velvet_log("lua emit: %s", err);

@@ -33,7 +33,7 @@ local vv = {
   --- @param level? velvet.api.severity
   log = function(message, level)
     if type(message) ~= 'string' then message = inspect(message) end
-    ev.emit_event('system_message', { message = message, level = level or 'info' })
+    ev.emit('system_message', { message = message, level = level or 'info' })
   end,
 
   -- stolen from vim.inspect

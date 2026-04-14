@@ -37,7 +37,7 @@ local events = {
 
   --- @param event_name string the raised event
   --- @param data any event data
-  emit_event = function(event_name, data)
+  emit = function(event_name, data)
     local lookup_key = event_name:gsub('[.]', '_')
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
