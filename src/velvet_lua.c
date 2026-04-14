@@ -33,7 +33,7 @@ int lua_debug_traceback_handler(lua_State *L) {
 static void velvet_lua_init_coroutine_helper(struct velvet *v) {
   char coroutine_helper[] = {
       "return function(chunk, setup, cleanup, print_function)\n"
-      "  local co = coroutine.create(function()\n"
+      "  vv.async.run(function()\n"
       "    setup()\n"
       "    COROUTINE_PRINT[coroutine.running()] = function(...) print_function(1, ...) end\n"
       "    local ok, result = xpcall(chunk, debug.traceback)\n"
@@ -45,7 +45,6 @@ static void velvet_lua_init_coroutine_helper(struct velvet *v) {
       "    end\n"
       "    cleanup(ok and true or false)\n"
       "  end)\n"
-      "  coroutine.resume(co)\n"
       "end",
   };
   int status = luaL_dostring(v->L, coroutine_helper);

@@ -10,8 +10,25 @@ local e = require('velvet.events').create_group('velvet.async', true)
 local registered_waits = {}
 local sequence_callbacks = {}
 local co_to_seq = {}
+local co_defer = {}
 -- Monotonically increasing sequence number used to invalidate multi-waits
 local sequence = 1
+
+--- Resolve all defers for |co|
+--- This is called when |co| completes.
+local function exec_defer(co)
+  local defer = co_defer[co]
+  if defer then
+    co_defer[co] = nil
+    for i = #defer, 1, -1 do
+      local fn = defer[i]
+      local ok, err = xpcall(fn, debug.traceback)
+      if not ok then
+        vv.log(("Unhandled error in coroutine defer: %s"):format(err), 'error')
+      end
+    end
+  end
+end
 
 --- Execute |f| as a coroutine.
 --- @param f fun(...): any
@@ -20,16 +37,18 @@ local sequence = 1
 function M.run(f, ...)
   local args = table.pack(...)
   local co = coroutine.create(function()
+    co_defer[coroutine.running()] = {}
     local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
     if not ok then
       vv.log(("Unhandled error in coroutine: %s"):format(err), 'error')
     end
+    exec_defer(coroutine.running())
   end)
   coroutine.resume(co)
   return co
 end
 
---- Cancel all continuations for |co|
+--- Cancel all continuations for |co| and trigger deferred actions.
 --- @param co thread the thread to cancel
 function M.cancel(co)
   local seq = co_to_seq[co]
@@ -37,6 +56,15 @@ function M.cancel(co)
     co_to_seq[co] = nil
     sequence_callbacks[seq] = nil
   end
+  exec_defer(co)
+end
+
+--- defer a function which runs when the current coroutine completes or is cancelled.
+--- @param defer fun() deferred action
+function M.defer(defer)
+  assert(type(defer) == 'function', string.format('Bad argument #1 (function expected, got %s)', type(defer)))
+  local defers = co_defer[coroutine.running()] or error("Provided coroutine is not managed by vv.async.")
+  defers[#defers + 1] = defer
 end
 
 local function resolve(name, data)

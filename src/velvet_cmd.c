@@ -38,20 +38,20 @@ static int l_coroutine_setup(lua_State *co) {
 }
 
 static void coroutine_cleanup(lua_State *co) {
-  // COROUTINE_PRINT[co] = nil
-  lua_getglobal(co, "COROUTINE_PRINT");
-  lua_pushthread(co);
-  lua_pushnil(co);
-  lua_settable(co, -3);
-  lua_pop(co, 1);
-
   // vv.async.cancel(co)
   lua_getglobal(co, "vv");
   lua_getfield(co, -1, "async");
   lua_getfield(co, -1, "cancel");
   lua_pushthread(co);
   lua_call(co, 1, 0);
-  lua_pop(co, 2);
+  lua_pop(co, 2); /* pop async, vv */
+
+  // COROUTINE_PRINT[co] = nil
+  lua_getglobal(co, "COROUTINE_PRINT");
+  lua_pushthread(co);
+  lua_pushnil(co);
+  lua_settable(co, -3);
+  lua_pop(co, 1); /* pop COROUTINE_PRINT */
 }
 
 static int l_coroutine_cleanup(lua_State *co) {
