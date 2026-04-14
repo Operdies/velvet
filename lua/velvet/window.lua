@@ -357,29 +357,16 @@ local function route_mouse_events(event, args)
   if mouse_locked_window and mouse_locked_window:valid() then win = mouse_locked_window end
   if not win then return end
 
-  vv.events.emit(("%s.%d"):format(event, args.win_id), args)
-  local window_func = win['on_' .. event:gsub('[.]', '_') .. '_handler']
-
   if win and win:valid() then
-    if win:is_lua() then
-      -- don't lock lua windows with no handlers
-      if not window_func then return end
-    elseif event ~= 'mouse.scroll' then
-      -- don't lock regular windows with no reporting
-      local opt = vv.api.window_get_mouse_settings(win.id)
-      if opt.reporting == 'off' then return end
+    if event == 'mouse.click' then
+      local foc = win.is_border and win.parent or win
+      foc:focus()
     end
+
     if args.event_type and args.event_type == 'mouse_down' then
       mouse_locked_window = win
     elseif args.event_type and args.event_type == 'mouse_up' then
       mouse_locked_window = nil
-    end
-    if event == 'mouse.click' then
-      if win.is_border then
-        win.parent:focus()
-      else
-        win:focus()
-      end
     end
 
     -- Translate event coordinates to be window local
@@ -388,14 +375,15 @@ local function route_mouse_events(event, args)
     args.pos = { col = 1 + gpos.col - geom.left, row = 1 + gpos.row - geom.top }
     args.win_id = win.id
 
+    local window_func = win['on_' .. event:gsub('[.]', '_') .. '_handler']
     if not win:is_lua() then
       vv.api['window_send_' .. event:gsub('[.]', '_')](args)
     elseif window_func then
       local ret = window_func(win, args)
       if ret == 'passthrough' then
         mouse_locked_window = nil
-        local above = Window.get_window_at_coordinate(gpos, win:get_z_index())
-        for _, next in ipairs(above) do
+        local below = Window.get_window_at_coordinate(gpos, win:get_z_index())
+        for _, next in ipairs(below) do
           if next.id ~= win.id then
             args.pos = gpos
             args.win_id = next.id
@@ -405,6 +393,8 @@ local function route_mouse_events(event, args)
         end
       end
     end
+    -- only emit the mouse event if the window did not 'passthrough'.
+    vv.events.emit(("window.%s.%d"):format(event, args.win_id), args)
   end
 end
 
@@ -529,9 +519,9 @@ function Window.from_handle(id)
   local instance = setmetatable(self, Window)
   win_registry[id] = instance
   instance.event = {
-    mouse_click = 'mouse_click.' .. id,
-    mouse_move = 'mouse_move.' .. id,
-    mouse_scroll = 'mouse_scroll.' .. id
+    mouse_click = 'window.mouse.click.' .. id,
+    mouse_move = 'window.mouse.move.' .. id,
+    mouse_scroll = 'window.mouse.scroll.' .. id
   }
   return instance
 end
