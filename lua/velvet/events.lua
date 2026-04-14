@@ -36,10 +36,9 @@ local events = {
   end,
 
   --- @param event_name string the raised event
-  --- @param ... any depends on the event
-  emit_event = function(event_name, ...)
+  --- @param data any event data
+  emit_event = function(event_name, data)
     local lookup_key = event_name:gsub('[.]', '_')
-    local args = table.pack(...)
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
       local handler = group_func_table[lookup_key] or group_func_table[event_name]
@@ -58,9 +57,9 @@ local events = {
           return e
         end
         if prefix == true then
-          xpcall(handler, error_handler, event_name, table.unpack(vv.deepcopy(args), 1, args.n)) 
+          xpcall(handler, error_handler, event_name, vv.deepcopy(data))
         else
-          xpcall(handler, error_handler, table.unpack(vv.deepcopy(args), 1, args.n)) 
+          xpcall(handler, error_handler, vv.deepcopy(data))
         end
       end
     end

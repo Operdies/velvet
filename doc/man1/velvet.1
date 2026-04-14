@@ -224,8 +224,8 @@ LUA
 -- Log all mouse events as json
 vv lua <<LUA | jq
 while true do
-  local registration, event, data = vv.async.wait('mouse.move', 'mouse.scroll', 'mouse.click')
-  print(require('velvet.json').to_json({ event = event, data = data}))
+  local registration, event = vv.async.wait('mouse.move', 'mouse.scroll', 'mouse.click')
+  print(require('velvet.json').to_json(event))
 end
 LUA
 .fi

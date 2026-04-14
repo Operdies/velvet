@@ -863,9 +863,8 @@ function M.cancel(co)
   end
 end
 
-local function resolve(name, ...)
+local function resolve(name, data)
   local current_sequence = sequence
-  local resolve_args = {...}
   local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
@@ -873,12 +872,13 @@ local function resolve(name, ...)
       if type(seq) == 'number' then
         if seq <= current_sequence then
           local is_match = true
-          if registration.when then is_match = registration.when(registration, name, table.unpack(resolve_args)) end
+          local wait_result = { name = name, data = data }
+          if registration.when then is_match = registration.when(registration, wait_result) end
           if is_match then
             local waiter = sequence_callbacks[seq]
             if waiter then
               sequence_callbacks[seq] = nil
-              waiter(registration, name, table.unpack(resolve_args))
+              waiter(registration, wait_result)
             end
             tbl[seq] = nil
           end
@@ -927,20 +927,22 @@ table.insert(async, [[
 for _, evt in ipairs(spec.events) do
   table.insert(async, ("---| '%s' %s\n"):format(evt.name, evt.doc))
 end
-table.insert(async, "---| '*' Raised when any dotless event is raised.\n")
-table.insert(async, "---| '**' Raised when any event is raised.\n")
 
 table.insert(async, [[
 
 --- @class velvet.async.conditional_event
 --- @field event velvet.async.event|string event
---- @field when fun(registration: velvet.async.event_registration, event: string, data: table): boolean predicate function
+--- @field when fun(registration: velvet.async.event_registration, result: velvet.async.wait.result): boolean predicate function
 
---- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|string
+--- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|'*'|'**'|string
+
+--- @class velvet.async.wait.result
+--- @field name velvet.async.event|string the name of the raised event
+--- @field data any the event args
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event_registration, string, table|'timeout' The name of the event and the result, or nil on 'timeout'
+--- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -972,7 +974,7 @@ function M.wait(...)
         -- if sequence_callbacks was unset, that means this coroutine was cancelled.
         if not sequence_callbacks[seq] then return end
         sequence_callbacks[seq] = nil
-        local ok, error = coroutine.resume(co, nil, "timeout")
+        local ok, error = coroutine.resume(co, nil, 'timeout')
         if not ok then
           vv.log(("Unhandled error in coroutine: %s (event: timeout)"):format(error), 'error')
           vv.log(debug.traceback(error, 0), 'debug')
@@ -1007,6 +1009,18 @@ function M.wait(...)
 
   return coroutine.yield()
 end
+
+--- Returns an iterator which yields whenever an event in |...| is fired. Terminates on timeout if specified.
+--- @param ... velvet.async.event_registration|integer One or more events to stream. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
+--- @return fun(): velvet.async.event_registration?, velvet.async.wait.result? Iterator which streams the input events
+function M.stream(...)
+  local args = {...}
+  return function()
+    local ok, result = M.wait(table.unpack(args))
+    return ok, result
+  end
+end
+
 ]])
 
 --- Generate user-facing API {{{3
@@ -1020,7 +1034,8 @@ for _, evt in ipairs(spec.events) do
 function M.wait_for_%s(timeout, when)
   local event = '%s'
   local registration = when and { event = event, when = when } or event
-  return select(3, M.wait(registration, timeout))
+  local _, result = M.wait(registration, timeout)
+  return result.data
 end
 ]]):format(evt.name, evt.args, evt.args, evt.name:gsub('[.]', '_'), evt.name))
 end
