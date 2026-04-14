@@ -651,54 +651,51 @@ end
 
 local activated = false
 function dwm.activate()
-  if not activated then
-    activated = true
-    local event_handler = vv.events.create_group('dwm.arrange', true)
-    local lst = vv.api.get_windows()
-    for _, id in ipairs(lst) do
-      add_window(id, true)
-    end
-    taskbar = create_status_window()
-    -- dwm.reserve(0, 0, 1, 0)
-    dwm.reserve(0, 0, 0, 0)
-    event_handler.screen_resized = arrange
-    event_handler.window_created = function(args)
-      if ignore_window(args.win_id) then return end
-      add_window(args.win_id, false)
-    end
+  if activated then return end
+  activated = true
+  local event_handler = vv.events.create_group('dwm.arrange', true)
+  local lst = vv.api.get_windows()
+  for _, id in ipairs(lst) do
+    add_window(id, true)
+  end
+  taskbar = create_status_window()
+  -- dwm.reserve(0, 0, 1, 0)
+  dwm.reserve(0, 0, 0, 0)
+  event_handler.screen_resized = arrange
+  event_handler.window_created = function(args)
+    if ignore_window(args.win_id) then return end
+    add_window(args.win_id, false)
+  end
 
-    event_handler.window_closed = function(_) remove_window() end
-    event_handler.window_focus_changed = function(args)
-      if ignore_window(args.new_focus) then return end
-      arrange()
-    end
+  event_handler.window_closed = function(_) remove_window() end
+  event_handler.window_focus_changed = function(args)
+    if ignore_window(args.new_focus) then return end
     arrange()
-    event_handler[km.passthrough_changed] = status_update
-    event_handler[km.chain_changed] = function(new_chain)
-      chain = new_chain
-      status_update()
-    end
+  end
+  arrange()
+  event_handler[km.passthrough_changed] = status_update
+  event_handler[km.chain_changed] = function(new_chain)
+    chain = new_chain
+    status_update()
+  end
 
-    local win_under_cursor = nil
-    -- TODO: dwm must manage borders for this to work properly.
-    -- Since window.lua now supports forwarding mouse events, the raw handler
-    -- doesn't know if a mouse event should actually go to an overlay or a window/border.
-    event_handler.mouse_move = function(args)
-      if args.win_id == 0 then 
-        dragging = nil
-        return 
-      end
-      if dragging then return end
+  local win_under_cursor = nil
+  vv.async.run(function()
+    for _, move_event in vv.async.stream('window.mouse.move.*') do
+      local args = move_event.data
       local id = args.win_id
-      if not dwm.options.focus_follows_mouse then return end
+      if dragging then goto continue end
+      if not dwm.options.focus_follows_mouse then goto continue end
       local win = window.from_handle(id)
       if win.is_border then id = win.parent.id end
       -- don't keep setting focus if the cursor hasn't moved away from the window
-      if id == win_under_cursor then return end
+      if id == win_under_cursor then goto continue end
       win_under_cursor = id
       vv.api.set_focused_window(id)
+
+      ::continue::
     end
-  end
+  end)
 end
 
 --- Increase width of the left stack by |v|
