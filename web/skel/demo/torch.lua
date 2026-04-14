@@ -65,7 +65,7 @@ torch:on_mouse_scroll(pass)
 vv.async.run(function()
   draw()
   while true do
-    local name, args = vv.async.wait('mouse.move', 'session.on_key', 'window.closed', 'screen.resized')
+    local _, name, args = vv.async.wait('mouse.move', 'session.on_key', 'window.closed', 'screen.resized')
     -- since async.wait() yields, the window could have been closed during the wait() call
     if not torch:valid() then break end
     if name == 'mouse.move' or name == 'screen.resized' then

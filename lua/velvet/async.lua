@@ -45,16 +45,16 @@ local function resolve(name, ...)
   local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
-    for seq, when in pairs(tbl) do
+    for seq, registration in pairs(tbl) do
       if type(seq) == 'number' then
         if seq <= current_sequence then
           local is_match = true
-          if type(when) == 'function' then is_match = when(name, table.unpack(resolve_args)) end
+          if registration.when then is_match = registration.when(registration, name, table.unpack(resolve_args)) end
           if is_match then
             local waiter = sequence_callbacks[seq]
             if waiter then
               sequence_callbacks[seq] = nil
-              waiter(name, table.unpack(resolve_args))
+              waiter(registration, name, table.unpack(resolve_args))
             end
             tbl[seq] = nil
           end
@@ -110,13 +110,13 @@ e['**'] = resolve
 
 --- @class velvet.async.conditional_event
 --- @field event velvet.async.event|string event
---- @field when fun(event: string, data: table): boolean predicate function
+--- @field when fun(registration: velvet.async.event_registration, event: string, data: table): boolean predicate function
 
 --- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|string
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event, table|'timeout' The name of the event and the result, or nil on 'timeout'
+--- @return velvet.async.event_registration, string, table|'timeout' The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -133,11 +133,11 @@ function M.wait(...)
   end
 
   co_to_seq[co] = seq
-  sequence_callbacks[seq] = function(evt, ...)
+  sequence_callbacks[seq] = function(registration, event, ...)
     if timeout then vv.api.schedule_cancel(timeout) end
-    local ok, error = coroutine.resume(co, evt, ...)
+    local ok, error = coroutine.resume(co, registration, event, ...)
     if not ok then
-      vv.log(("Unhandled error in coroutine: %s (event: %s)"):format(error, evt), 'error')
+      vv.log(("Unhandled error in coroutine: %s (event: %s)"):format(error, event), 'error')
       vv.log(debug.traceback(error, 0), 'debug')
     end
   end
@@ -156,15 +156,12 @@ function M.wait(...)
       end)
     elseif type(evt) == 'string' or type(evt) == 'table' then
       local event = evt
-      --- @type boolean|function
-      local when = true
       if type(evt) == 'table' then
         assert(type(evt.event) == 'string', ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
         if evt.when ~= nil then
           assert(type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
         end
         event = evt.event
-        when = evt.when
       end
       assert(type(event) == 'string')
       local tbl = registered_waits
@@ -178,7 +175,7 @@ function M.wait(...)
       if tbl == registered_waits then 
         error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      tbl[seq] = when
+      tbl[seq] = evt
     else 
       error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
@@ -194,7 +191,7 @@ end
 function M.wait_for_session_on_key(timeout, when)
   local event = 'session.on_key'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.created
@@ -204,7 +201,7 @@ end
 function M.wait_for_window_created(timeout, when)
   local event = 'window.created'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.closed
@@ -214,7 +211,7 @@ end
 function M.wait_for_window_closed(timeout, when)
   local event = 'window.closed'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.output
@@ -224,7 +221,7 @@ end
 function M.wait_for_window_output(timeout, when)
   local event = 'window.output'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.moved
@@ -234,7 +231,7 @@ end
 function M.wait_for_window_moved(timeout, when)
   local event = 'window.moved'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.resized
@@ -244,7 +241,7 @@ end
 function M.wait_for_window_resized(timeout, when)
   local event = 'window.resized'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.on_key
@@ -254,7 +251,7 @@ end
 function M.wait_for_window_on_key(timeout, when)
   local event = 'window.on_key'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for window.focus_changed
@@ -264,7 +261,7 @@ end
 function M.wait_for_window_focus_changed(timeout, when)
   local event = 'window.focus_changed'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for screen.resized
@@ -274,7 +271,7 @@ end
 function M.wait_for_screen_resized(timeout, when)
   local event = 'screen.resized'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for mouse.move
@@ -284,7 +281,7 @@ end
 function M.wait_for_mouse_move(timeout, when)
   local event = 'mouse.move'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for mouse.click
@@ -294,7 +291,7 @@ end
 function M.wait_for_mouse_click(timeout, when)
   local event = 'mouse.click'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for mouse.scroll
@@ -304,7 +301,7 @@ end
 function M.wait_for_mouse_scroll(timeout, when)
   local event = 'mouse.scroll'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for system_message
@@ -314,7 +311,7 @@ end
 function M.wait_for_system_message(timeout, when)
   local event = 'system_message'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for pre_render
@@ -324,7 +321,7 @@ end
 function M.wait_for_pre_render(timeout, when)
   local event = 'pre_render'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 
 --- Wait for pre_reload
@@ -334,6 +331,6 @@ end
 function M.wait_for_pre_reload(timeout, when)
   local event = 'pre_reload'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 return M

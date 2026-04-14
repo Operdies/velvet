@@ -869,16 +869,16 @@ local function resolve(name, ...)
   local function resolve_table(tbl)
     -- capture the current sequence number and ensure we don't resolve anything higher.
     -- Otherwise a waiter() invocation can trigger on the currently processing event.
-    for seq, when in pairs(tbl) do
+    for seq, registration in pairs(tbl) do
       if type(seq) == 'number' then
         if seq <= current_sequence then
           local is_match = true
-          if type(when) == 'function' then is_match = when(name, table.unpack(resolve_args)) end
+          if registration.when then is_match = registration.when(registration, name, table.unpack(resolve_args)) end
           if is_match then
             local waiter = sequence_callbacks[seq]
             if waiter then
               sequence_callbacks[seq] = nil
-              waiter(name, table.unpack(resolve_args))
+              waiter(registration, name, table.unpack(resolve_args))
             end
             tbl[seq] = nil
           end
@@ -934,13 +934,13 @@ table.insert(async, [[
 
 --- @class velvet.async.conditional_event
 --- @field event velvet.async.event|string event
---- @field when fun(event: string, data: table): boolean predicate function
+--- @field when fun(registration: velvet.async.event_registration, event: string, data: table): boolean predicate function
 
 --- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|string
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event, table|'timeout' The name of the event and the result, or nil on 'timeout'
+--- @return velvet.async.event_registration, string, table|'timeout' The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -957,9 +957,9 @@ function M.wait(...)
   end
 
   co_to_seq[co] = seq
-  sequence_callbacks[seq] = function(evt, ...)
+  sequence_callbacks[seq] = function(...)
     if timeout then vv.api.schedule_cancel(timeout) end
-    local ok, error = coroutine.resume(co, evt, ...)
+    local ok, error = coroutine.resume(co, ...)
     if not ok then
       vv.log(("Unhandled error in coroutine: %s (event: %s)"):format(error, evt), 'error')
       vv.log(debug.traceback(error, 0), 'debug')
@@ -980,15 +980,12 @@ function M.wait(...)
       end)
     elseif type(evt) == 'string' or type(evt) == 'table' then
       local event = evt
-      --- @type boolean|function
-      local when = true
       if type(evt) == 'table' then
         assert(type(evt.event) == 'string', ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
         if evt.when ~= nil then
           assert(type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
         end
         event = evt.event
-        when = evt.when
       end
       assert(type(event) == 'string')
       local tbl = registered_waits
@@ -1002,7 +999,7 @@ function M.wait(...)
       if tbl == registered_waits then 
         error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      tbl[seq] = when
+      tbl[seq] = evt
     else 
       error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
@@ -1023,7 +1020,7 @@ for _, evt in ipairs(spec.events) do
 function M.wait_for_%s(timeout, when)
   local event = '%s'
   local registration = when and { event = event, when = when } or event
-  return select(2, M.wait(registration, timeout))
+  return select(3, M.wait(registration, timeout))
 end
 ]]):format(evt.name, evt.args, evt.args, evt.name:gsub('[.]', '_'), evt.name))
 end
