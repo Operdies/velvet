@@ -108,12 +108,14 @@ e['**'] = resolve
 ---| '*' Raised when any dotless event is raised.
 ---| '**' Raised when any event is raised.
 
---- @class velvet.async.event_registration
+--- @class velvet.async.conditional_event
 --- @field event velvet.async.event|string event
 --- @field when fun(event: string, data: table): boolean predicate function
 
+--- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|string
+
 --- Wait for one of the events to fire, or |timeout|.
---- @param ... velvet.async.event|velvet.async.event_registration|string|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
+--- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event, table|'timeout' The name of the event and the result, or nil on 'timeout'
 function M.wait(...)
   local timeout = nil
