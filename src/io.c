@@ -90,11 +90,11 @@ void io_dispatch(struct io *io) {
     return;
   }
 
-  if (!polled) return;
 
-  for (size_t i = 0; i < io->pollfds.length; i++) {
+  for (size_t i = 0; polled && i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(io->pollfds, i);
     struct io_source *src = vec_nth(io->sources, i);
+    if (pfd->revents) polled--;
     assert((pfd->revents & POLLNVAL) == 0);
     for (int repeats = 0; pfd->revents && repeats < io->max_iterations; repeats++) {
       // Read output
