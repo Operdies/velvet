@@ -76,7 +76,7 @@ local function resolve(name, data)
       if type(seq) == 'number' then
         if seq <= current_sequence then
           local is_match = true
-          local wait_result = { name = name, data = vv.deepcopy(data) }
+          local wait_result = { name = name, data = data }
           if registration.when then is_match = registration.when(registration, wait_result) end
           if is_match then
             local waiter = sequence_callbacks[seq]
@@ -221,7 +221,7 @@ function M.stream(...)
   local args = {...}
   return function()
     local ok, result = M.wait(table.unpack(args))
-    return ok, result
+    return ok or 'timeout', result
   end
 end
 

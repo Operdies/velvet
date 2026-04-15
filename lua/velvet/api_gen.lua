@@ -1040,7 +1040,7 @@ function M.stream(...)
   local args = {...}
   return function()
     local ok, result = M.wait(table.unpack(args))
-    return ok, result
+    return ok or 'timeout', result
   end
 end
 
