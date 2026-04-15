@@ -134,18 +134,29 @@ vv.options = setmetatable(vv.options, {
   end,
 })
 
---- The main use case here is for sockets to redirect all print statements
---- in their execution context. _ENV.print was almost a good solution, but not quite since it doesn't capture
---- prints from other modules.
-_G.COROUTINE_PRINT = {}
-local real_print = _G.print
-_G.print = function(...)
+--- The main use case is for sockets to redirect all print statements
+--- to their execution context. Setting _ENV.print was almost a good solution, 
+--- but not quite since it doesn't capture prints from other modules.
+COROUTINE_PRINT = {}
+local real_print = function(stream, ...)
+  local tbl = {...}
+  for i, v in ipairs(tbl) do tbl[i] = tostring(v) end
+  local msg = table.concat(tbl, '\t')
+
   local co = coroutine.running()
   if _G.COROUTINE_PRINT[co] then
-    _G.COROUTINE_PRINT[co](...)
+    _G.COROUTINE_PRINT[co](stream, msg)
   else
-    real_print(...)
+    vv.log(msg, stream == 1 and 'info' or 'error')
   end
+end
+
+print = function(...)
+  real_print(1, ...)
+end
+
+printerr = function(...)
+  real_print(2, ...)
 end
 
 -- quit() and reload() are wrapped because the vv functions have not been loaded yet.

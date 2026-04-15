@@ -430,32 +430,10 @@ table.insert(c, [[
 #include "lua.h"
 #include "lauxlib.h"
 #include "velvet_api.h"
+#include "velvet_lua.h"
 #include "velvet.h"
 #include "utils.h"
 #include <string.h>
-
-/* Instead of creating a real gc handle, we only store a reference to the function.
-Cleaning up the handle in codegen is complicated, so instead the consumer must create its own handle. */
-static lua_Integer luaL_checkfunction(lua_State *L, lua_stackIndex idx) {
-  luaL_checktype(L, idx, LUA_TFUNCTION);
-  return idx;
-}
-
-static bool luaL_checkboolean(lua_State *L, lua_stackIndex idx) {
-  luaL_checktype(L, idx, LUA_TBOOLEAN);
-  return lua_toboolean(L, idx);
-}
-
-static struct u8_slice luaL_checkslice(lua_State *L, lua_stackIndex idx) {
-  struct u8_slice s;
-  s.content = (const uint8_t*)luaL_checklstring(L, idx, &s.len);
-  return s;
-}
-
-static void lua_pushslice(lua_State *L, struct u8_slice s) {
-  if (s.content) lua_pushlstring(L, (const char*)s.content, s.len);
-  else lua_pushstring(L, NULL);
-}
 
 ]])
 

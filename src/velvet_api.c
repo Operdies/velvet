@@ -349,8 +349,7 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
 
   if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
     struct velvet *v = *(struct velvet **)lua_getextraspace(L);
-    struct u8_slice err;
-    err.content = (const uint8_t *)lua_tolstring(L, -1, &err.len);
+    struct u8_slice err = luaL_checkslice(L, -1);
     struct velvet_api_system_message_event_args event_args = {
         .level = VELVET_API_SEVERITY_ERROR,
         .message = err,

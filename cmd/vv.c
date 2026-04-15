@@ -527,9 +527,17 @@ static void vv_lua_on_output(struct io_source *src, struct u8_slice str) {
   io_write(STDOUT_FILENO, str);
 }
 
+static bool color_stderr = false;
 static void vv_lua_on_error(struct io_source *src, struct u8_slice str) {
   (void)src;
+  struct u8_slice red = u8_slice_from_cstr("\x1b[31m");
+  struct u8_slice reset = u8_slice_from_cstr("\x1b[0m");
+
+  if (color_stderr)
+    io_write(STDERR_FILENO, red);
   io_write(STDERR_FILENO, str);
+  if (color_stderr)
+    io_write(STDERR_FILENO, reset);
 }
 static void vv_lua_on_input(struct io_source *src, struct u8_slice str) {
   (void)src;
@@ -583,6 +591,7 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
   close(out_fd[1]);
   close(err_fd[1]);
   ensure_streams_blocking();
+  color_stderr = isatty(STDERR_FILENO);
 
   struct velvet_lua_payload_context ctx = {0};
   struct io io = io_default;

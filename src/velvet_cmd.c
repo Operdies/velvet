@@ -2,6 +2,7 @@
 #include "lauxlib.h"
 #include "utils.h"
 #include <errno.h>
+#include "velvet_lua.h"
 
 static int l_socket_print(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
@@ -12,17 +13,12 @@ static int l_socket_print(lua_State *L) {
 
   if (source_socket == 0) return 0;
 
-  int n = lua_gettop(L);
   int out_stream = luaL_checkinteger(L, 1);
-  struct string *linebuf = out_stream == 1 ? &ctx->pending_output : &ctx->pending_error;
-  for (int i = 2; i <= n; i++) {
-    struct u8_slice s;
-    s.content = (uint8_t*)luaL_tolstring(L, i, &s.len);
-    if (i > 2) string_push_char(linebuf, '\t');
-    string_push_slice(linebuf, s);
-    lua_pop(L, 1);
-  }
-  string_push_char(linebuf, '\n');
+  struct u8_slice msg = luaL_checkslice(L, 2);
+
+  struct string *out_buffer = out_stream == 1 ? &ctx->pending_output : &ctx->pending_error;
+  string_push_slice(out_buffer, msg);
+  string_push_char(out_buffer, '\n');
   return 0;
 }
 
@@ -77,13 +73,12 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
 
   lua_rawgeti(v->L, LUA_REGISTRYINDEX, v->coroutine_wrapper_function);
   if (luaL_loadbuffer(v->L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
-    size_t len = 0;
-    const char *err = lua_tolstring(v->L, -1, &len);
+    struct u8_slice err = luaL_checkslice(v->L, -1);
     if (ctx) {
-      string_push_cstr(&ctx->pending_error, err);
+      string_push_slice(&ctx->pending_error, err);
       ctx->status = VELVET_COROUTINE_SYNTAX_ERROR;
     } else {
-      velvet_log("lua cmd error: %s", err);
+      velvet_log("lua cmd error: %.*s", (int)err.len, err.content);
     }
   } else {
     lua_pushinteger(v->L, source_socket);

@@ -35,7 +35,7 @@ static void velvet_lua_init_coroutine_helper(struct velvet *v) {
       "return function(chunk, setup, cleanup, print_function)\n"
       "  vv.async.run(function()\n"
       "    setup()\n"
-      "    COROUTINE_PRINT[coroutine.running()] = function(...) print_function(1, ...) end\n"
+      "    COROUTINE_PRINT[coroutine.running()] = print_function\n"
       "    local ok, result = xpcall(chunk, debug.traceback)\n"
       "    if result then result = type(result) == 'string' and result or vv.inspect(result) end\n"
       "    if not ok then\n"
@@ -148,4 +148,25 @@ void velvet_lua_source(struct velvet *vv, char *path) {
   if (lua_pcall(vv->L, 1, 0, 0) != LUA_OK) {
     vv_log_lua_error(vv);
   }
+}
+
+struct u8_slice luaL_checkslice(lua_State *L, lua_stackIndex idx) {
+  struct u8_slice s;
+  s.content = (const uint8_t*)luaL_checklstring(L, idx, &s.len);
+  return s;
+}
+
+lua_Integer luaL_checkfunction(lua_State *L, lua_stackIndex idx) {
+  luaL_checktype(L, idx, LUA_TFUNCTION);
+  return idx;
+}
+
+bool luaL_checkboolean(lua_State *L, lua_stackIndex idx) {
+  luaL_checktype(L, idx, LUA_TBOOLEAN);
+  return lua_toboolean(L, idx);
+}
+
+void lua_pushslice(lua_State *L, struct u8_slice s) {
+  if (s.content) lua_pushlstring(L, (const char*)s.content, s.len);
+  else lua_pushstring(L, NULL);
 }
