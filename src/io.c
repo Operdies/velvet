@@ -40,13 +40,6 @@ static void io_dispatch_idle_schedules(struct io *io) {
 }
 
 void io_dispatch(struct io *io) {
-  // First execute any pending scheduled actions;
-  // If a schedule was executed, return. This is needed because a scheduled
-  // action can affect everything, including closing file descriptors,
-  // and generally affecting all kinds of behavior.
-  if (io_dispatch_scheduled(io)) return;
-  io->sequence++;
-
   vec_clear(&io->pollfds);
   struct io_source *src;
   vec_foreach(src, io->sources) {
@@ -85,17 +78,11 @@ void io_dispatch(struct io *io) {
     return;
   }
 
-  if (polled == 0 && maybe_idle) {
-    io_dispatch_idle_schedules(io);
-    return;
-  }
-
-
-  for (size_t i = 0; polled && i < io->pollfds.length; i++) {
+  for (size_t i = 0, remaining = polled; remaining && i < io->pollfds.length; i++) {
     struct pollfd *pfd = vec_nth(io->pollfds, i);
     struct io_source *src = vec_nth(io->sources, i);
-    if (pfd->revents) polled--;
     assert((pfd->revents & POLLNVAL) == 0);
+    if (pfd->revents) remaining--;
     for (int repeats = 0; pfd->revents && repeats < io->max_iterations; repeats++) {
       // Read output
       if ((pfd->revents & POLLIN) && src->on_readable) {
@@ -139,6 +126,17 @@ void io_dispatch(struct io *io) {
       int poll_ret = poll(pfd, 1, 0);
       if (poll_ret < 1) break;
     }
+  }
+
+  /* increment the sequence number to allow dispatching events queued in the poll() loop */
+  io->sequence++;
+
+  /* dispatch all scheduled actions from before this generation */
+  io_dispatch_scheduled(io);
+
+  /* dispatch idle schedules if nothing was polled */
+  if (polled == 0 && maybe_idle) {
+    io_dispatch_idle_schedules(io);
   }
 }
 
