@@ -7,36 +7,34 @@
 #include <sys/wait.h>
 #include <time.h>
 
-static bool io_dispatch_scheduled(struct io *io) {
+static void io_dispatch_schedules(struct vec v) {
+  struct io_schedule *schedule;
+  vec_foreach(schedule, v) {
+    schedule->callback(schedule->data);
+  }
+}
+
+static void move_schedules(struct vec *pending, struct vec *ready) {
   struct io_schedule *schedule;
   uint64_t now = get_ms_since_startup();
-  bool did_execute = false;
-
-  // Execute all schedules which were sequenced before the current io_dispatch call
-  for (;;) {
-    vec_find(schedule, io->scheduled_actions, schedule->when <= now && schedule->sequence < io->sequence);
-    if (!schedule) break;
-    // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
-    // This is needed because we may otherwise corrupt the vec structure.
-    struct io_schedule copy = *schedule;
-    vec_remove(&io->scheduled_actions, schedule);
-    copy.callback(copy.data);
-    did_execute = true;
+  vec_rwhere(schedule, *pending, schedule->when <= now) {
+    vec_push(ready, schedule);
+    vec_remove(pending, schedule);
   }
-  return did_execute;
+}
+
+static void io_dispatch_scheduled(struct io *io) {
+  move_schedules(&io->scheduled_actions, &io->schedule_buffer);
+  io_dispatch_schedules(io->schedule_buffer);
+  vec_clear(&io->schedule_buffer);
 }
 
 static void io_dispatch_idle_schedules(struct io *io) {
-  struct io_schedule *schedule;
-  for (;;) {
-    vec_find(schedule, io->idle_schedule, schedule->sequence < io->sequence);
-    if (!schedule) break;
-    // Create a local copy of this schedule in case `scheduled_actions` is modified during the callback.
-    // This is needed because we may otherwise corrupt the vec structure.
-    struct io_schedule copy = *schedule;
-    vec_remove(&io->idle_schedule, schedule);
-    copy.callback(copy.data);
-  }
+  struct vec tmp = io->idle_schedule;
+  io->idle_schedule = io->schedule_buffer;
+  io->schedule_buffer = tmp;
+  io_dispatch_schedules(io->schedule_buffer);
+  vec_clear(&io->schedule_buffer);
 }
 
 void io_dispatch(struct io *io) {
@@ -128,9 +126,6 @@ void io_dispatch(struct io *io) {
     }
   }
 
-  /* increment the sequence number to allow dispatching events queued in the poll() loop */
-  io->sequence++;
-
   /* dispatch all scheduled actions from before this generation */
   io_dispatch_scheduled(io);
 
@@ -197,14 +192,14 @@ bool io_schedule_cancel(struct io *io, io_schedule_id id) {
 }
 
 io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
-  struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms, .sequence = io->sequence };
+  struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms };
   schedule.id = get_schedule_id();
   vec_push(&io->scheduled_actions, &schedule);
   return schedule.id;
 }
 
 io_schedule_id io_schedule_idle(struct io *io, void (*callback)(void*), void *data) {
-  struct io_schedule schedule = { .callback = callback, .data = data, .sequence = io->sequence };
+  struct io_schedule schedule = { .callback = callback, .data = data };
   schedule.id = get_schedule_id();
   vec_push(&io->idle_schedule, &schedule);
   return schedule.id;
@@ -215,4 +210,5 @@ void io_destroy(struct io *io) {
   vec_destroy(&io->sources);
   vec_destroy(&io->scheduled_actions);
   vec_destroy(&io->idle_schedule);
+  vec_destroy(&io->schedule_buffer);
 }

@@ -38,7 +38,6 @@ struct io_schedule {
   io_schedule_callback *callback;
   void *data;
   uint64_t when;
-  uint64_t sequence;
   uint64_t id;
 };
 
@@ -48,7 +47,8 @@ struct io {
   struct vec /* scheduled callbacks */ scheduled_actions;
   /* callbacks invoked when there is no io activity */
   struct vec /* idle callbacks */ idle_schedule;
-  uint64_t sequence; /* sequence number used to identify when a schedule was added */
+  /* swap buffer while dispatching schedules */
+  struct vec /* schedule buffer */ schedule_buffer;
   uint8_t buffer[kB(2)];
   int max_iterations;
   /* how many ms without activity is considered idle */
@@ -60,6 +60,7 @@ static const struct io io_default = {
     .pollfds = vec(struct pollfd),
     .scheduled_actions = vec(struct io_schedule),
     .idle_schedule = vec(struct io_schedule),
+    .schedule_buffer = vec(struct io_schedule),
     .max_iterations = 100,
     .idle_timeout_ms = 2,
 };
