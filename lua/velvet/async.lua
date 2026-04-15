@@ -84,7 +84,15 @@ local function resolve(name, data)
         if seq <= current_sequence then
           local is_match = true
           local wait_result = { name = name, data = data }
-          if registration.when then is_match = registration.when(registration, wait_result) end
+          if registration.when then 
+            local ok, result = xpcall(registration.when, debug.traceback, registration, wait_result)
+            if not ok then
+              printerr(string.format("Unhandled error during when(%s): %s", name, result))
+              return
+            else
+              is_match = result
+            end
+          end
           if is_match then
             local waiter = sequence_callbacks[seq]
             if waiter then
