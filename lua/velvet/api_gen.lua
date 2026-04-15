@@ -826,7 +826,7 @@ local function exec_defer(co)
       local fn = defer[i]
       local ok, err = xpcall(fn, debug.traceback)
       if not ok then
-        vv.log(("Unhandled error in coroutine defer: %s"):format(err), 'error')
+        printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
       end
     end
   end
@@ -842,7 +842,7 @@ function M.run(f, ...)
     co_defer[coroutine.running()] = {}
     local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
     if not ok then
-      vv.log(("Unhandled error in coroutine: %s"):format(err), 'error')
+      printerr(("Unhandled error in coroutine: %s"):format(err), 'error')
     end
     exec_defer(coroutine.running())
   end)
@@ -960,12 +960,11 @@ function M.wait(...)
   end
 
   co_to_seq[co] = seq
-  sequence_callbacks[seq] = function(...)
+  sequence_callbacks[seq] = function(registration, result)
     if timeout then vv.api.schedule_cancel(timeout) end
-    local ok, error = coroutine.resume(co, ...)
+    local ok, error = coroutine.resume(co, registration, result)
     if not ok then
-      vv.log(("Unhandled error in coroutine: %s (event: %s)"):format(error, evt), 'error')
-      vv.log(debug.traceback(error, 0), 'debug')
+      printerr(string.format("Unhandled error in coroutine after %s: %s", result.name, debug.traceback(error, 0)))
     end
   end
 
@@ -977,8 +976,7 @@ function M.wait(...)
         sequence_callbacks[seq] = nil
         local ok, error = coroutine.resume(co, nil, 'timeout')
         if not ok then
-          vv.log(("Unhandled error in coroutine: %s (event: timeout)"):format(error), 'error')
-          vv.log(debug.traceback(error, 0), 'debug')
+          printerr(string.format("Unhandled error in coroutine after timeout: %s", result.name, debug.traceback(error, 0)))
         end
       end)
     elseif type(evt) == 'string' or type(evt) == 'table' then

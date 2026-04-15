@@ -15,7 +15,7 @@ local arrange = function()
   if w < 50 then w = 50 end
   if w > sz.width then w = sz.width end
   local h = sz.height - 1
-  win:set_geometry({ left = sz.width - w, top = 0, width = w, height = h })
+  win:set_geometry({ left = sz.width - w, top = 1, width = w, height = h })
   win:set_background_color(bg)
   -- win:clear()
   win:draw('\x1b[J')
@@ -43,12 +43,10 @@ win:set_visibility(false)
 
 local function enable()
   win:set_visibility(true)
-  vv.log('show log panel')
 end
 
 local function disable()
   win:set_visibility(false)
-  vv.log('hide log panel')
 end
 
 return {

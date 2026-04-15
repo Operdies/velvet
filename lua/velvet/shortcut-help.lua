@@ -117,7 +117,6 @@ local function flatten_maps(map)
     flat[#flat + 1] = it
   end
 
-  -- vv.log(descriptions)
   return flat
 end
 

@@ -295,11 +295,10 @@ function keys.set(lhs, rhs, opts)
   end
   map.execute = function() 
     local handler = function(e)
-      local traceback = debug.traceback(e, 2)
-      vv.log("Unhandled error in mapping " .. lhs, 'error')
-      vv.log(traceback, 'debug')
+      return string.format("Unhandled error in keymap '%s': %s'", lhs, debug.traceback(e, 2))
     end
-    xpcall(rhs, handler)
+    local ok, err = xpcall(rhs, handler)
+    if not ok then printerr(err) end
   end
   map.options = opts or {}
   vv.events.emit(keys.keymap_changed)
@@ -332,8 +331,6 @@ local function send_key_to_window(args)
 end
 
 local sequence_id = 0
-
-local dbg_oneline = function(x) vv.log(vv.inspect(x, { indent = ' ', newline = '', depth = 4 })) end
 
 local function keymap_unwind()
   -- unwind is called when a key did not match any mappings.
@@ -379,10 +376,6 @@ local function schedule_unwind(seq)
       keymap_unwind()
     end
   end)
-end
-
-local function print_chain(map)
-  dbg_oneline { current_chain = chain_str(map) }
 end
 
 --- @param args velvet.api.session.key.event_args
@@ -460,7 +453,6 @@ function keymap.on_key(args)
       schedule_unwind(sequence_id)
     else
       if not next_chain.execute then
-        print_chain(next_chain)
         assert(next_chain.execute, "keymap: internal invariant violation: terminal chains must be executable!")
       end
 

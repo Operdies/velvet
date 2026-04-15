@@ -34,6 +34,11 @@ static int l_coroutine_setup(lua_State *co) {
 }
 
 static void coroutine_cleanup(lua_State *co) {
+  /* cancelling the coroutine does two things:
+   * 1. Triggers any functions registered with vv.async.defer()
+   * 2. Removes the coroutine from the resume table in vv.async,
+   * preventing it from being resumed. Hopefully later garbage collected. */
+
   // vv.async.cancel(co)
   lua_getglobal(co, "vv");
   lua_getfield(co, -1, "async");

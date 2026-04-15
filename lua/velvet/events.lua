@@ -49,17 +49,16 @@ local events = {
       end
       if handler then
         local error_handler = function(e)
-          -- prevent recursion if message handlers have errors
-          if event_name ~= 'system_message' then
-            vv.log(("Unhandled error in event handler. (event %s)"):format(event_name), 'error')
-            vv.log(debug.traceback(e, 2), 'debug')
-          end
-          return e
+          return string.format("Unhandled error in event handler. (event %s): %s", event_name, debug.traceback(e, 2))
         end
+        local ok, err
         if prefix == true then
-          xpcall(handler, error_handler, event_name, vv.deepcopy(data))
+          ok, err = xpcall(handler, error_handler, event_name, vv.deepcopy(data))
         else
-          xpcall(handler, error_handler, vv.deepcopy(data))
+          ok, err = xpcall(handler, error_handler, vv.deepcopy(data))
+        end
+        if not ok and event_name ~= 'system_message' then
+          printerr(err)
         end
       end
     end
