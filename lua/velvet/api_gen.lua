@@ -813,6 +813,7 @@ local registered_waits = {}
 local sequence_callbacks = {}
 local co_to_seq = {}
 local co_defer = {}
+local deferring = {}
 -- Monotonically increasing sequence number used to invalidate multi-waits
 local sequence = 1
 
@@ -821,6 +822,10 @@ local sequence = 1
 local function exec_defer(co)
   local defer = co_defer[co]
   if defer then
+    -- ensure no new wait() and defer() calls are made on this thread during defer
+    deferring[co] = true
+    -- Ensure co_defer is nilled in case a defer calls M.cancel()
+    -- Further defer calls will now error().
     co_defer[co] = nil
     for i = #defer, 1, -1 do
       local fn = defer[i]
@@ -829,6 +834,7 @@ local function exec_defer(co)
         printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
       end
     end
+    deferring[co] = nil
   end
 end
 
@@ -864,6 +870,7 @@ end
 --- defer a function which runs when the current coroutine completes or is cancelled.
 --- @param defer fun() deferred action
 function M.defer(defer)
+  if deferring[coroutine.running()] then error("Cannot add new defers during defer.") end
   assert(type(defer) == 'function', string.format('Bad argument #1 (function expected, got %s)', type(defer)))
   local defers = co_defer[coroutine.running()] or error("Provided coroutine is not managed by vv.async.")
   defers[#defers + 1] = defer
@@ -947,6 +954,7 @@ table.insert(async, [[
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
+  if deferring[co] then error("Cannot wait() during defer.") end
   sequence = sequence + 1
   -- local capture to preserve the sequence number
   local seq = sequence
