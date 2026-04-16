@@ -519,6 +519,7 @@ static void ensure_streams_blocking();
 
 struct velvet_lua_payload_context {
   bool quit;
+  bool stdin_closed;
   enum velvet_coroutine_exit_code exit_code;
 };
 
@@ -542,6 +543,8 @@ static void vv_lua_on_error(struct io_source *src, struct u8_slice str) {
 static void vv_lua_on_input(struct io_source *src, struct u8_slice str) {
   (void)src;
   (void)str;
+  struct velvet_lua_payload_context *ctx = src->data;
+  if (str.len == 0) ctx->stdin_closed = true;
 }
 static void vv_lua_on_socket(struct io_source *src, struct u8_slice str) {
   struct velvet_lua_payload_context *ctx = src->data;
@@ -595,34 +598,40 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
 
   struct velvet_lua_payload_context ctx = {0};
   struct io io = io_default;
-  while (!ctx.quit) {
-    io_clear_sources(&io);
-    struct io_source out_src = {
-      .fd = out_fd[0],
-      .events = IO_SOURCE_POLLIN,
-      .on_read = vv_lua_on_output,
-    };
-    io_add_source(&io, out_src);
-    struct io_source err_src = {
-      .fd = err_fd[0],
-      .events = IO_SOURCE_POLLIN,
-      .on_read = vv_lua_on_error,
-    };
-    io_add_source(&io, err_src);
+  struct io_source out_src = {
+    .fd = out_fd[0],
+    .events = IO_SOURCE_POLLIN,
+    .on_read = vv_lua_on_output,
+  };
+  io_add_source(&io, out_src);
+  struct io_source err_src = {
+    .fd = err_fd[0],
+    .events = IO_SOURCE_POLLIN,
+    .on_read = vv_lua_on_error,
+  };
+  io_add_source(&io, err_src);
+  struct io_source socket_src = {
+    .data = &ctx,
+    .fd = sockfd,
+    .events = IO_SOURCE_POLLIN,
+    .on_read = vv_lua_on_socket,
+  };
+  io_add_source(&io, socket_src);
+  if (isatty(STDIN_FILENO)) {
     struct io_source in_src = {
-      .fd = STDIN_FILENO,
-      .events = IO_SOURCE_POLLIN,
-      .on_read = vv_lua_on_input,
+        .fd = STDIN_FILENO,
+        .events = IO_SOURCE_POLLIN,
+        .on_read = vv_lua_on_input,
+        .data = &ctx,
     };
     io_add_source(&io, in_src);
-    struct io_source socket_src = {
-      .data = &ctx,
-      .fd = sockfd,
-      .events = IO_SOURCE_POLLIN,
-      .on_read = vv_lua_on_socket,
-    };
-    io_add_source(&io, socket_src);
+  }
+  while (!ctx.quit) {
     io_dispatch(&io);
+    if (ctx.stdin_closed) {
+      /* STDIN is the last entry */
+      vec_remove_at(&io.sources, io.sources.length - 1);
+    }
   }
 
   io_destroy(&io);
