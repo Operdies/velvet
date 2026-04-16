@@ -14,17 +14,14 @@ static void io_dispatch_schedules(struct vec v) {
   }
 }
 
-static void move_schedules(struct vec *pending, struct vec *ready) {
-  struct io_schedule *schedule;
-  uint64_t now = get_ms_since_startup();
-  vec_rwhere(schedule, *pending, schedule->when <= now) {
-    vec_push(ready, schedule);
-    vec_remove(pending, schedule);
-  }
-}
-
 static void io_dispatch_scheduled(struct io *io) {
-  move_schedules(&io->scheduled_actions, &io->schedule_buffer);
+  uint64_t now = get_ms_since_startup();
+  struct io_schedule *s;
+  vec_rforeach(s, io->scheduled_actions) {
+    if (s->when > now) break;
+    vec_push(&io->schedule_buffer, s);
+  }
+  io->scheduled_actions.length -= io->schedule_buffer.length;
   io_dispatch_schedules(io->schedule_buffer);
   vec_clear(&io->schedule_buffer);
 }
@@ -47,13 +44,7 @@ void io_dispatch(struct io *io) {
 
   /* TODO: Switch to epoll / kqueue based implementation */
   struct io_schedule *next_schedule = NULL;
-  struct io_schedule *schedule;
-  vec_foreach(schedule, io->scheduled_actions) {
-    if (!next_schedule)
-      next_schedule = schedule;
-    else
-      next_schedule = next_schedule->when < schedule->when ? next_schedule : schedule;
-  }
+  if (io->scheduled_actions.length > 0) next_schedule = vec_nth(io->scheduled_actions, io->scheduled_actions.length - 1);
 
   uint64_t now = get_ms_since_startup();
   int timeout = next_schedule ? MAX(0, (int64_t)next_schedule->when - (int64_t)now) : -1;
@@ -191,10 +182,21 @@ bool io_schedule_cancel(struct io *io, io_schedule_id id) {
   return false;
 }
 
+/* sort the schedules such that the next-up schedule is at the last index.
+ * This is on the assumption that long-lived schedules will linger in the
+ * buffer for longer, and short-lived schedules will be allocated often, so they should go on the end to reduce
+ * shifting. This also makes dispatch much cheaper since no shifting is needed. */
+static int schedule_cmp(const void *_a, const void *_b) {
+  const struct io_schedule *a = _a, *b = _b;
+  return a->when > b->when ? -1 : a->when < b->when ? 1 : 0;
+}
+
 io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
   struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms };
   schedule.id = get_schedule_id();
-  vec_push(&io->scheduled_actions, &schedule);
+  int insert_at = vec_binsearch(io->scheduled_actions, &schedule, schedule_cmp);
+  if (insert_at < 0) insert_at = ~insert_at;
+  vec_insert(&io->scheduled_actions, insert_at, &schedule);
   return schedule.id;
 }
 
