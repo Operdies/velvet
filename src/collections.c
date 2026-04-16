@@ -286,22 +286,19 @@ void vec_sort(struct vec *v, int (*cmp)(const void*,const void*)) {
   if (v->length) qsort(v->content, v->length, v->element_size, cmp);
 }
 
-ssize_t vec_binsearch(struct vec *v, const void *elem, int (*cmp)(const void *, const void *)) {
-  if (v->length == 0) return ~0;
-  size_t lower = 0;
-  size_t upper = v->length - 1;
-  while (lower < upper) {
-    size_t test = lower + (upper - lower) / 2;
-    int c = cmp(elem, vec_nth(*v, test));
+ssize_t vec_binsearch(struct vec v, const void *elem, int (*cmp)(const void *, const void *)) {
+  if (v.length == 0) return ~0;
+  ssize_t lower = 0, upper = v.length - 1;
+  do {
+    ssize_t test = lower + (upper - lower) / 2;
+    int c = cmp(elem, vec_nth(v, test));
     if (c == 0) return test;
     if (c > 0) {
-      /* elem > test */
-      lower = test + 1;
+      lower = test + 1; /* elem > test */
     } else {
-      /* elem < test */
-      upper = test - 1;
+      upper = test - 1; /* elem < test */
     }
-  }
+  } while (lower <= upper);
   return ~lower;
 }
 

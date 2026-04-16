@@ -1,6 +1,5 @@
 #include "collections.h"
 #include "csi.h"
-#include "platform.h"
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -844,6 +843,13 @@ static void test_base64() {
   string_destroy(&out);
 }
 
+static int int_less_than(const void *_a, const void *_b) {
+  int a = *(int*)_a;
+  int b = *(int*)_b;
+  return a - b;
+}
+
+
 void test_vec() {
   int *item = NULL;
   struct vec v = vec(int);
@@ -938,6 +944,42 @@ void test_vec() {
   }
   assert(vec_pop(&v) == NULL);
   assert(vec_pop(&v) == NULL);
+
+
+  #define V(x) &(int){x}
+  vec_clear(&v);
+  assert(vec_binsearch(v, V(0), int_less_than) == ~0);
+  vec_push(&v, V(5));
+  assert(vec_binsearch(v, V(4), int_less_than) == ~0);
+  assert(vec_binsearch(v, V(5), int_less_than) == 0);
+  assert(vec_binsearch(v, V(6), int_less_than) == ~1);
+  vec_push(&v, V(10));
+  assert(vec_binsearch(v, V(0), int_less_than) == ~0);
+  assert(vec_binsearch(v, V(5), int_less_than) == 0);
+  assert(vec_binsearch(v, V(7), int_less_than) == ~1);
+  assert(vec_binsearch(v, V(9), int_less_than) == ~1);
+  assert(vec_binsearch(v, V(10), int_less_than) == 1);
+  assert(vec_binsearch(v, V(11), int_less_than) == ~2);
+  vec_push(&v, V(15));
+  assert(vec_binsearch(v, V(0), int_less_than) == ~0);
+  assert(vec_binsearch(v, V(5), int_less_than) == 0);
+  assert(vec_binsearch(v, V(7), int_less_than) == ~1);
+  assert(vec_binsearch(v, V(9), int_less_than) == ~1);
+  assert(vec_binsearch(v, V(10), int_less_than) == 1);
+  assert(vec_binsearch(v, V(11), int_less_than) == ~2);
+  assert(vec_binsearch(v, V(15), int_less_than) == 2);
+  assert(vec_binsearch(v, V(17), int_less_than) == ~3);
+  vec_push(&v, V(20));
+  assert(vec_binsearch(v, V(0), int_less_than) == ~0);
+  assert(vec_binsearch(v, V(5), int_less_than) == 0);
+  assert(vec_binsearch(v, V(7), int_less_than) == ~1);
+  assert(vec_binsearch(v, V(9), int_less_than) == ~1);
+  assert(vec_binsearch(v, V(10), int_less_than) == 1);
+  assert(vec_binsearch(v, V(11), int_less_than) == ~2);
+  assert(vec_binsearch(v, V(15), int_less_than) == 2);
+  assert(vec_binsearch(v, V(17), int_less_than) == ~3);
+  assert(vec_binsearch(v, V(20), int_less_than) == 3);
+  assert(vec_binsearch(v, V(21), int_less_than) == ~4);
 
   vec_destroy(&v);
 }
