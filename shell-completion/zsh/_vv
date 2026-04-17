@@ -7,15 +7,28 @@ _vv_sockets() {
   fi
 }
 
-_vv_commands() {
-  # TODO: query commands from the server
-  local -a commands=(
-    'quit:Quit the velvet session, killing all windows'
-    'reload:Reload the velvet session, resourcing configs'
-    'detach:Detach the current terminal from the session'
-    'spawn:Spawn a new window running the provided command'
-  )
-  _describe 'command' commands
+_vv_socket_arg() {
+  if (( ${+opt_args[-S]} )); then
+    echo "${opt_args[-S]}"
+  elif (( ${+opt_args[--socket]} )); then
+    echo "${opt_args[--socket]}"
+  elif [[ -n "$VELVET" ]]; then
+    echo "$VELVET"
+  fi
+}
+
+_vv_complete() {
+  local socket_arg="$(_vv_socket_arg)"
+  local -a cmd=(vv)
+  if [[ -n "$socket_arg" ]]; then
+    cmd+=(-S "$socket_arg")
+  fi
+  cmd+=(vv-complete-internal zsh "$@")
+  local -a completions
+  completions=("${(@f)$("${cmd[@]}" 2>/dev/null)}")
+  if (( ${#completions} )); then
+    _describe 'command' completions
+  fi
 }
 
 _vv() {
@@ -31,12 +44,18 @@ _vv() {
 
   case $state in
     cmd)
-      local -a builtins=(
+      local socket_arg="$(_vv_socket_arg)"
+      local -a cmd=(vv)
+      if [[ -n "$socket_arg" ]]; then
+        cmd+=(-S "$socket_arg")
+      fi
+      cmd+=(vv-complete-internal zsh)
+      local -a commands=(
         'attach:Attach to a velvet session'
         'lua:Execute a lua file or stdin on the server'
+        "${(@f)$("${cmd[@]}" 2>/dev/null)}"
       )
-      _describe 'builtin' builtins
-      _vv_commands
+      _describe 'command' commands
       ;;
     args)
       case $line[1] in
@@ -49,6 +68,10 @@ _vv() {
           shift words
           (( CURRENT-- ))
           _normal && return
+          ;;
+        *)
+          # pass completed words (excluding partial) to the server
+          _vv_complete "${line[@]}" && return
           ;;
       esac
       ;;
