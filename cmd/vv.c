@@ -171,7 +171,6 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     if (F(--socket) || F(-S)) {
       if (a.socket) velvet_fatal("--socket specified multiple times.");
       GET(a.socket);
-      if (strchr(a.socket, '/')) velvet_fatal("Socket name must not contain the '/' character.");
       if (strlen(a.socket) > 200) velvet_fatal("Socket name too long. Max 200 characters.");
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
