@@ -692,70 +692,68 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
   for (int row = r->staged.top; row <= r->staged.bottom; row++) {
     for (int column = r->staged.left; column <= r->staged.right; column++) {
       int cell_index = row * r->w + column;
-      if (!cell_equals(staging->cells[cell_index], empty)) {
-        struct screen_cell above = staging->cells[cell_index];
-        struct screen_cell below = normalize_cell(t, composite->cells[cell_index]);
-        struct screen_cell a_norm = normalize_cell(t, above);
+      struct screen_cell above = staging->cells[cell_index];
+      struct screen_cell below = normalize_cell(t, composite->cells[cell_index]);
+      struct screen_cell a_norm = normalize_cell(t, above);
 
-        struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
-        bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
-        bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
-        bool fg_seethrough = !attributes_visible && (above.cp.value == ' ' || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255) && !is_wide_continuation;
+      struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
+      bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
+      bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
+      bool fg_seethrough = !attributes_visible && (above.cp.value == ' ' || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255) && !is_wide_continuation;
 
-        /* dim before blending. This looks a bit more like what you would expect in cases
+      /* dim before blending. This looks a bit more like what you would expect in cases
          * where a dimmed window is covering a non-dimmed window. The dimming effect still
          * dims the content below, but if the cell below is very bright it still appears to shine through.
          */
-        if (dim) {
-          above = normalize_cell(t, above);
-          above.style.bg = rgb_dim(above.style.bg, 1.0 - dim);
-          above.style.fg = rgb_dim(above.style.fg, 1.0 - dim);
-        }
-
-        bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
-                     (trns.transparency && (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above)));
-
-        if (a_norm.style.bg.transparency) {
-          above = normalize_cell(t, above);
-          float a = (float)a_norm.style.bg.transparency / 255.0;
-          above.style.bg = color_alpha_blend(above.style.bg, below.style.bg, 1.0f - a);
-          if (fg_seethrough) {
-            above.cp = below.cp;
-            above.style.attr = below.style.attr;
-            above.style.fg = color_alpha_blend(a_norm.style.bg, below.style.fg, 1.0f - a);
-          }
-        }
-
-        if (a_norm.style.fg.transparency && !fg_seethrough) {
-          above = normalize_cell(t, above);
-          float a = (float)a_norm.style.fg.transparency / 255.0;
-          above.style.fg = color_alpha_blend(above.style.fg, below.style.bg, 1.0f - a);
-        }
-
-        if (blend) {
-          above = normalize_cell(t, above);
-          /* if the top cell is blank, draw the glyph from the cell below, but tint it
-           * with the background color of the top cell. This creates the illusion of transparency. */
-          if (is_block_element(above.cp.value) || is_half_circle(above.cp.value)) {
-            /* block elements are used for pixel graphics. If we blend the background of such characters
-             * we must blend the foreground equally. Otherwise everything looks glitchy. */
-            above.style.fg = color_alpha_blend(below.style.bg, above.style.fg, trns.transparency);
-          } else if (fg_seethrough) {
-            above.cp = below.cp;
-            above.style.attr = below.style.attr;
-            above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.transparency);
-          }
-          above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, trns.transparency);
-        }
-
-        /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
-         * and this character is not a space. */
-        if (above.cp.value != ' ' && column && composite->cells[cell_index - 1].cp.is_wide)
-          composite->cells[cell_index - 1].cp = codepoint_space;
-
-        composite->cells[cell_index] = normalize_cell(t, above);
-        staging->cells[cell_index] = empty;
+      if (dim) {
+        above = normalize_cell(t, above);
+        above.style.bg = rgb_dim(above.style.bg, 1.0 - dim);
+        above.style.fg = rgb_dim(above.style.fg, 1.0 - dim);
       }
+
+      bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
+        (trns.transparency && (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above)));
+
+      if (a_norm.style.bg.transparency) {
+        above = normalize_cell(t, above);
+        float a = (float)a_norm.style.bg.transparency / 255.0;
+        above.style.bg = color_alpha_blend(above.style.bg, below.style.bg, 1.0f - a);
+        if (fg_seethrough) {
+          above.cp = below.cp;
+          above.style.attr = below.style.attr;
+          above.style.fg = color_alpha_blend(a_norm.style.bg, below.style.fg, 1.0f - a);
+        }
+      }
+
+      if (a_norm.style.fg.transparency && !fg_seethrough) {
+        above = normalize_cell(t, above);
+        float a = (float)a_norm.style.fg.transparency / 255.0;
+        above.style.fg = color_alpha_blend(above.style.fg, below.style.bg, 1.0f - a);
+      }
+
+      if (blend) {
+        above = normalize_cell(t, above);
+        /* if the top cell is blank, draw the glyph from the cell below, but tint it
+           * with the background color of the top cell. This creates the illusion of transparency. */
+        if (is_block_element(above.cp.value) || is_half_circle(above.cp.value)) {
+          /* block elements are used for pixel graphics. If we blend the background of such characters
+             * we must blend the foreground equally. Otherwise everything looks glitchy. */
+          above.style.fg = color_alpha_blend(below.style.bg, above.style.fg, trns.transparency);
+        } else if (fg_seethrough) {
+          above.cp = below.cp;
+          above.style.attr = below.style.attr;
+          above.style.fg = color_alpha_blend(below.style.fg, above.style.bg, trns.transparency);
+        }
+        above.style.bg = color_alpha_blend(below.style.bg, above.style.bg, trns.transparency);
+      }
+
+      /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
+         * and this character is not a space. */
+      if (above.cp.value != ' ' && column && composite->cells[cell_index - 1].cp.is_wide)
+        composite->cells[cell_index - 1].cp = codepoint_space;
+
+      composite->cells[cell_index] = normalize_cell(t, above);
+      staging->cells[cell_index] = empty;
     }
   }
 
@@ -1041,7 +1039,7 @@ static bool color_equals(struct color a, struct color b) {
   return false;
 }
 
-static bool blank(uint32_t v) { return v  == 0 || v == ' '; }
+static bool blank(uint32_t v) { return v == ' '; }
 static bool cell_equals(struct screen_cell a, struct screen_cell b) {
   /* ATTR_REVERSE has been normalized out at this point */
   assert(!(a.style.attr & ATTR_REVERSE));
