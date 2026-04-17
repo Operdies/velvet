@@ -1,31 +1,58 @@
 #compdef vv
 
-_arguments -C \
-  '(-S --socket)'{-S,--socket}'[Specify the socket to use]:socket path:_files' \
-  '(-h --help)'{-h,--help}'[Show help and exit]' \
-  '1:mode:->mode' \
-  '*:argument:->args' \
-  && return
+_vv_sockets() {
+  local socket_dir="$HOME/.local/share/velvet/sockets"
+  if [[ -d "$socket_dir" ]]; then
+    compadd -- "$socket_dir"/*(N:t)
+  fi
+}
 
-case $state in
-  mode)
-    local -a modes
-    modes=(
-      'attach:Attach to the server at <socket> or $VELVET'
-      'lua:Evaluate <file> or stdin on the server'
-      'foreground:Start a velvet session without daemonizing'
-      'quit:Quit the velvet session, killing all windows'
-      'detach:Detach the current terminal from the session'
-      'reload:Reload the velvet session, resourcing configs'
-    )
-    _describe 'mode' modes
-    ;;
-  args)
-    case $words[2] in
-      lua)
-        _arguments '2:lua file:_files -g "*.lua"'
-        ;;
-    esac
-    ;;
-esac
+_vv_commands() {
+  # TODO: query commands from the server
+  local -a commands=(
+    'quit:Quit the velvet session, killing all windows'
+    'reload:Reload the velvet session, resourcing configs'
+    'detach:Detach the current terminal from the session'
+    'spawn:Spawn a new window running the provided command'
+  )
+  _describe 'command' commands
+}
 
+_vv() {
+  local context state state_descr line
+  typeset -A opt_args
+
+  _arguments -s \
+    '(-S --socket)'{-S,--socket}'[Specify the socket to use]:socket name:_vv_sockets' \
+    '(--version -v)'{--version,-v}'[Print version and exit]' \
+    '(-h --help)'{-h,--help}'[Show help text and exit]' \
+    '1:command:->cmd' \
+    '*:: :->args' && return
+
+  case $state in
+    cmd)
+      local -a builtins=(
+        'attach:Attach to a velvet session'
+        'lua:Execute a lua file or stdin on the server'
+      )
+      _describe 'builtin' builtins
+      _vv_commands
+      ;;
+    args)
+      case $line[1] in
+        lua)
+          _arguments \
+            '1:lua file or -:_files' \
+            '*:arguments:' && return
+          ;;
+        spawn)
+          shift words
+          (( CURRENT-- ))
+          _normal && return
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_vv "$@"

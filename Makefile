@@ -129,18 +129,26 @@ $(GEN_LUA_AUTOGEN): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
 $(GEN_C_HEADER): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
 	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
 
+INSTALL_BASH_COMPLETION = $(PREFIX)/share/bash-completion/completions
+INSTALL_ZSH_COMPLETION = $(PREFIX)/share/zsh/site-functions
+
 install: release
 	mkdir -p $(INSTALL_LUA) $(INSTALL_BIN) $(INSTALL_BIN2) $(INSTALL_MAN)/man1 $(INSTALL_MAN)/man3
+	mkdir -p $(INSTALL_BASH_COMPLETION) $(INSTALL_ZSH_COMPLETION)
 	install -m 755 $(RELEASE_DIR)/vv $(INSTALL_BIN2)/vv
 	ln -sf ../share/velvet/bin/vv $(INSTALL_BIN)/vv
 	install -m 644 doc/man1/velvet.1 $(INSTALL_MAN)/man1/
 	install -m 644 doc/man3/*.3 $(INSTALL_MAN)/man3/
+	install -m 644 shell-completion/bash/vv $(INSTALL_BASH_COMPLETION)/vv
+	install -m 644 shell-completion/zsh/_vv $(INSTALL_ZSH_COMPLETION)/_vv
 	cp -r lua/velvet $(INSTALL_LUA)/
 
 uninstall:
 	rm -f $(INSTALL_BIN)/vv
 	rm -f $(INSTALL_MAN)/man1/velvet.1
 	rm -f $(INSTALL_MAN)/man3/velvet*.3
+	rm -f $(INSTALL_BASH_COMPLETION)/vv
+	rm -f $(INSTALL_ZSH_COMPLETION)/_vv
 	rm -rf $(INSTALL_VELVET)
 	
 -include $(OBJECT_DEPS) $(CMD_DEPS)
