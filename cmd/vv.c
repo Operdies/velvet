@@ -485,6 +485,7 @@ static int vv_connect(char *vv_socket) {
       exit(1);
     }
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+      if (errno == ECONNREFUSED) unlink(addr.sun_path);
       close(sockfd);
       velvet_fatal("connect:");
     }
