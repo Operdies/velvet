@@ -37,7 +37,7 @@ local function draw()
     return math.sqrt(a * a + b * b)
   end
 
-  local rx = 30
+  local rx = tonumber(arg[1]) or 30
   -- the exact ratio varies, but 16/34 is the ratio between cell width/height in my setup.
   local ry = math.floor(rx * (16 / 34))
   local norm_pos = { col = pos.col / rx, row = pos.row / ry }
