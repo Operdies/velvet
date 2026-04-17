@@ -68,7 +68,8 @@ static struct dumb_screen *screen_to_dumb_screen(const struct screen *const src)
   for (int row = 0; row < src->h; row++) {
     struct screen_line *screen_row = screen_get_line(src, row);
     for (int col = 0; col < src->w; col++) {
-      screen->cells[row * src->w + col] = (char)screen_row->cells[col].cp.value;
+      char val = (char)screen_row->cells[col].cp.value;
+      screen->cells[row * src->w + col] = val ? val : ' ';
     }
   }
   return screen;

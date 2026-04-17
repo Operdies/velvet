@@ -1041,11 +1041,12 @@ static bool color_equals(struct color a, struct color b) {
   return false;
 }
 
+static bool blank(uint32_t v) { return v  == 0 || v == ' '; }
 static bool cell_equals(struct screen_cell a, struct screen_cell b) {
   /* ATTR_REVERSE has been normalized out at this point */
   assert(!(a.style.attr & ATTR_REVERSE));
   assert(!(b.style.attr & ATTR_REVERSE));
-  if (a.cp.value == ' ' && b.cp.value == ' ') 
+  if (blank(a.cp.value) && blank(b.cp.value)) 
     return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr && a.link == b.link;
   return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style) && a.link == b.link;
 }

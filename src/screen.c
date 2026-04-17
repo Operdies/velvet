@@ -2,6 +2,7 @@
 #include "text.h"
 #include "utils.h"
 #include <stdlib.h>
+#include <string.h>
 #include "screen.h"
 #include <wchar.h>
 
@@ -38,13 +39,15 @@ int screen_bottom(const struct screen *g) {
 }
 
 void screen_clear_line(struct screen *g, int n) {
-  struct screen_cell clear = { .cp = codepoint_space, .style = g->cursor.brush };
   struct screen_line *row = screen_get_line(g, n);
   assert(row->cells);
   row->has_newline = false;
   row->eol = 0;
-  for (int i = 0; i < g->w; i++) {
-    row->cells[i] = clear;
+  memset(row->cells, 0, g->w * sizeof(struct screen_cell));
+  if (g->cursor.brush.attr | g->cursor.brush.fg.kind | g->cursor.brush.bg.kind) {
+    for (int i = 0; i < g->w; i++) {
+      row->cells[i].style = g->cursor.brush;
+    }
   }
 }
 
