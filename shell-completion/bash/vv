@@ -8,9 +8,29 @@ _vv_sockets() {
   fi
 }
 
-_vv_commands() {
-  # TODO: query commands from the server
-  echo "quit reload detach spawn"
+_vv_socket_arg() {
+  local i
+  for ((i = 1; i < ${#COMP_WORDS[@]}; i++)); do
+    case "${COMP_WORDS[i]}" in
+      -S|--socket)
+        echo "${COMP_WORDS[i+1]}"
+        return
+        ;;
+    esac
+  done
+  if [[ -n "$VELVET" ]]; then
+    echo "$VELVET"
+  fi
+}
+
+_vv_complete() {
+  local socket_arg="$(_vv_socket_arg)"
+  local cmd=(vv)
+  if [[ -n "$socket_arg" ]]; then
+    cmd+=(-S "$socket_arg")
+  fi
+  cmd+=(vv-complete-internal bash "$@")
+  "${cmd[@]}" 2>/dev/null
 }
 
 _vv() {
@@ -19,40 +39,47 @@ _vv() {
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="attach lua $(_vv_commands)"
-  local global_opts="-S --socket --version -v -h --help"
-
   case "$prev" in
     -S|--socket)
       COMPREPLY=($(compgen -W "$(_vv_sockets)" -- "$cur"))
       return
       ;;
-    lua)
-      COMPREPLY=($(compgen -f -W "- --" -- "$cur"))
-      return
-      ;;
-    spawn)
-      COMPREPLY=($(compgen -c -- "$cur"))
-      return
-      ;;
   esac
 
-  # find if a subcommand has already been given
-  local i subcmd=""
+  # collect completed words, skipping options and their arguments
+  local i
+  local -a cmd_words=()
   for ((i = 1; i < COMP_CWORD; i++)); do
     case "${COMP_WORDS[i]}" in
       -S|--socket) ((i++)); continue ;;
       -*) continue ;;
-      *) subcmd="${COMP_WORDS[i]}"; break ;;
+      *) cmd_words+=("${COMP_WORDS[i]}") ;;
     esac
   done
 
-  if [[ -z "$subcmd" ]]; then
-    if [[ "$cur" == -* ]]; then
-      COMPREPLY=($(compgen -W "$global_opts" -- "$cur"))
-    else
-      COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
-    fi
+  if (( ${#cmd_words[@]} )); then
+    case "${cmd_words[0]}" in
+      lua)
+        COMPREPLY=($(compgen -f -W "- --" -- "$cur"))
+        return
+        ;;
+      spawn)
+        COMPREPLY=($(compgen -c -- "$cur"))
+        return
+        ;;
+    esac
+    # subcommand already given — delegate to server
+    COMPREPLY=($(compgen -W "$(_vv_complete "${cmd_words[@]}")" -- "$cur"))
+    return
+  fi
+
+  local global_opts="-S --socket --version -v -h --help"
+  local commands="attach lua $(_vv_complete)"
+
+  if [[ "$cur" == -* ]]; then
+    COMPREPLY=($(compgen -W "$global_opts" -- "$cur"))
+  else
+    COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
   fi
 }
 
