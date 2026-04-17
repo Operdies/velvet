@@ -1,11 +1,9 @@
 FROM alpine:latest
 # Generously install tools to demonstrate lsp autocomplete and inline docs
-RUN apk add --no-cache gcc musl-dev make linux-headers vim bash man-db jq \
+RUN apk add --no-cache gcc musl-dev make linux-headers vim bash man-db jq bash-completion \
                       neovim neovim-doc lua-language-server \
                       tree-sitter tree-sitter-c tree-sitter-lua tree-sitter-markdown
 RUN adduser -D demo
-# these completions are not really good enough. Include them once socket completions work great, and vv lua completes *lua files
-# COPY shell-completion/bash/vv /etc/bash_completion.d/vv
 COPY web/skel /etc/skel
 COPY . /etc/skel/velvet
 # Override cflags. The makefile builds with native optimizations, but this is not
