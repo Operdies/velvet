@@ -330,9 +330,10 @@ local function send_key_to_window(args)
   if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
 end
 
-local sequence_id = 0
+local unwind_schedule = nil
 
 local function keymap_unwind()
+  unwind_schedule = nil
   -- unwind is called when a key did not match any mappings.
   -- we walk the parent binding tree to find a mapping which is a prefix of the current chain.
   -- If we find a mapping, we trigger that mapping and replay the remaining unresolved keys
@@ -370,14 +371,6 @@ local function keymap_unwind()
   end
 end
 
-local function schedule_unwind(seq)
-  vv.api.schedule_after(keymap.chain_unwind_timeout, function()
-    if sequence_id == seq then
-      keymap_unwind()
-    end
-  end)
-end
-
 --- @param args velvet.api.session.key.event_args
 --- @return boolean args is a modifier
 local function is_modifier(args)
@@ -413,6 +406,69 @@ end
 
 local passthrough = false
 local last_repeat = 0
+
+--- @param next_chain keymap
+--- @param args velvet.api.session.key.event_args
+--- @param now integer
+local function advance_chain(next_chain, args, now)
+  next_chain.trigger = args
+  if next(next_chain.children) then
+    set_current_chain(next_chain)
+    -- If the chain has continuations, schedule an unwind.
+    -- Otherwise it will be impossible to type keys which are part of a keymap.
+    unwind_schedule = vv.api.schedule_after(keymap.chain_unwind_timeout, keymap_unwind)
+  else
+    if not next_chain.execute then
+      assert(next_chain.execute, "keymap: internal invariant violation: terminal chains must be executable!")
+    end
+
+    if next_chain.options.repeatable then
+      last_repeat = now
+    else
+      -- if the key is not repeatable, we can trivially reset the chain and execute the mapping
+      set_current_chain(root_keymap)
+    end
+    next_chain.execute()
+  end
+end
+
+--- @param args velvet.api.session.key.event_args
+local function cancel_chain(args)
+  if args.key.name == vk.ESCAPE and current_chain ~= root_keymap then
+    -- escape should cancel any chain immediately without unwinding if the escape key was not a continuation.
+    set_current_chain(root_keymap)
+    last_repeat = 0
+    return
+  end
+
+  if is_modifier(args) then
+    -- if the key is a modifier, it may advance chains, but it should
+    -- not cancel chains or trigger unwinding. Otherwise pressing LEFT_CONTROL
+    -- in the middle of a binding using control as a modifier would cancel it.
+    -- We still send it to windows though in case they are using kitty keyboard extensions
+    -- and want to do something with modifiers.
+    send_key_to_window(args)
+    return
+  end
+
+  if current_chain == root_keymap then
+    -- if the key was not handled and we are in the root keymap,
+    -- send the key event to the window.
+    last_repeat = 0
+    send_key_to_window(args)
+  elseif last_repeat > 0 then
+    -- if the previous key was a repeat and the current key did not match anything,
+    -- replay the current key in the root keymap
+    last_repeat = 0
+    set_current_chain(root_keymap)
+    keymap.on_key(args)
+  else
+    -- otherwise, we should unwind the chain and replay the key.
+    keymap_unwind()
+    keymap.on_key(args)
+  end
+end
+
 --- @param args velvet.api.session.key.event_args
 function keymap.on_key(args)
   args.key = maybe_remap(args.key)
@@ -426,8 +482,8 @@ function keymap.on_key(args)
     return
   end
 
-  -- Increment the sequence number to invalidate scheduled callbacks
-  sequence_id = sequence_id + 1
+  -- cancel pending unwind on key
+  if unwind_schedule then vv.api.schedule_cancel(unwind_schedule) end
 
   local chord = clean_chord(chord_from_key_event(args.key))
   local chord_key, alt_key = chord_to_string(chord)
@@ -444,63 +500,7 @@ function keymap.on_key(args)
     end
   end
 
-  if next_chain then
-    next_chain.trigger = args
-    if next(next_chain.children) then
-      -- If the chain has continuations, schedule an unwind.
-      -- Otherwise it will be impossible to type keys which are part of a keymap.
-      set_current_chain(next_chain)
-      schedule_unwind(sequence_id)
-    else
-      if not next_chain.execute then
-        assert(next_chain.execute, "keymap: internal invariant violation: terminal chains must be executable!")
-      end
-
-      if next_chain.options.repeatable then
-        last_repeat = now
-      else
-        -- if the key is not repeatable, we can trivially reset the chain and execute the mapping
-        set_current_chain(root_keymap)
-      end
-      next_chain.execute()
-    end
-  end
-
-  if not next_chain then
-    if args.key.name == vk.ESCAPE and current_chain ~= root_keymap then
-      -- escape should cancel any chain immediately without unwinding if the escape key was not a continuation.
-      set_current_chain(root_keymap)
-      last_repeat = 0
-      return
-    end
-
-    if is_modifier(args) then
-      -- if the key is a modifier, it may advance chains, but it should
-      -- not cancel chains or trigger unwinding. Otherwise pressing LEFT_CONTROL
-      -- in the middle of a binding using control as a modifier would cancel it.
-      -- We still send it to windows though in case they are using kitty keyboard extensions
-      -- and want to do something with modifiers.
-      send_key_to_window(args)
-      return
-    end
-
-    if current_chain == root_keymap then
-      -- if the key was not handled and we are in the root keymap,
-      -- send the key event to the window.
-      last_repeat = 0
-      send_key_to_window(args)
-    elseif last_repeat > 0 then
-      -- if the previous key was a repeat and the current key did not match anything,
-      -- replay the current key in the root keymap
-      last_repeat = 0
-      set_current_chain(root_keymap)
-      keymap.on_key(args)
-    else
-      -- otherwise, we should unwind the chain and replay the key.
-      keymap_unwind()
-      keymap.on_key(args)
-    end
-  end
+  if next_chain then advance_chain(next_chain, args, now) else cancel_chain(args) end
 end
 
 local evt = require('velvet.events')
