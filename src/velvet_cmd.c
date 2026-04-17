@@ -84,7 +84,7 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
   vec_find(ctx, v->coroutines, ctx->socket == source_socket);
 
   lua_rawgeti(v->L, LUA_REGISTRYINDEX, v->coroutine_wrapper_function);
-  if (luaL_loadbuffer(v->L, (char *)chunk.content, chunk.len, "=(lua cmd)") != LUA_OK) {
+  if (luaL_loadbuffer(v->L, (char *)chunk.content, chunk.len, "@velvet.lua_execute_chunk") != LUA_OK) {
     struct u8_slice err = luaL_checkslice(v->L, -1);
     if (ctx) {
       string_push_slice(&ctx->pending_error, err);

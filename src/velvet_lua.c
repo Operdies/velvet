@@ -59,7 +59,8 @@ static void velvet_lua_init_coroutine_helper(struct velvet *v) {
       "  end)\n"
       "end",
   };
-  int status = luaL_dostring(v->L, coroutine_helper);
+  int status = luaL_loadbuffer(v->L, coroutine_helper, strlen(coroutine_helper), "@velvet.cli");
+  lua_call(v->L, 0, 1);
   assert(status == LUA_OK);
   assert(lua_type(v->L, -1) == LUA_TFUNCTION);
   v->coroutine_wrapper_function = luaL_ref(v->L, LUA_REGISTRYINDEX);

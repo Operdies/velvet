@@ -838,7 +838,7 @@ static void check_config(struct velvet *v) {
 
   if (!ok) lua_bail(v->L, "Unable to open config for reading.");
 
-  int status = luaL_loadbuffer(v->L, (char*)config.content, config.len, "validate config");
+  int status = luaL_loadbuffer(v->L, (char*)config.content, config.len, "@velvet.check_config");
   string_destroy(&config);
   if (status != LUA_OK) {
     const char *s = luaL_checkstring(v->L, -1);
@@ -1172,7 +1172,7 @@ lua_stackRetCount vv_api_session_load_value(lua_State *L, struct u8_slice name) 
   vec_find(it, v->stored_strings, u8_slice_equals(name, string_as_u8_slice(it->key)));
   if (it == NULL) return 0;
   string_ensure_null_terminated(&it->value);
-  if (luaL_loadbuffer(L, (char *)it->value.content, it->value.len, "session_load") != LUA_OK) {
+  if (luaL_loadbuffer(L, (char *)it->value.content, it->value.len, "@velvet.session_load") != LUA_OK) {
     lua_error(L);
   }
   lua_call(L, 0, 1);
