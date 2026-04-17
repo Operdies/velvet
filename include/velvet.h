@@ -34,6 +34,14 @@ struct vv_lua_payload {
   size_t magic;
   size_t chunk_offset;
   size_t chunk_length;
+  size_t args_offset;
+  size_t args_count;
+};
+
+/* contained in the payload, defined by |args_offset| and |args_count|. */
+struct velvet_lua_varargs {
+  int n;
+  char **args;
 };
 
 struct velvet_input_options {
@@ -106,6 +114,7 @@ struct velvet {
   struct vec /* velvet_kvp */ stored_strings;
   /* defined at init time in velvet_lua.c */
   lua_Integer coroutine_wrapper_function;
+  char **positional_args;
 };
 
 void velvet_force_full_redraw(struct velvet *scene);
@@ -130,7 +139,7 @@ void velvet_set_focused_session(struct velvet *v, int socket_fd);
 void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
-void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket);
+void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_varargs args);
 
 [[maybe_unused]] static struct velvet_input velvet_input_default = {0};
 

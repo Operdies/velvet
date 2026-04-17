@@ -32,7 +32,9 @@ int lua_debug_traceback_handler(lua_State *L) {
 
 static void velvet_lua_init_coroutine_helper(struct velvet *v) {
   char coroutine_helper[] = {
-      "return function(chunk, setup, cleanup, print_function)\n"
+      "return function(chunk, setup, cleanup, print_function, arg0, ...)\n"
+      "  local cli_args = {...}\n"
+      "  cli_args[0] = arg0\n"
       "  local function user_traceback(msg)\n"
       "    local tb = debug.traceback(msg, 2)\n"
       "    local lines = {}\n"
@@ -45,6 +47,7 @@ static void velvet_lua_init_coroutine_helper(struct velvet *v) {
       "  vv.async.run(function()\n"
       "    setup()\n"
       "    COROUTINE_PRINT[coroutine.running()] = print_function\n"
+      "    COROUTINE_ARGS[coroutine.running()] = cli_args\n"
       "    local ok, result = xpcall(chunk, user_traceback)\n"
       "    if result then result = type(result) == 'string' and result or vv.inspect(result) end\n"
       "    if not ok then\n"
@@ -60,6 +63,25 @@ static void velvet_lua_init_coroutine_helper(struct velvet *v) {
   assert(status == LUA_OK);
   assert(lua_type(v->L, -1) == LUA_TFUNCTION);
   v->coroutine_wrapper_function = luaL_ref(v->L, LUA_REGISTRYINDEX);
+}
+
+static void velvet_lua_init_arg(struct velvet *v) {
+  lua_State *L = v->L;
+  lua_getglobal(L, "vv");
+  lua_newtable(L);
+  int i = 1;
+  /* push velvet binary to arg[0]. The lua interpreter uses arg[0]
+   * to set the script path with e.g. `lua myscript.lua`,
+   * so this should be similar. */
+  char *exepath = platform_get_exe_path();
+  lua_pushstring(L, exepath);
+  lua_rawseti(L, -2, 0);
+  char **arg = v->positional_args;
+  for (;arg && *arg; arg++, i++) {
+    lua_pushstring(L, *arg);
+    lua_seti(L, -2, i);
+  }
+  lua_setfield(L, -2, "startup_arguments");
 }
 
 static void velvet_lua_init_api(struct velvet *v) {
@@ -138,6 +160,8 @@ void velvet_lua_init(struct velvet *v) {
   }
 
   velvet_lua_init_api(v);
+  /* set args from command line */
+  velvet_lua_init_arg(v);
   velvet_lua_init_coroutine_helper(v);
   // velvet_lua_init_log(v);
   velvet_lua_set_default_options(v);

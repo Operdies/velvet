@@ -53,6 +53,13 @@ static void coroutine_cleanup(lua_State *co) {
   lua_pushnil(co);
   lua_settable(co, -3);
   lua_pop(co, 1); /* pop COROUTINE_PRINT */
+
+  // COROUTINE_ARGS[co] = nil
+  lua_getglobal(co, "COROUTINE_ARGS");
+  lua_pushthread(co);
+  lua_pushnil(co);
+  lua_settable(co, -3);
+  lua_pop(co, 1); /* pop COROUTINE_ARGS */
 }
 
 static int l_coroutine_cleanup(lua_State *co) {
@@ -72,7 +79,7 @@ static int l_coroutine_cleanup(lua_State *co) {
   return 0;
 }
 
-void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket) {
+void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_varargs args) {
   struct velvet_coroutine *ctx;
   vec_find(ctx, v->coroutines, ctx->socket == source_socket);
 
@@ -91,7 +98,13 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
     lua_pushcfunction(v->L, l_coroutine_cleanup);
     lua_pushinteger(v->L, source_socket);
     lua_pushcclosure(v->L, l_socket_print, 1);
-    lua_Integer status = lua_pcall(v->L, 4, 0, 0);
+
+    int num_args = 4; /* chunk, setup, cleanup, print_function, ... */
+    for (int i = 0; i < args.n; i++) {
+      lua_pushstring(v->L, args.args[i]);
+      num_args++;
+    }
+    lua_Integer status = lua_pcall(v->L, num_args, 0, 0);
     if (status != LUA_OK) {
       const char *err = lua_tostring(v->L, -1);
       velvet_log("pcall: %s", err);
@@ -136,7 +149,8 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
                          "or it could be a bug!");
   } else {
     struct u8_slice chunk = {.len = codelength, .content = chunk_start};
-    velvet_lua_execute_chunk(v, chunk, source_socket);
+    struct velvet_lua_varargs args = {0};
+    velvet_lua_execute_chunk(v, chunk, source_socket, args);
   }
 }
 

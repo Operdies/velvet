@@ -132,7 +132,8 @@ struct velvet_args {
   bool foreground;
   char *lua;
   char *socket;
-  char **cmd;
+  char *cmd;
+  char **positional;
 };
 
 static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload);
@@ -140,7 +141,7 @@ static int vv_send_lua_chunk(struct velvet_args args);
 static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
-  printf("Usage:\n  %s [<options>] [<arguments> ...]\n\nOptions:\n"
+  printf("Usage:\n  %s [<options>] [<arguments> ...] [-- [<positional arguments>]]\n\nOptions:\n"
          "  attach                  Attach to the server at <socket> if present.\n"
          "  detach                  Detach the current terminal from the session\n"
          "  foreground              Start a server as a foreground process.\n"
@@ -174,7 +175,13 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     } else if (F(lua)) {
       n_commands++;
       a.lua = NEXT();
-      if (!a.lua) a.lua = "";
+      if (a.lua) {
+        a.positional = &argv[i+1];
+        break;
+      } else {
+        /* read from stdin */
+        a.lua = "";
+      }
     } else if (F(foreground)) {
       n_commands++;
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
@@ -185,18 +192,13 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       if (a.attach) velvet_fatal("attach specified multiple times.");
       a.attach = true;
     } else if (F(--)) {
-      /* double dash terminates argument parsing.
-       * Assume the rest of the command line is intended for the lua cli api.
-       * This way, it becomes possible to create a lua cli command with
-       * the name 'foreground' for example, or any other word which velvet might reserve in the future.
-       */
-      if (!NEXT()) velvet_fatal("No command specified");
-      n_commands++;
-      a.cmd = &argv[i];
+      if (!NEXT()) velvet_fatal("No arguments specified after --");
+      a.positional = &argv[i];
       break;
     } else {
       n_commands++;
-      a.cmd = &argv[i];
+      a.cmd = argv[i];
+      a.positional = &argv[i+1];
       break;
     }
   }
@@ -237,11 +239,11 @@ static bool daemonize(void) {
 
 static int vv_send_cmd(struct velvet_args args) {
   struct string lua_buf = {0};
-  string_push_format_slow(&lua_buf, "return vv.cli.execute([==[%s]==], {", args.cmd[0]);
-  for (char **cmd = &args.cmd[1]; *cmd; cmd++) {
-    string_push_format_slow(&lua_buf, "[==[%s]==], ", *cmd);
+  string_push_format_slow(&lua_buf, "return vv.cli.execute([==[%s]==]", args.cmd);
+  for (char **cmd = args.positional; cmd && *cmd; cmd++) {
+    string_push_format_slow(&lua_buf, ", [==[%s]==]", *cmd);
   }
-  string_push_cstr(&lua_buf, "})\n");
+  string_push_cstr(&lua_buf, ")\n");
 
   int success = vv_send_lua_payload(args, u8_slice_from_string(lua_buf));
   string_destroy(&lua_buf);
@@ -328,6 +330,7 @@ int main(int argc, char **argv) {
       .signal_read = signal_pipes[0],
       .daemon = !args.foreground,
       .startup_directory = startup_directory,
+      .positional_args = args.positional,
   };
 
   velvet_loop(&velvet);
@@ -570,7 +573,11 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
    * committed before they are written, but required because the allocator needs a small amount of
    * space for metadata. This is basically a fix for the edge case where payload.len is exactly equal to the system
    * page size. */
-  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * payload.len);
+
+  size_t args_size = 0;
+  for (char **pos = args.positional; pos && *pos; pos++) args_size += strlen(*pos);
+
+  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * (payload.len + args_size));
   char *chunk = shmem->calloc(shmem, payload.len, 1);
   memcpy(chunk, payload.content, payload.len);
   struct vv_lua_payload magic_header = {
@@ -579,6 +586,31 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
       .chunk_length = payload.len,
       .magic = VV_LUA_MAGIC,
   };
+
+  if (args.positional) {
+    int count = 0;
+    for (char **pos = args.positional; pos && *pos; pos++, count++);
+
+    magic_header.args_count = count + 1;
+    size_t *string_offsets = shmem->calloc(shmem, count + 1, sizeof(size_t));
+    magic_header.args_offset = (char*)string_offsets - (char*) shmem;
+
+    char *arg0 = args.lua ? args.lua : args.cmd;
+    int n = strlen(arg0);
+    char *dst = shmem->calloc(shmem, n + 1, sizeof(char));
+    strcpy(arg0, dst);
+    dst[n] = 0;
+    string_offsets[0] = dst - (char *)shmem;
+
+    for (int i = 0; i < count; i++) {
+      char *str = args.positional[i];
+      int n = strlen(str);
+      char *argi = shmem->calloc(shmem, n + 1, sizeof(char));
+      strcpy(argi, str);
+      argi[n] = 0;
+      string_offsets[i + 1] = argi - (char *)shmem;
+    }
+  }
 
   int out_fd[2];
   int err_fd[2];
@@ -666,6 +698,11 @@ static int vv_send_lua_chunk(struct velvet_args args) {
     close(fd);
   } else {
     string_read_fd(STDIN_FILENO, &stdin_buf);
+  }
+
+  if (stdin_buf.len == 0) {
+    fprintf(stderr, "Lua file is empty.\n");
+    return -1;
   }
 
   int success = vv_send_lua_payload(args, string_as_u8_slice(stdin_buf));

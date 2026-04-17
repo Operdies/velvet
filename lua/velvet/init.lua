@@ -25,6 +25,10 @@ local vv = {
     overlay = 100000,
   },
 
+  -- populated during lua vm initialization
+  --- @type string[] startup arguments
+  startup_arguments = {},
+
   cli = cli,
   async = async,
 
@@ -159,6 +163,25 @@ printerr = function(...)
   real_print(2, ...)
 end
 
+--- Coroutine-specific arg table. By using metamagic,
+--- we can make the _G.args global point to COROUTINE_ARGS[coroutine.running()]
+COROUTINE_ARGS = {}
+_G = setmetatable(_G, {
+  __index = function(_, k)
+    if k == 'arg' then
+      return COROUTINE_ARGS[coroutine.running()] or vv.startup_arguments
+    end
+    return nil
+  end,
+  __newindex = function(_, k, v)
+    if k == 'arg' then
+      COROUTINE_ARGS[coroutine.running()] = v
+    else
+      rawset(_G, k, v)
+    end
+  end
+})
+
 -- quit() and reload() are wrapped because the vv functions have not been loaded yet.
 cli.add_command({ name = "quit", action = function() vv.api.quit() end, description = "Quit the velvet session, killing all windows" });
 cli.add_command({ name = "reload", action = function() vv.api.reload() end, description = "Reload the velvet session, resourcing configs" });
@@ -170,7 +193,7 @@ cli.add_command({
 });
 cli.add_command({
   name = "spawn",
-  action = function(_, args) vv.api.window_create_process(args) end,
+  action = function(_, ...) vv.api.window_create_process({...}) end,
   description = "Spawn a new window running the provided command."
 })
 

@@ -3,7 +3,7 @@ local M = {}
 --- @class velvet.cli.command
 --- @field name string
 --- @field description? string
---- @field action fun(name: string, args: string[]): any
+--- @field action fun(name: string, ...: string): any
 
 --- @type table<string, velvet.cli.command>
 local commands = {}
@@ -49,11 +49,11 @@ function M.add_command(command)
 end
 
 --- @param name string The command to execute
---- @param args? string[] Optional parameters
-function M.execute(name, args)
+--- @param ... string Optional parameters
+function M.execute(name, ...)
   local cmd = commands[name]
   if not cmd then return ("Unknown command '%s'\n\n%s"):format(name, describe()) end
-  return cmd.action(name, args or {})
+  return cmd.action(name, ...)
 end
 
 return M

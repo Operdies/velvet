@@ -80,7 +80,17 @@ static void session_handle_command_buffer(struct velvet *v, struct velvet_sessio
 static void session_handle_lua_chunk(struct velvet *v, struct vv_lua_payload *chunk, int mapfd, int session_fd) {
   struct velvet_alloc *a = velvet_alloc_shmem_remap(mapfd);
   struct u8_slice code = { .content = (uint8_t*)a + chunk->chunk_offset, .len = chunk->chunk_length };
-  velvet_lua_execute_chunk(v, code, session_fd);
+  size_t *string_offsets = (size_t*)((uint8_t*)a + chunk->args_offset);
+
+  /* intentional VLA */
+  char *varargs[chunk->args_count];
+  for (size_t i = 0; i < chunk->args_count; i++) {
+    char *arg = (char *)a + string_offsets[i];
+    varargs[i] = arg;
+  }
+
+  struct velvet_lua_varargs args = { .n = chunk->args_count, .args = varargs };
+  velvet_lua_execute_chunk(v, code, session_fd, args);
   velvet_alloc_shmem_destroy(a, mapfd);
 }
 
