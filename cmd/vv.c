@@ -142,14 +142,18 @@ static void vv_attach(struct velvet_args args);
 
 static void usage(char *arg0) {
   printf("Usage:\n  %s [<options>] [<arguments> ...] [-- [<positional arguments>]]\n\nOptions:\n"
-         "  attach                  Attach to the server at <socket> if present.\n"
-         "  detach                  Detach the current terminal from the session\n"
+         "  attach                       Attach to the server at <socket> if present\n"
+         "  detach                       Detach the current terminal from the session\n"
+         /* foreground intentionally not documented because it is exclusively a debugging feature.
          "  foreground              Start a server as a foreground process.\n"
-         "  lua [<file>|-]          Evaluate <file> or stdin on the server.\n"
-         "  quit                    Quit the velvet session, killing all windows\n"
-         "  reload                  Reload the velvet session, resourcing configs\n"
-         "  -S, --socket <name>     Specify the socket to use instead of guessing or auto-generating it.\n"
-         "  -h, --help              Show this help text and exit.\n"
+         */
+         "  lua [<file>|-] [--] [<args>] Execute <file> or input on the server. <args> will be exposed to the script in the global <arg>\n"
+         "  quit                         Quit the velvet session, killing all windows\n"
+         "  reload                       Reload the velvet session, resourcing configs\n"
+         "  spawn <program> [<args>]     Spawn <program> with <args>\n"
+         "  -S, --socket <name>          Specify the socket to use instead of guessing or auto-generating it\n"
+         "  --version                    Print version and exit\n"
+         "  -h, --help                   Show this help text and exit\n"
          , arg0);
 }
 
