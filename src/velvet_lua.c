@@ -49,7 +49,7 @@ static void velvet_lua_init_coroutine_helper(struct velvet *v) {
       "    COROUTINE_PRINT[coroutine.running()] = print_function\n"
       "    COROUTINE_ARGS[coroutine.running()] = cli_args\n"
       "    local ok, result = xpcall(chunk, user_traceback)\n"
-      "    if result then result = type(result) == 'string' and result or vv.inspect(result) end\n"
+      "    if result then result = type(result) == 'string' and result or require('velvet.json').to_json(result) end\n"
       "    if not ok then\n"
       "      print_function(2, 'Unhandled error in lua chunk: ' .. result)\n"
       "    elseif result ~= nil then\n"
