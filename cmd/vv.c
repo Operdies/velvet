@@ -176,11 +176,13 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       n_commands++;
       a.lua = NEXT();
       if (a.lua) {
+        /* read from stdin */
+        if (strcmp(a.lua, "--") == 0) a.lua = "-";
         a.positional = &argv[i+1];
         break;
       } else {
         /* read from stdin */
-        a.lua = "";
+        a.lua = "-";
       }
     } else if (F(foreground)) {
       n_commands++;
@@ -196,9 +198,13 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       a.positional = &argv[i];
       break;
     } else {
-      n_commands++;
-      a.cmd = argv[i];
-      a.positional = &argv[i+1];
+      if (a.lua) {
+        a.positional = &argv[i];
+      } else {
+        n_commands++;
+        a.cmd = argv[i];
+        a.positional = &argv[i + 1];
+      }
       break;
     }
   }
@@ -574,10 +580,21 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
    * space for metadata. This is basically a fix for the edge case where payload.len is exactly equal to the system
    * page size. */
 
-  size_t args_size = 0;
-  for (char **pos = args.positional; pos && *pos; pos++) args_size += strlen(*pos);
+  size_t combined_arg_length = 0;
+  struct vec arglist = vec(struct u8_slice);
+  char *arg0 = args.cmd ? args.cmd : args.lua;
+  if (args.lua && (!args.lua[0] || strcmp(args.lua, "-") == 0)) arg0 = "<stdin>";
+  struct u8_slice arg_slice = u8_slice_from_cstr(arg0);
+  vec_push(&arglist, &arg_slice);
+  combined_arg_length = arg_slice.len;
 
-  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * (payload.len + args_size));
+  for (char **pos = args.positional; pos && *pos; pos++) {
+    arg_slice = u8_slice_from_cstr(*pos);
+    vec_push(&arglist, &arg_slice);
+    combined_arg_length += arg_slice.len;
+  }
+
+  struct velvet_alloc *shmem = velvet_alloc_shmem_create(2 * (payload.len + combined_arg_length));
   char *chunk = shmem->calloc(shmem, payload.len, 1);
   memcpy(chunk, payload.content, payload.len);
   struct vv_lua_payload magic_header = {
@@ -585,32 +602,21 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
       .chunk_offset = chunk - (char *)shmem,
       .chunk_length = payload.len,
       .magic = VV_LUA_MAGIC,
+      .args_count = arglist.length,
   };
 
-  if (args.positional) {
-    int count = 0;
-    for (char **pos = args.positional; pos && *pos; pos++, count++);
+  magic_header.args_count = arglist.length;
+  size_t *string_offsets = shmem->calloc(shmem, arglist.length, sizeof(size_t));
+  magic_header.args_offset = (char*)string_offsets - (char*) shmem;
 
-    magic_header.args_count = count + 1;
-    size_t *string_offsets = shmem->calloc(shmem, count + 1, sizeof(size_t));
-    magic_header.args_offset = (char*)string_offsets - (char*) shmem;
-
-    char *arg0 = args.lua ? args.lua : args.cmd;
-    int n = strlen(arg0);
-    char *dst = shmem->calloc(shmem, n + 1, sizeof(char));
-    strcpy(arg0, dst);
-    dst[n] = 0;
-    string_offsets[0] = dst - (char *)shmem;
-
-    for (int i = 0; i < count; i++) {
-      char *str = args.positional[i];
-      int n = strlen(str);
-      char *argi = shmem->calloc(shmem, n + 1, sizeof(char));
-      strcpy(argi, str);
-      argi[n] = 0;
-      string_offsets[i + 1] = argi - (char *)shmem;
-    }
+  for (size_t i = 0; i < arglist.length; i++) {
+    struct u8_slice *s = vec_nth(arglist, i);
+    char *argi = shmem->calloc(shmem, s->len + 1, sizeof(char));
+    strcpy(argi, (char*)s->content);
+    argi[s->len] = 0;
+    string_offsets[i] = argi - (char *)shmem;
   }
+  vec_destroy(&arglist);
 
   int out_fd[2];
   int err_fd[2];
@@ -690,7 +696,7 @@ static void string_read_fd(int fd, struct string *s) {
 
 static int vv_send_lua_chunk(struct velvet_args args) {
   struct string stdin_buf = {0};
-  if (args.lua && args.lua[0] && args.lua[0] != '-') {
+  if (args.lua && strcmp(args.lua, "-") != 0) {
     /* this file is only available here -- probably provided in the shell with pipe redirection or similar
      * Just read the content instead. */
     int fd = open(args.lua, O_RDONLY);
