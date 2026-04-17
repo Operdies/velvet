@@ -6,9 +6,9 @@ local keys = {}
 local vk = require('velvet.keymap.named_keys')
 
 -- create a custom event dispatched on the main event system
-keys.passthrough_changed = "custom.keymap.passthrough_changed"
-keys.chain_changed = "custom.keymap.chain_changed"
-keys.keymap_changed = "custom.keymap.keymap_changed"
+keys.passthrough_changed = "keymap.passthrough_changed"
+keys.chain_changed = "keymap.chain_changed"
+keys.keymap_changed = "keymap.keymap_changed"
 
 local keymap = {
   repeat_timeout = 300,
