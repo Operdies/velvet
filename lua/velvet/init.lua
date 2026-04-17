@@ -166,6 +166,20 @@ end
 --- Coroutine-specific arg table. By using metamagic,
 --- we can make the _G.args global point to COROUTINE_ARGS[coroutine.running()]
 COROUTINE_ARGS = {}
+COROUTINE_CWD = {}
+
+--- Returns the working directory of the current coroutine,
+--- the focused window's working directory, or the server's startup directory.
+--- @return string
+function vv.cwd()
+  local cwd = COROUTINE_CWD[coroutine.running()]
+  if not cwd then
+    local win = vv.api.get_focused_window()
+    if win and win ~= 0 then cwd = vv.api.window_get_working_directory(win) end
+  end
+  return cwd or vv.api.get_startup_directory()
+end
+
 _G = setmetatable(_G, {
   __index = function(_, k)
     if k == 'arg' then
@@ -194,7 +208,7 @@ cli.add_command({
 });
 cli.add_command({
   name = "spawn",
-  action = function(_, ...) vv.api.window_create_process({...}) end,
+  action = function(_, ...) vv.api.window_create_process({...}, { working_directory = vv.cwd() }) end,
   description = "Spawn a new window running the provided command."
 })
 

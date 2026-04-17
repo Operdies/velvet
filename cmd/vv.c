@@ -625,6 +625,12 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
   }
   vec_destroy(&arglist);
 
+  char cwd[PATH_MAX];
+  getcwd(cwd, PATH_MAX - 1);
+  char *cwd2 = shmem->calloc(shmem, strlen(cwd) + 1, sizeof(char));
+  strcpy(cwd2, cwd);
+  magic_header.cwd_offset = cwd2 - (char *)shmem;
+
   int out_fd[2];
   int err_fd[2];
   if (pipe(out_fd) == -1) velvet_die("pipe:");

@@ -32,13 +32,14 @@ int lua_debug_traceback_handler(lua_State *L) {
 
 static void velvet_lua_init_coroutine_helper(struct velvet *v) {
   char coroutine_helper[] = {
-      "return function(chunk, setup, cleanup, print_function, arg0, ...)\n"
+      "return function(chunk, setup, cleanup, print_function, cwd, arg0, ...)\n"
       "  local cli_args = {...}\n"
       "  cli_args[0] = arg0\n"
       "  vv.async.run(function()\n"
       "    setup()\n"
       "    COROUTINE_PRINT[coroutine.running()] = print_function\n"
       "    COROUTINE_ARGS[coroutine.running()] = cli_args\n"
+      "    COROUTINE_CWD[coroutine.running()] = cwd\n"
       "    local ok, result = xpcall(chunk, debug.traceback)\n"
       "    if result then result = type(result) == 'string' and result or require('velvet.json').to_json(result) end\n"
       "    if not ok then\n"

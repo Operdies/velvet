@@ -79,7 +79,7 @@ static int l_coroutine_cleanup(lua_State *co) {
   return 0;
 }
 
-void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_varargs args) {
+void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_context args) {
   struct velvet_coroutine *ctx;
   vec_find(ctx, v->coroutines, ctx->socket == source_socket);
 
@@ -99,7 +99,9 @@ void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int sourc
     lua_pushinteger(v->L, source_socket);
     lua_pushcclosure(v->L, l_socket_print, 1);
 
-    int num_args = 4; /* chunk, setup, cleanup, print_function, ... */
+    lua_pushstring(v->L, args.cwd);
+
+    int num_args = 5; /* chunk, setup, cleanup, print_function, cwd, ... */
     for (int i = 0; i < args.n; i++) {
       lua_pushstring(v->L, args.args[i]);
       num_args++;
@@ -149,7 +151,7 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
                          "or it could be a bug!");
   } else {
     struct u8_slice chunk = {.len = codelength, .content = chunk_start};
-    struct velvet_lua_varargs args = {0};
+    struct velvet_lua_context args = { .cwd = v->startup_directory };
     velvet_lua_execute_chunk(v, chunk, source_socket, args);
   }
 }

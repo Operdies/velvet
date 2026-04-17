@@ -89,8 +89,12 @@ static void session_handle_lua_chunk(struct velvet *v, struct vv_lua_payload *ch
     varargs[i] = arg;
   }
 
-  struct velvet_lua_varargs args = { .n = chunk->args_count, .args = varargs };
-  velvet_lua_execute_chunk(v, code, session_fd, args);
+  struct velvet_lua_context ctx = {
+    .n = chunk->args_count,
+    .args = varargs,
+    .cwd = chunk->cwd_offset ? (char *)a + chunk->cwd_offset : v->startup_directory,
+  };
+  velvet_lua_execute_chunk(v, code, session_fd, ctx);
   velvet_alloc_shmem_destroy(a, mapfd);
 }
 
