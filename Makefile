@@ -8,6 +8,7 @@ ifeq ($(UNAME_S),Darwin)
 	OBJECTS += platform_macos
 endif
 
+VELVET_VERSION=$(shell git describe --tags --always)
 PREFIX ?= /usr/local
 INSTALL_BIN = $(PREFIX)/bin
 INSTALL_MAN = $(PREFIX)/share/man
@@ -54,6 +55,8 @@ DEBUG_OBJECT_OUT = $(patsubst $(OBJECT_DIR)/%.c, $(DEBUG_DIR)/%.c.o, $(OBJECTS:%
 RELEASE_OBJECT_OUT = $(patsubst $(OBJECT_DIR)/%.c, $(RELEASE_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 
 OBJECT_DEPS = $(DEBUG_OBJECT_OUT:.o=.d) $(RELEASE_OBJECT_OUT:.o=.d)
+
+DEFINES += -DVELVET_VERSION='"$(VELVET_VERSION)"'
 
 CFLAGS = -std=c99 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = -lm

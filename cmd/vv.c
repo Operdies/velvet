@@ -172,6 +172,9 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
+    } else if (F(--version) || F(-v)) {
+      printf("velvet %s\n", VELVET_VERSION);
+      exit(0);
     } else if (F(lua)) {
       n_commands++;
       a.lua = NEXT();
