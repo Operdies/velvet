@@ -49,10 +49,10 @@ struct io {
   struct vec /* idle callbacks */ idle_schedule;
   /* swap buffer while dispatching schedules */
   struct vec /* schedule buffer */ schedule_buffer;
-  uint8_t buffer[kB(2)];
   int max_iterations;
   /* how many ms without activity is considered idle */
   int idle_timeout_ms;
+  uint8_t buffer[kB(64)];
 };
 
 static const struct io io_default = {
