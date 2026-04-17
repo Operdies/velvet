@@ -60,11 +60,17 @@ _vv() {
   if (( ${#cmd_words[@]} )); then
     case "${cmd_words[0]}" in
       lua)
+        compopt -o filenames
         COMPREPLY=($(compgen -f -W "- --" -- "$cur"))
         return
         ;;
       spawn)
-        COMPREPLY=($(compgen -c -- "$cur"))
+        if (( ${#cmd_words[@]} == 1 )); then
+          COMPREPLY=($(compgen -c -- "$cur"))
+        else
+          compopt -o filenames
+          COMPREPLY=($(compgen -f -- "$cur"))
+        fi
         return
         ;;
     esac
