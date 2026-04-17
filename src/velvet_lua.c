@@ -76,6 +76,7 @@ static void velvet_lua_init_arg(struct velvet *v) {
    * so this should be similar. */
   char *exepath = platform_get_exe_path();
   lua_pushstring(L, exepath);
+  free(exepath);
   lua_rawseti(L, -2, 0);
   char **arg = v->positional_args;
   for (;arg && *arg; arg++, i++) {
