@@ -15,6 +15,7 @@
 static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
 static bool color_equals(struct color a, struct color b);
+static bool blank(uint32_t v) { return v == ' ' || v == 0; }
 
 static int window_compare_z_index(const void *a1, const void *b1) {
   const struct velvet_window *a = a1;
@@ -701,9 +702,9 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
       struct screen_cell a_norm = normalize_cell(t, above);
 
       struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
-      bool is_wide_continuation = before && before->cp.is_wide && above.cp.value == ' ';
+      bool is_wide_continuation = before && before->cp.is_wide && blank(above.cp.value);
       bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
-      bool fg_seethrough = !attributes_visible && (above.cp.value == ' ' || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255) && !is_wide_continuation;
+      bool fg_seethrough = !attributes_visible && (blank(above.cp.value) || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255) && !is_wide_continuation;
 
       /* dim before blending. This looks a bit more like what you would expect in cases
          * where a dimmed window is covering a non-dimmed window. The dimming effect still
@@ -753,7 +754,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 
       /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
          * and this character is not a space. */
-      if (above.cp.value != ' ' && column && composite->cells[cell_index - 1].cp.is_wide)
+      if (!blank(above.cp.value) && column && composite->cells[cell_index - 1].cp.is_wide)
         composite->cells[cell_index - 1].cp = codepoint_space;
 
       composite->cells[cell_index] = normalize_cell(t, above);
@@ -1045,7 +1046,6 @@ static bool color_equals(struct color a, struct color b) {
   return false;
 }
 
-static bool blank(uint32_t v) { return v == ' '; }
 static bool cell_equals(struct screen_cell a, struct screen_cell b) {
   /* ATTR_REVERSE has been normalized out at this point */
   assert(!(a.style.attr & ATTR_REVERSE));
