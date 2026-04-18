@@ -236,14 +236,14 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
   g->cursor.column = MIN(column, screen_right(g));
 }
 
-void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
+static void screen_insert_nowrap(struct screen *g, struct screen_cell c) {
   struct cursor *cur = &g->cursor;
   struct screen_line *row = get_current_line(g);
 
   if (g->cursor.wrap_pending) {
     g->cursor.wrap_pending = false;
     assert(cur->column == screen_right(g));
-    if (wrap) {
+    if (false) {
       cur->column = 0;
       screen_move_or_scroll_down(g);
       row = get_current_line(g);
@@ -263,7 +263,7 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
   if (cell_wide(c)) {
     if (cur->column == screen_right(g)) {
       /* a wide character cannot start on the last column */
-      if (wrap) {
+      if (false) {
         cur->column = 0;
         screen_move_or_scroll_down(g);
         row = get_current_line(g);
@@ -289,6 +289,66 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     cur->wrap_pending = true;
     cur->column = screen_right(g);
   }
+}
+
+static void screen_insert_wrap(struct screen *g, struct screen_cell c) {
+  struct cursor *cur = &g->cursor;
+  struct screen_line *row = get_current_line(g);
+
+  if (g->cursor.wrap_pending) {
+    g->cursor.wrap_pending = false;
+    assert(cur->column == screen_right(g));
+    if (true) {
+      cur->column = 0;
+      screen_move_or_scroll_down(g);
+      row = get_current_line(g);
+    } else {
+      // Overwrite last character
+      cur->column = screen_right(g);
+    }
+  }
+
+  struct screen_cell *this = &row->cells[cur->column];
+  if (cur->column && cell_wide(this[-1])) {
+    /* if the previous cell is a wide character, writing this cell clears it */
+    /* the cleared cell keeps its current styling */
+    this[-1].cp = codepoint_space;
+  }
+
+  if (cell_wide(c)) {
+    if (cur->column == screen_right(g)) {
+      /* a wide character cannot start on the last column */
+      if (true) {
+        cur->column = 0;
+        screen_move_or_scroll_down(g);
+        row = get_current_line(g);
+      } else {
+        /* noop -- we cannot insert the character, and we cannot scroll */
+        return;
+      }
+    }
+    row_set_cell(row, cur->column++, c);
+    if (cur->column <= screen_right(g)) {
+      /* If this is a wide character, clear the cell following it.
+       * Note that unlike when clearing the previous character,
+       * we also overwrite the style here. */
+      struct screen_cell clear = c;
+      clear.cp = codepoint_space;
+      row_set_cell(row, cur->column++, clear);
+    }
+  } else {
+    row_set_cell(row, cur->column++, c);
+  }
+
+  if (cur->column > screen_right(g)) {
+    cur->wrap_pending = true;
+    cur->column = screen_right(g);
+  }
+}
+
+void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
+  if (wrap) screen_insert_wrap(g, c);
+  else screen_insert_nowrap(g, c);
 }
 
 static void scrollback_init(struct screen *g, int min_cap) {
