@@ -42,16 +42,15 @@ int main(int argc, char **argv) {
   char buf[1 << 16];
   char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   for (int i = 0; i < LENGTH(buf); i++) {
-    buf[i] = alphabet[i % LENGTH(alphabet)];
+    buf[i] = alphabet[i % (sizeof(alphabet) - 1)];
   }
 
   ascii_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), timeout);
 
   uint64_t multibyte_write = 0;
-  char wide_alphabet[] =
-      "ø󰬄󰬞󱁬󱉈󰼃󰽗󱑶󰩡󰡾󱤞";
+  char wide_alphabet[] = "ø󰬄󰬞󱁬󱉈󰼃󰽗󱑶󰩡󰡾󱤞";
   for (int i = 0; i < LENGTH(buf); i++) {
-    buf[i] = wide_alphabet[i % LENGTH(wide_alphabet)];
+    buf[i] = wide_alphabet[i % (sizeof(wide_alphabet) - 1)];
   }
   multibyte_write = spam_write(STDOUT_FILENO, buf, LENGTH(buf), timeout);
 
