@@ -364,7 +364,7 @@ static void render_buffer_add_damage(struct velvet_render_buffer_line *f, int st
   static const int consolidate_max = 10;
   int n_damage = f->n_damage;
 
-  if (consolidate && n_damage && start - f->damage[n_damage - 1].end < consolidate_max) {
+  if (__builtin_expect(consolidate, true) && n_damage && start - f->damage[n_damage - 1].end < consolidate_max) {
     f->damage[n_damage - 1].end = end;
   } else {
     f->damage[n_damage].start = start;
@@ -443,7 +443,11 @@ static void velvet_render_render_buffer(struct velvet_render *r,
           cell_style = highlight;
         }
 
-        velvet_render_set_style(r, cell_style, c->cp.value == ' ');
+        if (c->cp.value == ' ') {
+          velvet_render_set_style(r, cell_style, true);
+        } else {
+          velvet_render_set_style(r, cell_style, false);
+        }
         velvet_render_set_hyperlink(r, c->link);
 
         uint8_t buf[4];
@@ -908,7 +912,8 @@ static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
   p->n_sub++;
 }
 
-static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
+static inline __attribute__((always_inline))
+void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
   if (col.kind == COLOR_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
   } else if (col.kind == COLOR_TABLE) {
@@ -930,7 +935,8 @@ static void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
   }
 }
 
-static void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style, bool skip_fg) {
+static inline __attribute__((always_inline))
+void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style style, bool skip_fg) {
   struct color fg = r->state.cell.style.fg;
   struct color bg = r->state.cell.style.bg;
 
