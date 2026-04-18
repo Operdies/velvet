@@ -180,17 +180,19 @@ bool cell_wide(struct screen_cell c) {
 static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_cell_style brush, struct u8_slice run, hyperlink_handle link) {
   struct cursor *cur = &g->cursor;
   struct screen_cell c = {.style = brush, .link = link};
-
   struct screen_line *row = get_current_line(g);
-  for (size_t i = 0; i < run.len; i++) {
-    if (cur->column == screen_right(g)) {
-      c.cp.value = run.content[run.len - 1];
-      row->cells[cur->column] = c;
-      return;
-    }
+  int rem = MIN((int)run.len, screen_right(g) - cur->column);
+
+  for (int i = 0; i < rem; i++) {
     c.cp.value = run.content[i];
     row->cells[cur->column++] = c;
   }
+
+  if ((int)run.len > rem) {
+    c.cp.value = run.content[run.len - 1];
+    row->cells[screen_right(g)] = c;
+  }
+
   row->eol = MAX(row->eol, cur->column);
   cur->column = MIN(cur->column, screen_right(g));
 }
