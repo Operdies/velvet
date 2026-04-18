@@ -223,7 +223,11 @@ static void ground_reject(struct vte *vte) {
   struct screen *g = vte_get_current_screen(vte);
   screen_insert(g, replacement, vte->options.auto_wrap_mode);
   uint8_t n = utf8_length(copy);
-  struct u8_slice s = { .len = n - 1, .content = &copy.utf8[1] };
+  int drop = 1;
+  /* drop all continuation bytes */
+  for (; drop < n && (copy.utf8[drop] & 0x80) == 0x80; drop++) ;
+  struct u8_slice s = { .len = n - drop, .content = &copy.utf8[drop] };
+  vte->state = vte_ground;
   if (n > 1) vte_process(vte, s);
 }
 
@@ -316,20 +320,14 @@ static void vte_dispatch_utf8(struct vte *vte, uint8_t ch) {
     return;
   }
 
-  // continue processing
-  if (len < exp) return;
-
   // If this is not a continuation byte, reject the sequence
   if (len > 1 && (ch & 0xC0) != 0x80) {
     ground_reject(vte);
     return;
   }
 
-  // If the sequence is too long, reject it
-  if (len > 4) {
-    ground_reject(vte);
-    return;
-  }
+  // continue processing
+  if (len < exp) return;
 
   vte->state = vte_ground;
   ground_accept(vte);
@@ -584,6 +582,17 @@ static int unicode_fastpath(struct vte *vte, struct u8_slice str, size_t j) {
   for (; j + 3 < str.len; j += n) {
     uint32_t symbol = utf8_to_codepoint(&str.content[j], &n);
     if (n < 2) break;
+    /* XOR trick: We want to check for each continuation byte if EITHER
+     * 1. The first bit is NOT set (invalid continuation)
+     * 2. The second bit IS set (invalid continuation)
+     * This works because continuation bytes follow the format 0b10xxxxxx
+     * If an invalid sequence is detected, we should break from the fastpath
+     * and let the main loop figure out how to restore state. */
+    uint8_t bad = (str.content[j+1] ^ 0x80);
+    if (n >= 3) bad |= (str.content[j+2] ^ 0x80);
+    if (n >= 4) bad |= (str.content[j+3] ^ 0x80);
+    /* invalid utf8 -- break from the fastpath and let the state machine handle it */
+    if (bad & 0xC0) break;
     int width = utf8proc_charwidth(symbol);
     if (width == 0) {
       TODO("grapheme clusters");
