@@ -1140,7 +1140,14 @@ bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
   if (resized) {
     struct winsize ws = {.ws_col = geom.width, .ws_row = geom.height, .ws_xpixel = geom.x_pixel, .ws_ypixel = geom.y_pixel};
     if (win->pty) ioctl(win->pty, TIOCSWINSZ, &ws);
-    if (win->pid) kill(win->pid, SIGWINCH);
+    if (win->pid) {
+      pid_t pgid = tcgetpgrp(win->pty);
+      if (pgid > 0) {
+        kill(-pgid, SIGWINCH);
+      } else {
+        kill(win->pid, SIGWINCH);
+      }
+    }
   }
 
   struct velvet_api_rect old = { .left = win->geometry.left, .top = win->geometry.top, .width = win->geometry.width, .height = win->geometry.height };
