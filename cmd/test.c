@@ -37,42 +37,48 @@
 #define FIVE(X) X, X, X, X, X
 
 static bool exit_on_failure = true;
-typedef char screen_5x8[5][8];
-typedef char screen_5x5[5][5];
+typedef uint32_t screen_5x8[5][8];
+typedef uint32_t screen_5x5[5][5];
 
 struct dumb_screen {
   int rows;
   int cols;
-  char cells[];
+  uint32_t cells[];
 };
 
 struct rect bsmall = {.width = 5, .height = 5};
 struct rect blarge = {.width = 8, .height = 5};
 
-struct dumb_screen *make_dumb_screen(int rows, int cols, char g[rows][cols]) {
-  struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols, 1);
+struct dumb_screen *make_dumb_screen(int rows, int cols, uint32_t g[rows][cols]) {
+  struct dumb_screen *screen = calloc(sizeof(*screen) + rows * cols * sizeof(uint32_t), 1);
   screen->rows = rows;
   screen->cols = cols;
   for (int row = 0; row < rows; row++)
     for (int col = 0; col < cols; col++) {
-      char ch = g[row][col];
+      uint32_t ch = g[row][col];
       screen->cells[row * cols + col] = ch ? ch : ' ';
     }
   return screen;
 }
 
 static struct dumb_screen *screen_to_dumb_screen(const struct screen *const src) {
-  struct dumb_screen *screen = calloc(sizeof(*screen) + src->w * src->h, 1);
+  struct dumb_screen *screen = calloc(sizeof(*screen) + src->w * src->h * sizeof(uint32_t), 1);
   screen->cols = src->w;
   screen->rows = src->h;
   for (int row = 0; row < src->h; row++) {
     struct screen_line *screen_row = screen_get_line(src, row);
     for (int col = 0; col < src->w; col++) {
-      char val = (char)screen_row->cells[col].cp.value;
+      uint32_t val = screen_row->cells[col].cp.value;
       screen->cells[row * src->w + col] = val ? val : ' ';
     }
   }
   return screen;
+}
+
+static void print_codepoint(uint32_t cp) {
+  uint8_t buf[4];
+  int len = codepoint_to_utf8(cp, buf);
+  for (int i = 0; i < len; i++) putchar(buf[i]);
 }
 
 static void dumb_screen_print_diff(struct dumb_screen *left, struct dumb_screen *right, char *leftcolor, char *rightcolor) {
@@ -98,18 +104,18 @@ static void dumb_screen_print_diff(struct dumb_screen *left, struct dumb_screen 
     for (int col = 0; col < left->cols; col++) {
       bool same = left->cells[row * left->cols + col] == right->cells[row * left->cols + col];
       char *color = same ? reset : leftcolor;
-      if (same || left->cells[row * left->cols + col] != ' ')
-        printf("%s%c%s", color, left->cells[row * left->cols + col], reset);
-      else
+      if (same || left->cells[row * left->cols + col] != ' ') {
+        printf("%s", color); print_codepoint(left->cells[row * left->cols + col]); printf("%s", reset);
+      } else
         printf("%s%s%s", color, filled, reset);
     }
     printf("│%*s│", align - 2, "");
     for (int col = 0; col < right->cols; col++) {
       bool same = left->cells[row * left->cols + col] == right->cells[row * left->cols + col];
       char *color = same ? reset : rightcolor;
-      if (same || right->cells[row * left->cols + col] != ' ')
-        printf("%s%c%s", color, right->cells[row * left->cols + col], reset);
-      else
+      if (same || right->cells[row * left->cols + col] != ' ') {
+        printf("%s", color); print_codepoint(right->cells[row * left->cols + col]); printf("%s", reset);
+      } else
         printf("%s%s%s", color, filled, reset);
     }
 
@@ -271,7 +277,7 @@ static void test_input_output(void) {
   test_screen_input_output("single character",
                          "x",
                          (screen_5x8){
-                             {"x"},
+                             {'x'},
                          });
   // basic wrapping logic
   test_screen_input_output("wrapping",
@@ -297,31 +303,31 @@ static void test_input_output(void) {
                          "                 " // keep
                          CUU(123) CUB(123) CUF(1) CUD(1) "12" CUF(99) CUD(99) CUU(1) CUB(1) "3",
                          (screen_5x8){
-                             {"     "},
-                             {" 12 "},
-                             {"     "},
+                             {0},
+                             {' ', '1', '2', ' '},
+                             {0},
                              {' ', ' ', ' ', ' ', ' ', ' ', '3', ' ' },
-                             {"     "},
+                             {0},
                          });
   // line 1 scrolls out of view
   test_screen_input_output("scrolling 1",
                          "line1   line2   line3   line4   line5   l",
                          (screen_5x8){
-                             {"line2"},
-                             {"line3"},
-                             {"line4"},
-                             {"line5"},
-                             {"l"},
+                             {'l', 'i', 'n', 'e', '2'},
+                             {'l', 'i', 'n', 'e', '3'},
+                             {'l', 'i', 'n', 'e', '4'},
+                             {'l', 'i', 'n', 'e', '5'},
+                             {'l'},
                          });
   // line 1 and 2 scroll out of view
   test_screen_input_output("scrolling 2",
                          "line1   line2   line3   line4   line5   line6   ",
                          (screen_5x8){
-                             {"line2"},
-                             {"line3"},
-                             {"line4"},
-                             {"line5"},
-                             {"line6"},
+                             {'l', 'i', 'n', 'e', '2'},
+                             {'l', 'i', 'n', 'e', '3'},
+                             {'l', 'i', 'n', 'e', '4'},
+                             {'l', 'i', 'n', 'e', '5'},
+                             {'l', 'i', 'n', 'e', '6'},
                          });
   test_screen_input_output("E test command",
                          "\x1b#8",
@@ -382,76 +388,76 @@ static void test_input_output(void) {
   test_screen_input_output("Carriage Return",
                          "Hello!!\rworld",
                          (screen_5x8){
-                             {"world!!"},
+                             {'w', 'o', 'r', 'l', 'd', '!', '!'},
                          });
 
   test_screen_input_output("Insert Lines",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5" CUP(2, 1) IL(2),
                          (screen_5x8){
-                             {"Line1"},
-                             {"     "},
-                             {"     "},
-                             {"Line2"},
-                             {"Line3"},
+                             {'L', 'i', 'n', 'e', '1'},
+                             {0},
+                             {0},
+                             {'L', 'i', 'n', 'e', '2'},
+                             {'L', 'i', 'n', 'e', '3'},
                          });
   test_screen_input_output("Insert Lines Virtual",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7" CUP(2, 1) IL(2),
                          (screen_5x8){
-                             {"Line3"},
-                             {"     "},
-                             {"     "},
-                             {"Line4"},
-                             {"Line5"},
+                             {'L', 'i', 'n', 'e', '3'},
+                             {0},
+                             {0},
+                             {'L', 'i', 'n', 'e', '4'},
+                             {'L', 'i', 'n', 'e', '5'},
                          });
   test_screen_input_output("Delete Lines",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2),
                          (screen_5x8){
-                             {"Line2"},
-                             {"Line5"},
-                             {"Line6"},
+                             {'L', 'i', 'n', 'e', '2'},
+                             {'L', 'i', 'n', 'e', '5'},
+                             {'L', 'i', 'n', 'e', '6'},
                          });
   test_screen_input_output("Delete Many Lines",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(10),
                          (screen_5x8){
-                             {"Line2"},
+                             {'L', 'i', 'n', 'e', '2'},
                          });
   test_screen_input_output("Delete Many Lines 2",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(9, 1) DL(10),
                          (screen_5x8){
-                             {"Line2"},
-                             {"Line3"},
-                             {"Line4"},
-                             {"Line5"},
-                             {"     "},
+                             {'L', 'i', 'n', 'e', '2'},
+                             {'L', 'i', 'n', 'e', '3'},
+                             {'L', 'i', 'n', 'e', '4'},
+                             {'L', 'i', 'n', 'e', '5'},
+                             {0},
                          });
   test_screen_input_output("Delete Lines All But Last",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(1, 2) DL(4),
                          (screen_5x8){
-                             {"Line6"},
+                             {'L', 'i', 'n', 'e', '6'},
                          });
   test_screen_input_output("Insert Lines Then Delete",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) DL(2) IL(1),
                          (screen_5x8){
-                             {"Line2"},
-                             {"     "},
-                             {"Line5"},
-                             {"Line6"},
+                             {'L', 'i', 'n', 'e', '2'},
+                             {0},
+                             {'L', 'i', 'n', 'e', '5'},
+                             {'L', 'i', 'n', 'e', '6'},
                          });
   test_screen_input_output("Delete Lines Then Insert",
                          SM(20)
                              "Line1\nLine2\nLine3\nLine4\nLine5\nLine6" CUP(2, 1) IL(2) DL(1),
                          (screen_5x8){
-                             {"Line2"},
-                             {"     "},
-                             {"Line3"},
-                             {"Line4"},
+                             {'L', 'i', 'n', 'e', '2'},
+                             {0},
+                             {'L', 'i', 'n', 'e', '3'},
+                             {'L', 'i', 'n', 'e', '4'},
                          });
   test_screen_input_output("Overflow screen",
                          "AAAAAAAA"
@@ -527,7 +533,7 @@ static void test_reflow(void) {
                           (screen_5x8){
                               {'A', 'A', 'A', 'A', 'A', 'A', 'A', ' ' },
                               {'B', 'B', ' ', ' ', ' ', ' ', ' ', ' ' },
-                              {"DDDDDDD"},
+                              {'D', 'D', 'D', 'D', 'D', 'D', 'D'},
                           },
                           (screen_5x5){
                               {'A', 'A', 'A', 'A', 'A' },
@@ -574,28 +580,28 @@ static void test_erase(void) {
                          "wwwwwwww"
                          "wwwwwwww" CUP(5, 7) ED(1),
                          (screen_5x8){
-                             {""},
-                             {""},
-                             {""},
-                             {""},
+                             {0},
+                             {0},
+                             {0},
+                             {0},
                              {' ', ' ', ' ', ' ', ' ', ' ', ' ', 'w' },
                          });
   test_screen_input_output(
       "ED(0): Clear Cursor To End", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(0), (screen_5x8){0});
   test_screen_input_output(
-      "ED(0): Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) ED(0), (screen_5x8){"w"});
+      "ED(0): Clear Cursor To End 2", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 2) ED(0), (screen_5x8){{'w'}});
   test_screen_input_output(
       "ED(2): Clear Screen", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww" CUP(1, 1) ED(2), (screen_5x8){0});
 
   test_screen_input_output("Backspace 0",
                          "w\b\bxy\b\bab",
                          (screen_5x8){
-                             {"ab"},
+                             {'a', 'b'},
                          });
   test_screen_input_output("Backspace 1",
                          "wwwww\b\b\bxxx\b\b\b\b\b\by",
                          (screen_5x8){
-                             {"ywxxx"},
+                             {'y', 'w', 'x', 'x', 'x'},
                          });
   test_screen_input_output("Insert Blanks 1",
                          "helloooooo" CUB(10) DCH(1),
@@ -701,6 +707,7 @@ void test_scrolling(void) {
                          { EIGHT('E') },
                          });
 }
+
 
 void assert_csi_param_equals(const char *testname, struct csi_param *expected, struct csi_param *actual, int index) {
   char indexbuf[50];
