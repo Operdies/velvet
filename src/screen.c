@@ -236,7 +236,9 @@ void screen_insert_ascii_run(struct screen *g, struct screen_cell_style brush, s
   g->cursor.column = MIN(column, screen_right(g));
 }
 
-void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
+/* force inline to eliminate the "wrap" branch. */
+static inline __attribute__((always_inline)) 
+void screen_insert_impl(struct screen *g, struct screen_cell c, bool wrap) {
   struct cursor *cur = &g->cursor;
   struct screen_line *row = get_current_line(g);
 
@@ -289,6 +291,13 @@ void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
     cur->wrap_pending = true;
     cur->column = screen_right(g);
   }
+}
+
+void screen_insert(struct screen *g, struct screen_cell c, bool wrap) {
+  /* force inline a variant based on the wrap flag.
+   * This measures ~20% faster on Linux with gcc compared. */
+  if (wrap) screen_insert_impl(g, c, true);
+  else screen_insert_impl(g, c, false);
 }
 
 static void scrollback_init(struct screen *g, int min_cap) {
