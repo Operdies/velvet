@@ -27,6 +27,9 @@
 #define EL(x) CSI #x "K"
 #define SGR(x) CSI #x "m"
 #define SM(x) CSI #x "h"
+#define RM(x) CSI #x "l"
+#define DECSET(x) CSI "?" #x "h"
+#define DECRST(x) CSI "?" #x "l"
 #define RI "\x1bM"
 #define IND "\x1b" "D"
 #define SD(x) CSI #x "T"
@@ -708,6 +711,89 @@ void test_scrolling(void) {
                          });
 }
 
+static void test_nowrap(void) {
+  /* DECRST(7) disables auto-wrap mode (DECAWM) */
+
+  /* ascii: text stops at right margin, last char overwrites */
+  test_screen_input_output("nowrap ascii overflow",
+                         DECRST(7) "abcdefghijk",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'k'},
+                         });
+
+  /* ascii: exact fit */
+  test_screen_input_output("nowrap ascii exact fit",
+                         DECRST(7) "abcdefgh",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'},
+                         });
+
+  /* ascii: short text */
+  test_screen_input_output("nowrap ascii short",
+                         DECRST(7) "abc",
+                         (screen_5x8){
+                             {'a', 'b', 'c'},
+                         });
+
+  /* ascii: continued overwrite at right edge */
+  test_screen_input_output("nowrap ascii overwrite edge",
+                         DECRST(7) "abcdefghxyz",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'z'},
+                         });
+
+  /* unicode narrow (2-byte utf8): overflow */
+  test_screen_input_output("nowrap unicode narrow overflow",
+                         DECRST(7) "abcdefgééé",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', L'é'},
+                         });
+
+  /* unicode narrow: exact fit */
+  test_screen_input_output("nowrap unicode narrow exact",
+                         DECRST(7) "abcdefgé",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', L'é'},
+                         });
+
+  /* mixed ascii and unicode narrow */
+  test_screen_input_output("nowrap mixed narrow",
+                         DECRST(7) "αβγdefghijk",
+                         (screen_5x8){
+                             {L'α', L'β', L'γ', 'd', 'e', 'f', 'g', 'k'},
+                         });
+
+  /* wide character (CJK, 2 columns): fits */
+  test_screen_input_output("nowrap wide fit",
+                         DECRST(7) "abc中文",
+                         (screen_5x8){
+                             {'a', 'b', 'c', L'中', ' ', L'文', ' '},
+                         });
+
+  /* wide character: cannot start on last column */
+  test_screen_input_output("nowrap wide at edge",
+                         DECRST(7) "abcdefg中",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g'},
+                         });
+
+  /* re-enable wrap after disabling */
+  test_screen_input_output("nowrap then wrap",
+                         DECRST(7) "abcdefghijk" DECSET(7) "\r\n" "abcdefghijk",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'k'},
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'},
+                             {'i', 'j', 'k'},
+                         });
+
+  /* newline still works in nowrap mode */
+  test_screen_input_output("nowrap with newline",
+                         DECRST(7) SM(20) "abcdefghijk\nxyz",
+                         (screen_5x8){
+                             {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'k'},
+                             {'x', 'y', 'z'},
+                         });
+}
 
 void assert_csi_param_equals(const char *testname, struct csi_param *expected, struct csi_param *actual, int index) {
   char indexbuf[50];
@@ -1216,6 +1302,7 @@ int main(void) {
   test_reflow();
   test_erase();
   test_scrolling();
+  test_nowrap();
   test_csi_parsing();
   test_string();
   test_base64();
