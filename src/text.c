@@ -1,7 +1,5 @@
 #include "text.h"
 #include "utils.h"
-#include <string.h>
-#include <string.h>
 #include "utf8proc/utf8proc.h"
 
 // assume *str is a valid utf8 string
@@ -37,28 +35,26 @@ uint8_t utf8_length(struct utf8 u) {
   return 0;
 }
 
-struct codepoint utf8_to_codepoint(const uint8_t utf8[4], int *len) {
-  struct codepoint cp = { 0 };
+uint32_t utf8_to_codepoint(const uint8_t utf8[4], int *len) {
+  uint32_t cp;
 
   if (utf8[0] < 0x80) {
-    cp.value = utf8[0];
+    cp = utf8[0];
     *len = 1;
   } else if ((utf8[0] & 0xE0) == 0xC0) {
-    cp.value = ((utf8[0] & 0x1F) << 6) | (utf8[1] & 0x3F);
+    cp = ((utf8[0] & 0x1F) << 6) | (utf8[1] & 0x3F);
     *len = 2;
   } else if ((utf8[0] & 0xF0) == 0xE0) {
-    cp.value = ((utf8[0] & 0x0F) << 12) | ((utf8[1] & 0x3F) << 6) | (utf8[2] & 0x3F);
+    cp = ((utf8[0] & 0x0F) << 12) | ((utf8[1] & 0x3F) << 6) | (utf8[2] & 0x3F);
     *len = 3;
   } else if ((utf8[0] & 0xF8) == 0xF0) {
-    cp.value = ((utf8[0] & 0x07) << 18) | ((utf8[1] & 0x3F) << 12) | ((utf8[2] & 0x3F) << 6) | (utf8[3] & 0x3F);
+    cp = ((utf8[0] & 0x07) << 18) | ((utf8[1] & 0x3F) << 12) | ((utf8[2] & 0x3F) << 6) | (utf8[3] & 0x3F);
     *len = 4;
   } else {
-    cp.value = 0xFFFD; // replacement character
+    cp = 0xFFFD; // replacement character
     *len = 1;
   }
 
-  /* exploit the fact that all wide chars are 3 or more bytes */
-  cp.is_wide = *len > 2 && utf8proc_charwidth(cp.value) > 1;
   return cp;
 }
 

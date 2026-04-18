@@ -196,8 +196,8 @@ static void ground_accept(struct vte *vte) {
   struct screen *g = vte_get_current_screen(vte);
 
   int len;
-  struct codepoint symbol = utf8_to_codepoint(vte->pending_symbol.utf8, &len);
-  int width = utf8proc_charwidth(symbol.value);
+  uint32_t symbol = utf8_to_codepoint(vte->pending_symbol.utf8, &len);
+  int width = utf8proc_charwidth(symbol);
   /* this is true for codepoints which modify the preceding characters, such
    * as acutes and variation selectors. Since we don't properly handle
    * graphemes, we just ignore those characters for now. */
@@ -206,9 +206,10 @@ static void ground_accept(struct vte *vte) {
     vte->pending_symbol = (struct utf8){0};
     return;
   }
-  struct screen_cell c = { .cp = symbol, .style = g->cursor.brush, .link = vte->current_link };
+  struct codepoint cp = { .is_wide = width > 1, .value = symbol };
+  struct screen_cell c = { .cp = cp, .style = g->cursor.brush, .link = vte->current_link };
   screen_insert(g, c, vte->options.auto_wrap_mode);
-  vte->previous_symbol = symbol;
+  vte->previous_symbol = cp;
   vte->pending_symbol = (struct utf8){0};
 }
 
@@ -581,14 +582,14 @@ static int unicode_fastpath(struct vte *vte, struct u8_slice str, size_t j) {
   struct screen_cell c = {.style = g->cursor.brush, .link = vte->current_link};
   int n = 0;
   for (; j + 3 < str.len; j += n) {
-    struct codepoint cp = utf8_to_codepoint(&str.content[j], &n);
+    uint32_t symbol = utf8_to_codepoint(&str.content[j], &n);
     if (n < 2) break;
-    int width = utf8proc_charwidth(cp.value);
+    int width = utf8proc_charwidth(symbol);
     if (width == 0) {
       TODO("grapheme clusters");
       continue;
     }
-    c.cp = cp;
+    c.cp = (struct codepoint) { .is_wide = width > 1, .value = symbol };
     screen_insert(g, c, wrap);
   }
   if (c.cp.value) vte->previous_symbol = c.cp;

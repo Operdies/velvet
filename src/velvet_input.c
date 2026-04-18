@@ -631,7 +631,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
         break;
       }
       if (expected_length > 1) {
-        ch = utf8_to_codepoint(str.content + i, &expected_length).value;
+        ch = utf8_to_codepoint(str.content + i, &expected_length);
         i += expected_length - 1;
       }
     }

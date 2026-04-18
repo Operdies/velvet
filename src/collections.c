@@ -1,5 +1,6 @@
 #include "collections.h"
 #include "text.h"
+#include "utf8proc/utf8proc.h"
 #include "utils.h"
 #include <errno.h>
 #include <stdarg.h>
@@ -514,7 +515,8 @@ bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s) {
   }
 
   int len;
-  s->current = utf8_to_codepoint(t.content + s->cursor, &len);
+  uint32_t symbol = utf8_to_codepoint(t.content + s->cursor, &len);
+  s->current = (struct codepoint) { .value = symbol, .is_wide = utf8proc_charwidth(symbol) > 1 };
   s->cursor += len;
 
   /* do the implemnetations agree? */

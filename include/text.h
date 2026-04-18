@@ -26,7 +26,7 @@ int utf8_strlen(char *str);
 uint8_t utf8_expected_length(uint8_t ch);
 uint8_t utf8_length(struct utf8 u);
 void utf8_push(struct utf8 *u, uint8_t byte);
-struct codepoint utf8_to_codepoint(const uint8_t utf8[4], int *len);
+uint32_t utf8_to_codepoint(const uint8_t utf8[4], int *len);
 int codepoint_to_utf8(uint32_t cp, uint8_t utf8[4]);
 
 #endif /*  TEXT_H */
