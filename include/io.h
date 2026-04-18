@@ -61,7 +61,7 @@ static const struct io io_default = {
     .scheduled_actions = vec(struct io_schedule),
     .idle_schedule = vec(struct io_schedule),
     .schedule_buffer = vec(struct io_schedule),
-    .max_iterations = 100,
+    .max_iterations = 5,
     .idle_timeout_ms = 2,
 };
 

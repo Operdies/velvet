@@ -366,7 +366,7 @@ static void on_session_writable(struct io_source *src) {
 static void on_window_writable(struct io_source *src) {
   struct velvet *v = src->data;
   struct velvet_window *win;
-  vec_find(win, v->scene.windows, win->pty == src->fd);
+  vec_find(win, v->scene.windows, win->write == src->fd);
   assert(win);
   if (win->emulator.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(win->emulator.pending_input));
@@ -390,7 +390,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   if (str.len) {
     struct velvet_window *vte;
-    vec_find(vte, v->scene.windows, vte->pty == src->fd);
+    vec_find(vte, v->scene.windows, vte->read == src->fd);
     assert(vte);
     velvet_window_process_output(vte, str);
 
@@ -422,7 +422,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     /* the window should have been removed in the remove_exited() call,
      * but in case it was not detected we explicitly remove it by pty here */
     struct velvet_window *vte;
-    vec_find(vte, v->scene.windows, vte->pty == src->fd);
+    vec_find(vte, v->scene.windows, vte->read == src->fd);
     if (vte) {
       velvet_scene_close_and_remove_window(&v->scene, vte);
     }
@@ -505,14 +505,20 @@ static void velvet_dispatch(struct velvet *velvet) {
   vec_where(h, velvet->scene.windows, h->pty && h->pid) {
     struct io_source read_src = {
         .data = velvet,
-        .fd = h->pty,
+        .fd = h->read,
         .events = IO_SOURCE_POLLIN,
         .on_read = on_window_output,
-        .on_writable = on_window_writable,
     };
-    if (h->emulator.pending_input.len) read_src.events |= IO_SOURCE_POLLOUT;
-
     io_add_source(loop, read_src);
+    if (h->emulator.pending_input.len) {
+      struct io_source write_src = {
+          .data = velvet,
+          .fd = h->write,
+          .events = IO_SOURCE_POLLOUT,
+          .on_writable = on_window_writable,
+      };
+      io_add_source(loop, write_src);
+    }
   }
 
   io_add_source(loop, signal_src);

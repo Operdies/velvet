@@ -1,9 +1,11 @@
 #include "utils.h"
+#include "velvet.h"
 #include "virtual_terminal_sequences.h"
 #include "vte.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <pthread.h>
 #include <velvet_scene.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -1077,6 +1079,8 @@ void velvet_window_destroy(struct velvet_window *velvet_window) {
     }
 
     close(velvet_window->pty);
+    close(velvet_window->read);
+    close(velvet_window->write);
 
     /* window_destroy may have been called because |pid| exited.
      * if that is the case, it was set to 0, and we should not attempt to reap it. */
@@ -1203,6 +1207,114 @@ _Noreturn static void velvet_window_setup_child(struct velvet_window *velvet_win
   /* write side automatically cleaned up in child */
 }
 
+static void pipe_cloexec(int rw[2]) {
+  if (pipe(rw) < 0) velvet_die("pipe_cloexec:");
+  set_cloexec(rw[0]);
+  set_cloexec(rw[1]);
+}
+
+struct thread_data {
+  int pty, read, write;
+  bool quit;
+  struct string pending_input;
+};
+
+static void worker_write_pending(struct thread_data *d) {
+  ssize_t written = io_write(d->pty, string_as_u8_slice(d->pending_input));
+  if (written == 0) {
+    d->quit = true;
+  } else if (written > 0) {
+    /* non-blocking write of input to pty.
+     * In practice this should only happen when pasting
+     * a bunch of data, or if the pty is not reading. */
+    string_shift_left(&d->pending_input, written);
+  }
+}
+
+static void worker_pty_output(struct io_source *io, struct u8_slice output) {
+  struct thread_data *d = io->data;
+  if (output.len == 0) {
+    d->quit = true;
+  } else {
+    /* Blocking write. This naturally throttles if the pty actually
+     * produces data faster than velvet can ingest it. */
+    ssize_t written = io_write(d->write, output);
+    assert(written == (ssize_t)output.len);
+  }
+}
+
+static void worker_write_input(struct io_source *io) {
+  struct thread_data *d = io->data;
+  worker_write_pending(d);
+}
+
+static void worker_on_input(struct io_source *io, struct u8_slice output) {
+  struct thread_data *d = io->data;
+  if (output.len == 0) {
+    d->quit = true;
+  } else {
+    string_push_slice(&d->pending_input, output);
+    worker_write_pending(d);
+  }
+}
+
+static void* worker_thread(void *data) {
+  struct thread_data d = *(struct thread_data *)data;
+  set_nonblocking(d.read);
+  free(data);
+
+  struct io loop = io_default;
+  /* if the pty is really busy we can keep reading it in a loop. */
+  loop.max_iterations = 1000;
+  while (!d.quit) {
+    io_clear_sources(&loop);
+    struct io_source pty_output = {
+        .fd = d.pty,
+        .events = IO_SOURCE_POLLIN,
+        .on_writable = worker_write_input,
+        .on_read = worker_pty_output,
+        .data = &d,
+    };
+    if (d.pending_input.len)
+      pty_output.events |= IO_SOURCE_POLLOUT;
+    io_add_source(&loop, pty_output);
+
+    struct io_source input_pipe_read = {
+        .fd = d.read,
+        .events = IO_SOURCE_POLLIN,
+        .on_read = worker_on_input,
+        .data = &d,
+    };
+    io_add_source(&loop, input_pipe_read);
+    io_dispatch(&loop);
+  }
+  close(d.read);
+  close(d.write);
+  io_destroy(&loop);
+  string_destroy(&d.pending_input);
+  return NULL;
+}
+
+static void start_detached_io_thread(struct velvet_window *win) {
+  struct thread_data *td = velvet_calloc(1, sizeof(*td));
+  td->pty = win->pty;
+  int read[2];
+  int write[2];
+  pipe_cloexec(read);
+  pipe_cloexec(write);
+  win->read = read[0];
+  win->write = write[1];
+  td->read = write[0];
+  td->write = read[1];
+
+  set_nonblocking(win->read);
+  set_nonblocking(win->write);
+
+  pthread_t trd;
+  pthread_create(&trd, NULL, worker_thread, td);
+  pthread_detach(trd);
+}
+
 static int velvet_window_start(struct velvet_window *velvet_window, char * const *arglist) {
   assert(arglist && arglist[0] && arglist[0][0]);
   struct rect c = velvet_window->geometry;
@@ -1216,13 +1328,7 @@ static int velvet_window_start(struct velvet_window *velvet_window, char * const
 
   /* create a pipe to get back errors from exec() */
   int rw[2];
-  if (pipe(rw) < 0) { 
-    ERROR("Unable to create pipe:");
-    velvet_die("pipe:");
-  }
-
-  set_cloexec(rw[0]);
-  set_cloexec(rw[1]);
+  pipe_cloexec(rw);
 
   /* forward declare forkpty since it's the only thing we need from its header,
    * and the header is different on Mac and Linux. On Mac it is <util.h> (????????) */
@@ -1274,6 +1380,8 @@ static int velvet_window_start(struct velvet_window *velvet_window, char * const
       string_push_cstr(&velvet_window->cmdline, *arg);
     }
   }
+  velvet_window->read = velvet_window->write = velvet_window->pty;
+  start_detached_io_thread(velvet_window);
   return 0;
 }
 

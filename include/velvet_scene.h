@@ -19,7 +19,7 @@ struct velvet_window {
   /* buffer which should be flushed to the emulator hosting velvet */
   struct string emulator_output_buffer;
   bool is_lua_window;
-  int pty, pid;
+  int pty, pid, read, write;
   int id, parent_window_id;
   int z_index;
   bool hidden;
