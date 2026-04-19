@@ -1,5 +1,6 @@
 #include "collections.h"
 #include "csi.h"
+#include "platform.h"
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -1334,6 +1335,13 @@ static void lua_assert(lua_State *L, char *cmd) {
 
 void test_lua(void) {
   struct velvet v = {.event_loop = io_default};
+  char *binpath = platform_get_exe_path();
+  if (!binpath) velvet_die("Unable to locate library");
+  char *lastslash = strrchr(binpath, '/');
+  *lastslash = 0;
+  /* silently ignore errors */
+  if (chdir(binpath) == -1) velvet_die("chdir failed:");
+  free(binpath);
   velvet_lua_init(&v);
   lua_State *L = v.L;
 

@@ -66,9 +66,7 @@ static void velvet_lua_init_arg(struct velvet *v) {
   /* push velvet binary to arg[0]. The lua interpreter uses arg[0]
    * to set the script path with e.g. `lua myscript.lua`,
    * so this should be similar. */
-  char *exepath = platform_get_exe_path();
-  lua_pushstring(L, exepath);
-  free(exepath);
+  lua_pushstring(L, v->arg0);
   lua_rawseti(L, -2, 0);
   char **arg = v->positional_args;
   for (;arg && *arg; arg++, i++) {
@@ -133,13 +131,6 @@ void velvet_lua_init(struct velvet *v) {
   if (luaL_dostring(L, "package.searchers = { package.searchers[1], package.searchers[2] }")) {
     lua_die(L);
   }
-
-  char *binpath = platform_get_exe_path();
-  char *lastslash = strrchr(binpath, '/');
-  *lastslash = 0;
-  if (chdir(binpath) == -1)
-    velvet_die("chdir:");
-  free(binpath);
 
   /* The lua distribution is in the parent directory of the folder containing the vv binaries.
    * We don't want to load lua libraries from any other directories by default.

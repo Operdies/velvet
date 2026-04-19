@@ -115,6 +115,7 @@ struct velvet {
   struct vec /* velvet_kvp */ stored_strings;
   /* defined at init time in velvet_lua.c */
   lua_Integer coroutine_wrapper_function;
+  char *arg0;
   char **positional_args;
 };
 

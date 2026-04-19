@@ -591,6 +591,18 @@ void velvet_loop(struct velvet *velvet) {
    * Now it's just a dumb container. */
   velvet->scene.v = velvet;
 
+  /* set the working directory where the binary
+   * path is to resolve the lua runtime relative
+   * to the binary. This makes it possible to have multiple
+   * velvet installations on the same system (debug + release build). */
+  char *binpath = platform_get_exe_path();
+  if (!binpath) velvet_die("Unable to locate library");
+  char *lastslash = strrchr(binpath, '/');
+  *lastslash = 0;
+  /* silently ignore errors */
+  if (chdir(binpath) == -1) velvet_die("chdir failed:");
+  free(binpath);
+
   velvet_lua_init(velvet);
   velvet_source_config(velvet);
 

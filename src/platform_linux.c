@@ -1,7 +1,7 @@
 #include "platform.h"
 #include "utils.h"
+#include <errno.h>
 #include <linux/limits.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -21,7 +21,10 @@ bool get_cwd_from_pty(int pty, char *buffer, int len) {
 
 char *platform_get_exe_path(void) {
   char *buf = calloc(PATH_MAX + 1, 1);
-  if (!realpath("/proc/self/exe", buf)) velvet_die("realpath:");
+  if (!realpath("/proc/self/exe", buf)) {
+    ERROR("realpath:");
+    return NULL;
+  }
   return buf;
 }
 

@@ -342,6 +342,7 @@ int main(int argc, char **argv) {
       .daemon = !args.foreground,
       .startup_directory = startup_directory,
       .positional_args = args.positional,
+      .arg0 = argv[0],
   };
 
   velvet_loop(&velvet);
