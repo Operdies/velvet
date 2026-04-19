@@ -36,7 +36,7 @@ static void install_signal_handlers(int *pipes) {
 
   struct sigaction sig_handle = {0};
   sig_handle.sa_sigaction = &signal_handler;
-  sig_handle.sa_flags = SA_SIGINFO;
+  sig_handle.sa_flags = SA_SIGINFO | SA_RESTART;
 
   struct sigaction sig_trap = {0};
   sig_trap.sa_sigaction = &signal_trap;
