@@ -180,7 +180,8 @@ static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
     return (struct color){.kind = COLOR_RGB, .red = v, .green = v, .blue = v};
   }
 
-  return RGB("#000000");
+  struct color col = RGB("#000000");
+  return col;
 }
 
 static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg) {
@@ -543,12 +544,12 @@ velvet_render_copy_cells_from_window(struct velvet_scene *scene, struct velvet_w
       if (r->options.display_eol) {
         if (screen_line->has_newline) {
           if (screen_line->eol == 0 && column == 0) {
-            cell.style.bg = RGB("#ff00ff");
+            cell.style.bg = (struct color)RGB("#ff00ff");
           } else if (column == screen_line->eol - 1) {
-            cell.style.bg = RGB("#ffff00");
+            cell.style.bg = (struct color)RGB("#ffff00");
           }
         } else if (column == screen_line->eol - 1) {
-          cell.style.bg = RGB("#00ffff");
+          cell.style.bg = (struct color)RGB("#00ffff");
         }
       }
 

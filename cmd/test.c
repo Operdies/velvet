@@ -145,7 +145,7 @@ static void print_diff(struct dumb_screen *a, struct dumb_screen *b) {
 }
 
 static int n_failures = 0;
-static void fail() {
+static void fail(void) {
   n_failures++;
   if (exit_on_failure) __builtin_trap();
 }
@@ -892,7 +892,7 @@ void test_csi_parsing(void) {
     }                                                                                                                  \
   } while (0)
 
-void test_string() {
+void test_string(void) {
   struct string s = {0};
   string_push(&s, (uint8_t *)"Hello!");
   struct u8_slice middle = string_range(&s, 1, -2);
@@ -912,7 +912,7 @@ void test_string() {
   string_destroy(&s);
 }
 
-static void test_base64() {
+static void test_base64(void) {
   struct { const char *input; const char *expected; } cases[] = {
     { "",       "" },
     { "f",      "Zg==" },
@@ -944,7 +944,7 @@ static int int_less_than(const void *_a, const void *_b) {
 }
 
 
-void test_vec() {
+void test_vec(void) {
   int *item = NULL;
   struct vec v = vec(int);
   assert(vec_index(&v, &item) == -1);
@@ -1078,10 +1078,10 @@ void test_vec() {
   vec_destroy(&v);
 }
 
-static void test_lua();
-static void test_lua_modules();
+static void test_lua(void);
+static void test_lua_modules(void);
 
-static void test_shmem_allocator() {
+static void test_shmem_allocator(void) {
   size_t cap = sysconf(_SC_PAGESIZE);
   struct velvet_alloc *ally = velvet_alloc_shmem_create(cap);
 
@@ -1204,7 +1204,8 @@ static void test_shmem_allocator() {
   ally->free(ally, r3);
 
   /* nmemb * size overflow returns NULL */
-  char *overflow = ally->calloc(ally, (size_t)-1, 2);
+  volatile size_t inval = (size_t)-1; /* hide the value from the compiler to silence diagnostic */
+  char *overflow = ally->calloc(ally, inval, 2);
   assert(overflow == NULL);
 
   int fd = velvet_alloc_shmem_get_fd(ally);
@@ -1247,10 +1248,10 @@ static void test_shmem_allocator() {
   velvet_alloc_shmem_destroy(ally, fd);
 }
 
-static void test_bitmap() {
+static void test_bitmap(void) {
   struct tabstop_bitmap bm = {0};
-  bm.bits[0] = 0b1001000011;
-  bm.bits[1] = 0b00010001;
+  bm.bits[0] = (1 << 9) | (1 << 6) | (1 << 1) | 1;
+  bm.bits[1] = (1 << 4) | 1;
 
 
   /* tabstop_next: */
@@ -1331,7 +1332,7 @@ static void lua_assert(lua_State *L, char *cmd) {
   lua_pop(L, lua_gettop(L));
 }
 
-void test_lua() {
+void test_lua(void) {
   struct velvet v = {.event_loop = io_default};
   velvet_lua_init(&v);
   lua_State *L = v.L;
@@ -1357,7 +1358,7 @@ void test_lua() {
   velvet_destroy(&v);
 }
 
-void test_lua_modules() {
+void test_lua_modules(void) {
   struct velvet v = {.event_loop = io_default, .stored_strings = vec(struct velvet_kvp)};
   velvet_lua_init(&v);
   lua_State *L = v.L;

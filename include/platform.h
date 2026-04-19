@@ -12,6 +12,6 @@ extern const struct PLATFORM_IMPL {
   bool (*const get_process_from_pty)(int pty, char *buffer, int len);
 } platform;
 
-char *platform_get_exe_path();
+char *platform_get_exe_path(void);
 
 #endif /*  PLATFORM_H */

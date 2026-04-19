@@ -132,9 +132,9 @@ bool u8_slice_to_int32(struct u8_slice s, int *i32);
 bool u8_match(struct u8_slice s, char *opt);
 
 #ifdef RELEASE_BUILD
-#define vec(type) (struct vec) { .element_size = sizeof(type) }
+#define vec(type) {.element_size = sizeof(type)}
 #else
-#define vec(type) (struct vec) { .element_size = sizeof(type), .typename = #type }
+#define vec(type) {.element_size = sizeof(type), .typename = #type}
 #endif
 
 #define vec_rforeach(item, vec)                                                                                        \

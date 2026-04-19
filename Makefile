@@ -58,11 +58,12 @@ OBJECT_DEPS = $(DEBUG_OBJECT_OUT:.o=.d) $(RELEASE_OBJECT_OUT:.o=.d)
 
 DEFINES += -DVELVET_VERSION='"$(VELVET_VERSION)"'
 
-CFLAGS = -std=c99 -Wall -Wextra $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
+# c11: velvet uses a couple of unnamed anonymous structs and unions, which is a c11 feature.
+CFLAGS = -std=c11 -Wall -Wextra -pedantic $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
 LDFLAGS = -lm
 
-DEBUG_CFLAGS = $(CFLAGS) -O0 -g -fsanitize=address
-DEBUG_LDFLAGS = $(LDFLAGS) -fsanitize=address
+DEBUG_CFLAGS = $(CFLAGS) -O0 -g
+DEBUG_LDFLAGS = $(LDFLAGS)
 
 RELEASE_CFLAGS = $(CFLAGS) -O2 -DNDEBUG -DRELEASE_BUILD
 RELEASE_LDFLAGS = $(LDFLAGS)

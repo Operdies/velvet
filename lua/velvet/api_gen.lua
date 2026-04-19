@@ -408,7 +408,7 @@ for _, evt in ipairs(spec.events) do
   local event_arg_name = get_cname(evt.args)
   table.insert(h, ([=[
 /* %s */
-void velvet_api_raise_%s(struct velvet *v, [[maybe_unused]] struct %s args);
+void velvet_api_raise_%s(struct velvet *v, __attribute__((unused)) struct %s args);
 ]=]):format(evt.doc, event_name, event_arg_name))
 end
 
@@ -441,7 +441,7 @@ for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
   -- String to integer value {{{4
   table.insert(c, ([=[
-[[maybe_unused]] static %s %s_slice_to_enum(struct u8_slice str) {
+__attribute__((unused)) static %s %s_slice_to_enum(struct u8_slice str) {
 ]=]):format(c_type(enum.name), enum.name))
   for _, option in ipairs(enum.values) do
     local field_name = enum_value_c_name(cname, option.name)
@@ -449,11 +449,11 @@ for _, enum in ipairs(spec.enums) do
   if (u8_slice_equals(str, (struct u8_slice) { .content = (const uint8_t*)"%s", .len = %d })) return %s;
 ]]):format(option.name, #option.name, field_name))
   end
-  table.insert(c, '  return 0xffffffff;\n};\n\n')
+  table.insert(c, '  return 0xffffffff;\n}\n\n')
 
   -- Integer value to string {{{4
   table.insert(c, ([=[
-[[maybe_unused]] static struct u8_slice %s_to_slice(%s value) {
+__attribute__((unused)) static struct u8_slice %s_to_slice(%s value) {
 ]=]):format(enum.name, c_type(enum.name)))
   table.insert(c, [[
   switch (value) {
@@ -567,14 +567,14 @@ static int l_vv_api_%s(lua_State *L) {
     table.insert(c, [[
   return 1;
 }
-]]);
+]])
   end
 end
 
 -- Generate lua function table {{{3
 
 table.insert(c, [=[
-[[maybe_unused]] static const struct luaL_Reg velvet_lua_function_table[] = {
+__attribute__((unused)) static const struct luaL_Reg velvet_lua_function_table[] = {
 ]=])
 
 for _, fn in ipairs(spec.options) do
@@ -605,7 +605,7 @@ for _, evt in ipairs(spec.events) do
   local event_arg_name = get_cname(evt.args)
   table.insert(c, ([=[
 
-void velvet_api_raise_%s(struct velvet *v, [[maybe_unused]] struct %s args) {
+void velvet_api_raise_%s(struct velvet *v, __attribute__((unused)) struct %s args) {
   lua_State *L = v->L;
   if (!L) return;
   lua_getglobal(L, "vv");

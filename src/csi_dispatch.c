@@ -210,10 +210,10 @@ static bool csi_dispatch_todo(struct vte *vte, struct csi *csi) {
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
   TODO("CSI %2s %d %2s %2s",
-       byte_names[csi->prefix] ?: prefix,
+       byte_names[csi->prefix] ? byte_names[csi->prefix] : prefix,
        csi->params[0].primary,
-       byte_names[csi->intermediate] ?: intermediate,
-       byte_names[csi->final] ?: final);
+       byte_names[csi->intermediate] ? byte_names[csi->intermediate] : intermediate,
+       byte_names[csi->final] ? byte_names[csi->final] : final);
   return false;
 }
 
@@ -224,10 +224,10 @@ static bool csi_dispatch_omitted(struct vte *vte, struct csi *csi) {
   char intermediate[] = {csi->intermediate, 0};
   char final[] = {csi->final, 0};
   OMITTED("CSI %2s %d %2s %2s",
-          byte_names[csi->prefix] ?: prefix,
+          byte_names[csi->prefix] ? byte_names[csi->prefix] : prefix,
           csi->params[0].primary,
-          byte_names[csi->intermediate] ?: intermediate,
-          byte_names[csi->final] ?: final);
+          byte_names[csi->intermediate] ? byte_names[csi->intermediate] : intermediate,
+          byte_names[csi->final] ? byte_names[csi->final] : final);
   return false;
 }
 
@@ -812,7 +812,7 @@ static bool DECSCUSR(struct vte *vte, struct csi *csi) {
   if (cursor >= CURSOR_STYLE_DEFAULT && cursor < CURSOR_STYLE_LAST) {
     vte->options.cursor.style = cursor;
   } else {
-    OMITTED("Unknown cursor style %d", cursor);
+    TODO("Unknown cursor style %d", cursor);
   }
   return true;
 }

@@ -472,7 +472,7 @@ static void velvet_dispatch_frame(void *data) {
   io_schedule_cancel(&v->event_loop, v->idle_render_token);
 }
 
-void velvet_invalidate_render(struct velvet *velvet, [[maybe_unused]] const char *reason) {
+void velvet_invalidate_render(struct velvet *velvet, const char *reason) {
   velvet->_render_invalidated = true;
   velvet->render_invalidate_reason = reason;
 }

@@ -2,7 +2,6 @@
 #include "text.h"
 #include "utf8proc/utf8proc.h"
 #include "utils.h"
-#include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +15,7 @@ static size_t next_size(size_t min) {
 void *vec_nth_unchecked(struct vec v, size_t i) {
   const char *const base = v.content;
   size_t offset = i * v.element_size;
-  return (void *)base + offset;
+  return (void *)((char*)base + offset);
 }
 
 void string_ensure_capacity(struct string *str, size_t required) {
@@ -208,8 +207,8 @@ void vec_remove(struct vec *v, void *e) {
 void vec_remove_at(struct vec *v, size_t n) {
   assert(n < v->length);
   assert(v->length);
-  void *dst = v->content + n * v->element_size;
-  const void *src = v->content + (n + 1) * v->element_size;
+  void *dst = (char*)v->content + n * v->element_size;
+  const void *src = (char*)v->content + (n + 1) * v->element_size;
   size_t count = (v->length - n - 1) * v->element_size;
   memmove(dst, src, count);
   v->length--;
@@ -220,9 +219,9 @@ void vec_insert(struct vec *v, size_t i, const void *elem) {
   vec_ensure_capacity(v, v->length + 1);
 
   v->length++;
-  void *this = vec_nth_unchecked(*v, i);
-  void *next = vec_nth_unchecked(*v, i + 1);
-  void *end = vec_nth_unchecked(*v, v->length);
+  char *this = vec_nth_unchecked(*v, i);
+  char *next = vec_nth_unchecked(*v, i + 1);
+  char *end = vec_nth_unchecked(*v, v->length);
   memmove(next, this, end - next);
   memcpy(this, elem, v->element_size);
 }
@@ -230,8 +229,8 @@ void vec_insert(struct vec *v, size_t i, const void *elem) {
 void vec_truncate(struct vec *v, size_t len) {
   vec_ensure_capacity(v, len);
   if (len > v->length) {
-    void *start = vec_nth_unchecked(*v, v->length);
-    void *end = vec_nth_unchecked(*v, len);
+    char *start = vec_nth_unchecked(*v, v->length);
+    char *end = vec_nth_unchecked(*v, len);
     memset(start, 0, end - start);
   }
   v->length = len;
@@ -582,7 +581,8 @@ void _string_joinpath(struct string *str, int n, ...) {
 void u8_slice_encode_base64(struct u8_slice in, struct string *out) {
   if (in.len == 0) return;
   const char alphabet[] = { "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"};
-  uint8_t mask = 0b00111111;
+  
+  uint8_t mask = (1 << 6) - 1;
   int c1, c2, c3, c4;
   size_t i = 0;
   const uint8_t *c;
@@ -600,19 +600,19 @@ void u8_slice_encode_base64(struct u8_slice in, struct string *out) {
   }
 
   c = in.content + in.len - in.len % 3;
-  if (in.len % 3 == 2) {                        /* 2 last bytes + padding */
-    uint32_t chunk = (c[0] << 8) | (c[1]);      /* 16 significant bits */
-    c1 = alphabet[(chunk >> 10) & mask];        /* bit 10-15 */
-    c2 = alphabet[(chunk >> 4) & mask];         /* bit 4-9 */
-    c3 = alphabet[((chunk) & 0b00001111) << 2]; /* bit 0-3 */
+  if (in.len % 3 == 2) {                            /* 2 last bytes + padding */
+    uint32_t chunk = (c[0] << 8) | (c[1]);          /* 16 significant bits */
+    c1 = alphabet[(chunk >> 10) & mask];            /* bit 10-15 */
+    c2 = alphabet[(chunk >> 4) & mask];             /* bit 4-9 */
+    c3 = alphabet[((chunk) & ((1 << 4) - 1)) << 2]; /* bit 0-3 */
     string_push_char(out, c1);
     string_push_char(out, c2);
     string_push_char(out, c3);
     string_push_char(out, '=');
-  } else if (in.len % 3 == 1) {               /* last byte + padding */
-    uint32_t chunk = c[0];                    /* 8 significant bits */
-    c1 = alphabet[(chunk >> 2) & mask];       /* bit 2-7 */
-    c2 = alphabet[(chunk & 0b00000011) << 4]; /* bit 0-1 */
+  } else if (in.len % 3 == 1) {                   /* last byte + padding */
+    uint32_t chunk = c[0];                        /* 8 significant bits */
+    c1 = alphabet[(chunk >> 2) & mask];           /* bit 2-7 */
+    c2 = alphabet[(chunk & ((1 << 2) - 1)) << 4]; /* bit 0-1 */
     string_push_char(out, c1);
     string_push_char(out, c2);
     string_push_char(out, '=');

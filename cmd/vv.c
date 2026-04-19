@@ -333,7 +333,6 @@ int main(int argc, char **argv) {
 
   struct velvet velvet = {
       .scene = velvet_scene_default,
-      .input = velvet_input_default,
       .sessions = vec(struct velvet_session),
       .coroutines = vec(struct velvet_coroutine),
       .stored_strings = vec(struct velvet_kvp),

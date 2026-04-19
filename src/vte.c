@@ -23,7 +23,7 @@ static enum charset charset_lookup[] = {
 #define BELL '\a'
 #define BSP '\b'
 #define DEL 0x7f
-#define ESC '\e'
+#define ESC '\x1b'
 #define FORMFEED '\f'
 #define NEWLINE '\n'
 #define RET '\r'

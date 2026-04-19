@@ -141,12 +141,11 @@ void velvet_scene_render_damage(struct velvet_scene *m, render_func_t *render_fu
 struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 
 #define HEX_TO_NUM(x) (((x) >= '0' && (x) <= '9') ? (x) - '0' : (x) - 'a' + 10)
-#define RGB(rgb)                                                                                                       \
-  (struct color) {                                                                                                     \
-    .kind = COLOR_RGB, .red = (HEX_TO_NUM(rgb[1]) << 4) | (HEX_TO_NUM(rgb[2])),                                        \
-    .green = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])),                                                         \
-    .blue = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))                                                           \
-  }
+#define RGB(rgb)                                                               \
+  {.kind = COLOR_RGB,                                                          \
+   .red = (HEX_TO_NUM(rgb[1]) << 4) | (HEX_TO_NUM(rgb[2])),                    \
+   .green = (HEX_TO_NUM(rgb[3]) << 4) | (HEX_TO_NUM(rgb[4])),                  \
+   .blue = (HEX_TO_NUM(rgb[5]) << 4) | (HEX_TO_NUM(rgb[6]))}
 
 /* these values must be set to rgb colors to satisfy some rendering invariants,
 * but these values are not used. The real default values are set in lua. */

@@ -99,7 +99,7 @@ void dim_rgb_hsv(uint8_t r, uint8_t g, uint8_t b, float factor, uint8_t *out_r, 
   *out_b = (uint8_t)roundf(clampf(fb, 0.0f, 1.0f) * 255.0f);
 }
 
-[[maybe_unused]] static uint8_t srgb_to_linear(float c) {
+__attribute__((unused)) static uint8_t srgb_to_linear(float c) {
   if (c <= 0.04045f)
     c = c / 12.92f;
   else
@@ -107,7 +107,7 @@ void dim_rgb_hsv(uint8_t r, uint8_t g, uint8_t b, float factor, uint8_t *out_r, 
   return c * 255;
 }
 
-[[maybe_unused]] static float linear_to_srgb(uint8_t col) {
+__attribute__((unused)) static float linear_to_srgb(uint8_t col) {
   float c = (float)col / 255;
   if (c <= 0.0031308f)
     c =  12.92f * c;

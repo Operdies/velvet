@@ -119,7 +119,7 @@ struct velvet {
 };
 
 void velvet_force_full_redraw(struct velvet *scene);
-void velvet_invalidate_render(struct velvet *velvet, [[maybe_unused]] const char *reason);
+void velvet_invalidate_render(struct velvet *velvet, const char *reason);
 void velvet_loop(struct velvet *velvet);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
@@ -141,7 +141,5 @@ void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_context ctx);
-
-[[maybe_unused]] static struct velvet_input velvet_input_default = {0};
 
 #endif
