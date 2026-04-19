@@ -451,9 +451,8 @@ function Window:get_friendly_title()
   end
   local cwd = self:get_working_directory()
   if cwd then
-    cwd = cwd:gsub('^' .. home .. '/repos/', '󰊢 ')
-    cwd = cwd:gsub('^' .. home .. '/', ' ')
-    cwd = cwd:gsub('^' .. home, ' ')
+    cwd = cwd:gsub('^' .. home .. '/', '~/')
+    cwd = cwd:gsub('^' .. home, '~/')
     title = title .. ' in ' .. cwd
   end
   return title
