@@ -31,4 +31,10 @@ options.theme = {
   yellow = "#f9e2af"
 }
 
+--- Set the rendering fps target. Under load, velvet dispatches frames on a timer.
+--- Note that this only affects frame scheduling behavior. When the system is not under load
+--- velvet will attempt to dispatch dirty frames regardless of fps target immediately after flushing all pending IO.
+--- @type integer
+options.fps_target = "60"
+
 return options

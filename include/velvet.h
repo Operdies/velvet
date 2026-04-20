@@ -107,7 +107,7 @@ struct velvet {
   io_schedule_id idle_render_token;
   /* velvet will try to render when io is idle, but if io is constantly busy
    * it will try to render at least in this interval */
-  int min_ms_per_frame;
+  int fps_target;
   const char *startup_directory;
   /* if render_invalidated is set, velvet will schedule a render at an appropriate time. */
   bool _render_invalidated;

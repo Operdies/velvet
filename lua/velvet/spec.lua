@@ -100,6 +100,16 @@ return {
         cursor_background = "#f5e0dc",
       },
     },
+    {
+      name = 'fps_target',
+      type = 'int',
+      doc = {
+        'Set the rendering fps target. Under load, velvet dispatches frames on a timer.',
+        'Note that this only affects frame scheduling behavior. When the system is not under load',
+        'velvet will attempt to dispatch dirty frames regardless of fps target immediately after flushing all pending IO.'
+      },
+      default = '60',
+    },
   },
 
   --- enums {{{1

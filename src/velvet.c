@@ -484,8 +484,8 @@ static void velvet_ensure_render_scheduled(struct velvet *velvet) {
   }
   if (!io_schedule_exists(&velvet->event_loop, velvet->active_render_token)) {
     /* or schedule a render within a reasonable time */
-    velvet->active_render_token =
-        io_schedule(&velvet->event_loop, velvet->min_ms_per_frame, velvet_dispatch_frame, velvet);
+    int ms = 1000 * (1.0 / velvet->fps_target);
+    velvet->active_render_token = io_schedule(&velvet->event_loop, ms, velvet_dispatch_frame, velvet);
   }
   velvet->_render_invalidated = false;
 }
@@ -606,11 +606,6 @@ void velvet_loop(struct velvet *velvet) {
   velvet_lua_init(velvet);
   velvet_source_config(velvet);
 
-  /* arbitrarily set a minimum update rate of 40 fps
-   * Setting a higher update rate reduces throughput in extreme scenarios.
-   * For most updates, this timeout will not be hit at all since IO will normally be idle at some point.
-   * */
-  velvet->min_ms_per_frame = 1000 * (1.0 / 40);
   velvet_invalidate_render(velvet, "initial render");
 
   for (; !velvet->quit;) {

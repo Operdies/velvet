@@ -625,6 +625,16 @@ struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_the
   return vv_api_get_theme(v);
 }
 
+lua_Integer vv_api_get_fps_target(struct velvet *v) {
+  return v->fps_target;
+}
+
+lua_Integer vv_api_set_fps_target(struct velvet *v, lua_Integer new_value) {
+  if (new_value <= 0) lua_bail(v->L, "fps target must be a positive integer.");
+  v->fps_target = new_value;
+  return vv_api_get_fps_target(v);
+}
+
 float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
   return w->dim_factor;

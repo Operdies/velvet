@@ -545,6 +545,17 @@ function api.get_theme() end
 --- @return velvet.api.theme ret The value after the update
 function api.set_theme(new_value) end
 
+--- Get fps_target
+--- @return integer ret The current value
+function api.get_fps_target() end
+
+--- Set fps_target. Returns the new value.
+--- @param new_value integer Set the rendering fps target. Under load, velvet dispatches frames on a timer.
+--- Note that this only affects frame scheduling behavior. When the system is not under load
+--- velvet will attempt to dispatch dirty frames regardless of fps target immediately after flushing all pending IO.
+--- @return integer ret The value after the update
+function api.set_fps_target(new_value) end
+
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler
 --- @field id integer The id of the handler
