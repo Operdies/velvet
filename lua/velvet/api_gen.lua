@@ -87,6 +87,7 @@ local type_lookup = {
   any = { lua_type = "any", c_type = "void" },
   ["int[]"] = { lua_type = "integer[]", c_type = "int[]" },
   ["string|string[]"] = { lua_type = "string|string[]", c_type = "void*" },
+  ["string[]"] = { lua_type = "string[]", c_type = "void*" },
   void = { c_type = "void", lua_type = "nil" },
   ["function"] = {
     c_type = "lua_Integer",

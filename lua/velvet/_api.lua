@@ -536,6 +536,14 @@ function api.runtime_load_value(name) end
 --- @return nil ret 
 function api.debug_set_display_damage(mode) end
 
+--- Get the names of all running velvet servers.
+--- @return string[] ret List of server names.
+function api.get_servernames() end
+
+--- Get the name of this server.
+--- @return string ret The name of this server.
+function api.get_servername() end
+
 --- Get scrollback_scroll_multiplier
 --- @return integer ret The current value
 function api.get_scrollback_scroll_multiplier() end

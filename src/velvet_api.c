@@ -4,6 +4,8 @@
 #include "utf8proc/utf8proc.h"
 #include "velvet.h"
 #include "velvet_lua.h"
+#include <dirent.h>
+#include <errno.h>
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
@@ -223,10 +225,26 @@ void vv_api_client_detach(struct velvet *v, lua_Integer client_id) {
   velvet_detach_client(v, s, NULL);
 }
 
+static bool file_is_socket(const char *path) {
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISSOCK(st.st_mode);
+}
+
+static struct string pathbuf = {0};
+static bool check_server(struct u8_slice server) {
+  string_clear(&pathbuf);
+  string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", (char*)server.content);
+  string_ensure_null_terminated(&pathbuf);
+  bool good = file_is_socket((char*)pathbuf.content);
+  string_destroy(&pathbuf);
+  return good;
+}
+
 void vv_api_client_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
   struct velvet_client *s;
   vec_find(s, v->clients, s->socket == id);
   if (!s) lua_bail(v, "No client exists with socket id %I", id);
+  if (!check_server(server)) lua_bail(v, "Server '%s' does not exist.", server.content);
   velvet_detach_client(v, s, (char*)server.content);
 }
 
@@ -1218,4 +1236,29 @@ lua_Integer vv_api_set_scrollback_scroll_multiplier(struct velvet *v, lua_Intege
 
 struct velvet_api_coordinate vv_api_get_mouse_position(struct velvet *v) {
   return v->input.last_mouse_position;
+}
+
+lua_stackRetCount vv_api_get_servernames(lua_State *L) {
+  string_clear(&pathbuf);
+  string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets");
+  string_ensure_null_terminated(&pathbuf);
+  lua_newtable(L);
+  DIR *dir = opendir((char *)pathbuf.content);
+  if (!dir) return 1;
+
+  struct dirent *entry;
+  int index = 1;
+  while ((entry = readdir(dir)) != NULL) {
+    const char *name = entry->d_name;
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) continue;
+    lua_pushstring(L, name);
+    lua_seti(L, -2, index++);
+  }
+
+  return 1;
+}
+
+struct u8_slice vv_api_get_servername(struct velvet *v) {
+  (void)v;
+  return u8_slice_from_cstr(getenv("VELVET"));
 }
