@@ -138,7 +138,7 @@ void velvet_input_destroy(struct velvet_input *v);
 void velvet_coroutine_destroy(struct velvet *velvet, struct velvet_coroutine *s);
 struct velvet_session *velvet_get_focused_session(struct velvet *v);
 void velvet_set_focused_session(struct velvet *v, int socket_fd);
-void velvet_detach_session(struct velvet *velvet, struct velvet_session *s);
+void velvet_detach_session(struct velvet *velvet, struct velvet_session *s, char *reattach);
 void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_context ctx);

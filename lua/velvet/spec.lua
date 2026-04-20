@@ -521,6 +521,14 @@ return {
       params = { { name = "id", type = "int", doc = "Session id" } },
     },
     {
+      name = "session_reattach",
+      doc = "Detach session |id| from the server and attach it to |server|.",
+      params = {
+        { name = "id",     type = "int",    doc = "Session id" },
+        { name = "server", type = "string", doc = "Server to reattach to." },
+      }
+    },
+    {
       name = "session_set_options",
       doc = "Update session options for the session id id |session_id|",
       params = {

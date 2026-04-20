@@ -39,12 +39,18 @@ void velvet_force_full_redraw(struct velvet *v) {
   velvet_invalidate_render(v, "full redraw requested");
 }
 
-void velvet_detach_session(struct velvet *velvet, struct velvet_session *s) {
+void velvet_detach_session(struct velvet *velvet, struct velvet_session *s, char *reattach) {
   if (!s) return;
   int sock = s->socket;
   if (s->socket) {
-    uint8_t detach = 'D';
-    write(s->socket, &detach, 1);
+    if (reattach) {
+      char buf[256];
+      int n = snprintf(buf, sizeof(buf), "R%s", reattach);
+      write(s->socket, buf, n);
+    } else {
+      uint8_t detach = 'D';
+      write(s->socket, &detach, 1);
+    }
     close(s->socket);
   }
   velvet_session_destroy(velvet, s);
@@ -132,7 +138,7 @@ static void session_socket_callback(struct io_source *src) {
     close(session->socket);
     session->socket = 0;
     session_handle_command_buffer(velvet, session);
-    velvet_detach_session(velvet, session);
+    velvet_detach_session(velvet, session, NULL);
     return;
   }
 
@@ -304,7 +310,7 @@ static void on_session_input(struct io_source *src, struct u8_slice str) {
   vec_find(session, v->sessions, session->input == src->fd);
 
   if (str.len == 0) {
-    velvet_detach_session(v, session);
+    velvet_detach_session(v, session, NULL);
     return;
   }
 
@@ -358,7 +364,7 @@ static void on_session_writable(struct io_source *src) {
   if (sesh && sesh->pending_output.len) {
     ssize_t written = session_write_pending(sesh);
     if (written == 0) {
-      velvet_detach_session(velvet, sesh);
+      velvet_detach_session(velvet, sesh, NULL);
     }
   }
 }

@@ -220,7 +220,14 @@ void vv_api_session_detach(struct velvet *v, lua_Integer session_id) {
   struct velvet_session *s;
   vec_find(s, v->sessions, s->socket == session_id);
   if (!s) lua_bail(v, "No session exists with socket id %I", session_id);
-  velvet_detach_session(v, s);
+  velvet_detach_session(v, s, NULL);
+}
+
+void vv_api_session_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
+  struct velvet_session *s;
+  vec_find(s, v->sessions, s->socket == id);
+  if (!s) lua_bail(v, "No session exists with socket id %I", id);
+  velvet_detach_session(v, s, (char*)server.content);
 }
 
 void vv_api_window_close(struct velvet *v, lua_Integer winid) {

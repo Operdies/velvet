@@ -251,6 +251,12 @@ function api.get_active_session() end
 --- @return nil ret 
 function api.session_detach(id) end
 
+--- Detach session |id| from the server and attach it to |server|.
+--- @param id integer Session id
+--- @param server string Server to reattach to.
+--- @return nil ret 
+function api.session_reattach(id, server) end
+
 --- Update session options for the session id id |session_id|
 --- @param session_id integer Session id
 --- @param options velvet.api.session_options The new session options.

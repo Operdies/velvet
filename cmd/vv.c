@@ -262,7 +262,9 @@ static int vv_send_cmd(struct velvet_args args) {
   return success;
 }
 
+static char **main_argv;
 int main(int argc, char **argv) {
+  main_argv = argv;
   setlocale(LC_CTYPE, "");
   setenv("TERM", "xterm-256color", true);
   struct velvet_args args = velvet_parse_args(argc, argv);
@@ -749,6 +751,17 @@ static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
   if (str.len == 0) quit("Shutdown");
   if (str.len == 1 && str.content[0] == 'Q') quit("Shutdown");
   if (str.len == 1 && str.content[0] == 'D') quit("Detached");
+  if (str.len > 1 && str.content[0] == 'R') {
+    /* hack: writing to the buffer is technically illegal,
+     * but it's guaranteed to be large enough and we are about to exec(). */
+    char *socket = (char*)str.content;
+    socket[str.len] = 0;
+    terminal_reset();
+    unsetenv("VELVET");
+    execlp(main_argv[0], main_argv[0], "attach", "-S", socket + 1, NULL);
+    velvet_die("execl:");
+    /* reattach */
+  }
 }
 
 static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
