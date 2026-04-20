@@ -183,8 +183,8 @@ static void ground_tab(struct vte *vte, uint8_t ch) {
 }
 
 static void ground_bell(struct vte *vte, uint8_t ch) {
-  (void)vte, (void)ch;
-  write(STDOUT_FILENO, "\a", 1);
+  (void)ch;
+  vte->bell = true;
 }
 
 static void ground_newline(struct vte *vte, uint8_t ch) {

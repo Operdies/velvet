@@ -235,6 +235,7 @@ struct vte {
     void *userdata;
     void (*set)(struct u8_slice base64, enum osc_clipboard clipboard, void *userdata);
   } clipboard;
+  bool bell;
 };
 
 static const struct emulator_options emulator_options_default = {
