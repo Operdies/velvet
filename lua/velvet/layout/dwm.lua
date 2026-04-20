@@ -44,9 +44,6 @@ local monocle = false
 --- @alias arrange string arrange mode
 ---|'tiled' dwm-style master-stack tiling
 
---- @type integer[]
-local windows = {}
-
 -- |state| is automatically saved and reloaded when user config is reloaded.
 -- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
 -- And also because the restore logic cannot handle table keys.
@@ -66,6 +63,8 @@ session_options.state = session_options.state or {
   nmaster = 1,
   --- @type number
   mfact = 0.5,
+  --- @type integer[]
+  windows = {}
 }
 local state = session_options.state
 
@@ -170,7 +169,7 @@ end
 --- @param id integer
 local function set_focus(id)
   local win = window.from_handle(id)
-  if win == nil or ignore_window(vv.api.get_focused_window()) or id == taskbar.id then return end
+  if win == nil or id == taskbar.id then return end
   local current_index = table_index(state.focus_order, win.id)
   if current_index ~= nil then table.remove(state.focus_order, current_index) end
   table.insert(state.focus_order, win.id)
@@ -191,7 +190,7 @@ end
 
 --- Set the focus to the most recently focused visible item
 --- @return nil
-local function ensure_focus_visible()
+local function focus_first_visible()
   for i = #state.focus_order, 1, -1 do
     local id = state.focus_order[i]
     if visibleontags(id) then
@@ -342,7 +341,7 @@ local function tile()
     return visibleontags(id)
   end
 
-  for _, id in ipairs(windows) do
+  for _, id in ipairs(state.windows) do
     local win = window.from_handle(id)
     local vis = include(id)
     win:set_visibility(vis)
@@ -401,7 +400,7 @@ local function tile()
     win_stack(g, right_stack)
   end
 
-  ensure_focus_visible()
+  focus_first_visible()
 end
 
 local function arrange()
@@ -483,8 +482,8 @@ local function drop_or_show_hint(w, args)
   end
 
   local function drop_window()
-    local current = table_index(windows, w.id)
-    if current then table.remove(windows, current) end
+    local current = table_index(state.windows, w.id)
+    if current then table.remove(state.windows, current) end
     if side == 'left' then
       state.nmaster = state.nmaster + 1
     elseif side == 'right' and state.nmaster > #left_stack then
@@ -493,8 +492,8 @@ local function drop_or_show_hint(w, args)
     local before = nil
     if side == 'left' then before = left_stack[index] or right_stack[1] 
     elseif side == 'right' then before = right_stack[index] or nil end
-    local idx = before and table_index(windows, before.id) or (#windows + 1)
-    table.insert(windows, idx, w.id)
+    local idx = before and table_index(state.windows, before.id) or (#state.windows + 1)
+    table.insert(state.windows, idx, w.id)
     state.layers[w.id] = 'tiled'
   end
 
@@ -541,13 +540,16 @@ local function add_window(id, init)
       dragging = nil
     end
   end
-  windows[#windows + 1] = win.id
-  if not state.tags[win.id] then
-    table.insert(state.focus_order, 1, win.id)
-    state.layers[win.id] = 'tiled'
-    state.tags[win.id] = table.move(state.view, 1, #state.view, 1, {})
-    if not init then
-      arrange()
+
+  if not table_index(state.windows, id) then 
+    state.windows[#state.windows + 1] = win.id
+    if not state.tags[win.id] then
+      table.insert(state.focus_order, 1, win.id)
+      state.layers[win.id] = 'tiled'
+      state.tags[win.id] = table.move(state.view, 1, #state.view, 1, {})
+      if not init then
+        arrange()
+      end
     end
   end
 end
@@ -573,10 +575,11 @@ end
 
 local function remove_window()
   local function win_invalid(id) return not vv.api.window_is_valid(id) end
-  table.remove_if(windows, win_invalid)
+  table.remove_if(state.windows, win_invalid)
   table.remove_if(state.focus_order, win_invalid)
   table.unset_if_key(state.layers, win_invalid)
   table.unset_if_key(state.tags, win_invalid)
+  focus_first_visible()
   arrange()
 end
 
@@ -720,16 +723,16 @@ end
 --- @param match fun(integer): boolean
 --- @return integer?
 local function get_prev_matching(id, match)
-  local pivot = table_index(windows, id)
+  local pivot = table_index(state.windows, id)
   if pivot == nil then
     pivot = 0
   else
     pivot = pivot - 1
   end
 
-  for i = #windows - 1, 0, -1 do
-    local index = 1 + ((i + pivot) % (#windows))
-    if match(windows[index]) then return windows[index] end
+  for i = #state.windows - 1, 0, -1 do
+    local index = 1 + ((i + pivot) % (#state.windows))
+    if match(state.windows[index]) then return state.windows[index] end
   end
   return nil
 end
@@ -738,16 +741,16 @@ end
 --- @param match fun(integer): boolean
 --- @return integer?
 local function get_next_matching(win, match)
-  local pivot = table_index(windows, win)
+  local pivot = table_index(state.windows, win)
   if pivot == nil then
     pivot = 0
   else
     pivot = pivot - 1
   end
 
-  for i = 1, #windows do
-    local index = 1 + ((i + pivot) % (#windows))
-    if match(windows[index]) then return windows[index] end
+  for i = 1, #state.windows do
+    local index = 1 + ((i + pivot) % (#state.windows))
+    if match(state.windows[index]) then return state.windows[index] end
   end
   return nil
 end
@@ -783,9 +786,9 @@ function dwm.swap_next()
   if not tiled(fid) then return end
   local n = get_next_matching(fid, function(id) return visibleontags(id) and tiled(id) end)
   if n and n ~= fid then
-    local i1 = table_index(windows, fid)
-    local i2 = table_index(windows, n)
-    table_swap(windows, i1, i2)
+    local i1 = table_index(state.windows, fid)
+    local i2 = table_index(state.windows, n)
+    table_swap(state.windows, i1, i2)
     arrange()
   end
 end
@@ -796,9 +799,9 @@ function dwm.swap_prev()
   if not tiled(fid) then return end
   local n = get_prev_matching(fid, function(id) return visibleontags(id) and tiled(id) end)
   if n and n ~= fid then
-    local i1 = table_index(windows, fid)
-    local i2 = table_index(windows, n)
-    table_swap(windows, i1, i2)
+    local i1 = table_index(state.windows, fid)
+    local i2 = table_index(state.windows, n)
+    table_swap(state.windows, i1, i2)
     arrange()
   end
 end
@@ -808,14 +811,14 @@ end
 function dwm.swap_main()
   local focus_id = vv.api.get_focused_window()
   if focus_id == 0 then return end
-  local focus_index = table_index(windows, focus_id)
-  local next_index = get_first_matching(windows,
+  local focus_index = table_index(state.windows, focus_id)
+  local next_index = get_first_matching(state.windows,
     function(win) return win ~= focus_id and visibleontags(win) and tiled(win) end)
   if next_index then
-    local next_win = windows[next_index]
-    table_swap(windows, focus_index, next_index)
-    local new_focus = get_first_matching(windows, function(win) return win == focus_id or win == next_win end)
-    if new_focus then set_focus(windows[new_focus]) end
+    local next_win = state.windows[next_index]
+    table_swap(state.windows, focus_index, next_index)
+    local new_focus = get_first_matching(state.windows, function(win) return win == focus_id or win == next_win end)
+    if new_focus then set_focus(state.windows[new_focus]) end
     arrange()
   end
 end
