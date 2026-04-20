@@ -174,7 +174,7 @@ local api = {}
 --- @field row integer row
 --- @field col integer column
 
---- @class velvet.api.session.key.event_args
+--- @class velvet.api.on_key.event_args
 --- @field key velvet.api.window.key_event The key which generated the event.
 
 --- @class velvet.api.mouse.move.event_args
@@ -207,7 +207,7 @@ local api = {}
 --- @class velvet.api.pre_reload.event_args
 --- @field time integer The number of milliseconds elapsed since startup
 
---- @class velvet.api.session_options
+--- @class velvet.api.client_options
 --- @field x_pixel integer The number of horizontal pixels.
 --- @field y_pixel integer The number of vertical pixels.
 --- @field lines integer The number of lines.
@@ -233,35 +233,35 @@ function api.schedule_after(delay, func) end
 --- @return integer ret milliseconds elapsed since startup
 function api.get_current_tick() end
 
---- Get the IDs of all sessions.
---- @return integer[] ret List of session IDs
-function api.get_sessions() end
+--- Get the IDs of all clients.
+--- @return integer[] ret List of client IDs
+function api.get_clients() end
 
---- Set the active session to the session with id |session_id|
---- @param session_id integer Session id
+--- Set the active client to the client with id |client_id|
+--- @param client_id integer client id
 --- @return nil ret 
-function api.set_active_session(session_id) end
+function api.set_active_client(client_id) end
 
---- Get the id of the active session
---- @return integer ret Session id
-function api.get_active_session() end
+--- Get the id of the active client
+--- @return integer ret client id
+function api.get_active_client() end
 
---- Detach session |id| from the server.
---- @param id integer Session id
+--- Detach client |id| from the server.
+--- @param id integer client id
 --- @return nil ret 
-function api.session_detach(id) end
+function api.client_detach(id) end
 
---- Detach session |id| from the server and attach it to |server|.
---- @param id integer Session id
+--- Detach client |id| from the server and attach it to |server|.
+--- @param id integer client id
 --- @param server string Server to reattach to.
 --- @return nil ret 
-function api.session_reattach(id, server) end
+function api.client_reattach(id, server) end
 
---- Update session options for the session id id |session_id|
---- @param session_id integer Session id
---- @param options velvet.api.session_options The new session options.
+--- Update client options for the client id id |client_id|
+--- @param client_id integer client id
+--- @param options velvet.api.client_options The new client options.
 --- @return nil ret 
-function api.session_set_options(session_id, options) end
+function api.client_set_options(client_id, options) end
 
 --- Quit velvet with no warning
 --- @return nil ret 
@@ -520,16 +520,16 @@ function api.string_lower(string) end
 --- @return string ret Upper case string.
 function api.string_upper(string) end
 
---- Store a named value in the current session. Session values are preserved after reloading, but lost when the session ends.
+--- Store a named value in the current runtime. Runtime values are preserved after reloading, but lost when the server exits.
 --- @param name string The name of the stored value.
 --- @param value any The value to store.
 --- @return nil ret 
-function api.session_store_value(name, value) end
+function api.runtime_store_value(name, value) end
 
---- Load a value from the current session by name.
---- @param name string The name of the session value.
+--- Load a value from the current runtime by name.
+--- @param name string The name of the runtime value.
 --- @return any ret The loaded value.
-function api.session_load_value(name) end
+function api.runtime_load_value(name) end
 
 --- Enable damage tracking when the screen is updated. (debugging feature)
 --- @param mode boolean Damage display mode
@@ -568,7 +568,7 @@ function api.set_fps_target(new_value) end
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler
 --- @field id integer The id of the handler
---- @field session_on_key? fun(event_args: velvet.api.session.key.event_args): nil Raised when a key is pressed.
+--- @field on_key? fun(event_args: velvet.api.on_key.event_args): nil Raised when a key is pressed.
 --- @field window_created? fun(event_args: velvet.api.window.created.event_args): nil Raised after a new window is created.
 --- @field window_closed? fun(event_args: velvet.api.window.closed.event_args): nil Raised after a window is closed.
 --- @field window_output? fun(event_args: velvet.api.window.output.event_args): nil Raised when a window produces output.

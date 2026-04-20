@@ -1,5 +1,5 @@
-local store = vv.api.session_store_value
-local load = vv.api.session_load_value
+local store = vv.api.runtime_store_value
+local load = vv.api.runtime_load_value
 
 -- primitive types
 store('int', 99)

@@ -178,7 +178,7 @@ end
 --- @field execute? fun(nil): nil keymap action
 --- @field options velvet.keys.set.options
 --- @field key? string the key of this keymap in its parent child table
---- @field trigger? velvet.api.session.key.event_args the exact event which caused this keymap to be entered
+--- @field trigger? velvet.api.on_key.event_args the exact event which caused this keymap to be entered
 
 --- @type keymap
 local root_keymap = { children = {}, options = {} }
@@ -324,7 +324,7 @@ local function set_current_chain(chain)
   end
 end
 
---- @param args velvet.api.session.key.event_args
+--- @param args velvet.api.on_key.event_args
 local function send_key_to_window(args)
   local win = vv.api.get_focused_window()
   if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
@@ -360,7 +360,7 @@ local function keymap_unwind()
   -- Replay the remaining keys
   local last_unresolved = current_chain
   set_current_chain(root_keymap)
-  --- @type velvet.api.session.key.event_args[]
+  --- @type velvet.api.on_key.event_args[]
   local pending = {}
   while last_unresolved ~= map do
     table.insert(pending, 1, last_unresolved.trigger)
@@ -371,7 +371,7 @@ local function keymap_unwind()
   end
 end
 
---- @param args velvet.api.session.key.event_args
+--- @param args velvet.api.on_key.event_args
 --- @return boolean args is a modifier
 local function is_modifier(args)
   return modifier_keys[args.key.name] and true or false
@@ -408,7 +408,7 @@ local passthrough = false
 local last_repeat = 0
 
 --- @param next_chain keymap
---- @param args velvet.api.session.key.event_args
+--- @param args velvet.api.on_key.event_args
 --- @param now integer
 local function advance_chain(next_chain, args, now)
   next_chain.trigger = args
@@ -432,7 +432,7 @@ local function advance_chain(next_chain, args, now)
   end
 end
 
---- @param args velvet.api.session.key.event_args
+--- @param args velvet.api.on_key.event_args
 local function cancel_chain(args)
   if args.key.name == vk.ESCAPE and current_chain ~= root_keymap then
     -- escape should cancel any chain immediately without unwinding if the escape key was not a continuation.
@@ -469,7 +469,7 @@ local function cancel_chain(args)
   end
 end
 
---- @param args velvet.api.session.key.event_args
+--- @param args velvet.api.on_key.event_args
 function keymap.on_key(args)
   args.key = maybe_remap(args.key)
   if passthrough or args.key.event_type == 'release' then
@@ -505,7 +505,7 @@ end
 
 local evt = require('velvet.events')
 local grp = evt.create_group('velvet.keys', true)
-grp.session_on_key = keymap.on_key
+grp.on_key = keymap.on_key
 
 --- @class which_key
 --- @field description string user provided description

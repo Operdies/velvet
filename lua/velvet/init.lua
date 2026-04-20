@@ -197,14 +197,14 @@ _G = setmetatable(_G, {
 })
 
 -- quit() and reload() are wrapped because the vv functions have not been loaded yet.
-cli.add_command({ name = "quit", action = function() vv.api.quit() end, description = "Quit the velvet session, killing all windows" });
+cli.add_command({ name = "quit", action = function() vv.api.quit() end, description = "Quit the velvet server, killing all windows." });
 -- reload after 5ms to ensure the client to exits with 0, and not a restart error code.
-cli.add_command({ name = "reload", action = function() vv.api.schedule_after(5, vv.api.reload) end, description = "Reload the velvet session, resourcing configs" });
+cli.add_command({ name = "reload", action = function() vv.api.schedule_after(5, vv.api.reload) end, description = "Restart the lua VM and source configs." });
 cli.add_command({
   name = "detach",
-  action = function() vv.api.session_detach(vv.api.get_active_session()) end,
+  action = function() vv.api.client_detach(vv.api.get_active_client()) end,
   description =
-  "Detach the current terminal from the session"
+  "Detach the current terminal from the server."
 });
 cli.add_command({
   name = "spawn",

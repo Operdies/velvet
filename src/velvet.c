@@ -15,20 +15,20 @@
 #include "platform.h"
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd);
-static void velvet_session_render(struct u8_slice str, void *context) {
-  struct velvet_session *s = context;
+static void velvet_client_render(struct u8_slice str, void *context) {
+  struct velvet_client *s = context;
   string_push_slice(&s->pending_output, str);
 }
 
-void velvet_session_destroy(struct velvet *velvet, struct velvet_session *s) {
+void velvet_client_destroy(struct velvet *velvet, struct velvet_client *s) {
   if (s->input) close(s->input);
   if (s->output) close(s->output);
   if (s->socket) close(s->socket);
   string_destroy(&s->pending_output);
   string_destroy(&s->command_buffer);
-  *s = (struct velvet_session){0};
-  size_t idx = vec_index(&velvet->sessions, s);
-  vec_remove_at(&velvet->sessions, idx);
+  *s = (struct velvet_client){0};
+  size_t idx = vec_index(&velvet->clients, s);
+  vec_remove_at(&velvet->clients, idx);
 }
 
 /* Occasionally under MacOS, the screen is not fully redrawn after waking from sleep.
@@ -39,7 +39,7 @@ void velvet_force_full_redraw(struct velvet *v) {
   velvet_invalidate_render(v, "full redraw requested");
 }
 
-void velvet_detach_session(struct velvet *velvet, struct velvet_session *s, char *reattach) {
+void velvet_detach_client(struct velvet *velvet, struct velvet_client *s, char *reattach) {
   if (!s) return;
   int sock = s->socket;
   if (s->socket) {
@@ -53,37 +53,37 @@ void velvet_detach_session(struct velvet *velvet, struct velvet_session *s, char
     }
     close(s->socket);
   }
-  velvet_session_destroy(velvet, s);
+  velvet_client_destroy(velvet, s);
   if (sock && velvet->focused_socket == sock) {
-    struct velvet_session *fst = NULL;
-    vec_find(fst, velvet->sessions, fst->socket && fst->input);
+    struct velvet_client *fst = NULL;
+    vec_find(fst, velvet->clients, fst->socket && fst->input);
     velvet->focused_socket = fst ? fst->socket : 0;
   }
 }
 
-void velvet_set_focused_session(struct velvet *v, int socket_fd) {
-  struct velvet_session *s;
-  vec_find(s, v->sessions, s->socket == socket_fd);
+void velvet_set_focused_client(struct velvet *v, int socket_fd) {
+  struct velvet_client *s;
+  vec_find(s, v->clients, s->socket == socket_fd);
   if (s) v->focused_socket = socket_fd;
 }
 
-struct velvet_session *velvet_get_focused_session(struct velvet *v) {
-  if (v->sessions.length && v->focused_socket) {
-    struct velvet_session *f;
-    vec_find(f, v->sessions, f->socket == v->focused_socket);
+struct velvet_client *velvet_get_focused_client(struct velvet *v) {
+  if (v->clients.length && v->focused_socket) {
+    struct velvet_client *f;
+    vec_find(f, v->clients, f->socket == v->focused_socket);
     return f;
   }
   return NULL;
 }
 
-static void session_handle_command_buffer(struct velvet *v, struct velvet_session *src) {
+static void handle_command_buffer(struct velvet *v, struct velvet_client *src) {
   int socket = src->socket;
   struct u8_slice cmd = string_as_u8_slice(src->command_buffer);
   velvet_cmd(v, socket, cmd);
   string_clear(&src->command_buffer);
 }
 
-static void session_handle_lua_chunk(struct velvet *v, struct vv_lua_payload *chunk, int mapfd, int session_fd) {
+static void handle_lua_chunk(struct velvet *v, struct vv_lua_payload *chunk, int mapfd, int client_fd) {
   struct velvet_alloc *a = velvet_alloc_shmem_remap(mapfd);
   struct u8_slice code = { .content = (uint8_t*)a + chunk->chunk_offset, .len = chunk->chunk_length };
   size_t *string_offsets = (size_t*)((uint8_t*)a + chunk->args_offset);
@@ -100,11 +100,11 @@ static void session_handle_lua_chunk(struct velvet *v, struct vv_lua_payload *ch
     .args = varargs,
     .cwd = chunk->cwd_offset ? (char *)a + chunk->cwd_offset : v->startup_directory,
   };
-  velvet_lua_execute_chunk(v, code, session_fd, ctx);
+  velvet_lua_execute_chunk(v, code, client_fd, ctx);
   velvet_alloc_shmem_destroy(a, mapfd);
 }
 
-static void session_socket_callback(struct io_source *src) {
+static void client_socket_callback(struct io_source *src) {
   struct velvet *velvet = src->data;
   char data_buf[8192] = {0};
   char cmsgbuf[CMSG_SPACE(sizeof(int) * 3)] = {0};
@@ -121,28 +121,28 @@ static void session_socket_callback(struct io_source *src) {
     return;
   }
 
-  struct velvet_session *session;
-  vec_find(session, velvet->sessions, session->socket == src->fd);
-  /* this happens because the session was converted to a coroutine */
-  if (!session) return;
+  struct velvet_client *client;
+  vec_find(client, velvet->clients, client->socket == src->fd);
+  /* this happens because the client was converted to a coroutine */
+  if (!client) return;
 
   if (n >= (int)sizeof(data_buf)) {
     const char *err = "error: lua chunk too large (max 8kb); use dofile() for larger scripts\n";
     write(src->fd, err, strlen(err));
-    velvet_session_destroy(velvet, session);
+    velvet_client_destroy(velvet, client);
     return;
   }
 
   if (n == 0) {
     // The socket was closed, so let's ensure we don't write to it or close it again
-    close(session->socket);
-    session->socket = 0;
-    session_handle_command_buffer(velvet, session);
-    velvet_detach_session(velvet, session, NULL);
+    close(client->socket);
+    client->socket = 0;
+    handle_command_buffer(velvet, client);
+    velvet_detach_client(velvet, client, NULL);
     return;
   }
 
-  assert(session);
+  assert(client);
 
   bool needs_render = false;
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
@@ -155,9 +155,9 @@ static void session_socket_callback(struct io_source *src) {
     if (n == sizeof(struct vv_lua_payload)) {
       struct vv_lua_payload *lua_chunk = (struct vv_lua_payload *)data_buf;
       if (lua_chunk->magic == VV_LUA_MAGIC) {
-        /* convert this velvet_session to a coroutine */
-        session->socket = 0;
-        velvet_session_destroy(velvet, session);
+        /* convert this velvet_client to a coroutine */
+        client->socket = 0;
+        velvet_client_destroy(velvet, client);
         struct velvet_coroutine *co = vec_new_element(&velvet->coroutines);
         co->socket = src->fd;
         int map_fd = fds[0];
@@ -168,39 +168,39 @@ static void session_socket_callback(struct io_source *src) {
         set_cloexec(co->err_fd);
         set_nonblocking(co->out_fd);
         set_nonblocking(co->err_fd);
-        session_handle_lua_chunk(velvet, lua_chunk, map_fd, src->fd);
-        vec_find(session, velvet->sessions, session->socket == src->fd);
-        if (session && (!session->input || !session->output)) {
-          velvet_session_destroy(velvet, session);
+        handle_lua_chunk(velvet, lua_chunk, map_fd, src->fd);
+        vec_find(client, velvet->clients, client->socket == src->fd);
+        if (client && (!client->input || !client->output)) {
+          velvet_client_destroy(velvet, client);
         }
         return;
       }
     }
-    session->input = fds[0];
-    session->output = fds[1];
-    set_cloexec(session->input);
-    set_cloexec(session->output);
+    client->input = fds[0];
+    client->output = fds[1];
+    set_cloexec(client->input);
+    set_cloexec(client->output);
 
-    set_nonblocking(session->output);
+    set_nonblocking(client->output);
 
     // Since we are normally only rendering lines which have changed,
     // new clients must receive a complete render upon connecting.
-    velvet->focused_socket = session->socket;
+    velvet->focused_socket = client->socket;
     needs_render = true;
   }
 
   struct u8_slice cmd = {.content = (uint8_t *)data_buf, .len = n};
-  string_push_slice(&session->command_buffer, cmd);
-  session_handle_command_buffer(velvet, session);
+  string_push_slice(&client->command_buffer, cmd);
+  handle_command_buffer(velvet, client);
 
-  /* ensure the session still exists after handling the command */
-  vec_find(session, velvet->sessions, session->socket == src->fd);
-  if (!session) return;
+  /* ensure the client still exists after handling the command */
+  vec_find(client, velvet->clients, client->socket == src->fd);
+  if (!client) return;
 
-  if (!session->input || !session->output) {
-    velvet_session_destroy(velvet, session);
+  if (!client->input || !client->output) {
+    velvet_client_destroy(velvet, client);
   } else if (needs_render) {
-    velvet_scene_render_full(&velvet->scene, velvet_session_render, session);
+    velvet_scene_render_full(&velvet->scene, velvet_client_render, client);
   }
 }
 
@@ -214,8 +214,8 @@ static void socket_accept(struct io_source *src) {
   }
   set_cloexec(client_fd);
 
-  struct velvet_session c = { .socket = client_fd };
-  vec_push(&velvet->sessions, &c);
+  struct velvet_client c = { .socket = client_fd };
+  vec_push(&velvet->clients, &c);
 }
 
 void velvet_scene_remove_exited(struct velvet *v) {
@@ -269,7 +269,7 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
   }
 }
 
-static ssize_t session_write_pending(struct velvet_session *sesh) {
+static ssize_t client_write_pending(struct velvet_client *sesh) {
   assert(sesh->input);
   assert(sesh->output);
   if (sesh->pending_output.len) {
@@ -284,11 +284,11 @@ static ssize_t session_write_pending(struct velvet_session *sesh) {
 
 static void velvet_render(struct u8_slice str, void *context) {
   struct velvet *a = context;
-  struct velvet_session *s;
+  struct velvet_client *s;
   if (str.len == 0) return;
 
-  vec_where(s, a->sessions, s->output) string_push_slice(&s->pending_output, str);
-  vec_where(s, a->sessions, s->output) session_write_pending(s);
+  vec_where(s, a->clients, s->output) string_push_slice(&s->pending_output, str);
+  vec_where(s, a->clients, s->output) client_write_pending(s);
 }
 
 static void on_coroutine_hangup(struct io_source *src) {
@@ -304,17 +304,17 @@ static void on_coroutine_socket_read(struct io_source *src, struct u8_slice str)
   if (str.len == 0) on_coroutine_hangup(src);
 }
 
-static void on_session_input(struct io_source *src, struct u8_slice str) {
+static void on_client_input(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
-  struct velvet_session *session;
-  vec_find(session, v->sessions, session->input == src->fd);
+  struct velvet_client *client;
+  vec_find(client, v->clients, client->input == src->fd);
 
   if (str.len == 0) {
-    velvet_detach_session(v, session, NULL);
+    velvet_detach_client(v, client, NULL);
     return;
   }
 
-  if (session) v->input.input_socket = session->socket;
+  if (client) v->input.input_socket = client->socket;
   velvet_input_process(v, str);
   v->input.input_socket = 0;
 }
@@ -357,14 +357,14 @@ static void on_coroutine_writable(struct io_source *src) {
   if (co) co_write(velvet, co, co->out_fd, &co->pending_output);
 }
 
-static void on_session_writable(struct io_source *src) {
+static void on_client_writable(struct io_source *src) {
   struct velvet *velvet = src->data;
-  struct velvet_session *sesh;
-  vec_find(sesh, velvet->sessions, sesh->output == src->fd);
+  struct velvet_client *sesh;
+  vec_find(sesh, velvet->clients, sesh->output == src->fd);
   if (sesh && sesh->pending_output.len) {
-    ssize_t written = session_write_pending(sesh);
+    ssize_t written = client_write_pending(sesh);
     if (written == 0) {
-      velvet_detach_session(velvet, sesh, NULL);
+      velvet_detach_client(velvet, sesh, NULL);
     }
   }
 }
@@ -401,17 +401,17 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
     velvet_window_process_output(vte, str);
 
     if (vte->emulator_output_buffer.len) {
-      struct velvet_session *session;
-      /* multicast output to all sessions. In practice, there will only be one session connected,
-       * but since there is no good way to determine if a session is a proper terminal emulator just send it to every
-       * session with an output pipe. The worst case is something like the system clipboard being set multiple times
+      struct velvet_client *client;
+      /* multicast output to all clients. In practice, there will only be one client connected,
+       * but since there is no good way to determine if a client supports OSC 8, just send it to every
+       * client with an output pipe. The worst case is something like the system clipboard being set multiple times
        * which is harmless. */
-      vec_where(session, v->sessions, session->output) {
-        string_push_string(&session->pending_output, vte->emulator_output_buffer);
+      vec_where(client, v->clients, client->output) {
+        string_push_string(&client->pending_output, vte->emulator_output_buffer);
       }
 
       /* Consider the output handled even if it was not transmitted to any client.
-       * We really don't want the buffer to accumulate when no sessions are connected,
+       * We really don't want the buffer to accumulate when no clients are connected,
        * and allowing a process to e.g. set the clipboard when no client is connected
        * is kind of an anti-feature anyway,
        */
@@ -435,7 +435,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
   }
 }
 
-static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *focus) {
+static bool velvet_align_and_arrange(struct velvet *v, struct velvet_client *focus) {
   bool resized = false;
   if (focus->ws.width && focus->ws.height && (focus->ws.width != v->scene.size.width || focus->ws.height != v->scene.size.height)) {
     velvet_scene_resize(&v->scene, focus->ws);
@@ -462,7 +462,7 @@ static void velvet_raise_window_events(struct velvet *v) {
 static void velvet_dispatch_frame(void *data) {
   struct velvet *v = data;
 
-  struct velvet_session *focus = velvet_get_focused_session(v);
+  struct velvet_client *focus = velvet_get_focused_client(v);
   if (focus) {
     bool is_idle = io_schedule_exists(&v->event_loop, v->active_render_token);
     v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_multibyte_graphemes;
@@ -503,7 +503,7 @@ static void velvet_ensure_render_scheduled(struct velvet *velvet) {
 
 static void velvet_dispatch(struct velvet *velvet) {
   struct io *const loop = &velvet->event_loop;
-  struct velvet_session *focus = velvet_get_focused_session(velvet);
+  struct velvet_client *focus = velvet_get_focused_client(velvet);
   if (focus) velvet_align_and_arrange(velvet, focus);
   if (velvet->_render_invalidated) velvet_ensure_render_scheduled(velvet);
 
@@ -532,17 +532,17 @@ static void velvet_dispatch(struct velvet *velvet) {
       .fd = velvet->socket, .events = IO_SOURCE_POLLIN, .on_readable = socket_accept, .data = velvet};
   io_add_source(loop, socket_src);
 
-  struct velvet_session *session;
-  vec_foreach(session, velvet->sessions) {
+  struct velvet_client *client;
+  vec_foreach(client, velvet->clients) {
     struct io_source socket_src = {
-        .fd = session->socket, .events = IO_SOURCE_POLLIN, .on_readable = session_socket_callback, .data = velvet};
+        .fd = client->socket, .events = IO_SOURCE_POLLIN, .on_readable = client_socket_callback, .data = velvet};
     io_add_source(loop, socket_src);
     struct io_source input_src = {
-        .fd = session->input, .events = IO_SOURCE_POLLIN, .on_read = on_session_input, .data = velvet};
+        .fd = client->input, .events = IO_SOURCE_POLLIN, .on_read = on_client_input, .data = velvet};
     if (input_src.fd) io_add_source(loop, input_src);
-    if (session->pending_output.len) {
+    if (client->pending_output.len) {
       struct io_source output_src = {
-          .fd = session->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_session_writable, .data = velvet};
+          .fd = client->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_client_writable, .data = velvet};
       if (output_src.fd) io_add_source(loop, output_src);
     }
   }
@@ -629,13 +629,13 @@ void velvet_destroy(struct velvet *velvet) {
   io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input);
-  while (velvet->sessions.length) {
-    velvet_session_destroy(velvet, vec_nth(velvet->sessions, 0));
+  while (velvet->clients.length) {
+    velvet_client_destroy(velvet, vec_nth(velvet->clients, 0));
   }
   while (velvet->coroutines.length) {
     velvet_coroutine_destroy(velvet, vec_nth(velvet->coroutines, 0));
   }
-  vec_destroy(&velvet->sessions);
+  vec_destroy(&velvet->clients);
   struct velvet_kvp *kvp;
   vec_foreach(kvp, velvet->stored_strings) {
     string_destroy(&kvp->key);

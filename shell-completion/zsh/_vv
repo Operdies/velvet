@@ -51,7 +51,7 @@ _vv() {
       fi
       cmd+=(vv-complete-internal zsh)
       local -a commands=(
-        'attach:Attach to a velvet session'
+        'attach:Attach to a velvet server'
         'lua:Execute a lua file or stdin on the server'
         "${(@f)$("${cmd[@]}" 2>/dev/null)}"
       )

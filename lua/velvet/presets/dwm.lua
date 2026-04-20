@@ -18,7 +18,7 @@ local function cfg(settings)
   map_prefix("c", function() vv.api.window_create_process(default_shell, { working_directory = vv.cwd() }) end,
     { description = "Spawn " .. default_shell })
 
-  map_prefix("d", function() vv.api.session_detach(vv.api.get_active_session()) end,
+  map_prefix("d", function() vv.api.client_detach(vv.api.get_active_client()) end,
     { description = "Detach from velvet." })
 
   map_prefix(pfx, function() vv.api.window_send_keys(vv.api.get_focused_window(), pfx) end,

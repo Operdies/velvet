@@ -374,7 +374,7 @@ return {
       },
     },
     {
-      name = "session.key.event_args",
+      name = "on_key.event_args",
       fields = {
         { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
       },
@@ -428,8 +428,8 @@ return {
       },
     },
     {
-      name = "session_options",
-      doc = "session specific options of an attached client.",
+      name = "client_options",
+      doc = "client specific options of an attached client.",
       fields = {
         { name = "x_pixel",                                 type = "int",  doc = "The number of horizontal pixels." },
         { name = "y_pixel",                                 type = "int",  doc = "The number of vertical pixels." },
@@ -442,7 +442,7 @@ return {
 
   --- {{{1 events
   events = {
-    { name = "session.on_key",       doc = "Raised when a key is pressed.",                args = "session.key.event_args" },
+    { name = "on_key",               doc = "Raised when a key is pressed.",                args = "on_key.event_args" },
     { name = "window.created",       doc = "Raised after a new window is created.",        args = "window.created.event_args" },
     { name = "window.closed",        doc = "Raised after a window is closed.",             args = "window.closed.event_args" },
     { name = "window.output",        doc = "Raised when a window produces output.",        args = "window.output.event_args" },
@@ -501,39 +501,39 @@ return {
     },
     --- system {{{2
     {
-      name = "get_sessions",
-      doc = "Get the IDs of all sessions.",
-      returns = { type = "int[]", doc = "List of session IDs" }
+      name = "get_clients",
+      doc = "Get the IDs of all clients.",
+      returns = { type = "int[]", doc = "List of client IDs" }
     },
     {
-      name = "set_active_session",
-      doc = "Set the active session to the session with id |session_id|",
-      params = { { name = "session_id", type = "int", doc = "Session id" } },
+      name = "set_active_client",
+      doc = "Set the active client to the client with id |client_id|",
+      params = { { name = "client_id", type = "int", doc = "client id" } },
     },
     {
-      name = "get_active_session",
-      doc = "Get the id of the active session",
-      returns = { name = "session_id", type = "int", doc = "Session id" },
+      name = "get_active_client",
+      doc = "Get the id of the active client",
+      returns = { name = "client_id", type = "int", doc = "client id" },
     },
     {
-      name = "session_detach",
-      doc = "Detach session |id| from the server.",
-      params = { { name = "id", type = "int", doc = "Session id" } },
+      name = "client_detach",
+      doc = "Detach client |id| from the server.",
+      params = { { name = "id", type = "int", doc = "client id" } },
     },
     {
-      name = "session_reattach",
-      doc = "Detach session |id| from the server and attach it to |server|.",
+      name = "client_reattach",
+      doc = "Detach client |id| from the server and attach it to |server|.",
       params = {
-        { name = "id",     type = "int",    doc = "Session id" },
+        { name = "id",     type = "int",    doc = "client id" },
         { name = "server", type = "string", doc = "Server to reattach to." },
       }
     },
     {
-      name = "session_set_options",
-      doc = "Update session options for the session id id |session_id|",
+      name = "client_set_options",
+      doc = "Update client options for the client id id |client_id|",
       params = {
-        { name = "session_id", type = "int",             doc = "Session id" },
-        { name = "options",    type = "session_options", doc = "The new session options." },
+        { name = "client_id", type = "int",             doc = "client id" },
+        { name = "options",    type = "client_options", doc = "The new client options." },
       },
     },
     {
@@ -881,18 +881,18 @@ return {
       returns = { type = "string", doc = "Upper case string." },
     },
     {
-      name = "session_store_value",
+      name = "runtime_store_value",
       doc =
-      "Store a named value in the current session. Session values are preserved after reloading, but lost when the session ends.",
+      "Store a named value in the current runtime. Runtime values are preserved after reloading, but lost when the server exits.",
       params = {
         { name = "name",  type = "string", doc = "The name of the stored value." },
         { name = "value", type = "any",    doc = "The value to store." },
       },
     },
     {
-      name = "session_load_value",
-      doc = "Load a value from the current session by name.",
-      params = { { name = "name", type = "string", doc = "The name of the session value." } },
+      name = "runtime_load_value",
+      doc = "Load a value from the current runtime by name.",
+      params = { { name = "name", type = "string", doc = "The name of the runtime value." } },
       returns = { type = "any", doc = "The loaded value." },
     },
     {
@@ -902,7 +902,7 @@ return {
     },
     -- {
     --   name = "disk_store_value",
-    --   doc = "Store a named value on the disk. Values saved on the disk are shared between sessions.",
+    --   doc = "Store a named value on the disk. Values saved on the disk are shared between servers.",
     --   params = {
     --     { name = "name",  type = "string", doc = "The name of the stored value." },
     --     { name = "value", type = "any",    doc = "The value to store." },

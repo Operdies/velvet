@@ -8,7 +8,7 @@ velvet \- a scriptable terminal multiplexer
 .SH DESCRIPTION
 .B Velvet
 is a fully scriptable terminal multiplexer which draws heavy inspiration from tmux and neovim.
-Like tmux, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal session.
+Like tmux, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal window.
 Like neovim, velvet supports scripting nearly all behavior through its lua API.
 
 .PP
@@ -17,7 +17,7 @@ With no arguments,
 will start a new server and attach to it.
 If a server is already running,
 .B vv
-will attach to the existing session.
+will attach to the existing server.
 .SH OPTIONS
 .TP
 .BI "\-S, \-\-socket " socket
@@ -31,7 +31,7 @@ Show usage information and exit.
 Attach to the server at the specified socket, or guess if omitted.
 .TP
 .B detach
-Detach the current terminal from the session.
+Detach the current terminal from the server.
 .TP
 .BI "lua " "[<file>|\-]"
 Evaluate
@@ -39,10 +39,10 @@ Evaluate
 or stdin on the server.
 .TP
 .B reload
-Reload the velvet session, resourcing configs
+Restart the lua VM and source configs.
 .TP
 .B quit
-Quit the velvet session, killing all windows.
+Quit the velvet server, killing all windows.
 .SH CONFIGURATION
 .B velvet
 will look for a configuration file at 
@@ -82,7 +82,7 @@ This is convenient while tinkering with your config; it is almost never necessar
 and changes are immediately visible.
 
 To selectively preserve state during reload, see
-.BR velvet-session-storage (3)
+.BR velvet-runtime-storage (3)
 .SH KEYBINDINGS
 .B Velvet
 supports mapping any key sequence to a lua function. It follows similar syntax and conventions to neovim.
@@ -199,8 +199,8 @@ to implement functionality similar to the legendary neovim plugin
 .B which-key
 by Folke.
 .TP
-.BR velvet-session-storage (3)
-.B require('velvet.session_storage') 
+.BR velvet-runtime-storage (3)
+.B require('velvet.runtime_storage') 
 .br
 Defines a friendly interface for storing named lua tables and serializes them
 when a reload event is raised.
@@ -299,5 +299,5 @@ possible is to read the default config and the stock modules:
 .BR velvet-dwm (3)
 .BR velvet-events (3)
 .BR velvet-keymap (3)
-.BR velvet-session-storage (3)
+.BR velvet-runtime-storage (3)
 .BR velvet-window (3)

@@ -1,7 +1,7 @@
 # Velvet
 
 Velvet is a fully scriptable terminal multiplexer which draws heavy inspiration from tmux and neovim.
-Like tmux, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal session.
+Like tmux, velvet "multiplexes" IO between an arbitrary number of terminal applications in a single terminal window.
 Like neovim, velvet supports scripting nearly all behavior through its lua API.
 
 Nearly all velvet behavior except the terminal emulator and process management is written in LUA, so it is possible

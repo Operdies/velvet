@@ -37,7 +37,7 @@ void velvet_window_process_output(struct velvet_window *velvet_window, struct u8
 struct velvet_render_option {
   /* unfortunately some emulators don't support repeating multi-byte characters.
    * I observed this with the stock emulator on MacOS.
-   * If we detect the host emulator of the active session is AppleTerminal, then we disable this feature.
+   * If we detect the host emulator of the active client is AppleTerminal, then we disable this feature.
    */
   bool no_repeat_multibyte_symbols;
   /* debugging option for highlighting changed regions */

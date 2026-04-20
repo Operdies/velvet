@@ -106,7 +106,7 @@ static int create_socket(char *name) {
   if (file_exists((char *)path.content)) {
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) != -1) {
       close(sockfd);
-      velvet_fatal("Session name %s is already in use.", namebuf);
+      velvet_fatal("Server name %s is already in use.", namebuf);
     }
   }
   unlink((char *)path.content);
@@ -143,13 +143,13 @@ static void vv_attach(struct velvet_args args);
 static void usage(char *arg0) {
   printf("Usage:\n  %s [<options>] [<arguments> ...] [-- [<positional arguments>]]\n\nOptions:\n"
          "  attach                       Attach to the server at <socket> if present\n"
-         "  detach                       Detach the current terminal from the session\n"
+         "  detach                       Detach the current terminal from the server\n"
          /* foreground intentionally not documented because it is exclusively a debugging feature.
          "  foreground              Start a server as a foreground process.\n"
          */
          "  lua [<file>|-] [--] [<args>] Execute <file> or input on the server. <args> will be exposed to the script in the global <arg>\n"
-         "  quit                         Quit the velvet session, killing all windows\n"
-         "  reload                       Reload the velvet session, resourcing configs\n"
+         "  quit                         Quit the velvet server, killing all windows.\n"
+         "  reload                       Restart the lua VM and source configs.\n"
          "  spawn <program> [<args>]     Spawn <program> with <args>\n"
          "  -S, --socket <name>          Specify the socket to use instead of guessing or auto-generating it\n"
          "  --version                    Print version and exit\n"
@@ -195,7 +195,7 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       if (a.foreground) velvet_fatal("foreground specified multiple times.");
       a.foreground = true;
     } else if (F(attach)) {
-      if (nested) velvet_fatal("Nesting velvet sessions is not supported.");
+      if (nested) velvet_fatal("Nesting velvet servers is not supported.");
       n_commands++;
       if (a.attach) velvet_fatal("attach specified multiple times.");
       a.attach = true;
@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
 
   if (args.attach) {
     if (getenv("VELVET")) {
-      velvet_fatal("Unable to attach; terminal is already in a velvet session.");
+      velvet_fatal("Unable to attach. This process is already attached to a velvet server.");
       return 1;
     }
     vv_attach(args);
@@ -286,7 +286,6 @@ int main(int argc, char **argv) {
     return vv_send_cmd(args);
   }
 
-  // if (getenv("VELVET")) velvet_fatal("Nesting velvet is not supported.");
   int sock_fd = create_socket(args.socket);
   args.socket = getenv("VELVET");
 
@@ -301,7 +300,7 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    /* we are starting a new session. daemonize and connect to the server. */
+    /* we are starting a new server. daemonize and connect to the server. */
     bool is_daemon = daemonize();
     if (!is_daemon) {
       /* close the socket on this side and attach to the server. */
@@ -335,7 +334,7 @@ int main(int argc, char **argv) {
 
   struct velvet velvet = {
       .scene = velvet_scene_default,
-      .sessions = vec(struct velvet_session),
+      .clients = vec(struct velvet_client),
       .coroutines = vec(struct velvet_coroutine),
       .stored_strings = vec(struct velvet_kvp),
       .socket = sock_fd,
@@ -354,11 +353,11 @@ int main(int argc, char **argv) {
 _Noreturn static void velvet_fast_shutdown(struct velvet *velvet) {
   // 1. Notify all attached clients to detach
   if (velvet->socket) {
-    struct velvet_session *session;
-    vec_foreach(session, velvet->sessions) {
-      if (session->socket) {
+    struct velvet_client *client;
+    vec_foreach(client, velvet->clients) {
+      if (client->socket) {
         uint8_t quit = 'Q';
-        write(session->socket, &quit, 1);
+        write(client->socket, &quit, 1);
       }
     }
 
@@ -403,7 +402,7 @@ static void vv_attach_update_size(int sockfd) {
   char codebuf[200];
   int n_codebuf = snprintf(codebuf,
                            sizeof(codebuf),
-                           "vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d })\n",
+                           "vv.api.client_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d })\n",
                            size.height,
                            size.width,
                            size.y_pixel,
@@ -441,7 +440,7 @@ static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int 
   char codebuf[200];
   int n_codebuf = snprintf(codebuf,
                            sizeof(codebuf),
-                           "vv.api.session_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d, "
+                           "vv.api.client_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d, "
                            "supports_repeating_multibyte_characters = %s })\n",
                            size.height,
                            size.width,
@@ -475,14 +474,14 @@ static int vv_connect(char *vv_socket) {
     if (vv_socket[0] == '/') {
       snprintf(addr.sun_path, LENGTH(addr.sun_path), "%s", vv_socket);
     } else {
-      /* otherwise assume it refers to a named session */
+      /* otherwise assume it refers to a named server */
       string_push_format_slow(&socket_path, "/%s", vv_socket);
       snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s",
                (int)socket_path.len, (char *)socket_path.content);
     }
     if (!file_is_socket(addr.sun_path)) {
       terminal_reset();
-      fprintf(stderr, "No session named '%s'.\n", vv_socket);
+      fprintf(stderr, "No server named '%s'.\n", vv_socket);
       exit(1);
     }
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
@@ -495,8 +494,8 @@ static int vv_connect(char *vv_socket) {
     DIR *dir = opendir((char *)socket_path.content);
     if (!dir) {
       if (errno == ENOENT)
-        velvet_fatal("no sessions");
-      velvet_fatal("Unable to enumerate sessions:");
+        velvet_fatal("no servers");
+      velvet_fatal("Unable to enumerate servers:");
     }
 
     struct dirent *entry;
@@ -528,7 +527,7 @@ static int vv_connect(char *vv_socket) {
     closedir(dir);
   }
   string_destroy(&socket_path);
-  if (!connected) velvet_fatal("No sessions");
+  if (!connected) velvet_fatal("No servers");
   return sockfd;
 }
 

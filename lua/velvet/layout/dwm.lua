@@ -47,8 +47,8 @@ local monocle = false
 -- |state| is automatically saved and reloaded when user config is reloaded.
 -- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
 -- And also because the restore logic cannot handle table keys.
-local session_options = require('velvet.session_storage').create('velvet.dwm')
-session_options.state = session_options.state or {
+local storage = require('velvet.runtime_storage').create('velvet.dwm')
+storage.state = storage.state or {
   --- @type table<integer, boolean[]>
   tags = {},
   --- @type table<integer, dwm.layer>
@@ -66,7 +66,7 @@ session_options.state = session_options.state or {
   --- @type integer[]
   windows = {}
 }
-local state = session_options.state
+local state = storage.state
 
 --- @param win velvet.window
 --- @param to velvet.api.rect

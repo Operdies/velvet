@@ -14,7 +14,7 @@ w:set_alpha(0.9)
 local arrow = " ➤ "
 
 local shown = false
-e.session_on_key = function(args)
+e.on_key = function(args)
   -- create a new event listener to close the window on *any* keypress.
   -- This is done to handle the case where focus is changed with the mouse
   -- and then typing.
@@ -26,7 +26,7 @@ e.session_on_key = function(args)
       vv.api.window_set_scroll_offset(w.id, vv.api.window_get_scroll_offset(w.id) + -1)
     else
       -- schedule: inhibit the key event which closed the window.
-      -- This is needed because session_on_key is more low level than window_on_key,
+      -- This is needed because on_key is more low level than window_on_key,
       -- so it may not have been routed to the help window yet. By scheduling the hide() call,
       -- we ensure it is swallowed only if the help window would be the target.
       vv.api.schedule_after(0, M.hide)

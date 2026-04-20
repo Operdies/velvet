@@ -76,15 +76,15 @@ local function show(duration)
   visible = true
 end
 
-local session = require('velvet.session_storage').create("velvet.quake_state")
+local runtime = require('velvet.runtime_storage').create("velvet.quake_state")
 vv.async.run(function()
   vv.async.wait('pre_reload')
   if quake and quake:valid() then
     -- hack: set the window as its own parent so dwm will not try to manage it.
-    -- Once the session is reloaded, quakeHost will adopt it again
+    -- Once the runtime is reloaded, quakeHost will adopt it again
     vv.api.window_set_parent(quake.id, quake.id);
-    session.quake = quake.id
-    session.visible = visible
+    runtime.quake = quake.id
+    runtime.visible = visible
   end
 end)
 
@@ -129,9 +129,9 @@ local function toggle()
   if visible then hide() else show() end
 end
 
-if session.quake and vv.api.window_is_valid(session.quake) then
-  visible = session.visible
-  create_quake(window.from_handle(session.quake))
+if runtime.quake and vv.api.window_is_valid(runtime.quake) then
+  visible = runtime.visible
+  create_quake(window.from_handle(runtime.quake))
   quakeHost:set_geometry(quake:get_geometry())
   if visible then show(0) else hide(0) end
 end

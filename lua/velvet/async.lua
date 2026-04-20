@@ -17,7 +17,7 @@ local deferring = {}
 local sequence = 1
 
 local known_events = {
-  [ [[session.on_key]] ] = [[Raised when a key is pressed.]],
+  [ [[on_key]] ] = [[Raised when a key is pressed.]],
   [ [[window.created]] ] = [[Raised after a new window is created.]],
   [ [[window.closed]] ] = [[Raised after a window is closed.]],
   [ [[window.output]] ] = [[Raised when a window produces output.]],
@@ -159,7 +159,7 @@ end
 e['**'] = resolve
 
 --- @alias velvet.async.event
----| 'session.on_key' Raised when a key is pressed.
+---| 'on_key' Raised when a key is pressed.
 ---| 'window.created' Raised after a new window is created.
 ---| 'window.closed' Raised after a window is closed.
 ---| 'window.output' Raised when a window produces output.
@@ -267,12 +267,12 @@ function M.stream(...)
 end
 
 
---- Wait for session.on_key
+--- Wait for on_key
 --- @param timeout? integer Optional timeout.
---- @param when? fun(event: string, data: velvet.api.session.key.event_args): boolean predicate function
---- @return velvet.api.session.key.event_args ret Result, or nil on timeout.
-function M.wait_for_session_on_key(timeout, when)
-  local event = 'session.on_key'
+--- @param when? fun(event: string, data: velvet.api.on_key.event_args): boolean predicate function
+--- @return velvet.api.on_key.event_args ret Result, or nil on timeout.
+function M.wait_for_on_key(timeout, when)
+  local event = 'on_key'
   local registration = when and { event = event, when = when } or event
   local _, result = M.wait(registration, timeout)
   return result.data

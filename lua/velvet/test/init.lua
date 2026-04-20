@@ -1,6 +1,6 @@
 local tests = {
   'velvet.test.test_deep_extend',
-  'velvet.test.test_session_storage',
+  'velvet.test.test_runtime_storage',
 }
 
 local function run()

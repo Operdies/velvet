@@ -322,14 +322,14 @@ static void raise_key_event(struct velvet *v, struct velvet_key_event e) {
     name.len = codepoint_to_utf8(e.key.alternate_codepoint ? e.key.alternate_codepoint : e.key.codepoint, buf);
     name.content = buf;
   }
-  struct velvet_api_session_key_event_args event_args = {
+  struct velvet_api_on_key_event_args event_args = {
       .key = {.codepoint = e.key.codepoint,
               .alternate_codepoint = e.key.alternate_codepoint,
               .event_type = e.type,
               .modifiers = e.modifiers,
               .name = name}
   };
-  velvet_api_raise_session_on_key(v, event_args);
+  velvet_api_raise_on_key(v, event_args);
 }
 
 // this is supposed to emulate VIM-like behavior

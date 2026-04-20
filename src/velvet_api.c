@@ -216,18 +216,18 @@ void vv_api_window_write(struct velvet *v, lua_Integer win_id, struct u8_slice t
   if (window_visible(v, w)) velvet_invalidate_render(v, "write to window");
 }
 
-void vv_api_session_detach(struct velvet *v, lua_Integer session_id) {
-  struct velvet_session *s;
-  vec_find(s, v->sessions, s->socket == session_id);
-  if (!s) lua_bail(v, "No session exists with socket id %I", session_id);
-  velvet_detach_session(v, s, NULL);
+void vv_api_client_detach(struct velvet *v, lua_Integer client_id) {
+  struct velvet_client *s;
+  vec_find(s, v->clients, s->socket == client_id);
+  if (!s) lua_bail(v, "No client exists with socket id %I", client_id);
+  velvet_detach_client(v, s, NULL);
 }
 
-void vv_api_session_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
-  struct velvet_session *s;
-  vec_find(s, v->sessions, s->socket == id);
-  if (!s) lua_bail(v, "No session exists with socket id %I", id);
-  velvet_detach_session(v, s, (char*)server.content);
+void vv_api_client_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
+  struct velvet_client *s;
+  vec_find(s, v->clients, s->socket == id);
+  if (!s) lua_bail(v, "No client exists with socket id %I", id);
+  velvet_detach_client(v, s, (char*)server.content);
 }
 
 void vv_api_window_close(struct velvet *v, lua_Integer winid) {
@@ -456,12 +456,12 @@ void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, struct u8_sli
   string_push_slice(&w->title, title);
 }
 
-lua_stackRetCount vv_api_get_sessions(lua_State *L) {
+lua_stackRetCount vv_api_get_clients(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   lua_newtable(L);
   lua_Integer index = 1;
-  struct velvet_session *s;
-  vec_where(s, v->sessions, s->socket && s->output) {
+  struct velvet_client *s;
+  vec_where(s, v->clients, s->socket && s->output) {
     if (s->socket) {
       lua_pushinteger(L, s->socket);
       lua_seti(L, -2, index++);
@@ -470,15 +470,15 @@ lua_stackRetCount vv_api_get_sessions(lua_State *L) {
   return 1;
 }
 
-void vv_api_set_active_session(struct velvet *v, lua_Integer session_id) {
-  struct velvet_session *s;
-  vec_find(s, v->sessions, s->socket == session_id);
-  if (s == NULL || !s->output) lua_bail(v, "Session %I is not a valid session.", session_id);
-  velvet_set_focused_session(v, session_id);
+void vv_api_set_active_client(struct velvet *v, lua_Integer client_id) {
+  struct velvet_client *s;
+  vec_find(s, v->clients, s->socket == client_id);
+  if (s == NULL || !s->output) lua_bail(v, "client %I is not a valid client.", client_id);
+  velvet_set_focused_client(v, client_id);
 }
 
-lua_Integer vv_api_get_active_session(struct velvet *v) {
-  struct velvet_session *s = velvet_get_focused_session(v);
+lua_Integer vv_api_get_active_client(struct velvet *v) {
+  struct velvet_client *s = velvet_get_focused_client(v);
   if (s) return s->socket;
   return 0;
 }
@@ -766,12 +766,12 @@ struct u8_slice vv_api_get_startup_directory(struct velvet *v) {
   return u8_slice_from_cstr(v->startup_directory);
 }
 
-void vv_api_session_set_options(struct velvet *v, lua_Integer session_id, struct velvet_api_session_options options) {
-  struct velvet_session *s;
+void vv_api_client_set_options(struct velvet *v, lua_Integer client_id, struct velvet_api_client_options options) {
+  struct velvet_client *s;
   /* bit of a hack because clients don't really have a way of knowing their own id */
-  if (session_id == 0) session_id = v->socket_cmd_sender;
-  vec_find(s, v->sessions, s->socket == session_id);
-  if (s == NULL) lua_bail(v, "Session %I is not a valid session.", session_id);
+  if (client_id == 0) client_id = v->socket_cmd_sender;
+  vec_find(s, v->clients, s->socket == client_id);
+  if (s == NULL) lua_bail(v, "client %I is not a valid client.", client_id);
   s->ws.height = options.lines;
   s->ws.width = options.columns;
   s->ws.x_pixel = options.x_pixel;
@@ -1166,9 +1166,7 @@ static void velvet_store_string(struct velvet *v, struct u8_slice key, struct u8
   string_push_slice(&it->value, value);
 }
 
-/* Store a named value in the current session. Session values are preserved after reloading, but lost when the session
- * ends. */
-lua_stackRetCount vv_api_session_store_value(lua_State *L, struct u8_slice name, lua_stackIndex value) {
+lua_stackRetCount vv_api_runtime_store_value(lua_State *L, struct u8_slice name, lua_stackIndex value) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct emit_context ctx = {.recursion_guard = vec(void *)};
   string_push_cstr(&ctx.output, "return ");
@@ -1182,14 +1180,13 @@ lua_stackRetCount vv_api_session_store_value(lua_State *L, struct u8_slice name,
   return 0;
 }
 
-/* Load a value from the current session by name. */
-lua_stackRetCount vv_api_session_load_value(lua_State *L, struct u8_slice name) {
+lua_stackRetCount vv_api_runtime_load_value(lua_State *L, struct u8_slice name) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_kvp *it = NULL;
   vec_find(it, v->stored_strings, u8_slice_equals(name, string_as_u8_slice(it->key)));
   if (it == NULL) return 0;
   string_ensure_null_terminated(&it->value);
-  if (luaL_loadbuffer(L, (char *)it->value.content, it->value.len, "@velvet.session_load") != LUA_OK) {
+  if (luaL_loadbuffer(L, (char *)it->value.content, it->value.len, "@velvet.runtime_load") != LUA_OK) {
     lua_error(L);
   }
   lua_call(L, 0, 1);
@@ -1203,10 +1200,10 @@ void vv_api_clipboard_set(struct velvet *v, struct u8_slice text) {
   string_push_cstr(&osc_buffer, "\x1b]52;c;");
   u8_slice_encode_base64(text, &osc_buffer);
   string_push_char(&osc_buffer, '\a');
-  /* in almost all cases there will be just 1 session, but let's just push to all
+  /* in almost all cases there will be just 1 client, but let's just push to all
     * and hope one of them handles OSC 52 */
-  struct velvet_session *s;
-  vec_where(s, v->sessions, s->input && s->output) {
+  struct velvet_client *s;
+  vec_where(s, v->clients, s->input && s->output) {
     string_push_string(&s->pending_output, osc_buffer);
   }
   string_destroy(&osc_buffer);
