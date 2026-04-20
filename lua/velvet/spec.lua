@@ -900,6 +900,17 @@ return {
       doc = "Enable damage tracking when the screen is updated. (debugging feature)",
       params = { { name = "mode", type = "bool", doc = "Damage display mode" } },
     },
+    --- server {{{1
+    {
+      name = "get_servernames",
+      doc = "Get the names of all running velvet servers.",
+      returns = { type = "string[]", doc = "List of server names." },
+    },
+    {
+      name = "get_servername",
+      doc = "Get the name of this server.",
+      returns = { type = "string", doc = "The name of this server." },
+    },
     -- {
     --   name = "disk_store_value",
     --   doc = "Store a named value on the disk. Values saved on the disk are shared between servers.",

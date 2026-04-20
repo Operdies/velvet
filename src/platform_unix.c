@@ -143,6 +143,18 @@ void terminal_reset(void) {
   tcflush(STDIN_FILENO, TCIFLUSH); // equivalent to ioctl(STDIN_FILENO, TCFLSH, TCIFLUSH);
 }
 
+void terminal_light_reset(void) {
+  if (terminfo_initialized) {
+    /* disable_raw_mode() restores the original terminfo before attaching. Disabling this ensures
+     * the new attachee can restore the original terminfo. */
+    disable_raw_mode();
+    /* disable_kitty_keyboard() actually pops 1 element off the kitty stack, which attaching pushes again */
+    disable_kitty_keyboard();
+    if (reset_callback) reset_callback();
+  }
+  terminfo_initialized = false;
+}
+
 void set_nonblocking(int fd) {
   int flags = fcntl(fd, F_GETFL);
   if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {

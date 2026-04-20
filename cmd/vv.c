@@ -6,6 +6,7 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include "platform.h"
@@ -123,7 +124,10 @@ static int create_socket(char *name) {
     velvet_fatal("listen:");
   }
 
-  setenv("VELVET", addr.sun_path, true);
+  char buf[sizeof(addr.sun_path)];
+  snprintf(buf, sizeof(buf), "%s", addr.sun_path);
+  char *lastslash = strrchr(buf, '/');
+  setenv("VELVET", lastslash + 1, true);
   return sockfd;
 }
 
@@ -367,7 +371,10 @@ _Noreturn static void velvet_fast_shutdown(struct velvet *velvet) {
   // 2. Remove socket file from filesystem
   char *sockpath = getenv("VELVET");
   if (sockpath) {
-    unlink(sockpath);
+    struct string pathbuf = {0};
+    string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", sockpath);
+    string_ensure_null_terminated(&pathbuf);
+    unlink((char*)pathbuf.content);
   }
 
   // 3. Notify child processes
@@ -460,6 +467,7 @@ static int vv_connect(char *vv_socket) {
   bool connected = false;
   // Create the client socket
   sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+  set_cloexec(sockfd);
   if (sockfd == -1) {
     velvet_fatal("socket:");
   }
@@ -755,7 +763,7 @@ static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
      * but it's guaranteed to be large enough and we are about to exec(). */
     char *socket = (char*)str.content;
     socket[str.len] = 0;
-    terminal_reset();
+    terminal_light_reset();
     unsetenv("VELVET");
     execlp(main_argv[0], main_argv[0], "attach", "-S", socket + 1, NULL);
     velvet_die("execl:");
@@ -804,9 +812,15 @@ static void ensure_streams_blocking(void) {
   }
 }
 
+static void pipe_cloexec(int fds[2]) {
+  if (pipe(fds) < 0) velvet_die("pipe:");
+  set_cloexec(fds[0]);
+  set_cloexec(fds[1]);
+}
+
 static void vv_attach(struct velvet_args args) {
   int signal_pipes[2];
-  if (pipe(signal_pipes) < 0) velvet_die("pipe:");
+  pipe_cloexec(signal_pipes);
   signal_write = signal_pipes[1];
   int signal_read = signal_pipes[0];
 
@@ -827,7 +841,7 @@ static void vv_attach(struct velvet_args args) {
   int sockfd = vv_connect(args.socket);
 
   int output_pipe[2];
-  if (pipe(output_pipe) < 0) velvet_fatal("pipe:");
+  pipe_cloexec(output_pipe);
   vv_attach_handshake(sockfd, ws, STDIN_FILENO, output_pipe[1]);
 
   struct io io = io_default;

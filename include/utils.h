@@ -16,6 +16,8 @@ void *velvet_calloc(size_t nmemb, size_t size) __attribute__((malloc, alloc_size
 void *velvet_erealloc(void *array, size_t nmemb, size_t size) __attribute__((alloc_size(2, 3)));
 void terminal_setup(void (*reset)(void));
 void terminal_reset(void);
+/* reset just the required options to reattach a session without flickering */
+void terminal_light_reset(void);
 void set_nonblocking(int fd);
 void set_cloexec(int fd);
 
