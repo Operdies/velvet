@@ -345,7 +345,7 @@ lua_stackRetCount vv_api_window_get_text(lua_State *L, lua_Integer win_id, struc
         lua_setfield(L, -2, "truncated");
       } else {
         /* if this cell is wide, increment col to skip the next 0-width cell. */
-        string_push_codepoint(&scratch, c->cp.value);
+        string_push_codepoint(&scratch, c->cp.value ? c->cp.value : ' ');
         if (c->cp.is_wide) col++;
       }
     }
