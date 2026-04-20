@@ -170,9 +170,7 @@ end
 --- @param id integer
 local function set_focus(id)
   local win = window.from_handle(id)
-  if ignore_window(vv.api.get_focused_window()) then return end
-  if win == nil then return end
-  if win == taskbar.id then return end
+  if win == nil or ignore_window(vv.api.get_focused_window()) or id == taskbar.id then return end
   local current_index = table_index(state.focus_order, win.id)
   if current_index ~= nil then table.remove(state.focus_order, current_index) end
   table.insert(state.focus_order, win.id)
@@ -197,10 +195,7 @@ local function ensure_focus_visible()
   for i = #state.focus_order, 1, -1 do
     local id = state.focus_order[i]
     if visibleontags(id) then
-      local win = window.from_handle(id)
-      win:focus()
-      local rem = table.remove(state.focus_order, i)
-      table.insert(state.focus_order, rem)
+      set_focus(id)
       return
     end
   end
