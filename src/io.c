@@ -153,7 +153,7 @@ ssize_t io_write_format_slow(int fd, char *fmt, ...) {
   return written;
 }
 
-static int get_schedule_id() {
+static int get_schedule_id(void) {
   static uint64_t token = 123;
   return token++;
 }

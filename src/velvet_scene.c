@@ -55,7 +55,7 @@ void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_fo
   }
 }
 
-static int next_id() {
+static int next_id(void) {
   static int id = 1000;
   return id++;
 }
@@ -1168,7 +1168,7 @@ bool velvet_window_resize(struct velvet_window *win, struct rect geom, struct ve
   return resized || moved;
 }
 
-static void restore_signals() {
+static void restore_signals(void) {
   /* restore default handlers for a couple of terminating signals.
    * This is needed because their signal handlers would otherwise
    * deliver signals to the parent process via a pipe until exec() is called.

@@ -19,7 +19,7 @@ bool get_cwd_from_pty(int pty, char *buffer, int len) {
 }
 
 bool _NSGetExecutablePath(char *, uint32_t*);
-char *platform_get_exe_path() {
+char *platform_get_exe_path(void) {
   char *buf1 = calloc(PATH_MAX + 1, 1);
   char *buf2 = calloc(PATH_MAX + 1, 1);
   uint32_t sz = PATH_MAX;

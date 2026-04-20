@@ -530,8 +530,8 @@ static int vv_connect(char *vv_socket) {
   return sockfd;
 }
 
-static void restore_streams();
-static void ensure_streams_blocking();
+static void restore_streams(void);
+static void ensure_streams_blocking(void);
 
 struct velvet_lua_payload_context {
   bool quit;
@@ -769,13 +769,13 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
 static int stdin_flags = 0;
 static int stdout_flags = 0;
 static int stderr_flags = 0;
-static void restore_streams() {
+static void restore_streams(void) {
   fcntl(STDIN_FILENO, F_SETFL, stdin_flags);
   fcntl(STDOUT_FILENO, F_SETFL, stdout_flags);
   fcntl(STDERR_FILENO, F_SETFL, stderr_flags);
 }
 
-static void ensure_streams_blocking() {
+static void ensure_streams_blocking(void) {
   stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
   if (stdin_flags == -1 || fcntl(STDIN_FILENO, F_SETFL, stdin_flags & ~O_NONBLOCK) == -1) {
     velvet_die("fcntl:");
