@@ -306,6 +306,10 @@ return {
       fields = { { name = "win_id", type = "int", doc = "The id of the window that received output." } }
     },
     {
+      name = "window.bell.event_args",
+      fields = { { name = "win_id", type = "int", doc = "The id of the window that sent BEL." } }
+    },
+    {
       name = "window.moved.event_args",
       fields = {
         { name = "win_id",   type = "int",             doc = "The id of the resized window." },
@@ -442,6 +446,7 @@ return {
     { name = "window.created",       doc = "Raised after a new window is created.",        args = "window.created.event_args" },
     { name = "window.closed",        doc = "Raised after a window is closed.",             args = "window.closed.event_args" },
     { name = "window.output",        doc = "Raised when a window produces output.",        args = "window.output.event_args" },
+    { name = "window.bell",          doc = "Raised when a window sends BEL.",              args = "window.bell.event_args" },
     { name = "window.moved",         doc = "Raised after a window is moved.",              args = "window.moved.event_args" },
     { name = "window.resized",       doc = "Raised after a window is resized.",            args = "window.resized.event_args" },
     { name = "window.on_key",        doc = "Raised when a key is sent to a lua window.",   args = "window.on_key.event_args" },

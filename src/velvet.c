@@ -439,12 +439,17 @@ static bool velvet_align_and_arrange(struct velvet *v, struct velvet_session *fo
   return resized;
 }
 
-static void velvet_raise_window_output_events(struct velvet *v) {
+static void velvet_raise_window_events(struct velvet *v) {
   struct velvet_window *win;
   vec_where(win, v->scene.windows, win->had_output) {
     win->had_output = false;
     struct velvet_api_window_output_event_args event_args = {.win_id = win->id};
     velvet_api_raise_window_output(v, event_args);
+  }
+  vec_where(win, v->scene.windows, win->emulator.bell) {
+    win->emulator.bell = false;
+    struct velvet_api_window_bell_event_args event_args = {.win_id = win->id};
+    velvet_api_raise_window_bell(v, event_args);
   }
 }
 
@@ -462,7 +467,7 @@ static void velvet_dispatch_frame(void *data) {
                                              : u8_slice_from_cstr("io_busy")
     };
     velvet_api_raise_pre_render(v, event_args);
-    velvet_raise_window_output_events(v);
+    velvet_raise_window_events(v);
     velvet_scene_render_damage(&v->scene, velvet_render, v);
   }
 
@@ -578,7 +583,7 @@ static void velvet_dispatch(struct velvet *velvet) {
 
   // Dispatch all pending io
   io_dispatch(loop);
-  velvet_raise_window_output_events(velvet);
+  velvet_raise_window_events(velvet);
 }
 
 void velvet_loop(struct velvet *velvet) {

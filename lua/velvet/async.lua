@@ -21,6 +21,7 @@ local known_events = {
   [ [[window.created]] ] = [[Raised after a new window is created.]],
   [ [[window.closed]] ] = [[Raised after a window is closed.]],
   [ [[window.output]] ] = [[Raised when a window produces output.]],
+  [ [[window.bell]] ] = [[Raised when a window sends BEL.]],
   [ [[window.moved]] ] = [[Raised after a window is moved.]],
   [ [[window.resized]] ] = [[Raised after a window is resized.]],
   [ [[window.on_key]] ] = [[Raised when a key is sent to a lua window.]],
@@ -162,6 +163,7 @@ e['**'] = resolve
 ---| 'window.created' Raised after a new window is created.
 ---| 'window.closed' Raised after a window is closed.
 ---| 'window.output' Raised when a window produces output.
+---| 'window.bell' Raised when a window sends BEL.
 ---| 'window.moved' Raised after a window is moved.
 ---| 'window.resized' Raised after a window is resized.
 ---| 'window.on_key' Raised when a key is sent to a lua window.
@@ -304,6 +306,17 @@ end
 --- @return velvet.api.window.output.event_args ret Result, or nil on timeout.
 function M.wait_for_window_output(timeout, when)
   local event = 'window.output'
+  local registration = when and { event = event, when = when } or event
+  local _, result = M.wait(registration, timeout)
+  return result.data
+end
+
+--- Wait for window.bell
+--- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.window.bell.event_args): boolean predicate function
+--- @return velvet.api.window.bell.event_args ret Result, or nil on timeout.
+function M.wait_for_window_bell(timeout, when)
+  local event = 'window.bell'
   local registration = when and { event = event, when = when } or event
   local _, result = M.wait(registration, timeout)
   return result.data

@@ -133,6 +133,9 @@ local api = {}
 --- @class velvet.api.window.output.event_args
 --- @field win_id integer The id of the window that received output.
 
+--- @class velvet.api.window.bell.event_args
+--- @field win_id integer The id of the window that sent BEL.
+
 --- @class velvet.api.window.moved.event_args
 --- @field win_id integer The id of the resized window.
 --- @field old_size velvet.api.rect The old geometry of |id|.
@@ -563,6 +566,7 @@ function api.set_fps_target(new_value) end
 --- @field window_created? fun(event_args: velvet.api.window.created.event_args): nil Raised after a new window is created.
 --- @field window_closed? fun(event_args: velvet.api.window.closed.event_args): nil Raised after a window is closed.
 --- @field window_output? fun(event_args: velvet.api.window.output.event_args): nil Raised when a window produces output.
+--- @field window_bell? fun(event_args: velvet.api.window.bell.event_args): nil Raised when a window sends BEL.
 --- @field window_moved? fun(event_args: velvet.api.window.moved.event_args): nil Raised after a window is moved.
 --- @field window_resized? fun(event_args: velvet.api.window.resized.event_args): nil Raised after a window is resized.
 --- @field window_on_key? fun(event_args: velvet.api.window.on_key.event_args): nil Raised when a key is sent to a lua window.
