@@ -4,6 +4,11 @@ local pick = {}
 --- @class pick.item
 --- @field text string
 
+--- @class pick.freetext : pick.item
+--- @field enabled boolean if true, the user can submit text by typing in the filter
+--- @field text string the result, available in the on_choice() callback
+--- @field prefix string prefix to show in the selection window
+
 --- @class pick.mapping
 --- @field keys string
 --- @field action fun(pick.item) function
@@ -11,11 +16,13 @@ local pick = {}
 
 --- @class pick.options
 --- @field prompt? string
+--- @field freetext? pick.freetext
 --- @field on_choice fun(pick.item): nil
 --- @field on_preview? fun(pick.item): nil
 --- @field on_cancel? fun(): nil
 --- @field mappings? pick.mapping[]
 --- @field initial_selection? integer initial selection
+
 
 --- @type velvet.window | nil
 local picker = nil
@@ -66,6 +73,7 @@ function pick.select(items, opts)
     picker:set_cursor(1, 1)
     picker:clear_background_color()
     picker:clear()
+    local show_freetext = opts.freetext and opts.freetext.enabled
     for _, item in ipairs(current_items) do
       local display = item.text
       local case_sensitive = filter:lower() ~= filter
@@ -73,7 +81,14 @@ function pick.select(items, opts)
       if search:find(filter, 1, true) then
         if #display > width then width = #display end
         snapshot[#snapshot + 1] = item
+        -- don't show the freetext option if the list has an exact match
+        show_freetext = show_freetext and item.text ~= filter
       end
+    end
+
+    if show_freetext == true and filter and #filter > 0 then
+      opts.freetext.text = filter
+      snapshot[#snapshot+1] = opts.freetext
     end
 
     height = #snapshot
@@ -89,7 +104,7 @@ function pick.select(items, opts)
         picker:set_foreground_color('blue')
       end
       picker:set_cursor(1, idx)
-      picker:draw(("\x1b[K%s"):format(snapshot[idx].text))
+      picker:draw(("\x1b[K%s%s"):format(snapshot[idx].prefix or '', snapshot[idx].text))
     end
 
     if opts.on_preview then
@@ -115,8 +130,6 @@ function pick.select(items, opts)
     dispose()
     if index > 0 and index <= #snapshot then
       opts.on_choice(snapshot[index])
-    else
-      opts.on_choice({ text = filter })
     end
   end
 
