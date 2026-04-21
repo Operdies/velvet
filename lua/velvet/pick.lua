@@ -204,8 +204,8 @@ function pick.select(items, opts)
   end)
 
   picker:on_focus_changed(function (_, args)
-    if args.new ~= picker then
-      dispose(true)
+    if picker:valid() and args.new ~= picker and picker:get_visibility() then
+      vv.api.schedule_after(0, function() picker:focus() end)
     end
   end)
 
