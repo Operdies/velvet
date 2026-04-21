@@ -11,6 +11,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 _Noreturn static void lua_bail(struct velvet *v, char *fmt, ...) {
   va_list ap;
@@ -225,26 +227,22 @@ void vv_api_client_detach(struct velvet *v, lua_Integer client_id) {
   velvet_detach_client(v, s, NULL);
 }
 
-static bool file_is_socket(const char *path) {
-  struct stat st;
-  return stat(path, &st) == 0 && S_ISSOCK(st.st_mode);
-}
-
+#define SOCKET_PATH_MAX (int)((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
 static struct string pathbuf = {0};
-static bool check_server(struct u8_slice server) {
+static void check_server(struct velvet *v, struct u8_slice server) {
   string_clear(&pathbuf);
   string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", (char*)server.content);
   string_ensure_null_terminated(&pathbuf);
-  bool good = file_is_socket((char*)pathbuf.content);
+  if (strchr((char*)server.content, '/')) lua_bail(v, "Socket name must not contain '/'");
+  if (pathbuf.len > SOCKET_PATH_MAX) lua_bail(v, "Socket name too long.");
   string_destroy(&pathbuf);
-  return good;
 }
 
 void vv_api_client_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
   struct velvet_client *s;
   vec_find(s, v->clients, s->socket == id);
   if (!s) lua_bail(v, "No client exists with socket id %I", id);
-  if (!check_server(server)) lua_bail(v, "Server '%s' does not exist.", server.content);
+  check_server(v, server);
   velvet_detach_client(v, s, (char*)server.content);
 }
 

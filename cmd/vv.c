@@ -763,9 +763,20 @@ static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
      * but it's guaranteed to be large enough and we are about to exec(). */
     char *socket = (char*)str.content;
     socket[str.len] = 0;
+
+    struct string pathbuf = {0};
+    string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", socket + 1);
+    string_ensure_null_terminated(&pathbuf);
+
     terminal_light_reset();
     unsetenv("VELVET");
-    execlp(main_argv[0], main_argv[0], "attach", "-S", socket + 1, NULL);
+
+    if (file_is_socket((char*)pathbuf.content)) {
+      execlp(main_argv[0], main_argv[0], "attach", "-S", socket + 1, NULL);
+    } else {
+      execlp(main_argv[0], main_argv[0], "-S", socket + 1, NULL);
+    }
+
     velvet_die("execl:");
     /* reattach */
   }

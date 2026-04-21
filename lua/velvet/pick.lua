@@ -115,6 +115,8 @@ function pick.select(items, opts)
     dispose()
     if index > 0 and index <= #snapshot then
       opts.on_choice(snapshot[index])
+    else
+      opts.on_choice({ text = filter })
     end
   end
 
