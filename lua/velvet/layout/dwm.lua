@@ -249,6 +249,7 @@ local function status_update()
   taskbar:clear()
   taskbar:set_foreground_color('black')
   taskbar:set_cursor(tag_start, 1)
+  taskbar:draw('\x1b[1m')
 
   local on_click = {}
 
@@ -282,16 +283,22 @@ local function status_update()
     transient_start = c2.col
   end
 
+  local servername = vv.api.get_servername():upper()
+  local offset = #servername + 2
+  local lcol = taskbar:get_geometry().width - offset
+  taskbar:set_cursor(lcol, 1)
+  taskbar:set_background_color('red')
+  taskbar:set_foreground_color('black')
+  taskbar:draw(' ' .. servername .. ' ')
+
   if chain and #chain > 0 then 
-    local offset = math.max(15, #chain + 2)
-    local lcol = taskbar:get_geometry().width - offset
+    offset = offset + (#chain + 2)
+    lcol = taskbar:get_geometry().width - offset
     taskbar:set_cursor(lcol, 1)
-    taskbar:clear_background_color()
     taskbar:set_background_color(vv.options.theme.background)
     taskbar:set_foreground_color('white')
     taskbar:draw(' ' .. chain .. ' ')
   end
-
 
   --- @param args velvet.api.mouse.move.event_args|velvet.api.mouse.click.event_args
   local function view_mouse_hit(_, args)
