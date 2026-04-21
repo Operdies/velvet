@@ -469,6 +469,16 @@ local function cancel_chain(args)
   end
 end
 
+--- @param key velvet.api.window.key_event
+--- @return string,string|nil chord_string string representation of |key|, and an optional alternative representation if the key is shifted.
+local function key_event_to_string(key)
+  local chord = clean_chord(chord_from_key_event(key))
+  local chord_key, alt_key = chord_to_string(chord)
+  return chord_key, alt_key
+end
+
+keys.key_event_to_string = key_event_to_string
+
 --- @param args velvet.api.on_key.event_args
 function keymap.on_key(args)
   args.key = maybe_remap(args.key)
@@ -485,8 +495,7 @@ function keymap.on_key(args)
   -- cancel pending unwind on key
   if unwind_schedule then vv.api.schedule_cancel(unwind_schedule) end
 
-  local chord = clean_chord(chord_from_key_event(args.key))
-  local chord_key, alt_key = chord_to_string(chord)
+  local chord_key, alt_key = keys.key_event_to_string(args.key)
 
   local now = vv.api.get_current_tick()
 

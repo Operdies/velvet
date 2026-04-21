@@ -133,6 +133,22 @@ function pick.select(items, opts)
     end
   end
 
+  local function check_mappings(key)
+    local repr = require('velvet.keymap').key_event_to_string(key)
+    repr = vv.api.string_lower(repr)
+    for _, m in ipairs(opts.mappings or {}) do
+      if type(m.keys) == 'string' then
+        if vv.api.string_lower(m.keys) == repr then
+          local selection = index > 0 and index <= #snapshot and snapshot[index] or nil
+          local ok, err = xpcall(m.action, debug.traceback, selection)
+          if not ok then printerr("Unhandled error in pick mapping: " .. err) end
+          return true
+        end
+      end
+    end
+    return false
+  end
+
   --- @param args velvet.api.window.on_key.event_args
   picker:on_window_on_key(function(_, args)
     local cp = args.key.alternate_codepoint > 0 and args.key.alternate_codepoint or args.key.codepoint
@@ -140,11 +156,12 @@ function pick.select(items, opts)
     local m = args.key.modifiers
     local vk = args.key.name
     if evt == 'press' or evt == 'repeat' then
-      if vk == 'ESCAPE' or (vk == 'c' and m.control) then
+      if check_mappings(args.key) then
+        -- pass
+      elseif vk == 'ESCAPE' or (vk == 'c' and m.control) then
         dispose()
         return
-      end
-      if vk == 'DOWN' or (vk == 'n' and m.control) then
+      elseif vk == 'DOWN' or (vk == 'n' and m.control) then
         index = 1 + (index % #snapshot)
       elseif vk == 'UP' or (vk == 'p' and m.control) then
         index = index - 1
