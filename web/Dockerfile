@@ -17,4 +17,4 @@ ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 ENV MANPAGER='nvim +Man! -'
 USER demo
-ENTRYPOINT ["/bin/sh", "-c", "cp -r /etc/skel/. /home/demo && { while true; do /home/demo/velvet/release/vv; done }"]
+ENTRYPOINT ["/bin/sh", "-c", "cp -r /etc/skel/. /home/demo && { while true; do /home/demo/velvet/release/vv -S demo; done }"]
