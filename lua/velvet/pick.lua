@@ -6,7 +6,7 @@ local pick = {}
 
 --- @class pick.freetext : pick.item
 --- @field enabled boolean if true, the user can submit text by typing in the filter
---- @field text string the result, available in the on_choice() callback
+--- @field text? string the result, available in the on_choice() callback
 --- @field prefix string prefix to show in the selection window
 
 --- @class pick.mapping
@@ -30,9 +30,12 @@ local picker = nil
 --- @type pick.item[]
 local current_items = {}
 
+local update = function() end
+
 --- @param items pick.item[]
 function pick.update_items(items)
   current_items = items
+  update()
 end
 
 --- Create a new picker with |opts|
@@ -115,9 +118,11 @@ function pick.select(items, opts)
       prev_selection = item
     end
   end
+  update = draw
 
   local did_submit = false
   local function dispose(no_restore_focus)
+    update = function() end
     picker:set_visibility(false)
     if not no_restore_focus and vv.api.window_is_valid(prev_focus) then vv.api.set_focused_window(prev_focus) end
     if not did_submit and opts.on_cancel then
