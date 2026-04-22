@@ -1253,6 +1253,8 @@ lua_stackRetCount vv_api_get_servernames(lua_State *L) {
     lua_seti(L, -2, index++);
   }
 
+  closedir(dir);
+
   return 1;
 }
 
