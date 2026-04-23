@@ -15,6 +15,11 @@ local function is_primitive(v)
   return not is_complex
 end
 
+--- prototypes
+local function_repr = function(fn) end
+local table_repr = function(tbl) end
+local userdata_repr = function(ud) end
+
 local function to_json_aux(value, guard, fmt)
   local tbl = {}
   if value == nil then return nil end
@@ -26,7 +31,10 @@ local function to_json_aux(value, guard, fmt)
     local esc = value:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r'):gsub('\t', '\\t')
     tbl[1] = '"' .. esc .. '"'
   elseif type(value) == 'table' then
-    if guard[value] then goto ret end
+    if guard[value] then 
+      tbl[1] = table_repr(value)
+      goto ret 
+    end
     if type(value) == 'table' then guard[value] = true end
     if is_array(value) then
       for _, val in ipairs(value) do
@@ -60,7 +68,9 @@ local function to_json_aux(value, guard, fmt)
     end
     if type(value) == 'table' then guard[value] = nil end
   elseif type(value) == 'function' then
-    -- explicitly ignore functions
+    tbl[1] = function_repr(value)
+  elseif type(value) == 'userdata' then
+    tbl[1] = userdata_repr(value)
   elseif type(value) == 'number' then
     local number_repr = tostring(value)
     if value ~= value or value == math.huge or value == -math.huge then
@@ -80,6 +90,20 @@ end
 --- @param value any
 --- @param compact? boolean
 function M.to_json(value, compact)
+  local function repr_gen(prefix)
+    local next = 1
+    local seen = {}
+    return function(obj)
+      local id = seen[obj]
+      if not id then id = next; next = next + 1; seen[obj] = id; end
+      return string.format('"<%s %d>"', prefix, id)
+    end
+  end
+
+  table_repr = repr_gen("table")
+  function_repr = repr_gen("function")
+  userdata_repr = repr_gen("userdata")
+
   local fmt = compact and { indent = '', newline = '', level = 0 } or { indent = '  ', newline = '\n', level = 0 }
   fmt.compact = compact
   local guard = {}
