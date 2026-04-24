@@ -794,6 +794,8 @@ void vv_api_client_set_options(struct velvet *v, lua_Integer client_id, struct v
   s->ws.y_pixel = options.y_pixel;
   if (options.supports_repeating_multibyte_characters.set)
     s->features.no_repeat_multibyte_graphemes = !options.supports_repeating_multibyte_characters.value;
+  if (options.supports_repeating_characters.set)
+    s->features.no_repeat = !options.supports_repeating_characters.value;
   velvet_force_full_redraw(v);
 }
 

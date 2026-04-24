@@ -466,6 +466,7 @@ static void velvet_dispatch_frame(void *data) {
   if (focus) {
     bool is_idle = io_schedule_exists(&v->event_loop, v->active_render_token);
     v->scene.renderer.options.no_repeat_multibyte_symbols = focus->features.no_repeat_multibyte_graphemes;
+    v->scene.renderer.options.no_repeat = focus->features.no_repeat;
     struct velvet_api_pre_render_event_args event_args = {
         .time = get_ms_since_startup(),
         .cause = v->render_invalidate_reason ? u8_slice_from_cstr(v->render_invalidate_reason)

@@ -435,6 +435,7 @@ return {
         { name = "y_pixel",                                 type = "int",  doc = "The number of vertical pixels." },
         { name = "lines",                                   type = "int",  doc = "The number of lines." },
         { name = "columns",                                 type = "int",  doc = "The number of columns." },
+        { name = "supports_repeating_characters",           type = "bool", doc = "Some terminals do not support CSI REP at all.", optional = true },
         { name = "supports_repeating_multibyte_characters", type = "bool", doc = "Some terminals do not support CSI REP for multibyte characters.", optional = true },
       },
     },

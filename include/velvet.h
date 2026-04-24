@@ -59,6 +59,7 @@ struct velvet_input {
 };
 
 struct velvet_client_features {
+  bool no_repeat; // compatibility with primitive terminals (intellij)
   bool no_repeat_multibyte_graphemes; // compatibility with some terminals with poor multibyte handling
 };
 

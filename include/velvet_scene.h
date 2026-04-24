@@ -40,6 +40,8 @@ struct velvet_render_option {
    * If we detect the host emulator of the active client is AppleTerminal, then we disable this feature.
    */
   bool no_repeat_multibyte_symbols;
+  /* some emulators don't support repeating at all. */
+  bool no_repeat;
   /* debugging option for highlighting changed regions */
   bool display_damage;
   /* debugging option for highlighting line ends */
