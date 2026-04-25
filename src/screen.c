@@ -436,37 +436,53 @@ void screen_destroy(struct screen *screen) {
   screen->lines = NULL;
 }
 
+static bool cursor_equals(struct cursor c1, struct cursor c2) { return c1.column == c2.column && c1.line == c2.line; }
+static bool cell_empty(struct screen_cell c) { return c.cp.value == 0 || c.cp.value == ' '; }
+
 void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src) {
-  struct screen_line *current_src_line = get_current_line(src);
-  int n_src_lines = src->h + src->scroll.height;
-  int dst_column = 0;
-  int dst_row = 0;
+  struct cursor dst_saved_cursor = {.column = -1}, dst_cursor = {.column = -1};
+  /* discard empty lines after the cursor. */
+  int n_populated = src->cursor.line;
+  for (int row = src->cursor.line; row < src->h; row++) {
+    struct screen_line *s = screen_get_line(src, row);
+    if (s->eol > 0 || s->has_newline) n_populated = row + 1;
+  }
+
+  int n_src_lines = src->scroll.height + n_populated;
 
   for (int row = 0; row < n_src_lines; row++) {
     int real_row = row - src->scroll.height;
     struct screen_line *s = screen_get_line(src, real_row);
     int eol = s->eol;
-    if (s->has_newline || row == (n_src_lines - 1)) {
-      for (; eol && s->cells[eol - 1].cp.value == ' '; eol--);
-    }
-    int col = 0;
-    for (; col < eol; col += s->cells[col].cp.is_wide ? 2 : 1) {
-      screen_insert(dst, s->cells[col], true);
-    }
 
-    if (s == current_src_line) {
-      dst_row = dst->cursor.line;
-      dst_column = src->cursor.column % dst->w;
-    }
-
+    /* if the line contains an explicit newline, discard trailing whitespace.
+     * this is somewhat destructive if the cell background has meaningful styling, but
+     * this appears to be how most emulators handle wrapping. Note that whitespace
+     * is always significant if the line does not have an explicit newline since it is then considered 
+     * the same logical line as the next line. */
     if (s->has_newline) {
-      screen_newline(dst, true);
+      if (src->cursor.line == real_row) eol = CLAMP(src->cursor.column + 1, 0, src->w);
+      else for (; eol && cell_empty(s->cells[eol - 1]); eol--);
     }
-  }
 
-  int col = CLAMP(dst_column, 0, dst->w - 1);
-  int row = CLAMP(dst_row, 0, dst->h - 1);
-  dst->cursor = (struct cursor){.column = col, .line = row, .brush = src->cursor.brush};
+    int col = 0;
+    for (; col < eol;) {
+      int cw = s->cells[col].cp.is_wide ? 2 : 1;
+      screen_insert(dst, s->cells[col], true);
+      struct cursor this = { .column = col + cw, .line = real_row };
+      if (cursor_equals(this, src->cursor)) 
+        dst_cursor = dst->cursor;
+      if (cursor_equals(this, src->saved_cursor)) 
+        dst_saved_cursor = dst->cursor;
+      col += cw;
+    }
+
+    if (s->has_newline) screen_newline(dst, true);
+  }
+  if (dst_cursor.column >= 0) 
+    dst->cursor = dst_cursor;
+  if (dst_saved_cursor.column >= 0) 
+    dst->saved_cursor = dst_saved_cursor;
 }
 
 /* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
