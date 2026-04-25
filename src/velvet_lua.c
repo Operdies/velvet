@@ -96,7 +96,15 @@ static bool file_exists(const char *path) {
   return stat(path, &st) == 0;
 }
 
+static void source_default_config(struct velvet *v) {
+  if (luaL_dostring(v->L, "require('velvet.default_config')") != LUA_OK) lua_die(v->L);
+}
+
 void velvet_source_config(struct velvet *v) {
+  if (v->clean) {
+    source_default_config(v);
+    return;
+  }
   struct string scratch = {0};
   char *home = getenv("HOME");
   if (home) {
@@ -113,7 +121,7 @@ void velvet_source_config(struct velvet *v) {
     velvet_lua_source(v, (char*)scratch.content);
   } else {
     /* if the user does not have a config file, source the default config */
-    if (luaL_dostring(v->L, "require('velvet.default_config')") != LUA_OK) lua_die(v->L);
+    source_default_config(v);
   }
   string_destroy(&scratch);
 }

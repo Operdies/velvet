@@ -134,6 +134,7 @@ static int create_socket(char *name) {
 struct velvet_args {
   bool attach;
   bool foreground;
+  bool clean;
   char *lua;
   char *socket;
   char *cmd;
@@ -156,6 +157,7 @@ static void usage(char *arg0) {
          "  reload                       Restart the lua VM and source configs.\n"
          "  spawn <program> [<args>]     Spawn <program> with <args>\n"
          "  -S, --socket <name>          Specify the socket to use instead of guessing or auto-generating it\n"
+         "  --clean                      Start a new server with the stock config.\n"
          "  --version                    Print version and exit\n"
          "  -h, --help                   Show this help text and exit\n"
          , arg0);
@@ -176,6 +178,8 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
       if (a.socket) velvet_fatal("--socket specified multiple times.");
       GET(a.socket);
       if (strlen(a.socket) > 200) velvet_fatal("Socket name too long. Max 200 characters.");
+    } else if (F(--clean)) {
+      a.clean = true;
     } else if (F(--help) || F(-h)) {
       usage(argv[0]);
       exit(0);
@@ -348,6 +352,7 @@ int main(int argc, char **argv) {
       .startup_directory = startup_directory,
       .positional_args = args.positional,
       .arg0 = argv[0],
+      .clean = args.clean,
   };
 
   velvet_loop(&velvet);

@@ -104,6 +104,7 @@ struct velvet {
   int signal_read;
   bool quit;
   bool daemon;
+  bool clean;
   io_schedule_id active_render_token;
   io_schedule_id idle_render_token;
   /* velvet will try to render when io is idle, but if io is constantly busy
