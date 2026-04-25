@@ -602,10 +602,11 @@ function Window:set_frame_enabled(enabled)
       bottom = self:create_child_window(),
     }
 
-    for _, brd in pairs(self.borders) do
+    for name, brd in pairs(self.borders) do
       brd:set_alternate_screen(true)
       brd.is_border = true
       brd:set_cursor_visible(false)
+      brd:set_title(string.format("%d: %s border", self.id, name))
     end
     self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse.click") end)
     self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse.move") end)
