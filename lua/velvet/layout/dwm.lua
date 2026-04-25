@@ -555,6 +555,7 @@ local function add_window(id, init)
       state.layers[win.id] = 'tiled'
       state.tags[win.id] = table.move(state.view, 1, #state.view, 1, {})
       if not init then
+        set_focus(id)
         arrange()
       end
     end
