@@ -249,6 +249,9 @@ void screen_insert_impl(struct screen *g, struct screen_cell c, bool wrap) {
     assert(cur->column == screen_right(g));
     if (wrap) {
       cur->column = 0;
+      /* if the line wraps, ensure the newline flag is reset for the line.
+       * this edge case is unlikely to ever come up, but this seems the most correct. */
+      row->has_newline = false;
       screen_move_or_scroll_down(g);
       row = get_current_line(g);
     } else {
