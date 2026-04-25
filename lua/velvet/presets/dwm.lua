@@ -13,7 +13,7 @@ local function cfg(settings)
   local map_prefix = function(mapping, ...) map(pfx .. mapping, ...) end
 
   map_prefix("r", vv.api.reload, { description = "Reload config. Completely wipes global state." })
-  map_prefix("h", require("velvet.shortcut-help").show, "Show shortcut help window")
+  map_prefix("h", function() require("velvet.shortcut-help").show() end, "Show shortcut help window")
 
   map_prefix("c", function() vv.api.window_create_process(default_shell, { working_directory = vv.cwd() }) end,
     { description = "Spawn " .. default_shell })
