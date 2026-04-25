@@ -389,6 +389,9 @@ void screen_erase_between_cursors(struct screen *g, struct cursor from, struct c
       row_set_cell(row, i, template);
     }
 
+    // if a delete command deletes the end of the line, clear the newline flag.
+    // this fixes subtle wrapping issues when shell prompts become narrow enough to span multiple lines.
+    if (col_end == screen_right(g)) row->has_newline = false;
     // If eol was in the range we just erased, update it to be at most the start of the range.
     if (eol >= col_start) {
       // Since col_start was erased, the new eol should
