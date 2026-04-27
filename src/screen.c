@@ -90,8 +90,13 @@ int screen_get_scroll_offset(struct screen *s) {
   return s->scroll.view_offset;
 }
 
-void screen_set_scroll_offset(struct screen *s, int value) {
-  s->scroll.view_offset = CLAMP(value, 0, s->scroll.height);
+bool screen_set_scroll_offset(struct screen *s, int value) {
+  int new_offset = CLAMP(value, 0, s->scroll.height);
+  if (s->scroll.view_offset != new_offset) {
+    s->scroll.view_offset = new_offset;
+    return true;
+  }
+  return false;
 }
 
 int screen_get_scroll_height(struct screen *s) {

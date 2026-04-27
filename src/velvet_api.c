@@ -700,10 +700,7 @@ lua_Integer vv_api_window_get_scroll_offset(struct velvet *v, lua_Integer win_id
 void vv_api_window_set_scroll_offset(struct velvet *v, lua_Integer win_id, lua_Integer scroll_offset) {
   struct velvet_window *w = check_window(v, win_id);
   struct screen *active = vte_get_current_screen(&w->emulator);
-
-  scroll_offset = CLAMP(scroll_offset, 0, active->scroll.height);
-  if (active->scroll.view_offset != scroll_offset) {
-    active->scroll.view_offset = scroll_offset;
+  if (screen_set_scroll_offset(active, scroll_offset)) {
     if (window_visible(v, w)) {
       velvet_invalidate_render(v, "Scroll offset changed.");
     }

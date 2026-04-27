@@ -173,6 +173,6 @@ void screen_copy_alternate(struct screen *restrict dst, const struct screen *con
 
 int screen_get_scroll_height(struct screen *s);
 int screen_get_scroll_offset(struct screen *s);
-void screen_set_scroll_offset(struct screen *s, int value);
+bool screen_set_scroll_offset(struct screen *s, int value);
 
 #endif /*  SCREEN_H */
