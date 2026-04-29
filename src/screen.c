@@ -448,6 +448,8 @@ static bool cursor_equals(struct cursor c1, struct cursor c2) { return c1.column
 static bool cell_empty(struct screen_cell c) { return c.cp.value == 0 || c.cp.value == ' '; }
 
 void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src) {
+  int dst_cursor_offset = -1;
+  int dst_saved_cursor_offset = -1;
   struct cursor dst_saved_cursor = {.column = -1}, dst_cursor = {.column = -1};
   /* discard empty lines after the cursor. */
   int n_populated = src->cursor.line;
@@ -478,19 +480,28 @@ void screen_copy_primary(struct screen *restrict dst, const struct screen *restr
       int cw = s->cells[col].cp.is_wide ? 2 : 1;
       screen_insert(dst, s->cells[col], true);
       struct cursor this = { .column = col + cw, .line = real_row };
-      if (cursor_equals(this, src->cursor)) 
+      if (cursor_equals(this, src->cursor)) {
         dst_cursor = dst->cursor;
-      if (cursor_equals(this, src->saved_cursor)) 
+        dst_cursor_offset = dst->scroll.offset;
+      }
+      if (cursor_equals(this, src->saved_cursor)) {
         dst_saved_cursor = dst->cursor;
+        dst_saved_cursor_offset = dst->scroll.offset;
+      }
       col += cw;
     }
 
     if (s->has_newline) screen_newline(dst, true);
   }
-  if (dst_cursor.column >= 0) 
+
+  if (dst_cursor.column >= 0) {
+    dst_cursor.line -= (dst->scroll.offset - dst_cursor_offset);
     dst->cursor = dst_cursor;
-  if (dst_saved_cursor.column >= 0) 
+  }
+  if (dst_saved_cursor.column >= 0) {
+    dst_saved_cursor.line -= (dst->scroll.offset - dst_saved_cursor_offset);
     dst->saved_cursor = dst_saved_cursor;
+  }
 }
 
 /* copy to content from one screen to another. This is a naive resizing implementation which just re-inserts everything
