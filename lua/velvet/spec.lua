@@ -219,6 +219,14 @@ return {
         { name = "mouse_up",   value = 2 },
       },
     },
+    {
+      name = "output_channel",
+      flags = false,
+      values = {
+        { name = "stdout", value = 1 },
+        { name = "stderr", value = 2 },
+      },
+    },
   },
 
   --- types {{{1
@@ -268,6 +276,13 @@ return {
         { name = "background",        type = "rgb_color", doc = "The default background color" },
         { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor", optional = true },
         { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor", optional = true },
+      },
+    },
+    {
+      name = "process.spawn_options",
+      fields = {
+        { name = "working_directory", type = "string", doc = "The initial working directory of the new process.", optional = true },
+        { name = "environment",       type = "table",  doc = "Optional table of environment variables to set in the new process.",  optional = true },
       },
     },
     {
@@ -439,6 +454,21 @@ return {
         { name = "supports_repeating_multibyte_characters", type = "bool", doc = "Some terminals do not support CSI REP for multibyte characters.", optional = true },
       },
     },
+    {
+      name = "process.output.event_args",
+      fields = {
+        { name = "id", type = "int", doc = "The id of the process which produced the output." },
+        { name = "output", type = "string", doc = "Raw output. Not stripped for newlines, null bytes, or escapes." },
+        { name = "channel", type = "output_channel", doc = "Did |output| arrive on stdout or stderr" },
+      },
+    },
+    {
+      name = "process.exit.event_args",
+      fields = {
+        { name = "id", type = "int", doc = "The id of the exited process." },
+        { name = "exit_code", type = "int", doc = "The exit code of the exited process." },
+      },
+    },
   },
 
   --- {{{1 events
@@ -456,6 +486,8 @@ return {
     { name = "mouse.move",           doc = "Raised when the mouse moves.",                 args = "mouse.move.event_args" },
     { name = "mouse.click",          doc = "Raised when the mouse is clicked.",            args = "mouse.click.event_args" },
     { name = "mouse.scroll",         doc = "Raised when the mouse scrolls.",               args = "mouse.scroll.event_args" },
+    { name = "process.output",       doc = "Raised when a process produces output.",       args = "process.output.event_args" },
+    { name = "process.exited",       doc = "Raised when a process exits.",                 args = "process.exit.event_args" },
     { name = "system_message",       doc = "Raised when the system logs an error message", args = "system_message.event_args", },
     {
       name = "pre_render",
@@ -754,7 +786,7 @@ return {
     {
       name = "window_create_process",
       doc =
-      "Create a new window with the process |cmd|. If |cmd| is |string|, the process is started as { 'sh', '-c', |cmd| }. Returns the window id.",
+      "Create a new window with the process |cmd|. Returns the window id.",
       params = {
         { name = "cmd",     type = "string|string[]",       doc = "The process to spawn." },
         { name = "options", type = "window.create_options", doc = "Options for the created window." },
@@ -911,6 +943,41 @@ return {
       name = "get_servername",
       doc = "Get the name of this server.",
       returns = { type = "string", doc = "The name of this server." },
+    },
+    {
+      name = "get_processes",
+      doc = "Get the IDs of all processes.",
+      returns = { type = "int[]", doc = "List of process IDs" }
+    },
+    {
+      name = "process_kill",
+      doc = "Kill the process with id |id|.",
+      params = {{ name = "id", type = "int", doc = "The process to kill." }},
+    },
+    {
+      name = "process_stdin_write",
+      doc = "Write to stdin of process |id|.",
+      params = {
+        { name = "id", type = "int", doc = "The process to kill." },
+        { name = "text", type = "string", doc = "The content sent to stdin of process |id|." },
+      },
+    },
+    {
+      name = "process_stdin_close",
+      doc = "Close stdin of process |id|.",
+      params = {
+        { name = "id", type = "int", doc = "The process to kill." },
+      },
+    },
+    {
+      name = "process_spawn",
+      doc =
+      "Create a new process running |cmd|. Returns the process id.",
+      params = {
+        { name = "cmd",     type = "string|string[]",       doc = "The process to spawn." },
+        { name = "options", type = "process.spawn_options", doc = "Options for the new process." },
+      },
+      returns = { type = "int", doc = "The id of the spawned process." }
     },
     -- {
     --   name = "disk_store_value",

@@ -13,6 +13,7 @@
 #include "velvet_alloc.h"
 #include "velvet_lua.h"
 #include "platform.h"
+#include "velvet_process.h"
 
 void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd);
 static void velvet_client_render(struct u8_slice str, void *context) {
@@ -218,18 +219,27 @@ static void socket_accept(struct io_source *src) {
   vec_push(&velvet->clients, &c);
 }
 
-void velvet_scene_remove_exited(struct velvet *v) {
+void velvet_reap_exited_processes(struct velvet *v) {
   int status;
   pid_t pid = 0;
   struct velvet_scene *m = &v->scene;
 
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    struct velvet_process *p;
     struct velvet_window *h;
     vec_find(h, m->windows, h->pid == pid);
     if (h) {
       h->pid = 0;
       h->exited_at = get_ms_since_startup();
       velvet_scene_close_and_remove_window(&v->scene, h);
+    } else {
+      vec_find(p, v->processes, p->pid == pid);
+      if (p) {
+        /* defer destroying this process to ensure pending output / error is propagated. */
+        p->pid = 0;
+        p->exit_code = WEXITSTATUS(status);
+        p->destroy_pending = true;
+      }
     }
   }
 }
@@ -265,7 +275,7 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
   }
 
   if (did_sigchld) {
-    velvet_scene_remove_exited(velvet);
+    velvet_reap_exited_processes(velvet);
   }
 }
 
@@ -369,6 +379,45 @@ static void on_client_writable(struct io_source *src) {
   }
 }
 
+static void on_process_output(struct io_source *src, struct u8_slice output) {
+  struct velvet *velvet = src->data;
+  struct velvet_process *proc;
+  vec_find(proc, velvet->processes, proc->out == src->fd || proc->err == src->fd);
+  if (proc && output.len > 0) {
+    struct velvet_api_process_output_event_args args = {0};
+    args.output = output;
+    args.id = proc->id;
+    args.channel = proc->out == src->fd ? VELVET_API_OUTPUT_CHANNEL_STDOUT
+                                        : VELVET_API_OUTPUT_CHANNEL_STDERR;
+    velvet_api_raise_process_output(velvet, args);
+  }
+  if (output.len == 0) {
+    if (proc) {
+      if (proc->out == src->fd) { close(proc->out); proc->out = 0; }
+      if (proc->err == src->fd) { close(proc->err); proc->err = 0; }
+    }
+    velvet_reap_exited_processes(velvet);
+  }
+}
+
+static void on_process_writable(struct io_source *src) {
+  struct velvet *velvet = src->data;
+  struct velvet_process *proc;
+  vec_find(proc, velvet->processes, proc->in == src->fd);
+  if (proc && proc->pending_input.len) {
+    ssize_t written = io_write(proc->in, string_as_u8_slice(proc->pending_input));
+    if (written > 0) {
+      string_shift_left(&proc->pending_input, written);
+    } else if (written == 0) {
+      velvet_reap_exited_processes(velvet);
+    }
+    if (proc->in && proc->stdin_closed && proc->pending_input.len == 0) {
+      close(proc->in);
+      proc->in = 0;
+    }
+  }
+}
+
 static void on_window_writable(struct io_source *src) {
   struct velvet *v = src->data;
   struct velvet_window *win;
@@ -377,7 +426,7 @@ static void on_window_writable(struct io_source *src) {
   if (win->emulator.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(win->emulator.pending_input));
     if (written > 0) string_shift_left(&win->emulator.pending_input, (size_t)written);
-    else if (written == 0) velvet_scene_remove_exited(v);
+    else if (written == 0) velvet_reap_exited_processes(v);
   }
   if (win->emulator.pending_input.len == 0) 
     src->events &= ~IO_SOURCE_POLLOUT;
@@ -424,7 +473,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
       velvet_invalidate_render(v, "window output");
     }
   } else {
-    velvet_scene_remove_exited(v);
+    velvet_reap_exited_processes(v);
     /* the window should have been removed in the remove_exited() call,
      * but in case it was not detected we explicitly remove it by pty here */
     struct velvet_window *vte;
@@ -502,6 +551,11 @@ static void velvet_ensure_render_scheduled(struct velvet *velvet) {
   velvet->_render_invalidated = false;
 }
 
+int velvet_next_id(void) {
+  static int id = 1000;
+  return id++;
+}
+
 static void velvet_dispatch(struct velvet *velvet) {
   struct io *const loop = &velvet->event_loop;
   struct velvet_client *focus = velvet_get_focused_client(velvet);
@@ -545,6 +599,26 @@ static void velvet_dispatch(struct velvet *velvet) {
       struct io_source output_src = {
           .fd = client->output, .events = IO_SOURCE_POLLOUT, .on_writable = on_client_writable, .data = velvet};
       if (output_src.fd) io_add_source(loop, output_src);
+    }
+  }
+
+  struct velvet_process *proc;
+  vec_rwhere(proc, velvet->processes, proc->destroy_pending) {
+    velvet_process_destroy(velvet, proc);
+  }
+  vec_foreach(proc, velvet->processes) {
+    struct io_source out = {
+        .fd = proc->out,
+        .events = IO_SOURCE_POLLIN,
+        .on_read = on_process_output,
+        .data = velvet,
+    };
+    if (out.fd) io_add_source(loop, out);
+    out.fd = proc->err;
+    if (out.fd) io_add_source(loop, out);
+    if (proc->pending_input.len) {
+      struct io_source in = { .fd = proc->in, .events = IO_SOURCE_POLLOUT, .on_writable = on_process_writable, .data = velvet};
+      io_add_source(loop, in);
     }
   }
 

@@ -30,6 +30,8 @@ local known_events = {
   [ [[mouse.move]] ] = [[Raised when the mouse moves.]],
   [ [[mouse.click]] ] = [[Raised when the mouse is clicked.]],
   [ [[mouse.scroll]] ] = [[Raised when the mouse scrolls.]],
+  [ [[process.output]] ] = [[Raised when a process produces output.]],
+  [ [[process.exited]] ] = [[Raised when a process exits.]],
   [ [[system_message]] ] = [[Raised when the system logs an error message]],
   [ [[pre_render]] ] = [[Raised right before content is rendered. This is useful for applying updates just-in-time.]],
   [ [[pre_reload]] ] = [[Raised before reloading. This event can be used to store state.]],
@@ -172,6 +174,8 @@ e['**'] = resolve
 ---| 'mouse.move' Raised when the mouse moves.
 ---| 'mouse.click' Raised when the mouse is clicked.
 ---| 'mouse.scroll' Raised when the mouse scrolls.
+---| 'process.output' Raised when a process produces output.
+---| 'process.exited' Raised when a process exits.
 ---| 'system_message' Raised when the system logs an error message
 ---| 'pre_render' Raised right before content is rendered. This is useful for applying updates just-in-time.
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
@@ -405,6 +409,28 @@ end
 --- @return velvet.api.mouse.scroll.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_scroll(timeout, when)
   local event = 'mouse.scroll'
+  local registration = when and { event = event, when = when } or event
+  local _, result = M.wait(registration, timeout)
+  return result.data
+end
+
+--- Wait for process.output
+--- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.process.output.event_args): boolean predicate function
+--- @return velvet.api.process.output.event_args ret Result, or nil on timeout.
+function M.wait_for_process_output(timeout, when)
+  local event = 'process.output'
+  local registration = when and { event = event, when = when } or event
+  local _, result = M.wait(registration, timeout)
+  return result.data
+end
+
+--- Wait for process.exited
+--- @param timeout? integer Optional timeout.
+--- @param when? fun(event: string, data: velvet.api.process.exit.event_args): boolean predicate function
+--- @return velvet.api.process.exit.event_args ret Result, or nil on timeout.
+function M.wait_for_process_exited(timeout, when)
+  local event = 'process.exited'
   local registration = when and { event = event, when = when } or event
   local _, result = M.wait(registration, timeout)
   return result.data

@@ -77,6 +77,10 @@ local api = {}
 ---| 'mouse_down' 
 ---| 'mouse_up' 
 
+---@alias velvet.api.output_channel string 
+---| 'stdout' 
+---| 'stderr' 
+
 
 --- @class velvet.api.mouse_settings
 --- @field reporting velvet.api.mouse_reporting nil
@@ -109,6 +113,10 @@ local api = {}
 --- @field background velvet.api.rgb_color|string The default background color
 --- @field cursor_foreground? velvet.api.rgb_color|string The foreground color of the cell containing the cursor
 --- @field cursor_background? velvet.api.rgb_color|string The background color of the cell containing the cursor
+
+--- @class velvet.api.process.spawn_options
+--- @field working_directory? string The initial working directory of the new process.
+--- @field environment? table Optional table of environment variables to set in the new process.
 
 --- @class velvet.api.window.create_options
 --- @field working_directory? string The initial working directory of the new window.
@@ -214,6 +222,15 @@ local api = {}
 --- @field columns integer The number of columns.
 --- @field supports_repeating_characters? boolean Some terminals do not support CSI REP at all.
 --- @field supports_repeating_multibyte_characters? boolean Some terminals do not support CSI REP for multibyte characters.
+
+--- @class velvet.api.process.output.event_args
+--- @field id integer The id of the process which produced the output.
+--- @field output string Raw output. Not stripped for newlines, null bytes, or escapes.
+--- @field channel velvet.api.output_channel Did |output| arrive on stdout or stderr
+
+--- @class velvet.api.process.exit.event_args
+--- @field id integer The id of the exited process.
+--- @field exit_code integer The exit code of the exited process.
 
 --- Get the size of the screen.
 --- @return velvet.api.screen.geometry ret The geometry of the screen window.
@@ -424,7 +441,7 @@ function api.window_send_mouse_scroll(mouse_scroll) end
 --- @return integer ret The id of the new window
 function api.window_create(options) end
 
---- Create a new window with the process |cmd|. If |cmd| is |string|, the process is started as { 'sh', '-c', |cmd| }. Returns the window id.
+--- Create a new window with the process |cmd|. Returns the window id.
 --- @param cmd string|string[] The process to spawn.
 --- @param options? velvet.api.window.create_options Options for the created window.
 --- @return integer ret The id of the new window
@@ -545,6 +562,32 @@ function api.get_servernames() end
 --- @return string ret The name of this server.
 function api.get_servername() end
 
+--- Get the IDs of all processes.
+--- @return integer[] ret List of process IDs
+function api.get_processes() end
+
+--- Kill the process with id |id|.
+--- @param id integer The process to kill.
+--- @return nil ret 
+function api.process_kill(id) end
+
+--- Write to stdin of process |id|.
+--- @param id integer The process to kill.
+--- @param text string The content sent to stdin of process |id|.
+--- @return nil ret 
+function api.process_stdin_write(id, text) end
+
+--- Close stdin of process |id|.
+--- @param id integer The process to kill.
+--- @return nil ret 
+function api.process_stdin_close(id) end
+
+--- Create a new process running |cmd|. Returns the process id.
+--- @param cmd string|string[] The process to spawn.
+--- @param options? velvet.api.process.spawn_options Options for the new process.
+--- @return integer ret The id of the spawned process.
+function api.process_spawn(cmd, options) end
+
 --- Get scrollback_scroll_multiplier
 --- @return integer ret The current value
 function api.get_scrollback_scroll_multiplier() end
@@ -590,6 +633,8 @@ function api.set_fps_target(new_value) end
 --- @field mouse_move? fun(event_args: velvet.api.mouse.move.event_args): nil Raised when the mouse moves.
 --- @field mouse_click? fun(event_args: velvet.api.mouse.click.event_args): nil Raised when the mouse is clicked.
 --- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
+--- @field process_output? fun(event_args: velvet.api.process.output.event_args): nil Raised when a process produces output.
+--- @field process_exited? fun(event_args: velvet.api.process.exit.event_args): nil Raised when a process exits.
 --- @field system_message? fun(event_args: velvet.api.system_message.event_args): nil Raised when the system logs an error message
 --- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
 --- @field pre_reload? fun(event_args: velvet.api.pre_reload.event_args): nil Raised before reloading. This event can be used to store state.

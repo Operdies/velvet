@@ -11,6 +11,7 @@
 #include <signal.h>
 #include "velvet_api.h"
 #include "platform.h"
+#include "velvet.h"
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
@@ -55,14 +56,9 @@ void velvet_scene_set_focus(struct velvet_scene *m, struct velvet_window *new_fo
   }
 }
 
-static int next_id(void) {
-  static int id = 1000;
-  return id++;
-}
-
 struct velvet_window *velvet_scene_manage(struct velvet_scene *m, struct velvet_window template) {
   assert(m->windows.element_size == sizeof(struct velvet_window));
-  int win_id = next_id();
+  int win_id = velvet_next_id();
   struct velvet_window *host = vec_new_element(&m->windows);
   *host = template;
   host->id = win_id;

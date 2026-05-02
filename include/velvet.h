@@ -97,6 +97,7 @@ struct velvet {
   struct io event_loop;
   struct vec /* struct velvet_client */ clients;
   struct vec /* struct velvet_coroutine */ coroutines;
+  struct vec /* struct velvet_process */ processes;
   /* this is modified by events such as receiving focus IN/OUT events, new clients attaching, etc */
   int focused_socket;
   int socket_cmd_sender;
@@ -144,5 +145,6 @@ void velvet_detach_client(struct velvet *velvet, struct velvet_client *s, char *
 void velvet_client_destroy(struct velvet *velvet, struct velvet_client *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_context ctx);
+int velvet_next_id(void);
 
 #endif

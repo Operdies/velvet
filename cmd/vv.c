@@ -16,6 +16,7 @@
 #include "utils.h"
 #include "velvet.h"
 #include "velvet_alloc.h"
+#include "velvet_process.h"
 
 static int signal_write;
 static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
@@ -344,6 +345,7 @@ int main(int argc, char **argv) {
       .scene = velvet_scene_default,
       .clients = vec(struct velvet_client),
       .coroutines = vec(struct velvet_coroutine),
+      .processes = vec(struct velvet_process),
       .stored_strings = vec(struct velvet_kvp),
       .socket = sock_fd,
       .event_loop = io_default,

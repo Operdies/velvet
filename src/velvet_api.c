@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include "velvet_process.h"
 
 _Noreturn static void lua_bail(struct velvet *v, char *fmt, ...) {
   va_list ap;
@@ -29,6 +30,13 @@ struct velvet_window *check_lua_window(struct velvet *v, int win) {
   if (!w->is_lua_window) lua_bail(v, "Window id %I is not a lua window.", win);
   assert(w);
   return w;
+}
+
+struct velvet_process *check_process(struct velvet *v, int proc) {
+  struct velvet_process *p;
+  vec_find(p, v->processes, p->id == proc);
+  if (!p) lua_bail(v, "Process id %I is not valid.", proc);
+  return p;
 }
 
 struct velvet_window *check_window(struct velvet *v, int win) {
@@ -137,30 +145,154 @@ static bool wordsplit_iterator_next(struct velvet_wordsplit_iterator *it) {
   return !it->reject;
 }
 
-lua_stackRetCount
-vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api_window_create_options options) {
+lua_stackRetCount vv_api_get_processes(struct velvet *v) {
+  lua_State *L = v->current;
+  lua_newtable(L);
+  lua_Integer index = 1;
+  struct velvet_process *p;
+  /* hide non-regular windows from the LUA api for now */
+  vec_foreach(p, v->processes) {
+    lua_pushinteger(L, p->id);
+    lua_seti(L, -2, index++);
+  }
+  return 1;
+}
+
+void vv_api_process_kill(struct velvet *v, lua_Integer id) {
+  struct velvet_process *p = check_process(v, id);
+  velvet_process_kill(v, p);
+}
+
+static void split_and_push_string_array(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
-  struct velvet_window template = {.emulator = vte_default};
-  if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
+  struct velvet_wordsplit_iterator it = {0};
+  it.src.content = (uint8_t *)luaL_checklstring(L, -1, &it.src.len);
+  lua_newtable(L);
+
+  int index = 1;
+  while (wordsplit_iterator_next(&it)) {
+    lua_pushlstring(L, (char *)it.current.content, it.current.len);
+    lua_seti(L, -2, index++);
+  }
+  string_destroy(&it.current);
+  if (it.reject) {
+    lua_bail(v, "Invalid command: %s", it.reject_reason); /* TODO: Explain the problem */
+  }
+}
 
 lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
+  static struct string envbuf = {0};
+  static struct vec envlist = vec(char*);
+
+  vec_clear(&envlist);
+  string_clear(&envbuf);
+
   lua_State *L = v->current;
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
   if (lua_isstring(L, -1)) {
-    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'window_create_process' (string must not be empty)");
-    struct velvet_wordsplit_iterator it = {0};
-    it.src.content = (uint8_t*)luaL_checklstring(L, -1, &it.src.len);
-    lua_newtable(L);
+    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (string must not be empty)");
+    split_and_push_string_array(L);
+  }
 
-    int index = 1;
-    while (wordsplit_iterator_next(&it)) {
-      lua_pushlstring(L, (char*)it.current.content, it.current.len);
-      lua_seti(L, -2, index++);
+  if (lua_istable(L, -1)) {
+    int len = luaL_len(L, -1);
+    if (len == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
+
+    char *prog;
+    char **arglist = velvet_calloc(len + 1, sizeof(char*));
+    arglist[len] = NULL;
+    for (int i = 1; i <= len; i++) {
+      lua_geti(L, -1, i);
+      if (!lua_isstring(L, -1)) {
+        free(arglist);
+        lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
+      }
+      arglist[i - 1] = (char*)luaL_checkstring(L, -1);
+      lua_pop(L, 1);
     }
-    string_destroy(&it.current);
-    if (it.reject) {
-      lua_bail(v, "Invalid command: %s", it.reject_reason); /* TODO: Explain the problem */
+
+    if (options.environment.set) {
+      /* push env table to top of stack.
+       * In a perfect world, my emitter would expose
+       * this through options.environment.value,
+       * but the recursive marshalling makes it difficult
+       * to provide a stable index. Instead we extract
+       * it the old fashioned way from lua_State */
+      // lua_pushvalue(L, options.environment.value);
+      lua_pushvalue(L, 2);
+      lua_getfield(L, -1, "environment");
+      luaL_checktable(L, -1);
+      struct u8_slice key, value;
+
+      /* split validation and writing to two passes.
+       * This simplifies the cleanup path. */
+
+      /* first pass: verify the table only contains string->string values */
+      lua_pushnil(L);
+      int capacity = 0;
+      while (lua_next(L, -2) != 0) {
+        key = luaL_checkslice(L, -2);
+        value = luaL_checkslice(L, -1);
+        capacity += key.len + value.len + 2; /* additional space for '=' and '\0' */
+        lua_pop(L, 1);
+      }
+
+      /* ensure the string does not get resized while pushing.
+       * this would invalidate all the pointers in envlist */
+      string_ensure_capacity(&envbuf, capacity * 2);
+
+      /* second pass: write the values to envlist/envbuf */
+      lua_pushnil(L);
+      while (lua_next(L, -2) != 0) {
+        key = luaL_checkslice(L, -2);
+        value = luaL_checkslice(L, -1);
+        char *entry = (char*)envbuf.content + envbuf.len;
+        string_push_slice(&envbuf, key);
+        string_push_char(&envbuf, '=');
+        string_push_slice(&envbuf, value);
+        string_push_char(&envbuf, 0);
+        vec_push(&envlist, &entry);
+        lua_pop(L, 1);
+      }
+      char *sentinel = NULL;
+      vec_push(&envlist, &sentinel);
     }
+
+    char *wd = options.working_directory.set ? (char*)options.working_directory.value.content : NULL;
+    char **envp = envlist.length > 0 ? (char**)envlist.content : NULL;
+    lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp);
+    prog = arglist[0];
+    free(arglist);
+    if (proc_id < 0) { 
+      lua_bail(v, "Error starting %s: %s", prog, strerror(-proc_id));
+    }
+    lua_pushinteger(L, proc_id);
+    return 1;
+  }
+
+  return 1;
+}
+
+void vv_api_process_stdin_write(struct velvet *v, lua_Integer id, struct u8_slice text) {
+  struct velvet_process *p = check_process(v, id);
+  if (!p->stdin_closed) string_push_slice(&p->pending_input, text);
+}
+
+void vv_api_process_stdin_close(struct velvet *v, lua_Integer id) {
+  struct velvet_process *p = check_process(v, id);
+  velvet_process_close_stdin(v, p);
+}
+
+lua_stackRetCount
+vv_api_window_create_process(struct velvet *v, lua_stackIndex cmd, struct velvet_api_window_create_options options) {
+  lua_State *L = v->current;
+  struct velvet_window template = {.emulator = vte_default};
+  if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
+
+  lua_pushvalue(L, cmd); /* push cmd to top of stack */
+  if (lua_isstring(L, -1)) {
+    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'window_create_process' (string must not be empty)");
+    split_and_push_string_array(L);
   }
 
   if (lua_istable(L, -1)) {
