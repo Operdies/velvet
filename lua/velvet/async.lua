@@ -102,41 +102,47 @@ function M.defer(defer)
 end
 
 local function resolve(name, data)
+  -- capture the current sequence number and ensure we don't resolve anything higher.
+  -- Otherwise a waiter() invocation can trigger on the currently processing event.
   local current_sequence = sequence
   local function resolve_table(tbl)
-    -- capture the current sequence number and ensure we don't resolve anything higher.
-    -- Otherwise a waiter() invocation can trigger on the currently processing event.
-    for seq, registration in pairs(tbl) do
-      if type(seq) == 'number' then
-        if seq <= current_sequence then
-          local is_match = true
-          local wait_result = { name = name, data = data }
-          if registration.when then 
-            local ok, result = xpcall(registration.when, debug.traceback, registration, wait_result)
-            if not ok then
-              printerr(string.format("Unhandled error during when(%s): %s", name, result))
-              return
-            else
-              is_match = result
-            end
-          end
-          if is_match then
-            local waiter = sequence_callbacks[seq]
-            if waiter then
-              sequence_callbacks[seq] = nil
-              waiter(registration, wait_result)
-            end
-            tbl[seq] = nil
+    for seq, regs in pairs(tbl) do
+      -- tbl is indexed both by integer keys and string keys.
+      -- In this loop we are only interested in integer keys since string keys refer to nested tables.
+      if type(seq) ~= 'number' or seq > current_sequence then goto next_waiter end
+      local waiter = sequence_callbacks[seq]
+      -- if waiter is not set, this event is stale, so we can remove it right away and move on.
+      if not waiter then
+        tbl[seq] = nil
+        goto next_waiter
+      end
+      for _, reg in ipairs(regs) do
+        local is_match = true
+        local wait_result = { name = name, data = data }
+        if reg.when then
+          local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
+          if not ok then
+            printerr(string.format("Unhandled error during when(%s): %s", name, result))
+            is_match = false
+          else
+            is_match = result
           end
         end
+        if is_match then
+          sequence_callbacks[seq] = nil
+          waiter(reg, wait_result)
+          tbl[seq] = nil
+          break
+        end
       end
+      ::next_waiter::
     end
   end
 
   if not known_events[name] then known_events[name] = true end
   local segments = {}
   for segment in name:gmatch('[^.]+') do
-    segments[#segments+1] = segment
+    segments[#segments + 1] = segment
   end
 
   local function recursive_resolve(level, word, ...)
@@ -226,7 +232,7 @@ function M.wait(...)
         sequence_callbacks[seq] = nil
         local ok, error = coroutine.resume(co, nil, 'timeout')
         if not ok then
-          printerr(string.format("Unhandled error in coroutine after timeout: %s", result.name, debug.traceback(error, 0)))
+          printerr(string.format("Unhandled error in coroutine after timeout: %s", debug.traceback(error, 0)))
         end
       end)
     elseif type(evt) == 'string' or type(evt) == 'table' then
@@ -250,8 +256,16 @@ function M.wait(...)
       if tbl == registered_waits then 
         error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      tbl[seq] = evt
-    else 
+      if tbl[seq] then
+        -- this event has multiple registrations on the same event.
+        -- there is nothing wrong with this since the registrations can have
+        -- different |when| triggers, but we need to handle this by chaining
+        -- the registrations.
+        table.insert(tbl[seq], evt)
+      else
+        tbl[seq] = { evt }
+      end
+    else
       error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
   end
