@@ -5,7 +5,6 @@
 #include "velvet.h"
 #include "velvet_lua.h"
 #include <dirent.h>
-#include <errno.h>
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
@@ -144,6 +143,8 @@ vv_api_window_create_process(lua_State *L, lua_stackIndex cmd, struct velvet_api
   struct velvet_window template = {.emulator = vte_default};
   if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
 
+lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
+  lua_State *L = v->current;
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
   if (lua_isstring(L, -1)) {
     if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'window_create_process' (string must not be empty)");
@@ -283,8 +284,8 @@ bool vv_api_window_is_valid(struct velvet *v, lua_Integer winid) {
   return w ? true : false;
 }
 
-lua_stackRetCount vv_api_get_windows(lua_State *L) {
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+lua_stackRetCount vv_api_get_windows(struct velvet *v) {
+  lua_State *L = v->current;
   lua_newtable(L);
   lua_Integer index = 1;
   struct velvet_window *w;
@@ -301,8 +302,8 @@ struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
   return geom;
 }
 
-lua_stackRetCount vv_api_window_get_text(lua_State *L, lua_Integer win_id, struct velvet_api_rect region) {
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+lua_stackRetCount vv_api_window_get_text(struct velvet *v, lua_Integer win_id, struct velvet_api_rect region) {
+  lua_State *L = v->current;
   struct velvet_window *w = check_window(v, win_id);
   region.left = region.left - 1;
   region.top = region.top - 1;
@@ -472,8 +473,8 @@ void vv_api_window_set_title(struct velvet *v, lua_Integer win_id, struct u8_sli
   string_push_slice(&w->title, title);
 }
 
-lua_stackRetCount vv_api_get_clients(lua_State *L) {
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+lua_stackRetCount vv_api_get_clients(struct velvet *v) {
+  lua_State *L = v->current;
   lua_newtable(L);
   lua_Integer index = 1;
   struct velvet_client *s;
@@ -1181,8 +1182,8 @@ static void velvet_store_string(struct velvet *v, struct u8_slice key, struct u8
   string_push_slice(&it->value, value);
 }
 
-lua_stackRetCount vv_api_runtime_store_value(lua_State *L, struct u8_slice name, lua_stackIndex value) {
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+lua_stackRetCount vv_api_runtime_store_value(struct velvet *v, struct u8_slice name, lua_stackIndex value) {
+  lua_State *L = v->current;
   struct emit_context ctx = {.recursion_guard = vec(void *)};
   string_push_cstr(&ctx.output, "return ");
   lua_pushvalue(L, value); /* push value to top for emit_literal */
@@ -1195,8 +1196,8 @@ lua_stackRetCount vv_api_runtime_store_value(lua_State *L, struct u8_slice name,
   return 0;
 }
 
-lua_stackRetCount vv_api_runtime_load_value(lua_State *L, struct u8_slice name) {
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+lua_stackRetCount vv_api_runtime_load_value(struct velvet *v, struct u8_slice name) {
+  lua_State *L = v->current;
   struct velvet_kvp *it = NULL;
   vec_find(it, v->stored_strings, u8_slice_equals(name, string_as_u8_slice(it->key)));
   if (it == NULL) return 0;
@@ -1235,7 +1236,8 @@ struct velvet_api_coordinate vv_api_get_mouse_position(struct velvet *v) {
   return v->input.last_mouse_position;
 }
 
-lua_stackRetCount vv_api_get_servernames(lua_State *L) {
+lua_stackRetCount vv_api_get_servernames(struct velvet *v) {
+  lua_State *L = v->current;
   string_clear(&pathbuf);
   string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets");
   string_ensure_null_terminated(&pathbuf);

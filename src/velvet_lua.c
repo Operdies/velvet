@@ -182,6 +182,11 @@ struct u8_slice luaL_checkslice(lua_State *L, lua_stackIndex idx) {
   return s;
 }
 
+lua_Integer luaL_checktable(lua_State *L, lua_stackIndex idx) {
+  luaL_checktype(L, idx, LUA_TTABLE);
+  return idx;
+}
+
 lua_Integer luaL_checkfunction(lua_State *L, lua_stackIndex idx) {
   luaL_checktype(L, idx, LUA_TFUNCTION);
   return idx;

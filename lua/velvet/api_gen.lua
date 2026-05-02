@@ -85,6 +85,11 @@ end
 --- @type table<string,gen_type>
 local type_lookup = {
   any = { lua_type = "any", c_type = "void" },
+  ["table"] = {
+    c_type = "lua_stackIndex",
+    lua_type = "table",
+    check = function(idx) return ("luaL_checktable(L, %d)"):format(idx) end,
+  },
   ["int[]"] = { lua_type = "integer[]", c_type = "int[]" },
   ["string|string[]"] = { lua_type = "string|string[]", c_type = "void*" },
   ["string[]"] = { lua_type = "string[]", c_type = "void*" },
@@ -134,7 +139,7 @@ end
 
 local function is_manual(name) 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
-  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true, ["line[]"] = true, ["string|string[]"] = true }
+  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true, ["line[]"] = true, ["string|string[]"] = true, ["table"] = true }
   return manual_types[name]
 end
 
@@ -394,7 +399,7 @@ for _, fn in ipairs(spec.api) do
 
   table.insert(h, ("/* %s */\n"):format(string_concatenate(fn.doc, "\n** ")))
   if has_manual_param or manual_return then
-    table.insert(h, ([[lua_stackRetCount vv_api_%s(lua_State *L%s);
+    table.insert(h, ([[lua_stackRetCount vv_api_%s(struct velvet *v%s);
 ]]):format(fn.name, required_params))
   else
     table.insert(h,
@@ -490,14 +495,10 @@ for _, fn in ipairs(spec.api) do
   table.insert(c, ([[
 
 static int l_vv_api_%s(lua_State *L) {
-]])
-    :format(fn.name))
-  if not has_manual_param and not manual_return then
-    table.insert(c, [[
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   v->current = L;
 ]])
-  end
+    :format(fn.name))
 
   local idx = 1
   local args = {}
@@ -548,10 +549,9 @@ static int l_vv_api_%s(lua_State *L) {
   end
 
   local argsstring = #args > 0 and ", " .. table.concat(args, ", ") or ""
-  local t = type_lookup[fn.returns.type]
   if has_manual_param or manual_return then
     table.insert(c, ([[
-  return vv_api_%s(L%s);
+  return vv_api_%s(v%s);
 }
 ]]):format(fn.name, argsstring))
   elseif fn.returns.type == 'void' then
