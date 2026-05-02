@@ -28,11 +28,24 @@
       ]
     },
     {
-      "name": "foreground",
+      "name": "foreground (clean config)",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/debug/vv",
       "args": [ "foreground", "--socket", "debug", "--clean" ],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "make debug",
+      "console": "integratedTerminal",
+      "initCommands": [
+        "command source ${workspaceFolder}/scripts/lldb-config"
+      ]
+    },
+    {
+      "name": "foreground",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/debug/vv",
+      "args": [ "foreground", "--socket", "debug" ],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "make debug",
       "console": "integratedTerminal",
