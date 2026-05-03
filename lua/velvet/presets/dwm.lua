@@ -8,7 +8,7 @@ local function cfg(settings)
   --- @param lhs string
   --- @param func fun()
   --- @param opt string|table
-  local map = function(lhs, func, opt) keymap.set(lhs, func, type(opt) == 'table' and opt or { description = opt }) end
+  local map = function(lhs, func, opt) keymap:set(lhs, func, type(opt) == 'table' and opt or { description = opt }) end
 
   local map_prefix = function(mapping, ...) map(pfx .. mapping, ...) end
 

@@ -263,14 +263,14 @@ local function status_update()
 
   local transient_start = taskbar:get_cursor().col + 10
 
-  local passthrough = km.get_passthrough()
+  local passthrough = km:get_passthrough()
   if passthrough then
     local segment = " Direct Input "
     taskbar:set_foreground_color('black')
     taskbar:set_background_color('cyan')
     taskbar:set_cursor(transient_start, 1)
     local c1, c2 = taskbar:draw(segment)
-    on_click[#on_click+1] = { c1.col, c2.col - 1, function() km.set_passthrough(false) end }
+    on_click[#on_click+1] = { c1.col, c2.col - 1, function() km:set_passthrough(false) end }
     transient_start = c2.col
   end
 
@@ -679,8 +679,8 @@ function dwm.activate()
     arrange()
   end
   arrange()
-  event_handler[km.passthrough_changed] = status_update
-  event_handler[km.chain_changed] = function(new_chain)
+  event_handler[km.events.passthrough_changed] = status_update
+  event_handler[km.events.chain_changed] = function(new_chain)
     chain = new_chain
     status_update()
   end

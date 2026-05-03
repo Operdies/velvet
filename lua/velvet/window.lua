@@ -36,11 +36,11 @@
 --- @field is_border? boolean if set, this is a border of |self.parent|
 --- @field event velvet.window.events async event names which can be used with the async system.
 local Window = {}
+Window.__index = Window
 
 local vv = require('velvet')
 local a = vv.api
 
-Window.__index = Window
 
 --- @type velvet.window[]
 local win_registry = {}

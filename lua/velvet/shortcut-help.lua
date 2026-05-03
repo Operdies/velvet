@@ -121,7 +121,7 @@ local function flatten_maps(map)
 end
 
 local function draw()
-  local root = km.which_key("", true)
+  local root = km:which_key("", true)
   local flat_map = flatten_maps({ keys = "", children = root })
   local sz = vv.api.get_screen_geometry()
   local width = math.floor(sz.width * 0.7)
@@ -170,7 +170,7 @@ local function draw()
   end
 end
 
-e[km.keymap_changed] = draw
+e[km.events.keymap_changed] = draw
 e.screen_resized = draw
 
 local prevfocus = nil

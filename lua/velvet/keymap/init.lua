@@ -1,20 +1,41 @@
---- @class velvet.keymap.options
+--- @class velvet.keymap
+--- @field current_chain velvet.keymap.keybind current keymap
+--- @field root velvet.keymap.keybind root keymap
 --- @field repeat_timeout integer The interval in ms in which mappings with { repeatable=true } will be repeated without resetting the chain state. (Default 300)
 --- @field chain_unwind_timeout integer The timeout in ms before incomplete chains will start unwinding. (Default 2000)
+--- @field remapped_keys table<string,string> remapped keys
+--- @field on_unhandled_key? fun(self: velvet.keymap, args: velvet.api.on_key.event_args)
+--- @field on_chain_changed? fun(self: velvet.keymap)
+--- @field on_passthrough_changed? fun(self: velvet.keymap)
+--- @field on_keymap_changed? fun(self: velvet.keymap)
+--- @field last_repeat integer
+--- @field passthrough boolean if set, all keys are passed through as unhandled
+--- @field unwind_schedule? integer handle to scheduled unwind callback
+local Keys = {}
+Keys.__index = Keys
 
-local keys = {}
+Keys.events = {
+  passthrough_changed = "keymap.passthrough_changed",
+  chain_changed = "keymap.chain_changed",
+  keymap_changed = "keymap.keymap_changed",
+}
+
 local vk = require('velvet.keymap.named_keys')
 
--- create a custom event dispatched on the main event system
-keys.passthrough_changed = "keymap.passthrough_changed"
-keys.chain_changed = "keymap.chain_changed"
-keys.keymap_changed = "keymap.keymap_changed"
-
-local keymap = {
-  repeat_timeout = 300,
-  chain_unwind_timeout = 2000,
-}
-local remapped_keys = {}
+--- Create a new keymap
+--- @return velvet.keymap
+function Keys.create()
+  local instance = setmetatable({
+    repeat_timeout = 300,
+    chain_unwind_timeout = 2000,
+    remapped_keys = {},
+    passthrough = false,
+    last_repeat = 0,
+    root = { children = {}, options = {} }
+  }, Keys)
+  instance.current_chain = instance.root
+  return instance
+end
 
 --- @class chord
 --- @field mods integer mask of modifiers for the key
@@ -172,16 +193,13 @@ local function chord_to_string(chord)
   return primary_key, alt_key
 end
 
---- @class keymap
---- @field parent? keymap parent keymap
---- @field children table<string, keymap> child mappings
+--- @class velvet.keymap.keybind
+--- @field parent? velvet.keymap.keybind parent keymap
+--- @field children table<string, velvet.keymap.keybind> child mappings
 --- @field execute? fun(nil): nil keymap action
 --- @field options velvet.keys.set.options
 --- @field key? string the key of this keymap in its parent child table
 --- @field trigger? velvet.api.on_key.event_args the exact event which caused this keymap to be entered
-
---- @type keymap
-local root_keymap = { children = {}, options = {} }
 
 --- @param lhs string
 --- @return chord[] chords
@@ -247,12 +265,12 @@ end
 
 --- Delete the mapping associated with |lhs|
 --- @param lhs string sequence of keys
-function keys.del(lhs)
+function Keys:del(lhs)
   assert(type(lhs) == "string", "bad argument #1 (string expected)")
 
   local sequence = chords_from_string(lhs)
-  --- @type keymap
-  local map = root_keymap
+  --- @type velvet.keymap.keybind
+  local map = self.root
   for _, chord in ipairs(sequence) do
     local lookup_key = chord_to_string(chord)
     map = map.children[lookup_key]
@@ -264,13 +282,13 @@ function keys.del(lhs)
 
   -- recursively remove mappings in the tree if they do
   -- not have either a mapping (execute) or child mappings
-  while map ~= root_keymap do
+  while map ~= self.root do
     assert(map, "keymap: invariant violated: removed keymap detached from tree")
     if next(map.children) or map.execute then break end
     map.parent.children[map.key] = nil
     map = map.parent
   end
-  vv.events.emit(keys.keymap_changed)
+  if self.on_keymap_changed then self:on_keymap_changed() end
 end
 
 --- @class velvet.keys.set.options
@@ -281,13 +299,13 @@ end
 --- @param lhs string sequence of keys
 --- @param rhs fun(nil): nil function triggered when |keys| are pressed
 --- @param opts? velvet.keys.set.options options
-function keys.set(lhs, rhs, opts)
+function Keys:set(lhs, rhs, opts)
   assert(type(lhs) == "string", "bad argument #1 (string expected)")
   assert(type(rhs) == "function", "bad argument #2 (string expected)")
   assert(opts == nil or type(opts) == "table", "bad argument #3 (table or nil expected)")
 
   local sequence = chords_from_string(lhs)
-  local map = root_keymap
+  local map = self.root
   for _, chord in ipairs(sequence) do
     local lookup_key = chord_to_string(chord)
     if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
@@ -301,7 +319,6 @@ function keys.set(lhs, rhs, opts)
     if not ok then printerr(err) end
   end
   map.options = opts or {}
-  vv.events.emit(keys.keymap_changed)
 end
 
 local function chain_str(map)
@@ -313,44 +330,40 @@ local function chain_str(map)
   return str
 end
 
-
---- @type keymap
-local current_chain = root_keymap
-
-local function set_current_chain(chain)
-  if chain ~= current_chain then
-    current_chain = chain
-    vv.events.emit(keys.chain_changed, current_chain == root_keymap and nil or chain_str(current_chain))
+--- @param map velvet.keymap
+--- @param chain velvet.keymap.keybind
+local function set_current_chain(map, chain)
+  if chain ~= map.current_chain then
+    map.current_chain = chain
+    if map.on_chain_changed then map:on_chain_changed() end
   end
 end
 
---- @param args velvet.api.on_key.event_args
-local function send_key_to_window(args)
-  local win = vv.api.get_focused_window()
-  if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
+--- @param km velvet.keymap
+local function on_unhandled_key(km, args)
+  if km.on_unhandled_key then km:on_unhandled_key(args) end
 end
 
-local unwind_schedule = nil
-
-local function keymap_unwind()
-  unwind_schedule = nil
+--- @param km velvet.keymap
+local function keymap_unwind(km)
+  km.unwind_schedule = nil
   -- unwind is called when a key did not match any mappings.
   -- we walk the parent binding tree to find a mapping which is a prefix of the current chain.
   -- If we find a mapping, we trigger that mapping and replay the remaining unresolved keys
   -- from the root keymap. We are guaranteed to resolve at least 1 key by treating it as normal
   -- input in the root keymap.
-  local map = current_chain
+  local map = km.current_chain
   while map and map.trigger do
     if map.execute then
       map.execute()
       break
     end
 
-    if map.parent == root_keymap then
+    if map.parent == km.root then
       map.trigger.key.event_type = 'press'
-      send_key_to_window(map.trigger)
+      on_unhandled_key(km, map.trigger)
       map.trigger.key.event_type = 'release'
-      send_key_to_window(map.trigger)
+      on_unhandled_key(km, map.trigger)
       break
     end
     map = map.parent
@@ -358,8 +371,8 @@ local function keymap_unwind()
 
   -- the keys from start->map have now been handled.
   -- Replay the remaining keys
-  local last_unresolved = current_chain
-  set_current_chain(root_keymap)
+  local last_unresolved = km.current_chain
+  set_current_chain(km, km.root)
   --- @type velvet.api.on_key.event_args[]
   local pending = {}
   while last_unresolved ~= map do
@@ -367,7 +380,7 @@ local function keymap_unwind()
     last_unresolved = last_unresolved.parent
   end
   for _, key in ipairs(pending) do
-    keymap.on_key(key)
+    km:on_key(key)
   end
 end
 
@@ -377,12 +390,13 @@ local function is_modifier(args)
   return modifier_keys[args.key.name] and true or false
 end
 
+--- @param km velvet.keymap
 --- @param key velvet.api.window.key_event
 --- @return velvet.api.window.key_event
-local function maybe_remap(key)
+local function maybe_remap(km, key)
   -- if a raw key (no modifiers, etc.) such as 'x' or 'F1' was specified,
   -- the mapping applies regardless of modifiers.
-  local remap = remapped_keys[key.name]
+  local remap = km.remapped_keys[key.name]
   if remap then
     local new_chord = chords_from_string(remap)[1]
     local new_key = chord_to_key_event(new_chord)
@@ -394,7 +408,7 @@ local function maybe_remap(key)
   -- Otherwise the mapping applies to the specific modifiers of the remapping
   local chord = clean_chord(chord_from_key_event(key))
   local chord_key, alt_key = chord_to_string(chord)
-  remap = remapped_keys[alt_key] or remapped_keys[chord_key]
+  remap = km.remapped_keys[alt_key] or km.remapped_keys[chord_key]
   if remap then
     local new_chord = chords_from_string(remap)[1]
     local new_key = chord_to_key_event(new_chord)
@@ -404,40 +418,39 @@ local function maybe_remap(key)
   return key
 end
 
-local passthrough = false
-local last_repeat = 0
-
---- @param next_chain keymap
+--- @param km velvet.keymap
+--- @param next_chain velvet.keymap.keybind
 --- @param args velvet.api.on_key.event_args
 --- @param now integer
-local function advance_chain(next_chain, args, now)
+local function advance_chain(km, next_chain, args, now)
   next_chain.trigger = args
   if next(next_chain.children) then
-    set_current_chain(next_chain)
+    set_current_chain(km, next_chain)
     -- If the chain has continuations, schedule an unwind.
     -- Otherwise it will be impossible to type keys which are part of a keymap.
-    unwind_schedule = vv.api.schedule_after(keymap.chain_unwind_timeout, keymap_unwind)
+    km.unwind_schedule = vv.api.schedule_after(km.chain_unwind_timeout, function() keymap_unwind(km) end)
   else
     if not next_chain.execute then
       assert(next_chain.execute, "keymap: internal invariant violation: terminal chains must be executable!")
     end
 
     if next_chain.options.repeatable then
-      last_repeat = now
+      km.last_repeat = now
     else
       -- if the key is not repeatable, we can trivially reset the chain and execute the mapping
-      set_current_chain(root_keymap)
+      set_current_chain(km, km.root)
     end
     next_chain.execute()
   end
 end
 
+--- @param km velvet.keymap
 --- @param args velvet.api.on_key.event_args
-local function cancel_chain(args)
-  if args.key.name == vk.ESCAPE and current_chain ~= root_keymap then
+local function cancel_chain(km, args)
+  if args.key.name == vk.ESCAPE and km.current_chain ~= km.root then
     -- escape should cancel any chain immediately without unwinding if the escape key was not a continuation.
-    set_current_chain(root_keymap)
-    last_repeat = 0
+    set_current_chain(km, km.root)
+    km.last_repeat = 0
     return
   end
 
@@ -447,25 +460,25 @@ local function cancel_chain(args)
     -- in the middle of a binding using control as a modifier would cancel it.
     -- We still send it to windows though in case they are using kitty keyboard extensions
     -- and want to do something with modifiers.
-    send_key_to_window(args)
+    on_unhandled_key(km, args)
     return
   end
 
-  if current_chain == root_keymap then
+  if km.current_chain == km.root then
     -- if the key was not handled and we are in the root keymap,
     -- send the key event to the window.
-    last_repeat = 0
-    send_key_to_window(args)
-  elseif last_repeat > 0 then
+    km.last_repeat = 0
+    on_unhandled_key(km, args)
+  elseif km.last_repeat > 0 then
     -- if the previous key was a repeat and the current key did not match anything,
     -- replay the current key in the root keymap
-    last_repeat = 0
-    set_current_chain(root_keymap)
-    keymap.on_key(args)
+    km.last_repeat = 0
+    set_current_chain(km, km.root)
+    km:on_key(args)
   else
     -- otherwise, we should unwind the chain and replay the key.
-    keymap_unwind()
-    keymap.on_key(args)
+    keymap_unwind(km)
+    km:on_key(args)
   end
 end
 
@@ -477,44 +490,40 @@ local function key_event_to_string(key)
   return chord_key, alt_key
 end
 
-keys.key_event_to_string = key_event_to_string
+Keys.key_event_to_string = key_event_to_string
 
 --- @param args velvet.api.on_key.event_args
-function keymap.on_key(args)
-  args.key = maybe_remap(args.key)
-  if passthrough or args.key.event_type == 'release' then
-    -- TODO: Only send a release event if we previously sent pressed/repeat events to the recipient.
-    -- This is a bit tricky because it involves tracking if the press/repeat event was blocked due
-    -- to a keymap, and because the focus may have been changed by a key repeat.
-    -- For now, we just always send the release event since a missed key release
-    -- is likely to cause more trouble than an extra key release.
-    send_key_to_window(args)
-    return
+function Keys:on_key(args)
+  args.key = maybe_remap(self, args.key)
+  if self.passthrough or args.key.event_type == 'release' then
+    return false
   end
 
   -- cancel pending unwind on key
-  if unwind_schedule then vv.api.schedule_cancel(unwind_schedule) end
+  if self.unwind_schedule then vv.api.schedule_cancel(self.unwind_schedule) end
 
-  local chord_key, alt_key = keys.key_event_to_string(args.key)
+  local chord_key, alt_key = Keys.key_event_to_string(args.key)
 
   local now = vv.api.get_current_tick()
 
-  --- @type keymap|nil
-  local next_chain = current_chain.children[alt_key] or current_chain.children[chord_key]
-  if last_repeat > 0 and next_chain then
+  --- @type velvet.keymap.keybind|nil
+  local next_chain = self.current_chain.children[alt_key] or self.current_chain.children[chord_key]
+  if self.last_repeat > 0 and next_chain then
     if not next_chain.options.repeatable then
       next_chain = nil
-    elseif now - last_repeat > keymap.repeat_timeout then
+    elseif now - self.last_repeat > self.repeat_timeout then
       next_chain = nil
     end
   end
 
-  if next_chain then advance_chain(next_chain, args, now) else cancel_chain(args) end
+  if next_chain then
+    advance_chain(self, next_chain, args, now)
+    return true
+  else
+    cancel_chain(self, args)
+    return false
+  end
 end
-
-local evt = require('velvet.events')
-local grp = evt.create_group('velvet.keys', true)
-grp.on_key = keymap.on_key
 
 --- @class which_key
 --- @field description string user provided description
@@ -525,12 +534,12 @@ grp.on_key = keymap.on_key
 --- @param lhs string|nil the key sequence to introspect child mappings from
 --- @param recurse? boolean recursively get mappings
 --- @return which_key[] mappings
-function keys.which_key(lhs, recurse)
-  local map = current_chain
+function Keys:which_key(lhs, recurse)
+  local map = self.current_chain
   if lhs == '' then
-    map = root_keymap
+    map = self.root
   elseif lhs then
-    map = root_keymap
+    map = self.root
     local sequence = chords_from_string(lhs)
     for _, chord in ipairs(sequence) do
       local lookup_key = chord_to_string(chord)
@@ -545,7 +554,7 @@ function keys.which_key(lhs, recurse)
       keys = k, 
       terminal = not next(m.children), 
       repeatable = m.options.repeatable,
-      children = recurse and keys.which_key(lhs .. k, true) or nil 
+      children = recurse and self:which_key(lhs .. k, true) or nil
     }
   end
   table.sort(which_keys, function(a, b) return a.keys:upper() < b.keys:upper() end)
@@ -555,7 +564,7 @@ end
 --- Remap key |from| to |to|
 --- @param from string key
 --- @param to string key to map |from| to
-function keys.remap_key(from, to)
+function Keys:remap_key(from, to)
   assert(type(from) == "string", "bad argument #1 (string expected)")
   assert(type(to) == "string", "bad argument #1 (string expected)")
 
@@ -565,21 +574,41 @@ function keys.remap_key(from, to)
   assert(#ch1 == 1, "bad argument #1 (expected a single chord")
   assert(#ch2 == 1, "bad argument #2 (expected a single chord")
 
-  remapped_keys[chord_to_string(ch1[1])] = chord_to_string(ch2[1])
+  self.remapped_keys[chord_to_string(ch1[1])] = chord_to_string(ch2[1])
 end
 
 --- Enable or disable passthrough mode. In passthrouh mode, the current keymap is ignored.
 --- This is useful for sending keys to windows which would otherwise be intercepted.
-function keys.set_passthrough(b)
+function Keys:set_passthrough(b)
   local set = b and true or false
-  if passthrough ~= set then
-    passthrough = set
+  if self.passthrough ~= set then
+    self.passthrough = set
     -- reset keymap on passthrough
-    last_repeat = 0
-    set_current_chain(root_keymap)
-    vv.events.emit(keys.passthrough_changed, passthrough)
+    self.last_repeat = 0
+    set_current_chain(self, self.root)
+    if self.on_passthrough_changed then self:on_passthrough_changed() end
   end
 end
-function keys.get_passthrough() return passthrough end
+function Keys:get_passthrough() return self.passthrough end
 
-return keys
+local global_keymap = Keys.create()
+global_keymap.on_chain_changed = function(self)
+  local data = self.current_chain == self.root and nil or chain_str(self.current_chain)
+  vv.events.emit(Keys.events.chain_changed, data)
+end
+global_keymap.on_keymap_changed = function() vv.events.emit(Keys.events.keymap_changed) end
+global_keymap.on_passthrough_changed = function(self)
+  vv.events.emit(Keys.events.passthrough_changed, self.passthrough)
+end
+global_keymap.on_unhandled_key = function(_, args)
+  local win = vv.api.get_focused_window()
+  if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
+end
+
+local evt = require('velvet.events')
+local grp = evt.create_group('velvet.keys', true)
+grp.on_key = function(k)
+  global_keymap:on_key(k)
+end
+
+return global_keymap
