@@ -437,30 +437,33 @@ struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
 lua_stackRetCount vv_api_window_get_text(struct velvet *v, lua_Integer win_id, struct velvet_api_rect region) {
   lua_State *L = v->current;
   struct velvet_window *w = check_window(v, win_id);
+  struct screen *screen = vte_get_current_screen(&w->emulator);
+
+  /* adjust width */
   region.left = region.left - 1;
-  region.top = region.top - 1;
   if (region.left < 0) {
     int delta = -region.left;
     region.left += delta;
     region.width -= delta;
   }
-  if (region.top < 0) {
-    int delta = -region.top;
-    region.top += delta;
-    region.height -= delta;
-  }
-
   region.width = CLAMP(region.width, 0, w->geometry.width - region.left);
-  region.height = CLAMP(region.height, 0, w->geometry.height - region.top);
+
+  /* adjust height */
+  /* convert to 0-index */
+  region.top = region.top - 1;
+  /* clamp to scrollback+buffer bounds */
+  region.top = CLAMP(region.top, -screen->scroll.height, screen->h - 1);
+  /* clamp height to number of available lines */
+  region.height = MIN(region.height, screen->h - region.top);
+
 
   lua_newtable(L); /* line[] */
 
   struct string scratch = {0};
-  struct screen *screen = vte_get_current_screen(&w->emulator);
   for (int row = region.top; row < region.top + region.height; row++) {
-  lua_newtable(L); /* { text, wraps, truncated } */
+    lua_newtable(L); /* { text, wraps, truncated } */
     string_clear(&scratch);
-    struct screen_line *l = screen_get_view_line(screen, row);
+    struct screen_line *l = screen_get_line(screen, row);
     bool wraps = !l->has_newline;
     lua_pushboolean(L, wraps);
     lua_setfield(L, -2, "wraps");

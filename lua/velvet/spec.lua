@@ -632,7 +632,7 @@ return {
       doc = "Get window text contained in |region|. 1-indexed.",
       params = {
         { name = "win_id",  type = "int",   doc = "Window id" },
-        { name = "region", type = "rect", doc = "The region to get text from" },
+        { name = "region", type = "rect", doc = "The region to get text from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on." },
       },
       returns = { type = "line[]", doc = "The text in the specified region." },
     },

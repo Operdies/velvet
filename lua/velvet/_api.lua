@@ -330,7 +330,7 @@ function api.window_get_alpha(win_id) end
 
 --- Get window text contained in |region|. 1-indexed.
 --- @param win_id integer Window id
---- @param region velvet.api.rect The region to get text from
+--- @param region velvet.api.rect The region to get text from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on.
 --- @return velvet.api.line[] ret The text in the specified region.
 function api.window_get_text(win_id, region) end
 
