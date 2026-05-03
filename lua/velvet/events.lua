@@ -62,6 +62,9 @@ local events = {
         end
       end
     end
+    if event_name == 'pre_reload' then
+      vv.events.emit('pre_reload.late', data)
+    end
   end
 }
 

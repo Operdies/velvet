@@ -6,7 +6,7 @@ local known_stores = {}
 
 -- write all stores on reload.
 local e = vv.events.create_group("velvet.runtime_storage", true)
-e.pre_reload = function()
+e['pre_reload.late'] = function()
   for k, v in pairs(known_stores) do
     -- currently, this can't fail. The C implementation silently skips unsupported
     -- keys and value types (function and tables for keys, functions for values)
