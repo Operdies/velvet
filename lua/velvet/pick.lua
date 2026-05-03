@@ -91,7 +91,7 @@ function pick.select(items, opts)
 
     if show_freetext == true and filter and #filter > 0 then
       opts.freetext.text = filter
-      snapshot[#snapshot+1] = opts.freetext
+      snapshot[#snapshot + 1] = opts.freetext
     end
 
     height = #snapshot
@@ -138,59 +138,43 @@ function pick.select(items, opts)
     end
   end
 
-  local function check_mappings(key)
-    local repr = require('velvet.keymap').key_event_to_string(key)
-    repr = vv.api.string_lower(repr)
-    for _, m in ipairs(opts.mappings or {}) do
-      if type(m.keys) == 'string' then
-        if vv.api.string_lower(m.keys) == repr then
-          local selection = index > 0 and index <= #snapshot and snapshot[index] or nil
-          local ok, err = xpcall(m.action, debug.traceback, selection)
-          if not ok then printerr("Unhandled error in pick mapping: " .. err) end
-          return true
-        end
-      end
+  local map = require('velvet.keymap').create()
+  map:set("<esc>", dispose)
+  map:set("<C-c>", dispose)
+  local function next() index = 1 + (index % #snapshot) end
+  local function prev() index = 1 + ((index - 2) % #snapshot) end
+  map:set("<down>", next)
+  map:set("<C-n>", next)
+  map:set("<up>", prev)
+  map:set("<C-p>", prev)
+  map:set("<C-w>", function() filter = '' end)
+  map:set("<CR>", submit)
+  map:set("<backspace>", function()
+    if #filter > 0 then
+      filter = filter:sub(1, -2)
     end
-    return false
+  end)
+
+  for _, m in ipairs(opts.mappings or {}) do
+    map:set(m.keys, function()
+      local selection = index > 0 and index <= #snapshot and snapshot[index] or nil
+      m.action(selection)
+    end)
   end
 
-  --- @param args velvet.api.window.on_key.event_args
-  picker:on_window_on_key(function(_, args)
-    local cp = args.key.alternate_codepoint > 0 and args.key.alternate_codepoint or args.key.codepoint
+  map.on_unhandled_key = function(_, args)
     local evt = args.key.event_type
-    local m = args.key.modifiers
-    local vk = args.key.name
     if evt == 'press' or evt == 'repeat' then
-      if check_mappings(args.key) then
-        -- pass
-      elseif vk == 'ESCAPE' or (vk == 'c' and m.control) then
-        dispose()
-        return
-      elseif vk == 'DOWN' or (vk == 'n' and m.control) then
-        index = 1 + (index % #snapshot)
-      elseif vk == 'UP' or (vk == 'p' and m.control) then
-        index = index - 1
-        if index == 0 then index = #snapshot end
-      elseif vk == 'ENTER' then
-        submit()
-        return
-      elseif vk == 'BACKSPACE' then
-        if #filter > 0 then
-          filter = filter:sub(1, -2)
-        end
-      elseif vk == 'w' and m.control then
-        filter = ''
-      else
-        -- cp 32 is space, and it is the first printable character which makes sense in a filter.
-        -- 57358 chosen kind of arbitrarily. This is the keycode kitty maps caps lock to,
-        -- and it is the first special key with a dedicated keycode. A better way to do this
-        -- would be to use utf8proc to get the unicode category of the symbol and reject PUA / unknwon.
-        if cp >= 32 and cp < 57358 then
-          filter = filter .. utf8.char(cp)
-        end
+      local cp = args.key.alternate_codepoint > 0 and args.key.alternate_codepoint or args.key.codepoint
+      if cp >= 32 and cp < 57358 then
+        filter = filter .. utf8.char(cp)
       end
-      draw()
     end
+  end
+
+  picker:on_window_on_key(function(_, args)
+    map:on_key(args)
+    draw()
   end)
 
   picker:on_mouse_click(function(_, args)
@@ -208,14 +192,13 @@ function pick.select(items, opts)
     end
   end)
 
-  picker:on_focus_changed(function (_, args)
+  picker:on_focus_changed(function(_, args)
     if picker:valid() and args.new ~= picker and picker:get_visibility() then
       vv.api.schedule_after(0, function() picker:focus() end)
     end
   end)
 
   draw()
-
 end
 
 function pick.get_active_picker()
