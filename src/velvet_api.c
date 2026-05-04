@@ -570,10 +570,12 @@ void vv_api_debug_set_display_damage(struct velvet *v, bool new_value) {
 }
 
 void vv_api_window_paste_text(struct velvet *v, lua_Integer winid, struct u8_slice text) {
+  check_window(v, winid);
   velvet_input_paste_text(v, text, winid);
 }
 
 void vv_api_window_send_keys(struct velvet *v, lua_Integer winid, struct u8_slice keys) {
+  check_window(v, winid);
   velvet_input_send_keys(v, keys, winid);
 }
 
