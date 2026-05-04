@@ -31,11 +31,16 @@ local picker = nil
 local current_items = {}
 
 local update = function() end
+local dispose = function() end
 
 --- @param items pick.item[]
 function pick.update_items(items)
   current_items = items
   update()
+end
+
+function pick.dispose()
+  dispose()
 end
 
 --- Create a new picker with |opts|
@@ -121,7 +126,7 @@ function pick.select(items, opts)
   update = draw
 
   local did_submit = false
-  local function dispose(no_restore_focus)
+  local function dispose_impl(no_restore_focus)
     update = function() end
     picker:set_visibility(false)
     if not no_restore_focus and vv.api.window_is_valid(prev_focus) then vv.api.set_focused_window(prev_focus) end
@@ -129,6 +134,7 @@ function pick.select(items, opts)
       opts.on_cancel()
     end
   end
+  dispose = dispose_impl
 
   local function submit()
     did_submit = true
