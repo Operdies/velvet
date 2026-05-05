@@ -200,6 +200,39 @@ e['**'] = resolve
 --- @field name velvet.async.event|string the name of the raised event
 --- @field data any the event args
 
+local function timeout_callback(co, timeout, seq)
+  return vv.api.schedule_after(timeout, function()
+    -- if sequence_callbacks was unset, that means this coroutine was cancelled.
+    if not sequence_callbacks[seq] then return end
+    sequence_callbacks[seq] = nil
+    local ok, error = coroutine.resume(co, nil, 'timeout')
+    if not ok then
+      printerr(string.format("Unhandled error in coroutine after timeout: %s", debug.traceback(error, 0)))
+    end
+  end)
+end
+
+local function defer_callback(co, trd, seq)
+  defer_on(trd, function()
+    if not sequence_callbacks[seq] then return end
+    sequence_callbacks[seq] = nil
+    local ok, error = coroutine.resume(co, trd)
+    if not ok then
+      printerr(string.format("Unhandled error in coroutine wait: %s", debug.traceback(error, 0)))
+    end
+  end)
+end
+
+local function resolve_callback(co, timeout)
+return function(registration, result)
+    if timeout then vv.api.schedule_cancel(timeout) end
+    local ok, error = coroutine.resume(co, registration, result)
+    if not ok then
+      printerr(string.format("Unhandled error in coroutine after %s: %s", result.name, debug.traceback(error, 0)))
+    end
+  end
+end
+
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
@@ -212,9 +245,11 @@ function M.wait(...)
   local seq = sequence
 
   local compatible_types = { number = true, string = true, table = true, thread = true }
-  local args = {...}
-  if #args == 0 then error("No events specified.") end
-  for i, evt in ipairs(args) do
+  local raw_args = {...}
+  if #raw_args == 0 then error("No events specified.") end
+  local timeout_value = nil
+  local args = {}
+  for i, evt in ipairs(raw_args) do
     local tp = type(evt)
     if not compatible_types[tp] then
       error(("Bad argument #%d (number, string, coroutine, or table expected)"):format(i))
@@ -223,38 +258,27 @@ function M.wait(...)
       -- if the coroutine is not running, return immediately.
       ---@diagnostic disable-next-line: return-type-mismatch
       return evt, nil
+    elseif tp == 'number' then
+      if math.type(evt) ~= 'integer' then
+        error(("Bad argument #%d (integer expected, got number)"):format(i))
+      end
+      timeout_value = timeout_value and math.min(timeout_value, evt) or evt
     end
+    if tp ~= 'number' then
+      args[#args + 1] = evt
+    end
+  end
+
+  if timeout_value then
+    timeout = timeout_callback(co, timeout_value, seq)
   end
 
   co_to_seq[co] = seq
-  sequence_callbacks[seq] = function(registration, result)
-    if timeout then vv.api.schedule_cancel(timeout) end
-    local ok, error = coroutine.resume(co, registration, result)
-    if not ok then
-      printerr(string.format("Unhandled error in coroutine after %s: %s", result.name, debug.traceback(error, 0)))
-    end
-  end
+  sequence_callbacks[seq] = resolve_callback(co, timeout)
 
   for idx, evt in ipairs(args) do
-    if type(evt) == 'number' then
-      timeout = vv.api.schedule_after(evt, function()
-        -- if sequence_callbacks was unset, that means this coroutine was cancelled.
-        if not sequence_callbacks[seq] then return end
-        sequence_callbacks[seq] = nil
-        local ok, error = coroutine.resume(co, nil, 'timeout')
-        if not ok then
-          printerr(string.format("Unhandled error in coroutine after timeout: %s", debug.traceback(error, 0)))
-        end
-      end)
-    elseif type(evt) == 'thread' then
-      defer_on(evt, function()
-        if not sequence_callbacks[seq] then return end
-        sequence_callbacks[seq] = nil
-        local ok, error = coroutine.resume(co, evt)
-        if not ok then
-          printerr(string.format("Unhandled error in coroutine wait: %s", debug.traceback(error, 0)))
-        end
-      end)
+    if type(evt) == 'thread' then
+      defer_callback(co, evt, seq)
     elseif type(evt) == 'string' or type(evt) == 'table' then
       local event = evt
       if type(evt) == 'table' then
