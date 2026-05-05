@@ -158,13 +158,17 @@ static int get_schedule_id(void) {
   return token++;
 }
 
-bool io_schedule_exists(struct io *io, io_schedule_id id) {
+struct io_schedule *io_schedule_get(struct io *io, io_schedule_id id) {
   struct io_schedule *existing;
   vec_find(existing, io->scheduled_actions, existing->id == id);
   if (!existing) {
     vec_find(existing, io->idle_schedule, existing->id == id);
   }
   return existing;
+}
+
+bool io_schedule_exists(struct io *io, io_schedule_id id) {
+  return io_schedule_get(io, id);
 }
 
 bool io_schedule_cancel(struct io *io, io_schedule_id id) {

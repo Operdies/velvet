@@ -79,6 +79,7 @@ io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), 
 io_schedule_id io_schedule_idle(struct io *io, void (*callback)(void*), void *data);
 bool io_schedule_cancel(struct io *io, io_schedule_id id);
 bool io_schedule_exists(struct io *io, io_schedule_id id);
+struct io_schedule *io_schedule_get(struct io *io, io_schedule_id id);
 
 #define io_write_literal(fd, str)                                                                                        \
   io_write(fd, (struct u8_slice){.len = sizeof(str) - 1, .content = (uint8_t*)str})

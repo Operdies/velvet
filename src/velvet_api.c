@@ -519,26 +519,42 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_pop(L, 1); // msgh
 }
 
+#define SCHEDULE_MAGIC 0xFADEDACE
 struct schedule_data {
+  uint64_t magic;
   lua_State *state;
   lua_Integer function;
   lua_Integer state_ref;
 };
 
+static void schedule_unref(struct schedule_data *d) {
+  assert(d->magic == SCHEDULE_MAGIC);
+  // unpin function
+  luaL_unref(d->state, LUA_REGISTRYINDEX, d->function);
+  if (d->state_ref) {
+    // unpin coroutine thread
+    luaL_unref(d->state, LUA_REGISTRYINDEX, d->state_ref);
+  }
+}
+
 void schedule_execute(void *data) {
   struct schedule_data d = *(struct schedule_data*)data;
   free(data);
   pcall_func_ref(d.state, d.function);
-  // unpin function
-  luaL_unref(d.state, LUA_REGISTRYINDEX, d.function);
-  if (d.state_ref) {
-    // unpin coroutine thread
-    luaL_unref(d.state, LUA_REGISTRYINDEX, d.state_ref);
-  }
+  schedule_unref(&d);
 }
 
 bool vv_api_schedule_cancel(struct velvet *v, lua_Integer cancellation_id) {
-  return io_schedule_cancel(&v->event_loop, cancellation_id);
+  struct io_schedule *sched = io_schedule_get(&v->event_loop, cancellation_id);
+  if (sched) {
+    struct schedule_data *d = sched->data;
+    if (d->magic == SCHEDULE_MAGIC) { 
+      schedule_unref(d);
+      free(d);
+    }
+    return io_schedule_cancel(&v->event_loop, cancellation_id);
+  }
+  return false;
 }
 
 lua_Integer vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func) {
@@ -559,6 +575,7 @@ lua_Integer vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integ
   }
 
   struct schedule_data *alloc = calloc(1, sizeof(*alloc));
+  alloc->magic = SCHEDULE_MAGIC;
   alloc->function = func_ref;
   alloc->state = v->L;
   alloc->state_ref = state_ref;
