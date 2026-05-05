@@ -138,10 +138,13 @@ vv.options = setmetatable(vv.options, {
   end,
 })
 
+local function make_weaktable() return setmetatable({}, { __mode = 'k' }) end
+
 --- The main use case is for sockets to redirect all print statements
 --- to their execution context. Setting _ENV.print was almost a good solution, 
 --- but not quite since it doesn't capture prints from other modules.
-COROUTINE_PRINT = {}
+COROUTINE_PRINT = make_weaktable()
+
 local real_print = function(stream, ...)
   local tbl = {...}
   for i, v in ipairs(tbl) do tbl[i] = tostring(v) end
@@ -165,8 +168,8 @@ end
 
 --- Coroutine-specific arg table. By using metamagic,
 --- we can make the _G.args global point to COROUTINE_ARGS[coroutine.running()]
-COROUTINE_ARGS = {}
-COROUTINE_CWD = {}
+COROUTINE_ARGS = make_weaktable()
+COROUTINE_CWD = make_weaktable()
 
 --- Returns the working directory of the current coroutine,
 --- the focused window's working directory, or the server's startup directory.
