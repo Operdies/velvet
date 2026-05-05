@@ -80,15 +80,32 @@ static struct pair mypipe(void) {
   return (struct pair){ .r = fds[0], .w = fds[1] };
 }
 
-static const char *find_path(char **envp) {
-  /* if envp specifies PATH, use that.
+static char *find_path(char **envp) {
+  static char *default_path = NULL;
+  /* 1. if envp specifies PATH, use that.
    * Otherwise use the system path. */
   for (; envp && *envp; envp++) {
     char *env = *envp;
     if (strncmp("PATH=", env, 5) == 0)
       return (*envp) + 5;
   }
-  return getenv("PATH");
+
+  /* 2. check if PATH is defined */
+  char *path = getenv("PATH");
+  if (path) 
+    return path;
+
+  /* 3. fall back to the systems default PATH */
+  if (!default_path) {
+    /* lazily initialize default_path and reuse it for the program's lifetime */
+    default_path = "";
+    size_t len = confstr(_CS_PATH, NULL, 0);
+    if (len > 0) {
+      default_path = velvet_calloc(len, sizeof(char));
+      confstr(_CS_PATH, default_path, len);
+    }
+  }
+  return default_path;
 }
 
 static int spawn_process(struct velvet_process *p, char *wd, char **argv, char **envp) {
@@ -99,8 +116,11 @@ static int spawn_process(struct velvet_process *p, char *wd, char **argv, char *
   sigfillset(&block);
   sigprocmask(SIG_BLOCK, &block, &sighandler);
 
-  const char *path = find_path(envp);
-  const char *filename = find_binary(argv[0], path);
+  const char *filename = argv[0];
+  if (!strchr(filename, '/')) { 
+    char *path = find_path(envp);
+    if (path) filename = find_binary(argv[0], path);
+  }
   if (!filename) return ENOENT;
 
   struct pair guard, in, out, err;
