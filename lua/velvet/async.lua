@@ -85,8 +85,31 @@ end
 --- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
 function M.run(f, ...)
   local args = table.pack(...)
+  local parent = setmetatable({ coroutine.running() }, { __mode = 'kv' })
+  local get_print = function()
+    if parent and parent[1] then
+      return COROUTINE_PRINT[parent[1]]
+    end
+  end
+
   local co = coroutine.create(function()
     co_defer[coroutine.running()] = {}
+    if get_print() then
+      COROUTINE_PRINT[coroutine.running()] = function(stream, ...)
+        local parent_print = get_print()
+        if parent_print then
+          -- if the parent print is still set, use that.
+          parent_print(stream, ...)
+        else
+          -- otherwise, unset the print function and print normally.
+          -- this happens if the parent process exits while child
+          -- coroutines are still running.
+          COROUTINE_PRINT[coroutine.running()] = nil
+          -- discard stream
+          print(...)
+        end
+      end
+    end
     local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
     if not ok then
       printerr(("Unhandled error in coroutine: %s"):format(err), 'error')
