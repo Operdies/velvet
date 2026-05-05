@@ -124,7 +124,7 @@ struct velvet {
 
 void velvet_force_full_redraw(struct velvet *scene);
 void velvet_invalidate_render(struct velvet *velvet, const char *reason);
-void velvet_loop(struct velvet *velvet);
+void velvet_loop(struct velvet *velvet, struct rect initial_size);
 void velvet_destroy(struct velvet *velvet);
 /* Process keys in the root keymap. This can be used in e.g. a mapping to map asd->def.
  * This input will not be parsed for CSI sequences or any current keymap. */

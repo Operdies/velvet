@@ -667,10 +667,8 @@ static void velvet_dispatch(struct velvet *velvet) {
   velvet_raise_window_events(velvet);
 }
 
-void velvet_loop(struct velvet *velvet) {
-  // Set an initial dummy size. This will be controlled by clients once they connect.
-  struct rect ws = {.width = 80, .height = 24, .x_pixel = 800, .y_pixel = 600};
-  velvet_scene_resize(&velvet->scene, ws);
+void velvet_loop(struct velvet *velvet, struct rect initial_size) {
+  velvet_scene_resize(&velvet->scene, initial_size);
   /* We need to pass in a velvet reference to the scene so it can raise events.
    * TODO: Get rid of `velvet_scene` and store windows directly in `velvet`.
    * Scene initially made sense because it managed and arranged windows.

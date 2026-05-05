@@ -298,13 +298,14 @@ int main(int argc, char **argv) {
   int sock_fd = create_socket(args.socket);
   args.socket = getenv("VELVET");
 
+  /* initialize with dummy size. This will only be used in the headless debugging scenario */
+  struct rect initial_screen_size = {.width = 80, .height = 24, .x_pixel = 800, .y_pixel = 600};
   // Since we are not connecting to a server, that means we are creating a new server.
   // The server should be detached from the current process hierarchy.
   // We do this with a classic double fork()
   if (!args.foreground) {
-    struct rect ws = {0};
-    platform_get_winsize(&ws);
-    if (ws.height == 0 || ws.width == 0) {
+    platform_get_winsize(&initial_screen_size);
+    if (initial_screen_size.height == 0 || initial_screen_size.width == 0) {
       fprintf(stderr, "Error getting terminal size. Exiting.\n");
       return 1;
     }
@@ -357,7 +358,7 @@ int main(int argc, char **argv) {
       .clean = args.clean,
   };
 
-  velvet_loop(&velvet);
+  velvet_loop(&velvet, initial_screen_size);
   velvet_fast_shutdown(&velvet);
 }
 
