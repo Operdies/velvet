@@ -92,13 +92,17 @@ function M.cancel(co)
   exec_defer(co)
 end
 
+local function defer_on(co, defer)
+  if deferring[co] then error("Cannot add new defers during defer.") end
+  assert(type(defer) == 'function', string.format('Bad argument #1 (function expected, got %s)', type(defer)))
+  local defers = co_defer[co] or error("Provided coroutine is not managed by vv.async.")
+  defers[#defers + 1] = defer
+end
+
 --- defer a function which runs when the current coroutine completes or is cancelled.
 --- @param defer fun() deferred action
 function M.defer(defer)
-  if deferring[coroutine.running()] then error("Cannot add new defers during defer.") end
-  assert(type(defer) == 'function', string.format('Bad argument #1 (function expected, got %s)', type(defer)))
-  local defers = co_defer[coroutine.running()] or error("Provided coroutine is not managed by vv.async.")
-  defers[#defers + 1] = defer
+  defer_on(coroutine.running(), defer)
 end
 
 local function resolve(name, data)
@@ -190,7 +194,7 @@ e['**'] = resolve
 --- @field event velvet.async.event|string event
 --- @field when fun(registration: velvet.async.event_registration, result: velvet.async.wait.result): boolean predicate function
 
---- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|'*'|'**'|string
+--- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|thread|'*'|'**'|string
 
 --- @class velvet.async.wait.result
 --- @field name velvet.async.event|string the name of the raised event
@@ -207,11 +211,18 @@ function M.wait(...)
   -- local capture to preserve the sequence number
   local seq = sequence
 
+  local compatible_types = { number = true, string = true, table = true, thread = true }
   local args = {...}
   if #args == 0 then error("No events specified.") end
   for i, evt in ipairs(args) do
-    if type(evt) ~= 'number' and type(evt) ~= 'string' and type(evt) ~= 'table' then
-      error(("Bad argument #%d (number, string or table expected)"):format(i))
+    local tp = type(evt)
+    if not compatible_types[tp] then
+      error(("Bad argument #%d (number, string, coroutine, or table expected)"):format(i))
+    end
+    if tp == 'thread' and not co_defer[evt] then
+      -- if the coroutine is not running, return immediately.
+      ---@diagnostic disable-next-line: return-type-mismatch
+      return evt, nil
     end
   end
 
@@ -233,6 +244,15 @@ function M.wait(...)
         local ok, error = coroutine.resume(co, nil, 'timeout')
         if not ok then
           printerr(string.format("Unhandled error in coroutine after timeout: %s", debug.traceback(error, 0)))
+        end
+      end)
+    elseif type(evt) == 'thread' then
+      defer_on(evt, function()
+        if not sequence_callbacks[seq] then return end
+        sequence_callbacks[seq] = nil
+        local ok, error = coroutine.resume(co, evt)
+        if not ok then
+          printerr(string.format("Unhandled error in coroutine wait: %s", debug.traceback(error, 0)))
         end
       end)
     elseif type(evt) == 'string' or type(evt) == 'table' then
