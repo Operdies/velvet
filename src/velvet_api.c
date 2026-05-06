@@ -275,7 +275,7 @@ lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, str
 
 void vv_api_process_stdin_write(struct velvet *v, lua_Integer id, struct u8_slice text) {
   struct velvet_process *p = check_process(v, id);
-  if (!p->stdin_closed) string_push_slice(&p->pending_input, text);
+  velvet_process_write_stdin(v, p, text);
 }
 
 void vv_api_process_stdin_close(struct velvet *v, lua_Integer id) {

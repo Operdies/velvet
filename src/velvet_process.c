@@ -192,6 +192,11 @@ int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp) {
   return p.id;
 }
 
+void velvet_process_write_stdin(struct velvet *v, struct velvet_process *p, struct u8_slice text) {
+  (void)v;
+  if (!p->stdin_closed) string_push_slice(&p->pending_input, text);
+}
+
 void velvet_process_close_stdin(struct velvet *v, struct velvet_process *p) {
   (void)v;
   p->stdin_closed = true;
