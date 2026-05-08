@@ -27,6 +27,7 @@ local registered_waits = {}
 local co_to_seq = make_weaktable()
 local co_defer = make_weaktable()
 local deferring = make_weaktable()
+local co_result = make_weaktable()
 
 -- Monotonically increasing sequence number used to invalidate multi-waits
 local sequence = 1
@@ -110,9 +111,10 @@ function M.run(f, ...)
         end
       end
     end
-    local ok, err = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
-    if not ok then
-      printerr(("Unhandled error in coroutine: %s"):format(err), 'error')
+    local success, result = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
+    co_result[coroutine.running()] = { success = success, result = result }
+    if not success then
+      printerr(("Unhandled error in coroutine: %s"):format(result), 'error')
     end
     exec_defer(coroutine.running())
   end)
@@ -128,6 +130,7 @@ function M.cancel(co)
     co_to_seq[co] = nil
     sequence_callbacks[seq] = nil
   end
+  co_result[co] = { success = false, error = 'canceled' }
   exec_defer(co)
 end
 
@@ -256,7 +259,7 @@ local function defer_callback(co, trd, seq)
   defer_on(trd, function()
     if not sequence_callbacks[seq] then return end
     sequence_callbacks[seq] = nil
-    local ok, error = coroutine.resume(co, trd)
+    local ok, error = coroutine.resume(co, trd, co_result[trd])
     if not ok then
       printerr(string.format("Unhandled error in coroutine wait: %s", debug.traceback(error, 0)))
     end
@@ -294,10 +297,13 @@ function M.wait(...)
     if not compatible_types[tp] then
       error(("Bad argument #%d (number, string, coroutine, or table expected)"):format(i))
     end
-    if tp == 'thread' and not co_defer[evt] then
-      -- if the coroutine is not running, return immediately.
-      ---@diagnostic disable-next-line: return-type-mismatch
-      return evt, nil
+    if tp == 'thread' then
+      -- if the coroutine completed, or is not running, return immediately.
+      if co_result[evt] then return evt, co_result[evt] end
+      if not co_defer[evt] then 
+        ---@diagnostic disable-next-line: return-type-mismatch
+        return evt, nil
+      end
     elseif tp == 'number' then
       if math.type(evt) ~= 'integer' then
         error(("Bad argument #%d (integer expected, got number)"):format(i))
