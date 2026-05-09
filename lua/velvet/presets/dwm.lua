@@ -24,6 +24,8 @@ local function cfg(settings)
   map_prefix(pfx, function() vv.api.window_send_keys(vv.api.get_focused_window(), pfx) end,
     { description = "Send the key <C-x> to the current window." })
 
+  map_prefix('v', function() require('velvet.copy_mode').start() end, "Enter copy mode")
+
   local dwm = require('velvet.layout.dwm')
 
   for i = 1, 9 do
