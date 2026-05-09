@@ -169,11 +169,11 @@ static void vv_log_lua_error(struct velvet *vv) {
 }
 
 void velvet_lua_source(struct velvet *vv, char *path) {
-  lua_getglobal(vv->L, "dofile");
-  lua_pushstring(vv->L, path);
-  if (lua_pcall(vv->L, 1, 0, 0) != LUA_OK) {
+  struct string chunk = {0};
+  string_push_format_slow(&chunk, "vv.async.run(dofile, [=[%s]=])", path);
+  if (luaL_dostring(vv->L, (char*)chunk.content) != LUA_OK) 
     vv_log_lua_error(vv);
-  }
+  string_destroy(&chunk);
 }
 
 struct u8_slice luaL_checkslice(lua_State *L, lua_stackIndex idx) {

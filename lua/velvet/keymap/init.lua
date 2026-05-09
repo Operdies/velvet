@@ -312,11 +312,8 @@ function Keys:set(lhs, rhs, opts)
     map = map.children[lookup_key]
   end
   map.execute = function() 
-    local handler = function(e)
-      return string.format("Unhandled error in keymap '%s': %s'", lhs, debug.traceback(e, 2))
-    end
-    local ok, err = xpcall(rhs, handler)
-    if not ok then printerr(err) end
+    local ok, err = xpcall(rhs, debug.traceback)
+    if not ok then printerr(string.format("Unhandled error in keymap '%s': %s", lhs, err)) end
   end
   map.options = opts or {}
 end
