@@ -1063,6 +1063,33 @@ return function(registration, result)
   end
 end
 
+--- Wait for all registrations in |events| to fire, or |timeout|.
+--- @param events table<any, velvet.async.event_registration> One or more events to wait for.
+--- @param timeout? integer optional timeout
+--- @return table<any, velvet.async.wait.result> the result of each wait operation, with the same keys as |events|
+function M.wait_all(events, timeout)
+  -- shallow copy to avoid mutating the user provided table
+  local inputs = {}; for k, v in pairs(events) do inputs[k] = v end
+  local outputs = {}
+  local deadline = timeout and (vv.api.get_current_tick() + timeout) or nil
+  while next(inputs) do
+    local args = {}
+    local lookup = {}
+    for i, v in pairs(inputs) do args[#args+1] = v; lookup[v] = i; end
+    local t = deadline and (deadline - vv.api.get_current_tick()) or nil
+    local reg, evt = vv.async.wait(table.unpack(args), t)
+    if reg then
+      local key = lookup[reg]
+      inputs[key] = nil
+      outputs[key] = evt
+    else
+      -- timeout
+      return outputs
+    end
+  end
+  return outputs
+end
+
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
