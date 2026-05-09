@@ -1030,6 +1030,10 @@ table.insert(async, [[
 --- @field name velvet.async.event|string the name of the raised event
 --- @field data any the event args
 
+--- @class velvet.async.thread.result
+--- @field success boolean true if the thread completed successfully, otherwise false
+--- @field result any
+
 local function timeout_callback(co, timeout, seq)
   return vv.api.schedule_after(timeout, function()
     -- if sequence_callbacks was unset, that means this coroutine was cancelled.
@@ -1066,7 +1070,7 @@ end
 --- Wait for all registrations in |events| to fire, or |timeout|.
 --- @param events table<any, velvet.async.event_registration> One or more events to wait for.
 --- @param timeout? integer optional timeout
---- @return table<any, velvet.async.wait.result> the result of each wait operation, with the same keys as |events|
+--- @return table<any, velvet.async.wait.result|velvet.async.thread.result> the result of each wait operation, with the same keys as |events|
 function M.wait_all(events, timeout)
   -- shallow copy to avoid mutating the user provided table
   local inputs = {}; for k, v in pairs(events) do inputs[k] = v end
@@ -1092,7 +1096,7 @@ end
 
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
+--- @return velvet.async.event_registration, velvet.async.wait.result|velvet.async.thread.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -1179,12 +1183,12 @@ end
 
 --- Returns an iterator which yields whenever an event in |...| is fired. Terminates on timeout if specified.
 --- @param ... velvet.async.event_registration|integer One or more events to stream. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return fun(): velvet.async.event_registration?, velvet.async.wait.result? Iterator which streams the input events
+--- @return fun(): velvet.async.event_registration, velvet.async.wait.result|velvet.async.thread.result Iterator which streams the input events
 function M.stream(...)
   local args = {...}
   return function()
-    local ok, result = M.wait(table.unpack(args))
-    return ok or 'timeout', result
+    local registration, result = M.wait(table.unpack(args))
+    return registration or 'timeout', result
   end
 end
 
