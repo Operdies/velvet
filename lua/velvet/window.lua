@@ -593,6 +593,7 @@ end
 --- @param enabled boolean set 
 function Window:set_frame_enabled(enabled)
   assert(not self.is_border, "Bad argument #0 (self is a border)")
+  if self.frame_visible == enabled then return end
   self.frame_visible = enabled
   if enabled and not self.borders then
     self.borders = {

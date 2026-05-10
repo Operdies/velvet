@@ -391,22 +391,18 @@ local function tile()
   local left = 1 + r_left
   local top = 1 + r_top
   local left_geom = { left = left, top = top, width = master_width, height = term.height }
-  if #left_stack == 1 and #right_stack == 0 then 
-    left_geom.width = master_width + 2
-    left_geom.left = left - 1
-    left_geom.top = top - 1
+  local right_geom = { left = master_width + left, top = top, width = term.width - master_width, height = term.height }
+  if #left_stack + #right_stack == 1 then
+    local stk = #left_stack == 1 and left_stack or right_stack
+    local w = stk[1]
+    w:set_frame_enabled(false)
+    win_stack(left_geom, stk)
+  else
+    for _, w in ipairs(left_stack) do w:set_frame_enabled(true) end
+    for _, w in ipairs(right_stack) do w:set_frame_enabled(true) end
+    win_stack(left_geom, left_stack)
+    win_stack(right_geom, right_stack)
   end
-  win_stack(left_geom, left_stack)
-  if #right_stack > 0 then
-    local g = { left = master_width + left, top = top, width = term.width - master_width, height = term.height }
-    if #left_stack == 0 and #right_stack == 1 then
-      g.left = g.left - 1
-      g.width = g.width + 2
-      g.top = g.top - 1
-    end
-    win_stack(g, right_stack)
-  end
-
   focus_first_visible()
 end
 
