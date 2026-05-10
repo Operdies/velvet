@@ -81,7 +81,7 @@ local function exec_defer(co)
 end
 
 --- Execute |f| as a coroutine.
---- @param f fun(...): any
+--- @param f fun(...): ...
 --- @param ... any arguments passed to f
 --- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
 function M.run(f, ...)
@@ -111,8 +111,8 @@ function M.run(f, ...)
         end
       end
     end
-    local success, result = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
-    co_result[coroutine.running()] = { success = success, result = result }
+    local result = { xpcall(f, debug.traceback, table.unpack(args, 1, args.n)) }
+    co_result[coroutine.running()] = result
     exec_defer(coroutine.running())
   end)
   coroutine.resume(co)
@@ -127,7 +127,7 @@ function M.cancel(co)
     co_to_seq[co] = nil
     sequence_callbacks[seq] = nil
   end
-  co_result[co] = { success = false, error = 'canceled' }
+  co_result[co] = { false, 'canceled' }
   exec_defer(co)
 end
 
@@ -240,10 +240,6 @@ e['**'] = resolve
 --- @field name velvet.async.event|string the name of the raised event
 --- @field data any the event args
 
---- @class velvet.async.thread.result
---- @field success boolean true if the thread completed successfully, otherwise false
---- @field result any
-
 local function timeout_callback(co, timeout, seq)
   return vv.api.schedule_after(timeout, function()
     -- if sequence_callbacks was unset, that means this coroutine was cancelled.
@@ -257,7 +253,7 @@ local function defer_callback(co, trd, seq)
   defer_on(trd, function()
     if not sequence_callbacks[seq] then return end
     sequence_callbacks[seq] = nil
-    coroutine.resume(co, trd, co_result[trd])
+    coroutine.resume(co, trd, table.unpack(co_result[trd]))
   end)
 end
 
@@ -271,7 +267,7 @@ end
 --- Wait for all registrations in |events| to fire, or |timeout|.
 --- @param events table<any, velvet.async.event_registration> One or more events to wait for.
 --- @param timeout? integer optional timeout
---- @return table<any, velvet.async.wait.result|velvet.async.thread.result> the result of each wait operation, with the same keys as |events|
+--- @return table<any, velvet.async.wait.result> the result of each wait operation, with the same keys as |events|
 function M.wait_all(events, timeout)
   -- shallow copy to avoid mutating the user provided table
   local inputs = {}; for k, v in pairs(events) do inputs[k] = v end
@@ -295,9 +291,18 @@ function M.wait_all(events, timeout)
   return outputs
 end
 
+--- @param co thread
+--- @return boolean success
+--- @return any result
+--- @return any ...
+function M.wait_for_coroutine(co)
+  local _, tbl = M.wait(co)
+  return table.unpack(tbl)
+end
+
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return velvet.async.event_registration, velvet.async.wait.result|velvet.async.thread.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
+--- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
 function M.wait(...)
   local timeout = nil
   local co = coroutine.running()
@@ -384,7 +389,7 @@ end
 
 --- Returns an iterator which yields whenever an event in |...| is fired. Terminates on timeout if specified.
 --- @param ... velvet.async.event_registration|integer One or more events to stream. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return fun(): velvet.async.event_registration, velvet.async.wait.result|velvet.async.thread.result Iterator which streams the input events
+--- @return fun(): velvet.async.event_registration, velvet.async.wait.result Iterator which streams the input events
 function M.stream(...)
   local args = {...}
   return function()
