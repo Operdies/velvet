@@ -95,13 +95,13 @@ local taskbar = nil
 --- @param count integer number of windows to stack
 local function calc_win_stack(left, top, width, height, count)
   local geoms = {}
-  local offset = top
+  local offset = 0
   for i = 1, count do
-    local height_left = 1 + height - offset
+    local height_left = height - offset
     local num_items_left = 1 + count - i
     local win_height = height_left // num_items_left
     if win_height < 3 then win_height = 3 end
-    local geom = { width = width, height = win_height, left = left, top = offset }
+    local geom = { width = width, height = win_height, left = left, top = offset + top }
     offset = offset + geom.height
     geoms[#geoms + 1] = geom
   end
@@ -336,9 +336,6 @@ local function tile()
     end
   end
 
-  term.width = term.width - (r_left + r_right)
-  term.height = term.height - (r_top + r_bottom)
-
   focused_id = vv.api.get_focused_window()
   left_stack = {}
   right_stack = {}
@@ -385,6 +382,16 @@ local function tile()
     win:set_z_index(i + z)
   end
 
+  local solitary = #left_stack + #right_stack == 1
+  if solitary then
+    dwm.reserve(-1, -1, 0, -1)
+  else
+    dwm.reserve(0, 0, 0, 0)
+  end
+
+  term.width = term.width - (r_left + r_right)
+  term.height = term.height - (r_top + r_bottom)
+
   local master_width = #right_stack > 0 and math.floor(term.width * state.mfact) or term.width
   if #left_stack == 0 then master_width = 0 end
 
@@ -392,11 +399,8 @@ local function tile()
   local top = 1 + r_top
   local left_geom = { left = left, top = top, width = master_width, height = term.height }
   local right_geom = { left = master_width + left, top = top, width = term.width - master_width, height = term.height }
-  if #left_stack + #right_stack == 1 then
-    local stk = #left_stack == 1 and left_stack or right_stack
-    local w = stk[1]
-    w:set_frame_enabled(false)
-    win_stack(left_geom, stk)
+  if solitary then
+    win_stack(left_geom, { left_stack[1] or right_stack[1] })
   else
     for _, w in ipairs(left_stack) do w:set_frame_enabled(true) end
     for _, w in ipairs(right_stack) do w:set_frame_enabled(true) end
@@ -406,8 +410,12 @@ local function tile()
   focus_first_visible()
 end
 
+local arranging = false
 local function arrange()
-  tile()
+  if arranging then return end
+  arranging = true
+  pcall(tile)
+  arranging = false
 end
 
 local drop_hint = window.create()
