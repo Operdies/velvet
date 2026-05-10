@@ -263,8 +263,6 @@ local function do_copy()
         overlay:draw(line.text)
       end
     end
-    overlay:set_background_color('yellow')
-    overlay:draw(string.format("\x1b[H%s", mode))
     overlay:set_cursor(c1.col, c1.row)
     cursor = c1
   end
