@@ -38,8 +38,7 @@
 local Window = {}
 Window.__index = Window
 
-local vv = require('velvet')
-local a = vv.api
+local api = vv.api
 
 
 --- @type velvet.window[]
@@ -52,7 +51,7 @@ local function clamp(v, lo, hi)
 end
 
 --- @param hex string
---- @return velvet.api.rgb_color|nil,string|nil
+--- @return velvet.api.rgb_color?, string?
 local function hex_to_rgb(hex)
   if type(hex) ~= "string" then
     return nil, "expected string"
@@ -60,6 +59,7 @@ local function hex_to_rgb(hex)
 
   -- allow recursively looking up a color. This allows patterns such as setting 
   -- theme.cursor = 'red', where 'red' is automatically inferred as theme.red
+---@diagnostic disable-next-line: return-type-mismatch
   if vv.options.theme[hex] then return vv.options.theme[hex] end
 
   -- Must be "#rrggbb" or "#rrggbbaa"
@@ -91,9 +91,9 @@ local function hex_to_rgb(hex)
 end
 
 --- @param color string
---- @return velvet.api.rgb_color
+--- @return velvet.color
 local function color_from_string(color)
-  local palette = a.get_theme()
+  local palette = api.get_theme()
   if palette[color] then
     return palette[color]
   elseif type(color) == 'string' then
@@ -405,19 +405,19 @@ hooks.mouse_scroll = function(args) route_mouse_events('mouse.scroll', args) end
 --- get window geometry
 --- @return velvet.api.rect
 function Window:get_geometry()
-  return a.window_get_geometry(self.id)
+  return api.window_get_geometry(self.id)
 end
 
 --- set window geometry
 --- @param geom velvet.api.rect
 function Window:set_geometry(geom)
-  a.window_set_geometry(self.id, geom)
+  api.window_set_geometry(self.id, geom)
 end
 
 --- Close the window. The instance wi
 function Window:close()
   win_registry[self.id] = nil
-  if vv.api.window_is_valid(self.id) then a.window_close(self.id) end
+  if vv.api.window_is_valid(self.id) then api.window_close(self.id) end
 end
 
 --- Create a new window whose lifetime is tied to the parent window. If the parent window is closed, the child window is also closed. Otherwise, the windows are completely independent.
@@ -465,22 +465,22 @@ end
 
 --- @return string
 function Window:get_title()
-  return a.window_get_title(self.id)
+  return api.window_get_title(self.id)
 end
 
 --- @return string
 function Window:get_working_directory()
-  return a.window_get_working_directory(self.id)
+  return api.window_get_working_directory(self.id)
 end
 
 --- @param visible boolean window visibility
 function Window:set_visibility(visible)
-  a.window_set_hidden(self.id, not visible)
+  api.window_set_hidden(self.id, not visible)
 end
 
 --- @return boolean window 
 function Window:get_visibility()
-  return not a.window_get_hidden(self.id)
+  return not api.window_get_hidden(self.id)
 end
 
 --- Return boolean valid flag indicating if this window is a lua window.
@@ -490,7 +490,7 @@ end
 
 --- @return boolean valid flag indicating if this window is valid.
 function Window:valid()
-  return a.window_is_valid(self.id)
+  return api.window_is_valid(self.id)
 end
 
 local nil_window = {}
@@ -512,7 +512,7 @@ end
 --- @param id integer window handle
 --- @return velvet.window
 function Window.from_handle(id)
-  if not a.window_is_valid(id) then error(('%d is not a valid window.'):format(id)) end
+  if not api.window_is_valid(id) then error(('%d is not a valid window.'):format(id)) end
   if win_registry[id] then return win_registry[id] end
   local self = { id = id, child_windows = {} }
   local instance = setmetatable(self, Window)
@@ -529,7 +529,7 @@ end
 --- @param options? velvet.api.window.create_options initial window options
 --- @return velvet.window
 function Window.create(options)
-  local win = Window.from_handle(a.window_create(options))
+  local win = Window.from_handle(api.window_create(options))
   win:set_auto_return(true)
   win:set_line_wrapping(true)
   return win
@@ -540,7 +540,7 @@ end
 --- @param options? velvet.api.window.create_options initial window options
 --- @return velvet.window
 function Window.create_process(cmd, options)
-  local win = Window.from_handle(a.window_create_process(cmd, options))
+  local win = Window.from_handle(api.window_create_process(cmd, options))
   return win
 end
 
@@ -625,32 +625,13 @@ local indexed_colors = {
   black = 0, red = 1, green = 2, yellow = 3, blue = 4, magenta = 5, cyan = 6, white = 7,
   bright_black = 8, bright_red = 9, bright_green = 10, bright_yellow = 11, bright_blue = 12, bright_magenta = 13, bright_cyan = 14, bright_white = 15,
 }
---- @alias indexed_color
----| 'black'
----| 'red'
----| 'green'
----| 'yellow'
----| 'blue'
----| 'magenta'
----| 'cyan'
----| 'white'
----| 'bright_black'
----| 'bright_red'
----| 'bright_green'
----| 'bright_yellow'
----| 'bright_blue'
----| 'bright_magenta'
----| 'bright_cyan'
----| 'bright_white'
 
---- @alias rrggbb string
-
---- @param color velvet.api.rgb_color|string the new foreground color
+--- @param color velvet.color the new foreground color
 function Window:set_frame_color(color)
   if type(color) == 'string' then 
     if not indexed_colors[color] then
       -- if this is not a pre-configured color, assume it is an #rrggbb string.
-      color = color_from_string(color) 
+      color = color_from_string(color)
     end
   end
   self.frame_color = color
@@ -661,7 +642,7 @@ function Window:get_frame_enabled()
   return self.frame_visible
 end
 
---- @param color velvet.api.rgb_color|indexed_color|rrggbb the new foreground color
+--- @param color velvet.color the new foreground color
 function Window:set_foreground_color(color)
   if indexed_colors[color] then
     local idx = indexed_colors[color]
@@ -686,7 +667,7 @@ function Window:clear_foreground_color()
   self:draw('\x1b[39m')
 end
 
---- @param color velvet.api.rgb_color|indexed_color|rrggbb the new background color
+--- @param color velvet.color the new background color
 function Window:set_background_color(color)
   if indexed_colors[color] then
     local idx = indexed_colors[color]
@@ -703,50 +684,50 @@ end
 
 --- @param z integer new z index
 function Window:set_z_index(z)
-  a.window_set_z_index(self.id, z)
+  api.window_set_z_index(self.id, z)
 end
 
 function Window:get_z_index()
-  return a.window_get_z_index(self.id)
+  return api.window_get_z_index(self.id)
 end
 
 function Window:draw(str)
   local c1 = self:get_cursor()
-  a.window_write(self.id, str)
+  api.window_write(self.id, str)
   local c2 = self:get_cursor()
   return c1, c2
 end
 
 --- @param mode velvet.api.transparency_mode
 function Window:set_transparency_mode(mode)
-  a.window_set_transparency_mode(self.id, mode)
+  api.window_set_transparency_mode(self.id, mode)
 end
 
 --- @param dim number new dim factor. Highter dim means more dimming (0.0 - 1.0)
 function Window:set_dimming(dim)
-  a.window_set_dim_factor(self.id, dim)
+  api.window_set_dim_factor(self.id, dim)
 end
 
 --- @return number dim
 function Window:get_dimming()
-  return a.window_get_dim_factor(self.id)
+  return api.window_get_dim_factor(self.id)
 end
 
 --- @param alpha number Window alpha (0.0 - 1.0)
 function Window:set_alpha(alpha)
   alpha = clamp(alpha, 0, 1)
   if alpha < 1 then
-    local mode = a.window_get_transparency_mode(self.id)
+    local mode = api.window_get_transparency_mode(self.id)
     if mode == 'none' then 
       self:set_transparency_mode('all')
     end
   end
-  a.window_set_alpha(self.id, alpha)
+  api.window_set_alpha(self.id, alpha)
 end
 
 --- @return number alpha Window alpha (0.0 - 1.0)
 function Window:get_alpha()
-  return a.window_get_alpha(self.id)
+  return api.window_get_alpha(self.id)
 end
 
 --- @param handler fun(self: velvet.window, args: velvet.api.mouse.click.event_args)
@@ -797,7 +778,7 @@ end
 --- Focus this window
 function Window:focus()
   if self:valid() then
-    a.set_focused_window(self.id)
+    api.set_focused_window(self.id)
   end
 end
 

@@ -64,6 +64,7 @@ local vv = {
   events = ev,
 }
 
+--- @return velvet.api.rgb_color?,string?
 local function string_to_rgb(hex)
   if type(hex) ~= "string" then
     return nil, "expected string"

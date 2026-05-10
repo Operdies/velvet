@@ -9,6 +9,31 @@ vv = {}
 --- @class velvet.api.event_handler
 --- @field any fun(event_name: string, event_args?: table): nil Raised when any event is raised.
 
+--- @alias velvet.color.ansi
+---| 'black'
+---| 'red'
+---| 'green'
+---| 'yellow'
+---| 'blue'
+---| 'magenta'
+---| 'cyan'
+---| 'white'
+---| 'bright_black'
+---| 'bright_red'
+---| 'bright_green'
+---| 'bright_yellow'
+---| 'bright_blue'
+---| 'bright_magenta'
+---| 'bright_cyan'
+---| 'bright_white'
+
+--- @alias velvet.color.rrggbb string
+
+--- @alias velvet.color
+--- | velvet.api.rgb_color
+--- | velvet.color.ansi
+--- | velvet.color.rrggbb
+
 -- convenient alias for named keys.
 -- Note that this alias intentionally omits non-special characters outside of the ascii range,
 -- such as æøå, accented characters, and all eastern glyphs.
