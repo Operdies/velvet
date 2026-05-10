@@ -566,7 +566,7 @@ local function add_window(id, init)
   end
 end
 
-function table.remove_if(t, pred)
+local function remove_if(t, pred)
   local j = 1
   for i = 1, #t do
     if not pred(t[i]) then
@@ -579,7 +579,7 @@ function table.remove_if(t, pred)
   end
 end
 
-function table.unset_if_key(t, pred)
+local function unset_if_key(t, pred)
   for k, _ in pairs(t) do
     if pred(k) then t[k] = nil end
   end
@@ -587,10 +587,10 @@ end
 
 local function remove_window()
   local function win_invalid(id) return not vv.api.window_is_valid(id) end
-  table.remove_if(state.windows, win_invalid)
-  table.remove_if(state.focus_order, win_invalid)
-  table.unset_if_key(state.layers, win_invalid)
-  table.unset_if_key(state.tags, win_invalid)
+  remove_if(state.windows, win_invalid)
+  remove_if(state.focus_order, win_invalid)
+  unset_if_key(state.layers, win_invalid)
+  unset_if_key(state.tags, win_invalid)
   focus_first_visible()
   arrange()
 end
@@ -845,12 +845,16 @@ end
 --- For example, if left=1, then the leftmost column of cells is considered reserved,
 --- and will not be used in the tiling layout.
 --- bottom=1 means the last line is reserved.
---- @param top integer
---- @param left integer
---- @param bottom integer
---- @param right integer
+--- This is mostly relevant for taskbars, which may want to reserve the first or last line.
+--- @param top? integer
+--- @param left? integer
+--- @param bottom? integer
+--- @param right? integer
 function dwm.reserve(top, left, bottom, right)
-  r_top, r_left, r_bottom, r_right = top, left, bottom, right
+  r_top = top or r_top
+  r_left = left or r_left
+  r_bottom = bottom or r_bottom
+  r_right = right or r_right
   arrange()
 end
 
