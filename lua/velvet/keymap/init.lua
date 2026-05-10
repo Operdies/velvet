@@ -311,9 +311,12 @@ function Keys:set(lhs, rhs, opts)
     if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
     map = map.children[lookup_key]
   end
-  map.execute = function() 
-    local ok, err = xpcall(rhs, debug.traceback)
-    if not ok then printerr(string.format("Unhandled error in keymap '%s': %s", lhs, err)) end
+  map.execute = function()
+    -- run rhs in async context to avoid blocking
+    vv.async.run(function()
+      local success, result = xpcall(rhs, debug.traceback)
+      if not success then printerr(string.format("Unhandled error in keymap '%s': %s", lhs, result)) end
+    end)
   end
   map.options = opts or {}
 end
