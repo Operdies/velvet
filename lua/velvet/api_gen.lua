@@ -908,9 +908,6 @@ function M.run(f, ...)
     end
     local success, result = xpcall(f, debug.traceback, table.unpack(args, 1, args.n))
     co_result[coroutine.running()] = { success = success, result = result }
-    if not success then
-      printerr(("Unhandled error in coroutine: %s"):format(result), 'error')
-    end
     exec_defer(coroutine.running())
   end)
   coroutine.resume(co)
@@ -1039,10 +1036,7 @@ local function timeout_callback(co, timeout, seq)
     -- if sequence_callbacks was unset, that means this coroutine was cancelled.
     if not sequence_callbacks[seq] then return end
     sequence_callbacks[seq] = nil
-    local ok, error = coroutine.resume(co, nil, 'timeout')
-    if not ok then
-      printerr(string.format("Unhandled error in coroutine after timeout: %s", debug.traceback(error, 0)))
-    end
+    coroutine.resume(co, nil, 'timeout')
   end)
 end
 
@@ -1050,20 +1044,14 @@ local function defer_callback(co, trd, seq)
   defer_on(trd, function()
     if not sequence_callbacks[seq] then return end
     sequence_callbacks[seq] = nil
-    local ok, error = coroutine.resume(co, trd, co_result[trd])
-    if not ok then
-      printerr(string.format("Unhandled error in coroutine wait: %s", debug.traceback(error, 0)))
-    end
+    coroutine.resume(co, trd, co_result[trd])
   end)
 end
 
 local function resolve_callback(co, timeout)
 return function(registration, result)
     if timeout then vv.api.schedule_cancel(timeout) end
-    local ok, error = coroutine.resume(co, registration, result)
-    if not ok then
-      printerr(string.format("Unhandled error in coroutine after %s: %s", result.name, debug.traceback(error, 0)))
-    end
+    coroutine.resume(co, registration, result)
   end
 end
 
