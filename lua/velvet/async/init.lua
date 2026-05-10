@@ -209,7 +209,7 @@ local function defer_callback(co, trd, seq)
   defer_on(trd, function()
     if not sequence_callbacks[seq] then return end
     sequence_callbacks[seq] = nil
-    coroutine.resume(co, trd, table.unpack(co_result[trd]))
+    coroutine.resume(co, trd, co_result[trd])
   end)
 end
 
