@@ -799,6 +799,9 @@ struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_the
   } else {
     v->scene.theme.cursor.background = rgb_from_palette(new_value.foreground);
   }
+
+  if (new_value.bold_bright_colors.set)
+    v->scene.theme.bold_bright_colors = new_value.bold_bright_colors.value;
   velvet_invalidate_render(v, "color palette updated");
   return vv_api_get_theme(v);
 }

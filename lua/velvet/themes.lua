@@ -29,6 +29,7 @@ return {
       cursor_background = "#f5e0dc",
       -- text color of the cell containing the cursor, if block cursor is used
       cursor_foreground = "#1e1e2e",
+      bold_bright_colors = true,
     }
   },
   gruvbox = {
@@ -56,6 +57,7 @@ return {
 
       cursor_background = "#ebdbb2",
       cursor_foreground = "#282828",
+      bold_bright_colors = false,
     },
   },
 }

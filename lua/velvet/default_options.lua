@@ -7,6 +7,7 @@ vv.options.theme = {
   background = "#1e1e2e",
   black = "#45475a",
   blue = "#89b4fa",
+  bold_bright_colors = true,
   bright_black = "#585b70",
   bright_blue = "#89b4fa",
   bright_cyan = "#94e2d5",

@@ -69,6 +69,7 @@ struct velvet_theme {
     struct color background;
   } cursor;
   struct color palette[16];
+  bool bold_bright_colors;
 };
 
 struct velvet_render_state_cache {

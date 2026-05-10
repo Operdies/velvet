@@ -113,6 +113,7 @@ local api = {}
 --- @field background velvet.api.rgb_color|string The default background color
 --- @field cursor_foreground? velvet.api.rgb_color|string The foreground color of the cell containing the cursor
 --- @field cursor_background? velvet.api.rgb_color|string The background color of the cell containing the cursor
+--- @field bold_bright_colors? boolean Bright colors set cell style to bold
 
 --- @class velvet.api.process.spawn_options
 --- @field working_directory? string The initial working directory of the new process.

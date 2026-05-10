@@ -98,6 +98,7 @@ return {
         background        = "#1e1e2e",
         cursor_foreground = "#1e1e2e",
         cursor_background = "#f5e0dc",
+        bold_bright_colors = true,
       },
     },
     {
@@ -272,10 +273,12 @@ return {
         { name = "bright_white",      type = "rgb_color", doc = "Palette color 15" },
 
         -- Additional named colors
-        { name = "foreground",        type = "rgb_color", doc = "The default text color" },
-        { name = "background",        type = "rgb_color", doc = "The default background color" },
-        { name = "cursor_foreground", type = "rgb_color", doc = "The foreground color of the cell containing the cursor", optional = true },
-        { name = "cursor_background", type = "rgb_color", doc = "The background color of the cell containing the cursor", optional = true },
+        { name = "foreground",         type = "rgb_color", doc = "The default text color" },
+        { name = "background",         type = "rgb_color", doc = "The default background color" },
+        { name = "cursor_foreground",  type = "rgb_color", doc = "The foreground color of the cell containing the cursor", optional = true },
+        { name = "cursor_background",  type = "rgb_color", doc = "The background color of the cell containing the cursor", optional = true },
+
+        { name = "bold_bright_colors", type = "bool",      doc = "Bright colors set cell style to bold",                   optional = true },
       },
     },
     {

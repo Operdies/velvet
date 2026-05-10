@@ -233,9 +233,19 @@ static struct color color_alpha_blend(struct color a, struct color b, float frac
 
 /* convert cell colors to RGB colors based on the current theme, and convert null characters to spaces */
 static struct screen_cell normalize_cell(struct velvet_theme t, struct screen_cell c) {
+  bool is_reverse = c.style.attr & ATTR_REVERSE;
+  if (t.bold_bright_colors) {
+    struct color col = is_reverse ? c.style.bg : c.style.fg;
+    if (col.kind == COLOR_TABLE) {
+      if (col.table >= 8 && col.table <= 15) {
+        if (c.style.attr & ATTR_FAINT) c.style.attr &= ~ATTR_FAINT;
+        else c.style.attr |= ATTR_BOLD;
+      }
+    }
+  }
   c.style.bg = color_to_rgb(t, c.style.bg, false);
   c.style.fg = color_to_rgb(t, c.style.fg, true);
-  if (c.style.attr & ATTR_REVERSE) {
+  if (is_reverse) {
     c.style.attr &= ~ATTR_REVERSE;
     struct color fg = c.style.fg;
     c.style.fg = c.style.bg;
