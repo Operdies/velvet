@@ -60,7 +60,8 @@ end
 --- @param ... any arguments passed to f
 --- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
 function M.run(f, ...)
-  local args = table.pack(...)
+  if type(f) ~= 'function' then error(string.format("Bad argument #1 (function expected, got %s)", type(f))) end
+  local args = {...}
   local parent = setmetatable({ coroutine.running() }, { __mode = 'kv' })
   local get_print = function()
     if parent and parent[1] then
@@ -86,7 +87,7 @@ function M.run(f, ...)
         end
       end
     end
-    local result = { xpcall(f, debug.traceback, table.unpack(args, 1, args.n)) }
+    local result = { xpcall(f, debug.traceback, table.unpack(args)) }
     co_result[coroutine.running()] = result
     exec_defer(coroutine.running())
   end)
