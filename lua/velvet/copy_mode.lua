@@ -1,5 +1,18 @@
 local M = {}
 
+--- @alias velvet.copy_mode
+--- | 'none'
+--- | 'visual'
+--- | 'lines'
+--- | 'block'
+
+--- @type table<velvet.copy_mode, velvet.copy_mode>
+local modes = { none = 'none', visual = 'visual', lines = 'lines', block = 'block' }
+
+--- @param from velvet.api.coordinate
+--- @param to velvet.api.coordinate
+--- @param id integer
+--- @param mode velvet.copy_mode
 local function get_selection_ranges(from, to, id, mode)
   local geom = vv.api.window_get_geometry(id)
   if mode == 'block' then
@@ -28,21 +41,31 @@ local function get_selection_ranges(from, to, id, mode)
   end
 end
 
-local function do_copy()
-  local text_color = '#ffffff'
-  local confirm_text_color = '#000000ff'
-  local selection_highlight_color = 'black'
-  local selection_confirm_color = 'magenta'
-  local modes = { none = 'none', visual = 'visual', lines = 'lines', block = 'block' }
+--- @param initial_mode? velvet.copy_mode
+local function do_copy(initial_mode)
+  local target = vv.api.get_focused_window()
+  local initial_offset = vv.api.window_get_scroll_offset(target)
+  local text_color = 'bright_black'
+  local confirm_text_color = 'bright_black'
+  local selection_highlight_color = 'magenta'
+  local selection_confirm_color = 'yellow'
   local mode = modes.none
   local disposed = false
   local win = require('velvet.window')
   local km = require('velvet.keymap').create()
   local overlay = win.create()
-  local function dispose() disposed = true; if overlay and overlay:valid() then overlay:close() end end
+  local function dispose()
+    if disposed then return end
+    disposed = true
+    if overlay and overlay:valid() then
+      overlay:close()
+    end
+    if target and vv.api.window_is_valid(target) then
+      vv.api.window_set_scroll_offset(target, initial_offset)
+    end
+  end
   vv.async.defer(dispose)
 
-  local target = vv.api.get_focused_window()
   local target_geometry = vv.api.window_get_geometry(target)
   local cursor = vv.api.window_get_cursor_position(target)
   local start_selection, end_selection
@@ -171,10 +194,6 @@ local function do_copy()
     set_abs_cursor(end_selection)
   end
 
-  local function none_or_dispose()
-    if mode == modes.none then dispose() else mode = modes.none end
-  end
-
   local function scroll_to_top()
     cursor_move(0, -10000)
   end
@@ -212,7 +231,7 @@ local function do_copy()
   --
   -- dwm transient modeline
   local keymap = {
-    { { 'q', '<esc>' },                none_or_dispose },
+    { { 'q', '<esc>' },                dispose },
     { { 'k', '<up>' },                 apply(cursor_move, 0, -1) },
     { { 'j', '<down>' },               apply(cursor_move, 0, 1) },
     { { 'h', '<left>' },               apply(cursor_move, -1, 0) },
@@ -267,8 +286,6 @@ local function do_copy()
     cursor = c1
   end
 
-  draw()
-
   local on_key = {
     event = 'window.on_key',
     when = function(_, e) return e.data.key.event_type ~= 'release' and e.data.win_id == overlay.id end
@@ -285,6 +302,9 @@ local function do_copy()
   local target_resized = { event = 'window.resized', when = function(_, evt) return evt.data.win_id == target end }
   -- target output can cause scrolling which must be handled
   local target_output = { event = 'window.output', when = function(_, evt) return evt.data.win_id == target end }
+
+  if initial_mode then selection_mode(initial_mode) end
+  draw()
 
   -- FIXME: this approach breaks when the scrollback buffer overflows.
   -- The C API must provide some mechanism for answering the question, "how many lines were added?",
@@ -322,7 +342,12 @@ local function do_copy()
   end
 end
 
+--- @param mode? velvet.copy_mode
 function M.start(mode)
+  if mode and not modes[mode] then
+    local valid = {}; for k in pairs(modes) do valid[#valid + 1] = k end
+    error(string.format("Bad argument #1: invalid mode. Expected one of %s", table.concat(valid, ", ")))
+  end
   return vv.async.run(do_copy, mode)
 end
 
