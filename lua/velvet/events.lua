@@ -42,24 +42,21 @@ local events = {
     for _, id in pairs(event_groups or {}) do
       local group_func_table = event_handlers[id] or {}
       local handler = group_func_table[lookup_key] or group_func_table[event_name]
-      local prefix = false
+      local include_event_name = false
       if not handler then
         handler = group_func_table["**"]
-        prefix = true
+        include_event_name = true
       end
       if handler then
-        local error_handler = function(e)
-          return string.format("Unhandled error in event handler. (event %s): %s", event_name, debug.traceback(e, 2))
-        end
-        local ok, err
-        if prefix == true then
-          ok, err = xpcall(handler, error_handler, event_name, vv.deepcopy(data))
-        else
-          ok, err = xpcall(handler, error_handler, vv.deepcopy(data))
-        end
-        if not ok and event_name ~= 'system_message' then
-          printerr(err)
-        end
+        vv.async.run(function()
+          local d = vv.deepcopy(data)
+          local function get_args() if include_event_name then return event_name, d else return d end end
+          local ok, err = xpcall(handler, debug.traceback, get_args())
+          if not ok and event_name ~= 'system_message' then
+            printerr(string.format("Unhandled error in event handler (event %s): %s",
+              event_name, err))
+          end
+        end)
       end
     end
     if event_name == 'pre_reload' then
