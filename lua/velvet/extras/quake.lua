@@ -129,7 +129,7 @@ local function quake_builder(cmd, id)
     quake:on_window_moved(function(_, args) quakeHost:set_geometry(args.new_size) end)
     quake:on_focus_changed(function(_, args)
       if args.new == quake then show() end
-      if args.old == quake then hide() end
+      if args.old == quake and (args.new and not args.new:is_lua()) then hide() end
       if args.new == quake then
         if args.old and not quake_registry[args.old.id] then
           -- don't track other quake windows for the purposes
