@@ -280,7 +280,7 @@ local function do_copy(initial_mode)
         local line = vv.api.window_get_text(target, { top = range.row, height = 1, left = range.col1, width = range.col2 - range.col1 + 1 })[1]
         local visual_row = row1 + (i-1) + offset
         overlay:set_cursor(range.col1, visual_row)
-        overlay:draw(line.text)
+        overlay:draw(line.text:match('(.-)%s*$'))
       end
     end
     overlay:set_cursor(c1.col, c1.row)
