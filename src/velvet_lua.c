@@ -170,8 +170,23 @@ static void vv_log_lua_error(struct velvet *vv) {
 
 void velvet_lua_source(struct velvet *vv, char *path) {
   struct string chunk = {0};
-  string_push_format_slow(&chunk, "vv.async.run(dofile, [=[%s]=])", path);
-  if (luaL_dostring(vv->L, (char*)chunk.content) != LUA_OK) 
+  string_push_format_slow(
+      &chunk,
+      "vv.async.run(function()\n"
+      "  local success, result = xpcall(dofile, debug.traceback, [=[%s]=])\n"
+      "  if not success then\n"
+      /* Wait a moment before emitting the error. Since this would typically
+         happen after a reloading, this gives log listeners a moment to come
+         online. (they may be connecting over the socket) */
+      "    vv.async.wait(100)\n"
+      "    printerr(result)\n"
+      "  end\n"
+      "end)",
+      path);
+
+  if (luaL_loadbuffer(vv->L, (char *)chunk.content, chunk.len, "source config") != LUA_OK)
+    vv_log_lua_error(vv);
+  if (lua_pcall(vv->L, 0, 0, 0) != LUA_OK)
     vv_log_lua_error(vv);
   string_destroy(&chunk);
 }
