@@ -1,4 +1,9 @@
-local M = {}
+local M = {
+  events = {
+    --- @type velvet.async.event_source<string|nil>
+    mode_changed = vv.async.event_source()
+  }
+}
 
 --- @alias velvet.copy_mode
 --- | 'none'
@@ -46,10 +51,12 @@ end
 
 --- @param initial_mode? velvet.copy_mode
 local function do_copy(initial_mode)
+  vv.async.defer(function() M.events.mode_changed:emit(nil) end)
+  M.events.mode_changed:emit(initial_mode or 'normal')
   local target = vv.api.get_focused_window()
   local initial_offset = vv.api.window_get_scroll_offset(target)
-  local text_color = 'bright_black'
-  local confirm_text_color = 'bright_black'
+  local text_color = 'black'
+  local confirm_text_color = 'black'
   local selection_highlight_color = 'magenta'
   local selection_confirm_color = 'yellow'
   local mode = modes.none
@@ -88,6 +95,7 @@ local function do_copy(initial_mode)
   -- the overlay should be completely translucent except for highlighted text
   overlay:set_background_color('#00000000')
   overlay:set_foreground_color(text_color)
+  overlay:draw('\x1b[1m')
   overlay:clear()
   overlay:focus()
   overlay:set_cursor(cursor.col, cursor.row)
@@ -133,6 +141,7 @@ local function do_copy(initial_mode)
   end
 
   local function selection_mode(new_mode)
+    M.events.mode_changed:emit(new_mode)
     if mode == modes.none then
       start_selection = get_abs_cursor()
       end_selection = start_selection
@@ -195,6 +204,7 @@ local function do_copy(initial_mode)
     local cur = get_abs_cursor()
     if mode == 'none' then
       mode = 'yank'
+      M.events.mode_changed:emit('yank')
       yank_digit = digit
       start_selection = { col = cur.col, row = cur.row }
       end_selection = start_selection
