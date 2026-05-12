@@ -52,7 +52,9 @@ local monocle = false
 -- Note that it uses |integer| instead of |velvet.window| because |velvet.window| instances becomes stale after a reload.
 -- And also because the restore logic cannot handle table keys.
 local storage = require('velvet.runtime_storage').create('velvet.dwm')
-storage.state = storage.state or {
+
+--- @class velvet.dwm.state
+local default_state = {
   --- @type table<integer, boolean[]>
   tags = {},
   --- @type table<integer, dwm.layer>
@@ -70,6 +72,8 @@ storage.state = storage.state or {
   --- @type integer[]
   windows = {}
 }
+storage.state = storage.state or default_state
+
 local state = storage.state
 
 --- @param win velvet.window
@@ -88,9 +92,6 @@ local function win_move(win, to)
     a.cancel(win.id)
   end
 end
-
---- @type velvet.window
-local taskbar = nil
 
 --- @param left integer leftmost column of stacking area
 --- @param top integer topmost row of stacking area
@@ -251,120 +252,10 @@ local tiled_z = vv.z_hint.tiled
 local floating_z = vv.z_hint.floating
 local dim_inactive = 0
 
---- @return velvet.window
-local function create_status_window()
-  taskbar = window.create()
-  -- taskbar is below tiled windows, but the tiling
-  -- area does not overlap with the taskar area.
-  taskbar:set_z_index(floating_z - 1)
-  taskbar:set_cursor_visible(false)
-  taskbar:set_line_wrapping(false)
-  return taskbar
-end
-
---- @param tag integer
---- @return boolean
-local function tag_occupied(tag)
-  for _, set in pairs(state.tags) do
-    if set[tag] then return true end
-  end
-  return false
-end
-
-local show_status = true
-local km = require('velvet.keymap')
-
-local chain = nil
---- @return nil
-local function status_update()
-  local tag_start = 3
-  taskbar:set_visibility(show_status)
-  if not show_status then return end
-  local sz = vv.api.get_screen_geometry()
-  local tgeom = { left = 1, top = sz.height, width = sz.width, height = 1 }
-  taskbar:set_geometry(tgeom)
-  taskbar:clear_background_color()
-  taskbar:set_transparency_mode('clear')
-  taskbar:set_alpha(0)
-  taskbar:clear()
-  taskbar:set_foreground_color('black')
-  taskbar:set_cursor(tag_start, 1)
-  taskbar:draw('\x1b[1m')
-
-  local on_click = {}
-
-  for i = 1, 9 do
-    if state.view[i] or tag_occupied(i) then
-      taskbar:set_background_color(state.view[i] and 'red' or 'blue')
-      local c1, c2 = taskbar:draw((" %d "):format(i))
-      on_click[#on_click+1] = { c1.col, c2.col - 1, function() dwm.set_view(i) end }
-    end
-  end
-
-  local transient_start = taskbar:get_cursor().col + 10
-
-  local passthrough = km:get_passthrough()
-  if passthrough then
-    local segment = " Direct Input "
-    taskbar:set_foreground_color('black')
-    taskbar:set_background_color('cyan')
-    taskbar:set_cursor(transient_start, 1)
-    local c1, c2 = taskbar:draw(segment)
-    on_click[#on_click+1] = { c1.col, c2.col - 1, function() km:set_passthrough(false) end }
-    transient_start = c2.col
-  end
-
-  if monocle then
-    local segment = " Monocle "
-    taskbar:set_foreground_color('black')
-    taskbar:set_background_color('magenta')
-    taskbar:set_cursor(transient_start, 1)
-    local _, c2 = taskbar:draw(segment)
-    transient_start = c2.col
-  end
-
-  local servername = vv.api.get_servername():upper()
-  local offset = #servername + 2
-  local lcol = taskbar:get_geometry().width - offset
-  taskbar:set_cursor(lcol, 1)
-  taskbar:set_background_color('red')
-  taskbar:set_foreground_color('black')
-  taskbar:draw(' ' .. servername .. ' ')
-
-  if chain and #chain > 0 then 
-    offset = offset + (#chain + 2)
-    lcol = taskbar:get_geometry().width - offset
-    taskbar:set_cursor(lcol, 1)
-    taskbar:set_background_color(vv.options.theme.background)
-    taskbar:set_foreground_color('white')
-    taskbar:draw(' ' .. chain .. ' ')
-  end
-
-  --- @param args velvet.api.mouse.move.event_args|velvet.api.mouse.click.event_args
-  local function view_mouse_hit(_, args)
-    if args.mouse_button == 'left' then
-      local col = args.pos.col
-      for _, clk in ipairs(on_click) do
-        local lcol, rcol, fun  = table.unpack(clk)
-        if col >= lcol and col <= rcol then 
-          fun()
-          return nil
-        end
-      end
-    end
-    -- bubble events up if the taskbar did not handle them -- this lets us click things below the transparent sections.
-    return 'passthrough'
-  end
-
-  taskbar:on_mouse_move(view_mouse_hit)
-  taskbar:on_mouse_click(view_mouse_hit)
-end
-
 local left_stack = {}
 local right_stack = {}
 
 local function tile()
-  status_update()
   local term = vv.api.get_screen_geometry()
 
   local focused_id = vv.api.get_focused_window()
@@ -420,11 +311,6 @@ local function tile()
   end
 
   local solitary = #left_stack + #right_stack == 1
-  if solitary then
-    dwm.reserve(-1, -1, 0, -1)
-  else
-    dwm.reserve(0, 0, 0, 0)
-  end
 
   term.width = term.width - (r_left + r_right)
   term.height = term.height - (r_top + r_bottom)
@@ -679,9 +565,6 @@ function dwm.activate()
   for _, id in ipairs(lst) do
     add_window(id, true)
   end
-  taskbar = create_status_window()
-  -- dwm.reserve(0, 0, 1, 0)
-  dwm.reserve(0, 0, 0, 0)
   event_handler.screen_resized = arrange
   event_handler.window_created = function(args)
     if ignore_window(args.win_id) then return end
@@ -694,11 +577,6 @@ function dwm.activate()
     arrange()
   end
   arrange()
-  event_handler[km.events.passthrough_changed] = status_update
-  event_handler[km.events.chain_changed] = function(new_chain)
-    chain = new_chain
-    status_update()
-  end
 
   local win_under_cursor = nil
   vv.async.run(function()
@@ -852,6 +730,11 @@ function dwm.toggle_monocle()
   arrange()
 end
 
+--- @return string mode
+function dwm.get_mode()
+  return monocle and 'monocle' or 'tile'
+end
+
 --- reserve `n` lines/columns from top,left,bottom,right
 --- For example, if left=1, then the leftmost column of cells is considered reserved,
 --- and will not be used in the tiling layout.
@@ -894,13 +777,6 @@ end
 --- @param mode arrange arrange mode
 function dwm.set_arrange(mode)
   layout_name = mode
-  arrange()
-end
-
---- @param mode? boolean if true, show the status bar. Otherwise hide it
-function dwm.set_status(mode)
-  show_status = mode or not show_status
-  -- dwm.reserve(0, 0, show_status and 1 or 0, 0)
   arrange()
 end
 

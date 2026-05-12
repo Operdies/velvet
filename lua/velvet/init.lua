@@ -14,7 +14,7 @@ local vv = {
     background = -100000,
     --- tiled windows, if a tiling layout scheme is used
     tiled = -10000,
-    --- tstatus bars, power lines, etc. Should appear above tiled windows but below floating windows and popups
+    --- status bars, power lines, etc. Should appear above tiled windows but below floating windows and popups
     statusbar = -1000,
     --- floating windows, if a layout scheme with stacking capabilities is used
     floating = 1000,
