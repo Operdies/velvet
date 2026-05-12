@@ -180,6 +180,7 @@ void velvet_lua_source(struct velvet *vv, char *path) {
          online. (they may be connecting over the socket) */
       "    vv.async.wait(100)\n"
       "    printerr(result)\n"
+      "    require(VELVET_PRESET).setup()\n"
       "  end\n"
       "end)",
       path);

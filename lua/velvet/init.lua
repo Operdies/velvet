@@ -216,6 +216,8 @@ cli.add_command({
   description = "Spawn a new window running the provided command."
 })
 
+_G["VELVET_PRESET"] = 'velvet.presets.dwm'
+
 --- @class inspect.format_options
 --- @field depth? integer max recursion depth
 --- @field newline? string newline separator

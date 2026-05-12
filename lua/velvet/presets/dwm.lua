@@ -1,5 +1,6 @@
 --- @param settings velvet.default_config.settings
 local function cfg(settings)
+  _G["VELVET_PRESET"] = 'velvet.presets.dwm'
   local pfx = settings.prefix or "<C-x>"
   local vv = require('velvet')
   local keymap = require('velvet.keymap')
