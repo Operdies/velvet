@@ -146,7 +146,7 @@ local function do_copy(initial_mode)
       local col2 = r2.col2
       local lines = vv.api.window_get_text(target, { top = r1.row, height = height, left = col1, width = col2 - col1 + 1 })
       for i, l in ipairs(lines) do
-        ll[i] = l.text
+        ll[i] = l.text:match('(.-)%s*$')
       end
     else
       local wrapping = false
