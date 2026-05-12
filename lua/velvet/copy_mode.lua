@@ -62,6 +62,7 @@ local function do_copy(initial_mode)
     end
     if target and vv.api.window_is_valid(target) then
       vv.api.window_set_scroll_offset(target, initial_offset)
+      vv.api.set_focused_window(target)
     end
   end
   vv.async.defer(dispose)
