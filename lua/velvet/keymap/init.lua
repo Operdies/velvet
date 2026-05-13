@@ -164,7 +164,7 @@ local function clean_chord(chord)
 end
 
 --- @param chord chord
---- @return string,string|nil chord_string string representation of |chord|, and an optional alternative representation if the key was shifted.
+--- @return string[] representations one or more string representations of |chord|
 local function chord_to_string(chord)
   -- use an array to preserve order
   local mappings = {
@@ -176,10 +176,15 @@ local function chord_to_string(chord)
     { 'hyper',   'H', 16 },
   }
 
+  local reprs = {}
+
   if chord.mods == 0 then
     local named = vk[chord.key:upper()]
+    if named then return { named } end
     if named then return '<' .. named .. '>' end
-    return chord.key, chord.alt_key
+    if chord.key then reprs[#reprs+1] = chord.key end
+    if chord.alt_key then reprs[#reprs+1] = chord.alt_key end
+    return reprs
   end
   local str = '<'
   for _, pair in ipairs(mappings) do
@@ -190,7 +195,14 @@ local function chord_to_string(chord)
   end
   local alt_key = chord.alt_key and (str .. chord.alt_key .. '>')
   local primary_key = str .. chord.key .. '>'
-  return primary_key, alt_key
+  local third_key = nil
+  if chord.mods == mflags.shift and chord.key and chord.alt_key and chord.key ~= chord.alt_key and #chord.alt_key == 1 then
+    third_key = chord.alt_key
+  end
+  if primary_key then table.insert(reprs, primary_key) end
+  if alt_key then table.insert(reprs, alt_key) end
+  if third_key then table.insert(reprs, third_key) end
+  return reprs
 end
 
 --- @class velvet.keymap.keybind
@@ -272,7 +284,7 @@ function Keys:del(lhs)
   --- @type velvet.keymap.keybind
   local map = self.root
   for _, chord in ipairs(sequence) do
-    local lookup_key = chord_to_string(chord)
+    local lookup_key = chord_to_string(chord)[1]
     map = map.children[lookup_key]
     if not map then error(("lhs %s does not match any current mapping."):format(lhs)) end
   end
@@ -307,7 +319,7 @@ function Keys:set(lhs, rhs, opts)
   local sequence = chords_from_string(lhs)
   local map = self.root
   for _, chord in ipairs(sequence) do
-    local lookup_key = chord_to_string(chord)
+    local lookup_key = chord_to_string(chord)[1]
     if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
     map = map.children[lookup_key]
   end
@@ -407,8 +419,11 @@ local function maybe_remap(km, key)
 
   -- Otherwise the mapping applies to the specific modifiers of the remapping
   local chord = clean_chord(chord_from_key_event(key))
-  local chord_key, alt_key = chord_to_string(chord)
-  remap = km.remapped_keys[alt_key] or km.remapped_keys[chord_key]
+  local reprs = chord_to_string(chord)
+  for _, repr in ipairs(reprs) do
+    remap = km.remapped_keys[repr]
+    if remap then break end
+  end
   if remap then
     local new_chord = chords_from_string(remap)[1]
     local new_key = chord_to_key_event(new_chord)
@@ -483,11 +498,10 @@ local function cancel_chain(km, args)
 end
 
 --- @param key velvet.api.window.key_event
---- @return string,string|nil chord_string string representation of |key|, and an optional alternative representation if the key is shifted.
+--- @return string[] representations one or more string representations of |key|
 local function key_event_to_string(key)
   local chord = clean_chord(chord_from_key_event(key))
-  local chord_key, alt_key = chord_to_string(chord)
-  return chord_key, alt_key
+  return chord_to_string(chord)
 end
 
 Keys.key_event_to_string = key_event_to_string
@@ -502,12 +516,15 @@ function Keys:on_key(args)
   -- cancel pending unwind on key
   if self.unwind_schedule then vv.api.schedule_cancel(self.unwind_schedule) end
 
-  local chord_key, alt_key = Keys.key_event_to_string(args.key)
-
+  local reprs = Keys.key_event_to_string(args.key)
   local now = vv.api.get_current_tick()
 
   --- @type velvet.keymap.keybind|nil
-  local next_chain = self.current_chain.children[alt_key] or self.current_chain.children[chord_key]
+  local next_chain = nil
+  for _, repr in ipairs(reprs) do
+    next_chain = self.current_chain.children[repr]
+    if next_chain then break end
+  end
   if self.last_repeat > 0 and next_chain then
     if not next_chain.options.repeatable then
       next_chain = nil
@@ -542,7 +559,7 @@ function Keys:which_key(lhs, recurse)
     map = self.root
     local sequence = chords_from_string(lhs)
     for _, chord in ipairs(sequence) do
-      local lookup_key = chord_to_string(chord)
+      local lookup_key = chord_to_string(chord)[1]
       map = map.children[lookup_key]
       if not map then error(("lhs %s does not match any current mapping."):format(lhs)) end
     end
@@ -574,7 +591,7 @@ function Keys:remap_key(from, to)
   assert(#ch1 == 1, "bad argument #1 (expected a single chord")
   assert(#ch2 == 1, "bad argument #2 (expected a single chord")
 
-  self.remapped_keys[chord_to_string(ch1[1])] = chord_to_string(ch2[1])
+  self.remapped_keys[chord_to_string(ch1[1])[1]] = chord_to_string(ch2[1])[1]
 end
 
 --- Enable or disable passthrough mode. In passthrouh mode, the current keymap is ignored.
