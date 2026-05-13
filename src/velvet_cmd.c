@@ -1,13 +1,13 @@
 #include "velvet.h"
 #include "lauxlib.h"
 #include "utils.h"
-#include <errno.h>
 #include "velvet_lua.h"
 
 static int l_socket_print(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_coroutine *ctx;
   int source_socket = lua_tointeger(L, lua_upvalueindex(1));
+  if (source_socket == 0) return 0;
   vec_find(ctx, v->coroutines, ctx->socket == source_socket);
   if (!ctx) return 0;
 
@@ -137,7 +137,8 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
   int codelength;
   int read = read_digit(cmd, &codelength);
   if (!read) {
-    io_write(source_socket, u8_slice_from_cstr("Expected command to start with length encoding"));
+    if (source_socket) 
+      io_write(source_socket, u8_slice_from_cstr("Expected command to start with length encoding"));
     return;
   }
 
@@ -146,9 +147,11 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
 
   size_t remaining = (cmd.content + cmd.len) - chunk_start;
   if (remaining != (size_t)codelength) {
-    io_write_format_slow(source_socket, "lua chunk length does not match encoded length. "
-                         "This could be due to a partial write (chunk too large),"
-                         "or it could be a bug!");
+    if (source_socket) {
+      io_write_format_slow(source_socket, "lua chunk length does not match encoded length. "
+                           "This could be due to a partial write (chunk too large),"
+                           "or it could be a bug!");
+    }
   } else {
     struct u8_slice chunk = {.len = codelength, .content = chunk_start};
     struct velvet_lua_context args = { .cwd = v->startup_directory };
