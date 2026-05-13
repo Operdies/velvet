@@ -448,12 +448,24 @@ static bool cursor_equals(struct cursor c1, struct cursor c2) { return c1.column
 static bool cell_empty(struct screen_cell c) { return c.cp.value == 0 || c.cp.value == ' '; }
 
 void screen_copy_primary(struct screen *restrict dst, const struct screen *restrict src) {
-  int dst_cursor_offset = -1;
-  int dst_saved_cursor_offset = -1;
-  struct cursor dst_saved_cursor = {.column = -1}, dst_cursor = {.column = -1};
+  struct {
+    struct cursor dst;      /* recorded cursor position */
+    struct cursor src;      /* reference cursor */
+    struct cursor *dst_ptr; /* cursor to update */
+    int offset;             /* offset during recording */
+  } cursors[2] = {
+      {{.column = -1},
+       .offset = -1,
+       .src = src->cursor,
+       .dst_ptr = &dst->cursor},
+      {{.column = -1},
+       .offset = -1,
+       .src = src->saved_cursor,
+       .dst_ptr = &dst->saved_cursor},
+  };
   /* discard empty lines after the cursor. */
-  int n_populated = src->cursor.line;
-  for (int row = src->cursor.line; row < src->h; row++) {
+  int n_populated = 1 + MIN(src->cursor.line, src->saved_cursor.line);
+  for (int row = n_populated; row < src->h; row++) {
     struct screen_line *s = screen_get_line(src, row);
     if (s->eol > 0 || s->has_newline) n_populated = row + 1;
   }
@@ -471,36 +483,38 @@ void screen_copy_primary(struct screen *restrict dst, const struct screen *restr
      * is always significant if the line does not have an explicit newline since it is then considered 
      * the same logical line as the next line. */
     if (s->has_newline) {
-      if (src->cursor.line == real_row) eol = CLAMP(src->cursor.column + 1, 0, src->w);
-      else for (; eol && cell_empty(s->cells[eol - 1]); eol--);
+      for (; eol && cell_empty(s->cells[eol - 1]); eol--);
+    }
+
+    /* if this line contains a cursor, include trailing characters until the cursor.
+     * otherwise we will not be able to record the cursor position */
+    for (int i = 0; i < LENGTH(cursors); i++) {
+      if (cursors[i].src.line == real_row) 
+        eol = CLAMP(cursors[i].src.column + 1, eol, src->w);
     }
 
     int col = 0;
-    for (; col < eol;) {
+    for (;;) {
+      struct cursor this = { .column = col, .line = real_row };
+      for (int i = 0; i < LENGTH(cursors); i++) {
+        if (cursor_equals(this, cursors[i].src)) { cursors[i].dst = dst->cursor;
+          cursors[i].offset = dst->scroll.offset;
+        }
+      }
+      if (col >= eol) break;
       int cw = s->cells[col].cp.is_wide ? 2 : 1;
       screen_insert(dst, s->cells[col], true);
-      struct cursor this = { .column = col + cw, .line = real_row };
-      if (cursor_equals(this, src->cursor)) {
-        dst_cursor = dst->cursor;
-        dst_cursor_offset = dst->scroll.offset;
-      }
-      if (cursor_equals(this, src->saved_cursor)) {
-        dst_saved_cursor = dst->cursor;
-        dst_saved_cursor_offset = dst->scroll.offset;
-      }
       col += cw;
     }
 
     if (s->has_newline) screen_newline(dst, true);
   }
 
-  if (dst_cursor.column >= 0) {
-    dst_cursor.line -= (dst->scroll.offset - dst_cursor_offset);
-    dst->cursor = dst_cursor;
-  }
-  if (dst_saved_cursor.column >= 0) {
-    dst_saved_cursor.line -= (dst->scroll.offset - dst_saved_cursor_offset);
-    dst->saved_cursor = dst_saved_cursor;
+  /* restore cursors if they were found during insertion */
+  for (int i = 0; i < LENGTH(cursors); i++) {
+    cursors[i].dst.line -= (dst->scroll.offset - cursors[i].offset);
+    if (cursors[i].dst.column != -1) 
+      *cursors[i].dst_ptr = cursors[i].dst;
   }
 }
 
