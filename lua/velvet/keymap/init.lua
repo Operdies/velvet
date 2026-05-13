@@ -10,6 +10,7 @@
 --- @field on_keymap_changed? fun(self: velvet.keymap)
 --- @field last_repeat integer
 --- @field passthrough boolean if set, all keys are passed through as unhandled
+--- @field async boolean if true, mappings will execute in a detached async context
 --- @field unwind_schedule? integer handle to scheduled unwind callback
 local Keys = {}
 Keys.__index = Keys
@@ -22,15 +23,21 @@ Keys.events = {
 
 local vk = require('velvet.keymap.named_keys')
 
+--- @class velvet.keymap.options
+--- @field async? boolean if true, mappings will be executed in a detached async context.
+
 --- Create a new keymap
+--- @param opt? velvet.keymap.options
 --- @return velvet.keymap
-function Keys.create()
+function Keys.create(opt)
+  opt = opt or {async = false}
   local instance = setmetatable({
     repeat_timeout = 300,
     chain_unwind_timeout = 2000,
     remapped_keys = {},
     passthrough = false,
     last_repeat = 0,
+    async = opt.async or false,
     root = { children = {}, options = {} }
   }, Keys)
   instance.current_chain = instance.root
@@ -323,13 +330,11 @@ function Keys:set(lhs, rhs, opts)
     if not map.children[lookup_key] then map.children[lookup_key] = { parent = map, children = {}, key = lookup_key, options = {} } end
     map = map.children[lookup_key]
   end
-  map.execute = function()
-    -- run rhs in async context to avoid blocking
-    vv.async.run(function()
-      local success, result = xpcall(rhs, debug.traceback)
-      if not success then printerr(string.format("Unhandled error in keymap '%s': %s", lhs, result)) end
-    end)
+  local fn = function()
+    local success, result = xpcall(rhs, debug.traceback)
+    if not success then printerr(string.format("Unhandled error in keymap '%s': %s", lhs, result)) end
   end
+  map.execute = fn
   map.options = opts or {}
 end
 
@@ -367,7 +372,7 @@ local function keymap_unwind(km)
   local map = km.current_chain
   while map and map.trigger do
     if map.execute then
-      map.execute()
+      if km.async then vv.async.run(map.execute) else map.execute() end
       break
     end
 
@@ -455,7 +460,7 @@ local function advance_chain(km, next_chain, args, now)
       -- if the key is not repeatable, we can trivially reset the chain and execute the mapping
       set_current_chain(km, km.root)
     end
-    next_chain.execute()
+    if km.async then vv.async.run(next_chain.execute) else next_chain.execute() end
   end
 end
 
@@ -608,7 +613,10 @@ function Keys:set_passthrough(b)
 end
 function Keys:get_passthrough() return self.passthrough end
 
-local global_keymap = Keys.create()
+-- the global keymap is async because it is critical that it does not
+-- delay key propagation. The global keymap is responsible for routing output to windows,
+-- so blocking here is devastating.
+local global_keymap = Keys.create({async = true})
 global_keymap.on_chain_changed = function(self)
   local data = self.current_chain == self.root and nil or chain_str(self.current_chain)
   vv.events.emit(Keys.events.chain_changed, data)

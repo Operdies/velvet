@@ -52,7 +52,7 @@ local function do_copy(initial_mode)
   local mode = modes.none
   local disposed = false
   local win = require('velvet.window')
-  local km = require('velvet.keymap').create()
+  local km = require('velvet.keymap').create({ async = false })
   local overlay = win.create()
   local function dispose()
     if disposed then return end
