@@ -102,15 +102,30 @@ local function string_to_rgb(hex)
   return color
 end
 
+-- non-ansi colors.
+-- it is convenient to be able to define an extended palette
+-- since ansi colors are quite limited, and rgb strings are unwieldy.
+local extra_theme = {}
 local theme = setmetatable({}, {
   __index = function(_, k)
     local tbl = vv.api.get_theme()
-    return tbl[k]
+    return tbl[k] or extra_theme[k]
+  end,
+  __pairs = function()
+    local tbl = vv.api.get_theme()
+    local combo = vv.tbl_deep_extend('force', extra_theme, tbl)
+    return pairs(combo)
   end,
   __newindex = function(_, k, v)
     local tbl = vv.api.get_theme()
-    tbl[k] = v
-    vv.options.theme = tbl
+    if tbl[k] then
+      tbl[k] = v
+      vv.options.theme = tbl
+    else
+      local color, err = string_to_rgb(v)
+      if not color then error(err) end
+      extra_theme[k] = color
+    end
   end,
 })
 
