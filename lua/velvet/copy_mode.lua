@@ -16,14 +16,14 @@ local modes = { none = 'none', visual = 'visual', lines = 'lines', block = 'bloc
 local function get_selection_ranges(from, to, id, mode)
   local geom = vv.api.window_get_geometry(id)
   if mode == 'block' then
-    local col1, col2 = from.col, to.col
+    local lcol, rcol = from.col, to.col
     local row1, row2 = from.row, to.row
-    if col1 > col2 then col1, col2 = col2, col1 end
+    if lcol > rcol then lcol, rcol = rcol, lcol end
     if row1 > row2 then row1, row2 = row2, row1 end
     local ranges = {}
     for row = row1, row2 do
       if row > geom.height then break end
-      ranges[#ranges + 1] = { row = row, col1 = col1, col2 = col2 }
+      ranges[#ranges + 1] = { row = row, lcol = lcol, rcol = rcol }
     end
     return ranges, geom
   else
@@ -32,10 +32,10 @@ local function get_selection_ranges(from, to, id, mode)
     local ranges = {}
     for row = start.row, _end.row do
       if row > geom.height then break end
-      local col1 = mode ~= 'lines' and row == start.row and start.col or 1
-      local col2 =  mode ~= 'lines' and row == _end.row and _end.col or geom.width
-      if start.row == _end.row and col1 > col2 then col1, col2 = col2, col1 end
-      ranges[#ranges + 1] = { row = row, col1 = col1, col2 = col2 }
+      local lcol = mode ~= 'lines' and row == start.row and start.col or 1
+      local rcol =  mode ~= 'lines' and row == _end.row and _end.col or geom.width
+      if start.row == _end.row and lcol > rcol then lcol, rcol = rcol, lcol end
+      ranges[#ranges + 1] = { row = row, lcol = lcol, rcol = rcol }
     end
     return ranges
   end
@@ -66,6 +66,15 @@ local function do_copy(initial_mode)
     end
   end
   vv.async.defer(dispose)
+
+  local on_key = {
+    event = 'window.on_key',
+    when = function(_, e) return e.data.key.event_type ~= 'release' and e.data.win_id == overlay.id end
+  }
+  local either_closed = {
+    event = 'window.closed',
+    when = function(_, e) return e.data.win_id == target or e.data.win_id == overlay.id end
+  }
 
   local target_geometry = vv.api.window_get_geometry(target)
   local cursor = vv.api.window_get_cursor_position(target)
@@ -106,7 +115,7 @@ local function do_copy(initial_mode)
     end
   end
 
-  local function abs_cursor()
+  local function get_abs_cursor()
     local offset = vv.api.window_get_scroll_offset(target)
     local cur = overlay:get_cursor()
     cur.row = cur.row - offset
@@ -117,12 +126,12 @@ local function do_copy(initial_mode)
     if dx ~= 0 then cursor_move_x(dx) end
     if dy ~= 0 then cursor_move_y(dy) end
     cursor = overlay:get_cursor()
-    end_selection = abs_cursor()
+    end_selection = get_abs_cursor()
   end
 
   local function selection_mode(new_mode)
     if mode == modes.none then
-      start_selection = abs_cursor()
+      start_selection = get_abs_cursor()
       end_selection = start_selection
     end
     mode = new_mode
@@ -131,6 +140,11 @@ local function do_copy(initial_mode)
   local function apply(f, ...)
     local args = {...}
     return function() f(table.unpack(args)) end
+  end
+
+  --- @return velvet.api.line
+  local function get_line(line, lcol, rcol)
+      return vv.api.window_get_text(target, { top = line, height = 1, left = lcol, width = rcol - lcol + 1 })[1]
   end
 
   local function copy_and_dispose()
@@ -142,16 +156,15 @@ local function do_copy(initial_mode)
       local r1 = ranges[1]
       local r2 = ranges[#ranges]
       local height = 1 + r2.row - r1.row
-      local col1 = r1.col1
-      local col2 = r2.col2
-      local lines = vv.api.window_get_text(target, { top = r1.row, height = height, left = col1, width = col2 - col1 + 1 })
+      local lines = vv.api.window_get_text(target,
+        { top = r1.row, height = height, left = r1.lcol, width = r2.rcol - r1.lcol + 1 })
       for i, l in ipairs(lines) do
         ll[i] = l.text:match('(.-)%s*$')
       end
     else
       local wrapping = false
       for _, r in ipairs(ranges) do
-        local line = vv.api.window_get_text(target, { top = r.row, height = 1, left = r.col1, width = r.col2 - r.col1 + 1 })[1]
+        local line = get_line(r.row, r.lcol, r.rcol)
         local text = line.wraps and line.text or line.text:match('(.-)%s*$')
         local index = wrapping and #ll or #ll + 1
         if wrapping then text = ll[index] .. text end
@@ -206,7 +219,7 @@ local function do_copy(initial_mode)
     local at = where == 'start' and 0 or target_geometry.width
     overlay:set_cursor(at, cursor.row)
     cursor = overlay:get_cursor()
-    end_selection = abs_cursor()
+    end_selection = get_abs_cursor()
   end
 
   local function pan(dy)
@@ -219,7 +232,7 @@ local function do_copy(initial_mode)
     elseif delta ~= 0 and dy > 0 and cur1.row > 1 then
       cursor_move(0, -dy)
     end
-    end_selection = abs_cursor()
+    end_selection = get_abs_cursor()
   end
 
   -- TODO: 
@@ -239,8 +252,8 @@ local function do_copy(initial_mode)
     { { 'l', '<right>' },              apply(cursor_move, 1, 0) },
     { { 'gg' },                        scroll_to_top },
     { { 'G' },                         scroll_to_end },
-    { { '0', '<home>', '^' }, apply(set_cursor_column, 'start') },
-    { { '$', '<end>' },       apply(set_cursor_column, 'end') },
+    { { '0', '<home>', '^' },          apply(set_cursor_column, 'start') },
+    { { '$', '<end>' },                apply(set_cursor_column, 'end') },
     { { 'v' },                         apply(selection_mode, modes.visual) },
     { { '<C-v>' },                     apply(selection_mode, modes.block) },
     { { '<S-v>' },                     apply(selection_mode, modes.lines) },
@@ -277,27 +290,19 @@ local function do_copy(initial_mode)
       local _end = math.min(#ranges, #ranges - num_below)
       for i = start, _end do
         local range = ranges[i]
-        local line = vv.api.window_get_text(target, { top = range.row, height = 1, left = range.col1, width = range.col2 - range.col1 + 1 })[1]
+        local line = vv.api.window_get_text(target, { top = range.row, height = 1, left = range.lcol, width = range.rcol - range.lcol + 1 })[1]
         local visual_row = row1 + (i-1) + offset
-        overlay:set_cursor(range.col1, visual_row)
-        overlay:draw(line.text:match('(.-)%s*$'))
+        overlay:set_cursor(range.lcol, visual_row)
+        overlay:draw(line.text)
       end
     end
     overlay:set_cursor(c1.col, c1.row)
     cursor = c1
   end
 
-  local on_key = {
-    event = 'window.on_key',
-    when = function(_, e) return e.data.key.event_type ~= 'release' and e.data.win_id == overlay.id end
-  }
   local focus_lost = {
     event = 'window.focus_changed',
     when = function(_, e) return e.data.new_focus ~= overlay.id end
-  }
-  local either_closed = {
-    event = 'window.closed',
-    when = function(_, e) return e.data.win_id == target or e.data.win_id == overlay.id end
   }
 
   local target_resized = { event = 'window.resized', when = function(_, evt) return evt.data.win_id == target end }

@@ -467,7 +467,7 @@ lua_stackRetCount vv_api_window_get_text(struct velvet *v, lua_Integer win_id, s
     bool wraps = !l->has_newline;
     lua_pushboolean(L, wraps);
     lua_setfield(L, -2, "wraps");
-    for (int col = region.left; col < region.left + region.width; col++) {
+    for (int col = region.left; col < l->eol && col < region.left + region.width; col++) {
       struct screen_cell *c, *p;
       c = &l->cells[col];
       p = col ? c - 1 : NULL;
