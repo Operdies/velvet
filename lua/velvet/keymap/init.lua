@@ -572,12 +572,13 @@ function Keys:which_key(lhs, recurse)
   end
   local which_keys = {}
   for k, m in pairs(map.children) do
+    local keys = vk[k] and ('<' .. vk[k] .. '>') or k
     which_keys[#which_keys + 1] = {
-      description = m.options.description or k, 
-      keys = k, 
+      description = m.options.description or keys,
+      keys = keys,
       terminal = not next(m.children), 
       repeatable = m.options.repeatable,
-      children = recurse and self:which_key(lhs .. k, true) or nil
+      children = recurse and self:which_key(lhs .. keys, true) or nil
     }
   end
   table.sort(which_keys, function(a, b) return a.keys:upper() < b.keys:upper() end)
