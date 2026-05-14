@@ -515,7 +515,8 @@ Keys.key_event_to_string = key_event_to_string
 function Keys:on_key(args)
   args.key = maybe_remap(self, args.key)
   if self.passthrough or args.key.event_type == 'release' then
-    return false
+    on_unhandled_key(self, args)
+    return
   end
 
   -- cancel pending unwind on key
