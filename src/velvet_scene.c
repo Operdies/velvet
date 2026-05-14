@@ -10,13 +10,17 @@
 #include <termios.h>
 #include <signal.h>
 #include "velvet_api.h"
-#include "platform.h"
 #include "velvet.h"
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
 static bool color_equals(struct color a, struct color b);
-static bool blank(uint32_t v) { return v == ' ' || v == 0; }
+
+static bool blank(struct screen_cell c) {
+  return (c.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED |
+                          ATTR_ENCIRCLED | ATTR_CROSSED_OUT)) == 0 &&
+         (c.cp.value == ' ' || c.cp.value == 0);
+}
 
 static int window_compare_z_index(const void *a1, const void *b1) {
   const struct velvet_window *a = a1;
@@ -451,7 +455,7 @@ static void velvet_render_render_buffer(struct velvet_render *r,
           cell_style = highlight;
         }
 
-        if (c->cp.value == ' ') {
+        if (blank(*c)) {
           velvet_render_set_style(r, cell_style, true);
         } else {
           velvet_render_set_style(r, cell_style, false);
@@ -691,9 +695,8 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
       struct screen_cell a_norm = normalize_cell(t, above);
 
       struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
-      bool is_wide_continuation = before && before->cp.is_wide && blank(above.cp.value);
-      bool attributes_visible = above.style.attr & (ATTR_UNDERLINE_ANY | ATTR_FRAMED | ATTR_OVERLINED | ATTR_ENCIRCLED | ATTR_CROSSED_OUT);
-      bool fg_seethrough = !attributes_visible && (blank(above.cp.value) || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255) && !is_wide_continuation;
+      bool is_wide_continuation = before && before->cp.is_wide && blank(above);
+      bool fg_seethrough = !is_wide_continuation && (blank(above) || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255);
 
       /* dim before blending. This looks a bit more like what you would expect in cases
          * where a dimmed window is covering a non-dimmed window. The dimming effect still
@@ -743,7 +746,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 
       /* Wide chars on layers below can 'bleed through'. Clear the previous cell if it contains a wide char,
          * and this character is not a space. */
-      if (!blank(above.cp.value) && column && composite->cells[cell_index - 1].cp.is_wide)
+      if (!blank(above) && column && composite->cells[cell_index - 1].cp.is_wide)
         composite->cells[cell_index - 1].cp = codepoint_space;
 
       composite->cells[cell_index] = normalize_cell(t, above);
@@ -1039,7 +1042,7 @@ static bool cell_equals(struct screen_cell a, struct screen_cell b) {
   /* ATTR_REVERSE has been normalized out at this point */
   assert(!(a.style.attr & ATTR_REVERSE));
   assert(!(b.style.attr & ATTR_REVERSE));
-  if (blank(a.cp.value) && blank(b.cp.value)) 
+  if (blank(a) && blank(b)) 
     return color_equals(a.style.bg, b.style.bg) && a.style.attr == b.style.attr && a.link == b.link;
   return a.cp.value == b.cp.value && cell_style_equals(a.style, b.style) && a.link == b.link;
 }
