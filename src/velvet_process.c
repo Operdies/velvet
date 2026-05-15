@@ -53,9 +53,13 @@ _Noreturn static void process_setup_child(int error_pipe, const char *wd,
     char *home = getenv("HOME");
     if (home) chdir(home);
   }
-  dup2(err, STDERR_FILENO);
-  dup2(out, STDOUT_FILENO);
+  if (!in) in = open("/dev/null", O_RDONLY);
+  if (!out) out = open("/dev/null", O_WRONLY);
+  if (!err) err = open("/dev/null", O_WRONLY);
   dup2(in, STDIN_FILENO);
+  dup2(out, STDOUT_FILENO);
+  dup2(err, STDERR_FILENO);
+  close(in); close(out); close(err);
   /* close read side in fork */
 
   if (envp) {
@@ -109,7 +113,11 @@ static char *find_path(char **envp) {
   return default_path;
 }
 
-static int spawn_process(struct velvet_process *p, char *wd, char **argv, char **envp) {
+struct streams {
+  int in, out, err;
+};
+
+static int spawn_process(struct velvet_process *p, const char *filename, char *wd, char **argv, char **envp, struct streams streams) {
   assert(argv && argv[0] && argv[0][0]);
   /* fork sequence largely copied from velvet_scene.c. The same principles apply;
   * block signal generation before forking so the child cannot write to velvet's signal pipes. */
@@ -117,19 +125,7 @@ static int spawn_process(struct velvet_process *p, char *wd, char **argv, char *
   sigfillset(&block);
   sigprocmask(SIG_BLOCK, &block, &sighandler);
 
-  const char *filename = argv[0];
-  if (!strchr(filename, '/')) { 
-    char *path = find_path(envp);
-    if (path) filename = find_binary(argv[0], path);
-  }
-  if (!filename) return ENOENT;
-
-  struct pair guard, in, out, err;
-  guard = mypipe();
-  in = mypipe();
-  out = mypipe();
-  err = mypipe();
-
+  struct pair guard = mypipe();
   pid_t pid = fork();
 
   if (pid == 0) {
@@ -140,9 +136,6 @@ static int spawn_process(struct velvet_process *p, char *wd, char **argv, char *
 
   if (pid < 0) {
     close(guard.r); close(guard.w);
-    close(in.r); close(in.w);
-    close(out.r); close(out.w);
-    close(err.r); close(err.w);
     ERROR("Unable to spawn process:");
     return errno;
   }
@@ -152,43 +145,72 @@ static int spawn_process(struct velvet_process *p, char *wd, char **argv, char *
   if (pid == 0) {
     /* close read side in child */
     close(guard.r);
-    close(in.w);
-    close(out.r);
-    close(err.r);
-    process_setup_child(guard.w, wd, filename, argv, envp, in.r, out.w, err.w);
+    process_setup_child(guard.w, wd, filename, argv, envp, streams.in, streams.out, streams.err);
     /* child does not return here */
   }
 
   /* Close write side in parent. Otherwise read(rw[0]) will block. */
   close(guard.w);
-  close(in.r);
-  close(out.w);
-  close(err.w);
   int read_count = read(guard.r, &exec_error, sizeof(int)); 
   /* close read side in parent */
   close(guard.r);
   if (read_count == sizeof(int)) {
-    close(in.w);
-    close(out.r);
-    close(err.r);
     return exec_error;
   }
 
-  p->in = in.w;
-  p->out = out.r;
-  p->err = err.r;
   p->pid = pid;
   return 0;
 }
 
-int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp) {
+int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp, struct velvet_process_stream_options streams) {
+  const char *filename = argv[0];
+  if (!strchr(filename, '/')) { 
+    char *path = find_path(envp);
+    if (path) filename = find_binary(argv[0], path);
+  }
+  if (!filename) return -ENOENT;
+
+  int in, out, err;
+  in = out = err = 0;
+  struct streams s = {0};
+  if (streams.in) {
+    struct pair p = mypipe();
+    in = p.w;
+    s.in = p.r;
+  }
+  if (streams.out) {
+    struct pair p = mypipe();
+    out = p.r;
+    s.out = p.w;
+  }
+  if (streams.err) {
+    struct pair p = mypipe();
+    err = p.r;
+    s.err = p.w;
+  }
+
   struct velvet_process p = {0};
-  int error = spawn_process(&p, wd, argv, envp);
-  if (error > 0) return -error;
+  int error = spawn_process(&p, filename, wd, argv, envp, s);
+  /* close client streams on server side on success */
+  int to_close[] = {s.in, s.out, s.err};
+  for (int i = 0; i < LENGTH(to_close); i++)
+    if (to_close[i]) close(to_close[i]);
+
+  if (error > 0) {
+    /* close all streams in case of errors */
+    int to_close[] = {in, out, err};
+    for (int i = 0; i < LENGTH(to_close); i++)
+      if (to_close[i]) close(to_close[i]);
+    return -error;
+  }
+
+  int nonblock[] = {in, out, err};
+  for (int i = 0; i < LENGTH(nonblock); i++)
+    if (nonblock[i]) set_nonblocking(nonblock[i]);
+
   p.id = velvet_next_id();
-  set_nonblocking(p.in);
-  set_nonblocking(p.out);
-  set_nonblocking(p.err);
+  p.in = in; p.out = out; p.err = err;
+  if (streams.in) p.stdin_closed = true;
   vec_push(&v->processes, &p);
   return p.id;
 }

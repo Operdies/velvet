@@ -228,6 +228,14 @@ return {
         { name = "stderr", value = 2 },
       },
     },
+    {
+      name = "process_stream_mode",
+      flags = false,
+      values = {
+        { name = "none", value = 1, doc = "This stream will be set to /dev/null" },
+        { name = "stream", value = 2, doc = "This stream will be writable, or produce output, depending on stream direction" },
+      },
+    },
   },
 
   --- types {{{1
@@ -284,8 +292,11 @@ return {
     {
       name = "process.spawn_options",
       fields = {
-        { name = "working_directory", type = "string", doc = "The initial working directory of the new process.", optional = true },
-        { name = "environment",       type = "table",  doc = "Optional table of environment variables to set in the new process.",  optional = true },
+        { name = "working_directory", type = "string",              doc = "The initial working directory of the new process.",                  optional = true },
+        { name = "environment",       type = "table",               doc = "Optional table of environment variables to set in the new process.", optional = true },
+        { name = "stdin_mode",        type = "process_stream_mode", doc = "stdin mode",                                                         optional = true },
+        { name = "stdout_mode",       type = "process_stream_mode", doc = "stdout mode",                                                        optional = true },
+        { name = "stderr_mode",       type = "process_stream_mode", doc = "stderr mode",                                                        optional = true },
       },
     },
     {

@@ -260,7 +260,12 @@ lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, str
 
     char *wd = options.working_directory.set ? (char*)options.working_directory.value.content : NULL;
     char **envp = envlist.length > 0 ? (char**)envlist.content : NULL;
-    lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp);
+    struct velvet_process_stream_options streams = {
+        .in = options.stdin_mode.value == VELVET_API_PROCESS_STREAM_MODE_STREAM,
+        .out = options.stdout_mode.value == VELVET_API_PROCESS_STREAM_MODE_STREAM,
+        .err = options.stderr_mode.value == VELVET_API_PROCESS_STREAM_MODE_STREAM,
+    };
+    lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
     prog = arglist[0];
     free(arglist);
     if (proc_id < 0) { 

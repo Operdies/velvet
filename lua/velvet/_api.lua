@@ -81,6 +81,10 @@ local api = {}
 ---| 'stdout' 
 ---| 'stderr' 
 
+---@alias velvet.api.process_stream_mode string 
+---| 'none' This stream will be set to /dev/null
+---| 'stream' This stream will be writable, or produce output, depending on stream direction
+
 
 --- @class velvet.api.mouse_settings
 --- @field reporting velvet.api.mouse_reporting nil
@@ -118,6 +122,9 @@ local api = {}
 --- @class velvet.api.process.spawn_options
 --- @field working_directory? string The initial working directory of the new process.
 --- @field environment? table Optional table of environment variables to set in the new process.
+--- @field stdin_mode? velvet.api.process_stream_mode stdin mode
+--- @field stdout_mode? velvet.api.process_stream_mode stdout mode
+--- @field stderr_mode? velvet.api.process_stream_mode stderr mode
 
 --- @class velvet.api.window.create_options
 --- @field working_directory? string The initial working directory of the new window.
