@@ -973,6 +973,8 @@ static void reload_callback(void *data) {
     }
   }
 
+  velvet_process_kill_all(v);
+
   struct velvet_coroutine *co;
   vec_foreach(co, v->coroutines) {
     co->coroutine = NULL;
