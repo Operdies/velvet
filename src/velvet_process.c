@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include "collections.h"
 #include "velvet_process.h"
+#include <fcntl.h>
 
 static void restore_signals(void) {
   /* restore default handlers for a couple of terminating signals.
@@ -202,6 +203,13 @@ void velvet_process_close_stdin(struct velvet *v, struct velvet_process *p) {
   p->stdin_closed = true;
 }
 
+void velvet_process_kill_all(struct velvet *v) {
+  struct velvet_process *p;
+  vec_rforeach(p, v->processes) {
+    velvet_process_kill(v, p);
+  }
+}
+
 void velvet_process_kill(struct velvet *v, struct velvet_process *p) {
   assert(p);
   assert(p->pid);
@@ -211,6 +219,7 @@ void velvet_process_kill(struct velvet *v, struct velvet_process *p) {
   if (result == -1) {
     /* This is fine to ignore. It just means the process did not exit
      * immediately. We will handle this later. */
+    p->destroy_pending = true;
   } else {
     p->pid = 0;
     p->exit_code = WEXITSTATUS(status);;
