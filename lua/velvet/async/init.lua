@@ -226,25 +226,31 @@ end
 --- @return table<any, velvet.async.wait.result> the result of each wait operation, with the same keys as |events|
 function M.wait_all(events, timeout)
   -- shallow copy to avoid mutating the user provided table
-  local inputs = {}; for k, v in pairs(events) do inputs[k] = v end
-  local outputs = {}
-  local deadline = timeout and (vv.api.get_current_tick() + timeout) or nil
-  while next(inputs) do
-    local args = {}
-    local lookup = {}
-    for i, v in pairs(inputs) do args[#args+1] = v; lookup[v] = i; end
-    local t = deadline and (deadline - vv.api.get_current_tick()) or nil
-    local reg, evt = vv.async.wait(table.unpack(args), t)
-    if reg then
-      local key = lookup[reg]
-      inputs[key] = nil
-      outputs[key] = evt
-    else
-      -- timeout
-      return outputs
+  local result = {}
+  local args = {}
+  local missing = 0
+  for key, reg in pairs(events) do
+    local inner_when, found, event
+    event = reg
+    if type(reg) == 'table' then
+      event = reg.event
+      inner_when = reg.when
     end
+
+    local when = function(_, evt)
+      if found then return false end                                   -- already recorded
+      if inner_when and not inner_when(reg, evt) then return false end -- value rejected
+      found = true
+      result[key] = evt
+      missing = missing - 1
+      return missing == 0 -- resolve wait_all when no events are missing
+    end
+
+    args[#args + 1] = { event = event, when = when }
+    missing = missing + 1
   end
-  return outputs
+  if missing > 0 then vv.async.wait(timeout, table.unpack(args)) end
+  return result
 end
 
 --- @param co thread
