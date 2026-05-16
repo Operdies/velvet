@@ -172,13 +172,13 @@ static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
     int b = n % 6;
 
     static const uint8_t levels[6] = {0, 95, 135, 175, 215, 255};
-    return (struct color){.kind = COLOR_RGB, .c.rgb = rgb_color(levels[r], levels[g], levels[b])};
+    return (struct color){.kind = VELVET_API_COLOR_KIND_RGB, .c.rgb = rgb_color(levels[r], levels[g], levels[b])};
   }
 
   /* Grayscale ramp */
   if (n >= 232) {
     uint8_t v = 8 + (n - 232) * 10;
-    return (struct color){.kind = COLOR_RGB, .c.rgb = rgb_color(v, v, v)};
+    return (struct color){.kind = VELVET_API_COLOR_KIND_RGB, .c.rgb = rgb_color(v, v, v)};
   }
 
   struct color col = RGB("#000000");
@@ -186,8 +186,8 @@ static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
 }
 
 static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg) {
-  if (c.kind == COLOR_RESET) return fg ? t.foreground : t.background;
-  if (c.kind == COLOR_TABLE) return xterm256_to_rgb(t, c.c.table);
+  if (c.kind == VELVET_API_COLOR_KIND_RESET) return fg ? t.foreground : t.background;
+  if (c.kind == VELVET_API_COLOR_KIND_TABLE) return xterm256_to_rgb(t, c.c.table);
   return c;
 }
 
@@ -210,7 +210,7 @@ static struct color rgb_dim(struct color a, float f) {
 
 /* literal multiplication */
 static struct color rgb_mult(struct color a, float m) {
-  assert(a.kind == COLOR_RGB);
+  assert(a.kind == VELVET_API_COLOR_KIND_RGB);
   a.c.rgb = rgb_color(CLAMP((float)a.c.rgb.r * m, 0, 255),
                       CLAMP((float)a.c.rgb.g * m, 0, 255),
                       CLAMP((float)a.c.rgb.b * m, 0, 255));
@@ -218,8 +218,8 @@ static struct color rgb_mult(struct color a, float m) {
 }
 
 static struct color rgb_add(struct color a, struct color b) {
-  assert(a.kind == COLOR_RGB);
-  assert(b.kind == COLOR_RGB);
+  assert(a.kind == VELVET_API_COLOR_KIND_RGB);
+  assert(b.kind == VELVET_API_COLOR_KIND_RGB);
   a.c.rgb = rgb_color(CLAMP(a.c.rgb.r + b.c.rgb.r, 0, 255),
                       CLAMP(a.c.rgb.g + b.c.rgb.g, 0, 255),
                       CLAMP(a.c.rgb.b + b.c.rgb.b, 0, 255));
@@ -228,8 +228,8 @@ static struct color rgb_add(struct color a, struct color b) {
 
 /* blend colors such that out == a * frac + b * (1.0f-frac) */
 static struct color color_alpha_blend(struct color a, struct color b, float frac) {
-  assert(a.kind == COLOR_RGB);
-  assert(b.kind == COLOR_RGB);
+  assert(a.kind == VELVET_API_COLOR_KIND_RGB);
+  assert(b.kind == VELVET_API_COLOR_KIND_RGB);
   return rgb_add(rgb_mult(a, frac), rgb_mult(b, 1.0f - frac));
 }
 
@@ -239,7 +239,7 @@ static struct screen_cell normalize_cell(struct velvet_theme t, struct screen_ce
   bool is_reverse = c.style.attr & ATTR_REVERSE;
   if (t.bold_bright_colors) {
     struct color col = is_reverse ? c.style.bg : c.style.fg;
-    if (col.kind == COLOR_TABLE) {
+    if (col.kind == VELVET_API_COLOR_KIND_TABLE) {
       if (col.c.table >= 8 && col.c.table <= 15) {
         if (c.style.attr & ATTR_FAINT) c.style.attr &= ~ATTR_FAINT;
         else c.style.attr |= ATTR_BOLD;
@@ -648,8 +648,8 @@ struct composite_options {
 };
 
 static bool is_cell_bg_clear(struct screen_cell c) {
-  if (c.style.attr & ATTR_REVERSE) return c.style.fg.kind == COLOR_RESET;
-  else return c.style.bg.kind == COLOR_RESET;
+  if (c.style.attr & ATTR_REVERSE) return c.style.fg.kind == VELVET_API_COLOR_KIND_RESET;
+  else return c.style.bg.kind == VELVET_API_COLOR_KIND_RESET;
 }
 
 static bool is_block_element(uint32_t codepoint) {
@@ -906,9 +906,9 @@ static inline void sgr_buffer_add_param(struct sgr_buffer *b, int sub) {
 
 static inline __attribute__((always_inline))
 void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
-  if (col.kind == COLOR_RESET) {
+  if (col.kind == VELVET_API_COLOR_KIND_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
-  } else if (col.kind == COLOR_TABLE) {
+  } else if (col.kind == VELVET_API_COLOR_KIND_TABLE) {
     if (col.c.table <= 7) {
       sgr_buffer_push(sgr, (fg ? 30 : 40) + col.c.table);
     } else if (col.c.table <= 15) {
@@ -918,7 +918,7 @@ void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
       sgr_buffer_add_param(sgr, 5);
       sgr_buffer_add_param(sgr, col.c.table);
     }
-  } else if (col.kind == COLOR_RGB) {
+  } else if (col.kind == VELVET_API_COLOR_KIND_RGB) {
     sgr_buffer_push(sgr, fg ? 38 : 48);
     sgr_buffer_add_param(sgr, 2);
     sgr_buffer_add_param(sgr, col.c.rgb.r);
@@ -1030,9 +1030,9 @@ void velvet_render_set_style(struct velvet_render *r, struct screen_cell_style s
 static bool color_equals(struct color a, struct color b) {
   if (a.kind != b.kind) return false;
   switch (a.kind) {
-  case COLOR_RESET: return true;
-  case COLOR_RGB: return a.c.rgb.r == b.c.rgb.r && a.c.rgb.g == b.c.rgb.g && a.c.rgb.b == b.c.rgb.b && a.c.rgb.t == b.c.rgb.t;
-  case COLOR_TABLE: return a.c.table == b.c.table;
+  case VELVET_API_COLOR_KIND_RESET: return true;
+  case VELVET_API_COLOR_KIND_RGB: return a.c.rgb.r == b.c.rgb.r && a.c.rgb.g == b.c.rgb.g && a.c.rgb.b == b.c.rgb.b && a.c.rgb.t == b.c.rgb.t;
+  case VELVET_API_COLOR_KIND_TABLE: return a.c.table == b.c.table;
   }
   return false;
 }

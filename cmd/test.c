@@ -1358,9 +1358,9 @@ void test_lua(void) {
   }
 
   /* test that options are wired up correctly */
-  v.scene.theme.palette[4] = (struct color){ .c.rgb.b = 0, .kind = COLOR_RGB };
+  v.scene.theme.palette[4] = (struct color){ .c.rgb.b = 0, .kind = VELVET_API_COLOR_KIND_RGB };
   lua_assert(L, "assert(vv.options.theme.blue ~= 0.0)");
-  v.scene.theme.palette[4] = (struct color){ .c.rgb.b = 254, .kind = COLOR_RGB };
+  v.scene.theme.palette[4] = (struct color){ .c.rgb.b = 254, .kind = VELVET_API_COLOR_KIND_RGB };
   lua_assert(L, "assert(vv.options.theme.blue ~= 1.0)");
 
   velvet_destroy(&v);

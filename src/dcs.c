@@ -5,7 +5,7 @@
 
 static void push_color(struct vte *vte, struct color col, bool is_fg) {
   switch (col.kind) {
-  case COLOR_TABLE: {
+  case VELVET_API_COLOR_KIND_TABLE: {
     string_push_char(&vte->pending_input, ';');
     if (col.c.table <= 7) {
       string_push_int(&vte->pending_input, (is_fg ? 30 : 40) + col.c.table);
@@ -19,7 +19,7 @@ static void push_color(struct vte *vte, struct color col, bool is_fg) {
       string_push_int(&vte->pending_input, col.c.table);
     }
   } break;
-  case COLOR_RGB: {
+  case VELVET_API_COLOR_KIND_RGB: {
     string_push_int(&vte->pending_input, is_fg ? 38 : 48);
     string_push_char(&vte->pending_input, ';');
     string_push_int(&vte->pending_input, 2);
@@ -30,7 +30,7 @@ static void push_color(struct vte *vte, struct color col, bool is_fg) {
     string_push_char(&vte->pending_input, ';');
     string_push_int(&vte->pending_input, col.c.rgb.b);
   } break;
-  case COLOR_RESET: break; /* nothing to do */
+  case VELVET_API_COLOR_KIND_RESET: break; /* nothing to do */
   }
 }
 
