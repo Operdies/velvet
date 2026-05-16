@@ -21,6 +21,7 @@
 
 --- @class spec_enum enumeration type
 --- @field name string
+--- @field pack boolean if true, define the enum with the PACK option
 --- @field values spec_enum_value[]
 --- @field doc? string
 --- @field flags boolean flag indicating if this is a discrete value or a list of flags

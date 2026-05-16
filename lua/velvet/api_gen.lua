@@ -291,13 +291,14 @@ lua_pop(L, 1);
       local varname = path:gsub('[.]', '_') .. '_str'
       table.insert(result, ([[
 struct u8_slice %s = luaL_checkslice(L, -1);
-%s = %s_slice_to_enum(%s);
-if (%s == 0xffffffff) { 
+int %s_conv = %s_slice_to_enum(%s);
+if (%s_conv == ~0) { 
   lua_pushstring(L, " is not a valid %s value.");
   lua_concat(L, 2);
   lua_error(L); 
 }
-]]):format(varname, path, type_name, varname, path, type_name))
+%s = %s_conv;
+]]):format(varname, type_name, type_name, varname, type_name, type_name, path, type_name))
     end
   else
     table.insert(result, ([[
@@ -340,8 +341,8 @@ struct velvet;
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
   table.insert(h, ([[
-enum %s {
-]]):format(cname))
+enum %s%s {
+]]):format(enum.packed and "__attribute__((packed)) " or "", cname))
   for _, v in ipairs(enum.values) do
     local field_name = ("%s_%s"):format(cname, v.name):upper()
     table.insert(h, ([[
@@ -447,15 +448,15 @@ for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
   -- String to integer value {{{4
   table.insert(c, ([=[
-__attribute__((unused)) static %s %s_slice_to_enum(struct u8_slice str) {
-]=]):format(c_type(enum.name), enum.name))
+__attribute__((unused)) static int %s_slice_to_enum(struct u8_slice str) {
+]=]):format(enum.name))
   for _, option in ipairs(enum.values) do
     local field_name = enum_value_c_name(cname, option.name)
     table.insert(c, ([[
   if (u8_slice_equals(str, (struct u8_slice) { .content = (const uint8_t*)"%s", .len = %d })) return %s;
 ]]):format(option.name, #option.name, field_name))
   end
-  table.insert(c, '  return 0xffffffff;\n}\n\n')
+  table.insert(c, '  return ~0;\n}\n\n')
 
   -- Integer value to string {{{4
   table.insert(c, ([=[
