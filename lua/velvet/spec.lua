@@ -21,7 +21,7 @@
 
 --- @class spec_enum enumeration type
 --- @field name string
---- @field pack boolean if true, define the enum with the PACK option
+--- @field packed? boolean if true, define the enum with __attribute__((packed))
 --- @field values spec_enum_value[]
 --- @field doc? string
 --- @field flags boolean flag indicating if this is a discrete value or a list of flags
@@ -35,6 +35,7 @@
 
 --- @class spec_type
 --- @field name string the name of the type
+--- @field doc? string
 --- @field fields struct_field[] the members of the type
 
 --- @class spec_parameter
@@ -235,6 +236,16 @@ return {
       values = {
         { name = "none", value = 1, doc = "This stream will be set to /dev/null" },
         { name = "stream", value = 2, doc = "This stream will be writable, or produce output, depending on stream direction" },
+      },
+    },
+    {
+      name = "color_kind",
+      flags = false,
+      packed = true,
+      values = {
+        { name = "reset", value = 0, doc = "No color. Falls back to default background/foreground color. This also affects pseudotransparency behavior. If any background color is set except |reset|, a surface is considered opaque by the compositor." },
+        { name = "rgb", value = 1, doc = "Indicates a full rgb color" },
+        { name = "table", value = 2, doc = "Indicates one of the 16 pre-defined ansi colors or an xterm-256color" },
       },
     },
   },

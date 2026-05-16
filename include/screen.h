@@ -4,10 +4,9 @@
 #include "text.h"
 #include "collections.h"
 #include "osc.h"
+#include "velvet_api.h"
 
-#define PACK __attribute__((packed))
-
-enum PACK cell_attributes {
+enum __attribute((packed)) cell_attributes {
   ATTR_NONE = 0,
 
   ATTR_BOLD = 1u << 0,      // SGR 1
@@ -42,28 +41,19 @@ struct rect {
   int left, top, height, width, x_pixel, y_pixel;
 };
 
-enum PACK color_kind {
-/* no color -- defaults to terminal background */
-  COLOR_RESET,
-  /* full rgb color */
-  COLOR_RGB,
-  /* one of the 16 pre-defined ansi colors OR xterm-256color */
-  COLOR_TABLE,
-};
-
 struct rgb_color {
   uint8_t r, g, b, t; 
 };
 
 struct color {
-  enum color_kind kind;
+  enum velvet_api_color_kind kind;
   union {
     uint8_t table;
     struct rgb_color rgb;
   } c;
 };
 
-static const struct color color_default = {.kind = COLOR_RESET};
+static const struct color color_default = {.kind = VELVET_API_COLOR_KIND_RESET};
 
 struct screen_cell_style {
   enum cell_attributes attr;

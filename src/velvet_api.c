@@ -731,7 +731,7 @@ static float iconv(uint8_t v) {
 
 static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
   struct color rgb = {
-      .kind = COLOR_RGB,
+      .kind = VELVET_API_COLOR_KIND_RGB,
       .c.rgb = {
           .r = fconv(pal.red),
           .g = fconv(pal.green),

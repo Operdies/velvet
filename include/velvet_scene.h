@@ -139,7 +139,7 @@ struct velvet_window *velvet_scene_get_focus(struct velvet_scene *m);
 #define HEX_TO_NUM(x) (((x) >= '0' && (x) <= '9') ? (x) - '0' : (x) - 'a' + 10)
 #define RGB(col)                                                               \
   {                                                                            \
-    .kind = COLOR_RGB, .c.rgb = {                                              \
+    .kind = VELVET_API_COLOR_KIND_RGB, .c.rgb = {                                              \
       .r = (HEX_TO_NUM(col[1]) << 4) | (HEX_TO_NUM(col[2])),                   \
       .g = (HEX_TO_NUM(col[3]) << 4) | (HEX_TO_NUM(col[4])),                   \
       .b = (HEX_TO_NUM(col[5]) << 4) | (HEX_TO_NUM(col[6]))                    \
