@@ -51,14 +51,16 @@ enum PACK color_kind {
   COLOR_TABLE,
 };
 
+struct rgb_color {
+  uint8_t r, g, b, t; 
+};
+
 struct color {
   enum color_kind kind;
   union {
     uint8_t table;
-    struct {
-      uint8_t red, green, blue, transparency;
-    };
-  };
+    struct rgb_color rgb;
+  } c;
 };
 
 static const struct color color_default = {.kind = COLOR_RESET};

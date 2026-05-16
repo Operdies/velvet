@@ -158,6 +158,8 @@ void velvet_scene_resize(struct velvet_scene *m, struct rect new_size) {
   }
 }
 
+static inline struct rgb_color rgb_color(int red, int green, int blue) { return (struct rgb_color){ .r = red, .g = green, .b = blue }; }
+
 static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
   /* ANSI 16 colors */
   if (n < 16) return t.palette[n];
@@ -170,14 +172,13 @@ static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
     int b = n % 6;
 
     static const uint8_t levels[6] = {0, 95, 135, 175, 215, 255};
-
-    return (struct color){.kind = COLOR_RGB, .red = levels[r], .green = levels[g], .blue = levels[b]};
+    return (struct color){.kind = COLOR_RGB, .c.rgb = rgb_color(levels[r], levels[g], levels[b])};
   }
 
   /* Grayscale ramp */
   if (n >= 232) {
     uint8_t v = 8 + (n - 232) * 10;
-    return (struct color){.kind = COLOR_RGB, .red = v, .green = v, .blue = v};
+    return (struct color){.kind = COLOR_RGB, .c.rgb = rgb_color(v, v, v)};
   }
 
   struct color col = RGB("#000000");
@@ -186,7 +187,7 @@ static struct color xterm256_to_rgb(struct velvet_theme t, uint8_t n) {
 
 static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg) {
   if (c.kind == COLOR_RESET) return fg ? t.foreground : t.background;
-  if (c.kind == COLOR_TABLE) return xterm256_to_rgb(t, c.table);
+  if (c.kind == COLOR_TABLE) return xterm256_to_rgb(t, c.c.table);
   return c;
 }
 
@@ -197,33 +198,31 @@ static struct color color_to_rgb(struct velvet_theme t, struct color c, bool fg)
  * gives a decent perceived brightness change. */
 static struct color rgb_dim(struct color a, float f) {
   float red, green, blue, hue, saturation, value;
-  red = (float)a.red / 255;
-  green = (float)a.green / 255;
-  blue = (float)a.blue / 255;
+  red = (float)a.c.rgb.r / 255;
+  green = (float)a.c.rgb.g / 255;
+  blue = (float)a.c.rgb.b / 255;
   rgb_to_hsv(red, green, blue, &hue, &saturation, &value);
   value *= f;
   hsv_to_rgb(hue, saturation, value, &red, &green, &blue);
-  a.red = red * 255;
-  a.green = green * 255;
-  a.blue = blue * 255;
+  a.c.rgb = rgb_color(red * 255, green * 255, blue * 255);
   return a;
 }
 
 /* literal multiplication */
 static struct color rgb_mult(struct color a, float m) {
   assert(a.kind == COLOR_RGB);
-  a.red = CLAMP((float)a.red * m, 0, 255);
-  a.green = CLAMP((float)a.green * m, 0, 255);
-  a.blue = CLAMP((float)a.blue * m, 0, 255);
+  a.c.rgb = rgb_color(CLAMP((float)a.c.rgb.r * m, 0, 255),
+                      CLAMP((float)a.c.rgb.g * m, 0, 255),
+                      CLAMP((float)a.c.rgb.b * m, 0, 255));
   return a;
 }
 
 static struct color rgb_add(struct color a, struct color b) {
   assert(a.kind == COLOR_RGB);
   assert(b.kind == COLOR_RGB);
-  a.red = CLAMP(a.red + b.red, 0, 255);
-  a.green = CLAMP(a.green + b.green, 0, 255);
-  a.blue = CLAMP(a.blue + b.blue, 0, 255);
+  a.c.rgb = rgb_color(CLAMP(a.c.rgb.r + b.c.rgb.r, 0, 255),
+                      CLAMP(a.c.rgb.g + b.c.rgb.g, 0, 255),
+                      CLAMP(a.c.rgb.b + b.c.rgb.b, 0, 255));
   return a;
 }
 
@@ -241,7 +240,7 @@ static struct screen_cell normalize_cell(struct velvet_theme t, struct screen_ce
   if (t.bold_bright_colors) {
     struct color col = is_reverse ? c.style.bg : c.style.fg;
     if (col.kind == COLOR_TABLE) {
-      if (col.table >= 8 && col.table <= 15) {
+      if (col.c.table >= 8 && col.c.table <= 15) {
         if (c.style.attr & ATTR_FAINT) c.style.attr &= ~ATTR_FAINT;
         else c.style.attr |= ATTR_BOLD;
       }
@@ -696,7 +695,7 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
 
       struct screen_cell *before = column ? &composite->cells[cell_index - 1] : NULL;
       bool is_wide_continuation = before && before->cp.is_wide && blank(above);
-      bool fg_seethrough = !is_wide_continuation && (blank(above) || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.transparency == 255);
+      bool fg_seethrough = !is_wide_continuation && (blank(above) || color_equals(a_norm.style.fg, a_norm.style.bg) || a_norm.style.fg.c.rgb.t == 255);
 
       /* dim before blending. This looks a bit more like what you would expect in cases
          * where a dimmed window is covering a non-dimmed window. The dimming effect still
@@ -711,9 +710,9 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
       bool blend = cell_index != block_blend_index && trns.mode != VELVET_API_TRANSPARENCY_MODE_NONE &&
         (trns.transparency && (trns.mode == VELVET_API_TRANSPARENCY_MODE_ALL || is_cell_bg_clear(above)));
 
-      if (a_norm.style.bg.transparency) {
+      if (a_norm.style.bg.c.rgb.t) {
         above = normalize_cell(t, above);
-        float a = (float)a_norm.style.bg.transparency / 255.0;
+        float a = (float)a_norm.style.bg.c.rgb.t / 255.0;
         above.style.bg = color_alpha_blend(above.style.bg, below.style.bg, 1.0f - a);
         if (fg_seethrough) {
           above.cp = below.cp;
@@ -722,9 +721,9 @@ static void velvet_scene_commit_staged(struct velvet_scene *m, struct velvet_win
         }
       }
 
-      if (a_norm.style.fg.transparency && !fg_seethrough) {
+      if (a_norm.style.fg.c.rgb.t && !fg_seethrough) {
         above = normalize_cell(t, above);
-        float a = (float)a_norm.style.fg.transparency / 255.0;
+        float a = (float)a_norm.style.fg.c.rgb.t / 255.0;
         above.style.fg = color_alpha_blend(above.style.fg, below.style.bg, 1.0f - a);
       }
 
@@ -910,21 +909,21 @@ void sgr_color_apply(struct sgr_buffer *sgr, struct color col, bool fg) {
   if (col.kind == COLOR_RESET) {
     sgr_buffer_push(sgr, fg ? 39 : 49);
   } else if (col.kind == COLOR_TABLE) {
-    if (col.table <= 7) {
-      sgr_buffer_push(sgr, (fg ? 30 : 40) + col.table);
-    } else if (col.table <= 15) {
-      sgr_buffer_push(sgr, (fg ? 90 : 100) + col.table - 8);
+    if (col.c.table <= 7) {
+      sgr_buffer_push(sgr, (fg ? 30 : 40) + col.c.table);
+    } else if (col.c.table <= 15) {
+      sgr_buffer_push(sgr, (fg ? 90 : 100) + col.c.table - 8);
     } else {
       sgr_buffer_push(sgr, fg ? 38 : 48);
       sgr_buffer_add_param(sgr, 5);
-      sgr_buffer_add_param(sgr, col.table);
+      sgr_buffer_add_param(sgr, col.c.table);
     }
   } else if (col.kind == COLOR_RGB) {
     sgr_buffer_push(sgr, fg ? 38 : 48);
     sgr_buffer_add_param(sgr, 2);
-    sgr_buffer_add_param(sgr, col.red);
-    sgr_buffer_add_param(sgr, col.green);
-    sgr_buffer_add_param(sgr, col.blue);
+    sgr_buffer_add_param(sgr, col.c.rgb.r);
+    sgr_buffer_add_param(sgr, col.c.rgb.g);
+    sgr_buffer_add_param(sgr, col.c.rgb.b);
   }
 }
 
@@ -1032,8 +1031,8 @@ static bool color_equals(struct color a, struct color b) {
   if (a.kind != b.kind) return false;
   switch (a.kind) {
   case COLOR_RESET: return true;
-  case COLOR_RGB: return a.red == b.red && a.green == b.green && a.blue == b.blue && a.transparency == b.transparency;
-  case COLOR_TABLE: return a.table == b.table;
+  case COLOR_RGB: return a.c.rgb.r == b.c.rgb.r && a.c.rgb.g == b.c.rgb.g && a.c.rgb.b == b.c.rgb.b && a.c.rgb.t == b.c.rgb.t;
+  case COLOR_TABLE: return a.c.table == b.c.table;
   }
   return false;
 }
