@@ -7,16 +7,16 @@ static void push_color(struct vte *vte, struct color col, bool is_fg) {
   switch (col.kind) {
   case COLOR_TABLE: {
     string_push_char(&vte->pending_input, ';');
-    if (col.table <= 7) {
-      string_push_int(&vte->pending_input, (is_fg ? 30 : 40) + col.table);
-    } else if (col.table <= 15) {
-      string_push_int(&vte->pending_input, (is_fg ? 90 : 100) + col.table - 8);
+    if (col.c.table <= 7) {
+      string_push_int(&vte->pending_input, (is_fg ? 30 : 40) + col.c.table);
+    } else if (col.c.table <= 15) {
+      string_push_int(&vte->pending_input, (is_fg ? 90 : 100) + col.c.table - 8);
     } else {
       string_push_int(&vte->pending_input, is_fg ? 38 : 48);
       string_push_char(&vte->pending_input, ';');
       string_push_int(&vte->pending_input, 5);
       string_push_char(&vte->pending_input, ';');
-      string_push_int(&vte->pending_input, col.table);
+      string_push_int(&vte->pending_input, col.c.table);
     }
   } break;
   case COLOR_RGB: {
@@ -24,11 +24,11 @@ static void push_color(struct vte *vte, struct color col, bool is_fg) {
     string_push_char(&vte->pending_input, ';');
     string_push_int(&vte->pending_input, 2);
     string_push_char(&vte->pending_input, ';');
-    string_push_int(&vte->pending_input, col.red);
+    string_push_int(&vte->pending_input, col.c.rgb.r);
     string_push_char(&vte->pending_input, ';');
-    string_push_int(&vte->pending_input, col.green);
+    string_push_int(&vte->pending_input, col.c.rgb.g);
     string_push_char(&vte->pending_input, ';');
-    string_push_int(&vte->pending_input, col.blue);
+    string_push_int(&vte->pending_input, col.c.rgb.b);
   } break;
   case COLOR_RESET: break; /* nothing to do */
   }

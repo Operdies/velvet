@@ -732,20 +732,21 @@ static float iconv(uint8_t v) {
 static struct color rgb_from_palette(struct velvet_api_rgb_color pal) {
   struct color rgb = {
       .kind = COLOR_RGB,
-      .red = fconv(pal.red),
-      .green = fconv(pal.green),
-      .blue = fconv(pal.blue),
-      .transparency = pal.alpha.set ? fconv(1.0 - pal.alpha.value) : 0,
-  };
+      .c.rgb = {
+          .r = fconv(pal.red),
+          .g = fconv(pal.green),
+          .b = fconv(pal.blue),
+          .t = pal.alpha.set ? fconv(1.0 - pal.alpha.value) : 0,
+      }};
   return rgb;
 }
 
 static struct velvet_api_rgb_color palette_from_rgb(struct color col) {
   struct velvet_api_rgb_color api = {
-      .red = iconv(col.red),
-      .blue = iconv(col.blue),
-      .green = iconv(col.green),
-      .alpha.value = 1.0 - iconv(col.transparency),
+      .red = iconv(col.c.rgb.r),
+      .blue = iconv(col.c.rgb.b),
+      .green = iconv(col.c.rgb.g),
+      .alpha.value = 1.0 - iconv(col.c.rgb.t),
   };
   return api;
 }
