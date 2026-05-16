@@ -328,7 +328,6 @@ table.insert(h, ([[
 
 #include "lua.h"
 #include <stdbool.h>
-#include "utils.h"
 #include "collections.h"
 
 typedef lua_Integer lua_stackIndex;
@@ -340,10 +339,12 @@ struct velvet;
 --- C enums {{{3
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
+  if enum.doc then table.insert(h, string.format("/* %s */\n", enum.doc)) end
   table.insert(h, ([[
 enum %s%s {
 ]]):format(enum.packed and "__attribute__((packed)) " or "", cname))
   for _, v in ipairs(enum.values) do
+    if v.doc then table.insert(h, string.format("  /* %s */\n", v.doc)) end
     local field_name = ("%s_%s"):format(cname, v.name):upper()
     table.insert(h, ([[
   %s = %d,
@@ -359,22 +360,24 @@ end
 -- Create structs for composite types.
 -- These structs will automatically be marshaled to and from lua
 for _, type in ipairs(spec.types) do
+  if type.doc then table.insert(h, string.format("/* %s */\n", type.doc)) end
   local cname = get_cname(type.name)
   table.insert(h, ([[
 struct %s {
 ]]):format(cname))
   for _, fld in ipairs(type.fields) do
+    if fld.doc then table.insert(h, string.format("  /* %s */\n", fld.doc)) end
     if fld.optional then
       table.insert(h, ([[
   struct {
     %s value;
     bool set;
-  } %s; /* %s */
-]]):format(c_type(fld.type), fld.name, string_concatenate(fld.doc, "")))
+  } %s;
+]]):format(c_type(fld.type), fld.name))
       else
     table.insert(h, ([[
-  %s %s; /* %s */
-]]):format(c_type(fld.type), fld.name, string_concatenate(fld.doc, "")))
+  %s %s;
+]]):format(c_type(fld.type), fld.name))
     end
   end
   table.insert(h, [[
