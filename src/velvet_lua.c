@@ -185,7 +185,7 @@ void velvet_lua_source(struct velvet *vv, char *path) {
       "end)",
       path);
 
-  if (luaL_loadbuffer(vv->L, (char *)chunk.content, chunk.len, "source config") != LUA_OK)
+  if (luaL_loadbuffer(vv->L, (char *)chunk.content, chunk.len, "@load_config") != LUA_OK)
     vv_log_lua_error(vv);
   if (lua_pcall(vv->L, 0, 0, 0) != LUA_OK)
     vv_log_lua_error(vv);

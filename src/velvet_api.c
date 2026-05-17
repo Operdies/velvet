@@ -1032,7 +1032,7 @@ static void check_config(struct velvet *v) {
 
   if (!ok) lua_bail(v, "Unable to open config for reading.");
 
-  int status = luaL_loadbuffer(v->L, (char*)config.content, config.len, "@velvet.check_config");
+  int status = luaL_loadbuffer(v->L, (char*)config.content, config.len, "@init.lua");
   string_destroy(&config);
   if (status != LUA_OK) {
     const char *s = luaL_checkstring(v->L, -1);
