@@ -439,28 +439,31 @@ struct velvet_api_screen_geometry vv_api_get_screen_geometry(struct velvet *v) {
   return geom;
 }
 
+static void confine_region_to_screen(struct screen *screen, struct velvet_api_rect *region) {
+  /* adjust width */
+  if (region->left < 0) {
+    int delta = -region->left;
+    region->left += delta;
+    region->width -= delta;
+  }
+  region->width = CLAMP(region->width, 0, screen->w - region->left);
+
+  /* adjust height */
+  /* convert to 0-index */
+  /* clamp to scrollback+buffer bounds */
+  region->top = CLAMP(region->top, -screen->scroll.height, screen->h - 1);
+  /* clamp height to number of available lines */
+  region->height = MIN(region->height, screen->h - region->top);
+}
+
 lua_stackRetCount vv_api_window_get_text(struct velvet *v, lua_Integer win_id, struct velvet_api_rect region) {
   lua_State *L = v->current;
   struct velvet_window *w = check_window(v, win_id);
   struct screen *screen = vte_get_current_screen(&w->emulator);
 
-  /* adjust width */
-  region.left = region.left - 1;
-  if (region.left < 0) {
-    int delta = -region.left;
-    region.left += delta;
-    region.width -= delta;
-  }
-  region.width = CLAMP(region.width, 0, w->geometry.width - region.left);
-
-  /* adjust height */
-  /* convert to 0-index */
-  region.top = region.top - 1;
-  /* clamp to scrollback+buffer bounds */
-  region.top = CLAMP(region.top, -screen->scroll.height, screen->h - 1);
-  /* clamp height to number of available lines */
-  region.height = MIN(region.height, screen->h - region.top);
-
+  region.left--;
+  region.top--;
+  confine_region_to_screen(screen, &region);
 
   lua_newtable(L); /* line[] */
 
@@ -1423,4 +1426,92 @@ lua_stackRetCount vv_api_get_servernames(struct velvet *v) {
 struct u8_slice vv_api_get_servername(struct velvet *v) {
   (void)v;
   return u8_slice_from_cstr(getenv("VELVET"));
+}
+
+static void lua_pushcolor(lua_State *L, struct color col) {
+  lua_newtable(L); /* cell_color */
+  if (col.kind == VELVET_API_COLOR_KIND_RGB) {
+    lua_newtable(L); /* rgb_color */
+    struct velvet_api_rgb_color api_color = palette_from_rgb(col);
+    lua_pushnumber(L, api_color.red);
+    lua_setfield(L, -2, "red");
+    lua_pushnumber(L, api_color.green);
+    lua_setfield(L, -2, "green");
+    lua_pushnumber(L, api_color.blue);
+    lua_setfield(L, -2, "blue");
+    lua_pushnumber(L, api_color.alpha.value);
+    lua_setfield(L, -2, "alpha");
+    lua_setfield(L, -2, "rgb"); /* cell_color[rgb] = rgb */
+  } else if (col.kind == VELVET_API_COLOR_KIND_TABLE) {
+    lua_pushinteger(L, col.c.table);
+    lua_setfield(L, -2, "table"); /* cell_color[table] = col.c.table */
+  } else {
+    /* return empty table to indicate no color */
+  }
+}
+
+/* return: cell_line[]
+ * {
+ * { cells: cell { content, style, foreground, background }, wraps },
+ * ...
+ * }
+ */
+
+lua_stackRetCount vv_api_window_get_cells(struct velvet *v, lua_Integer win_id, struct velvet_api_rect region) {
+  uint8_t decode_buf[4] = {0};
+  lua_State *L = v->current;
+  struct velvet_window *w = check_window(v, win_id);
+  struct screen *screen = vte_get_current_screen(&w->emulator);
+
+  region.left--;
+  region.top--;
+  confine_region_to_screen(screen, &region);
+
+  /* cell_lines: cell_line[] */
+  lua_newtable(L);
+  int line_idx = 1;
+  for (int row = region.top; row < region.top + region.height; row++) {
+    struct screen_line *l = screen_get_line(screen, row);
+    /* cell_line: { cells: cell[], wraps: bool } */
+    lua_newtable(L);
+    lua_pushboolean(L, !l->has_newline);
+    lua_setfield(L, -2, "wraps");
+    lua_newtable(L); /* cell[] */
+    int cell_idx = 1;
+    for (int col = region.left; col < l->eol && col < region.left + region.width; col++) {
+      struct screen_cell *c, *p;
+      c = &l->cells[col];
+      p = col ? c - 1 : NULL;
+      lua_newtable(L); /* cell */
+      if (p && p->cp.is_wide) {
+        /* if the previous cell is wide, this cell should be {} */
+        lua_seti(L, -2, cell_idx++);
+        continue;
+      }
+      { /* cell[content] = cp.value */
+        uint32_t cp = c->cp.value;
+        if (!cp) cp = ' ';
+        int n = codepoint_to_utf8(cp, decode_buf);
+        lua_pushlstring(L, (char *)decode_buf, n);
+        lua_setfield(L, -2, "content");
+      }
+      { /* cell[background] = c->style.bg */
+        lua_pushcolor(L, c->style.bg);
+        lua_setfield(L, -2, "background");
+      }
+      { /* cell[foreground] = c->style.fg */
+        lua_pushcolor(L, c->style.fg);
+        lua_setfield(L, -2, "foreground");
+      }
+      { /* cell[style] = c->style.attr */
+        lua_pushinteger(L, c->style.attr);
+        lua_setfield(L, -2, "style");
+      }
+
+      lua_seti(L, -2, cell_idx++); /* cells[col] = cell */
+    }
+    lua_setfield(L, -2, "cells"); /* cell_line.cells = cells */
+    lua_seti(L, -2, line_idx++); /* cell_lines[line_idx] = cell_line */
+  }
+  return 1;
 }

@@ -85,6 +85,11 @@ local api = {}
 ---| 'none' This stream will be set to /dev/null
 ---| 'stream' This stream will be writable, or produce output, depending on stream direction
 
+---@alias velvet.api.color_kind string 
+---| 'reset' No color. Falls back to default background/foreground color. This also affects pseudotransparency behavior. If any background color is set except |reset|, a surface is considered opaque by the compositor.
+---| 'rgb' Indicates a full rgb color
+---| 'table' Indicates one of the 16 pre-defined ansi colors or an xterm-256color
+
 
 --- @class velvet.api.mouse_settings
 --- @field reporting velvet.api.mouse_reporting nil
@@ -95,6 +100,10 @@ local api = {}
 --- @field green number nil
 --- @field blue number nil
 --- @field alpha? number nil
+
+--- @class velvet.api.cell_color
+--- @field rgb? velvet.api.rgb_color|string RGB color
+--- @field table? integer xterm-256 color table value
 
 --- @class velvet.api.theme
 --- @field black velvet.api.rgb_color|string Palette color 0
@@ -185,6 +194,16 @@ local api = {}
 --- @field text string Text content
 --- @field wraps boolean Set if the line continues on the next row
 --- @field truncated boolean Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space.
+
+--- @class velvet.api.cell
+--- @field content string Cell content. If nil, the previous cell is a wide character which occupies this cell.
+--- @field style integer A bit mask indicating style of this cell.
+--- @field foreground velvet.api.cell_color The foreground color of this cell.
+--- @field background velvet.api.cell_color The background color of this cell.
+
+--- @class velvet.api.cell_line
+--- @field cells velvet.api.cell[] A list of cells such that cells[n] corresponds to the nth terminal column.
+--- @field wraps boolean Set if the line continues on the next row
 
 --- @class velvet.api.coordinate
 --- @field row integer row
@@ -341,6 +360,12 @@ function api.window_get_alpha(win_id) end
 --- @param region velvet.api.rect The region to get text from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on.
 --- @return velvet.api.line[] ret The text in the specified region.
 function api.window_get_text(win_id, region) end
+
+--- Get window cells contained in |region|. 1-indexed.
+--- @param win_id integer Window id
+--- @param region velvet.api.rect The region to get cells from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on.
+--- @return velvet.api.cell_line[] ret The lines in the specified region.
+function api.window_get_cells(win_id, region) end
 
 --- Get the mouse settings of |win_id|
 --- @param win_id integer Window id

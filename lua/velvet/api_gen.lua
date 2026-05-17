@@ -139,7 +139,18 @@ end
 
 local function is_manual(name) 
   -- types we know that we cannot automatically marshal. Such functions must be implemented by hand.
-  local manual_types = { ["int[]"] = true, any = true, ["string[]"] = true, ["line[]"] = true, ["string|string[]"] = true, ["table"] = true }
+  local manual_types = { 
+    ["cell_line[]"] = true,
+    ["cell_line"] = true,
+    cell = true,
+    ['cell[]'] = true,
+    ["int[]"] = true,
+    any = true,
+    ["string[]"] = true,
+    ["line[]"] = true,
+    ["string|string[]"] = true,
+    ["table"] = true,
+  }
   return manual_types[name]
 end
 
@@ -179,6 +190,7 @@ end
 
 local function c_type(t)
   local entry = type_lookup[t] or error("Unrecognized type: " .. t)
+  if not entry.c_type then error('Cannot handle type: ' .. t) end
   return entry.c_type
 end
 
@@ -360,6 +372,9 @@ end
 -- Create structs for composite types.
 -- These structs will automatically be marshaled to and from lua
 for _, type in ipairs(spec.types) do
+  if is_manual(type.name) then
+    goto continue
+  end
   if type.doc then table.insert(h, string.format("/* %s */\n", type.doc)) end
   local cname = get_cname(type.name)
   table.insert(h, ([[
@@ -374,8 +389,8 @@ struct %s {
     bool set;
   } %s;
 ]]):format(c_type(fld.type), fld.name))
-      else
-    table.insert(h, ([[
+    else
+      table.insert(h, ([[
   %s %s;
 ]]):format(c_type(fld.type), fld.name))
     end
@@ -384,6 +399,7 @@ struct %s {
 };
 
 ]])
+  ::continue::
 end
 
 for _, fn in ipairs(spec.api) do
