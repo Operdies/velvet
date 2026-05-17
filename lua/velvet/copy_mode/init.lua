@@ -2,12 +2,15 @@ local M = {}
 
 --- @alias velvet.copy_mode
 --- | 'none'
+--- | 'yank'
 --- | 'visual'
 --- | 'lines'
 --- | 'block'
 
 --- @type table<velvet.copy_mode, velvet.copy_mode>
-local modes = { none = 'none', visual = 'visual', lines = 'lines', block = 'block' }
+local modes = { none = 'none', visual = 'visual', lines = 'lines', block = 'block', yank = 'yank' }
+local vk = require('velvet.keymap.named_keys')
+local mo = require('velvet.copy_mode.motions')
 
 --- @param from velvet.api.coordinate
 --- @param to velvet.api.coordinate
@@ -69,7 +72,7 @@ local function do_copy(initial_mode)
 
   local on_key = {
     event = 'window.on_key',
-    when = function(_, e) return e.data.key.event_type ~= 'release' and e.data.win_id == overlay.id end
+    when = function(_, e) return not km.is_modifier(e.data) and e.data.key.event_type ~= 'release' and e.data.win_id == overlay.id end
   }
   local either_closed = {
     event = 'window.closed',
@@ -183,6 +186,22 @@ local function do_copy(initial_mode)
     end)
   end
 
+  local digit = nil
+  local function copy_or_yank()
+    local cur = get_abs_cursor()
+    if mode == 'none' then
+      mode = 'yank'
+      start_selection = { col = cur.col, row = cur.row }
+      end_selection = start_selection
+      return
+    elseif mode == 'yank' then
+      local count = digit or 1
+      mode = 'lines'
+      end_selection = { col = start_selection.col, row = math.min(cur.row + count - 1, target_geometry.height) }
+    end
+    copy_and_dispose()
+  end
+
   local function set_abs_cursor(abs)
     local offset = vv.api.window_get_scroll_offset(target)
     local local_row = offset + abs.row
@@ -208,20 +227,6 @@ local function do_copy(initial_mode)
     set_abs_cursor(end_selection)
   end
 
-  local function scroll_to_top()
-    cursor_move(0, -10000)
-  end
-  local function scroll_to_end()
-    cursor_move(0, 10000)
-  end
-
-  local function set_cursor_column(where)
-    local at = where == 'start' and 0 or target_geometry.width
-    overlay:set_cursor(at, cursor.row)
-    cursor = overlay:get_cursor()
-    end_selection = get_abs_cursor()
-  end
-
   local function pan(dy)
     local cur1 = overlay:get_cursor()
     local offset = vv.api.window_get_scroll_offset(target)
@@ -235,38 +240,98 @@ local function do_copy(initial_mode)
     end_selection = get_abs_cursor()
   end
 
+  --- @param motion velvet.copy.vim_motion
+  --- @param count? integer
+  local function vim_motion(motion, count)
+    local op = nil
+    local operand_required = { f = true, F = true, t = true, T = true, g = true, a = true, i = true }
+    if operand_required[motion] then
+      local r, operand = vv.async.wait(on_key, either_closed)
+      if r == either_closed then
+        dispose()
+        return
+      end
+      op = operand.data.key.name
+      -- space is treated as a named key, so we should convert its name to ' '
+      if operand.data.key.codepoint == 32 then op = ' ' end
+      -- don't attempt to handle named keys
+      if op ~= ' ' and vk[op] then return end
+    end
+    local cur1 = get_abs_cursor()
+    local _end, _start = mo.move(target, cur1, motion, count, op)
+    if _start then
+      -- TODO: this approach doesn't really work.
+      -- It was intended to make e.g. vap select a paragraph by updating both
+      -- ranges, but I hadn't considered that vap->ap->ap should extend
+      -- the selection with an additional paragraph each timer.
+      -- This hack works for that specific appraoch, but o->ap should extend
+      -- the selection in the other direction, so we really need a more
+      -- extensive visual mode emulation which can properly account
+      -- for which end of the selection is active, and pass that information
+      -- to the motion implementation so it knows which direction to extend in.
+      if cur1.col == start_selection.col and cur1.row == start_selection.row then
+        start_selection = _start
+      end
+    end
+    set_abs_cursor(_end)
+    end_selection = _end
+    if mode == 'yank' then
+      -- some motions implicitly select whole lines
+      -- this is probably not exhaustive.
+      local yank_motion_modes = {
+        j = 'lines', k = 'lines', G = 'lines'
+      }
+      mode = yank_motion_modes[motion] or 'visual'
+      if motion == 'g' then mode = op == 'g' and 'lines' or 'visual' end
+      copy_and_dispose()
+    end
+  end
+
+
   -- TODO: 
-  -- vim motions
-  -- w/W b/B e/E/
-  -- f/F t/T line search
   -- %: match closing symbol
-  -- {}: paragraphs
-  -- in 'none' mode: support yank motions (yip, yap, yW, yy, yj, y3j, etc.)
-  --
   -- dwm transient modeline
   local keymap = {
     { { 'q', '<esc>' },                dispose },
-    { { 'k', '<up>' },                 apply(cursor_move, 0, -1) },
-    { { 'j', '<down>' },               apply(cursor_move, 0, 1) },
-    { { 'h', '<left>' },               apply(cursor_move, -1, 0) },
-    { { 'l', '<right>' },              apply(cursor_move, 1, 0) },
-    { { 'gg' },                        scroll_to_top },
-    { { 'G' },                         scroll_to_end },
-    { { '0', '<home>', '^' },          apply(set_cursor_column, 'start') },
-    { { '$', '<end>' },                apply(set_cursor_column, 'end') },
     { { 'v' },                         apply(selection_mode, modes.visual) },
     { { '<C-v>' },                     apply(selection_mode, modes.block) },
     { { '<S-v>' },                     apply(selection_mode, modes.lines) },
-    { { 'y', '<C-c>' },                copy_and_dispose },
+    { { '<C-c>' },                     copy_and_dispose },
+    { { 'y', },                        copy_or_yank },
     { { 'o' },                         other },
     { { 'O' },                         apply(other, modes.block) },
-    { { '<C-y>' },                     apply(pan, -1) },
-    { { '<C-e>' },                     apply(pan, 1) },
-    { { '<C-d>' },                     function() cursor_move(0, target_geometry.height // 2) end },
-    { { '<C-u>' },                     function() cursor_move(0, -target_geometry.height // 2) end },
-    { { '<C-f>' },                     function() cursor_move(0, target_geometry.height) end },
-    { { '<C-b>' },                     function() cursor_move(0, -target_geometry.height) end },
+    { { '<C-y>' }, apply(pan, -1) },
+    { { '<C-e>' }, apply(pan, 1) },
   }
+
+  -- TODO: alias 'normal' mappings to vim motions
+  local aliases = {
+    k = { '<up>' },
+    j = { '<down>' },
+    h = { '<left>' },
+    l = { '<right>' },
+    ['$'] = { '<end>' },
+    ['0'] = { '<home>' },
+  }
+
+  for _, m in ipairs(mo.motions) do
+    local lst = aliases[m] or {}
+    lst[#lst + 1] = m
+    keymap[#keymap + 1] = { lst, function()
+      local cnt = digit; digit = nil; vim_motion(m, cnt)
+    end }
+  end
+
+  for i = 0, 9 do
+    keymap[#keymap + 1] = { { tostring(i) }, function()
+      if i == 0 and digit == nil then
+        vim_motion('0')
+      else
+        digit = (digit or 0) * 10 + i
+        if digit > 100000 then digit = 100000 end
+      end
+    end }
+  end
 
   for _, mappings in ipairs(keymap) do
     for _, keys in ipairs(mappings[1]) do
@@ -335,6 +400,7 @@ local function do_copy(initial_mode)
     end
     if reg == on_key then
       km:on_key(evt.data)
+      if tonumber(evt.data.key.name) == nil then digit = nil end
     elseif reg == focus_lost then
       dispose()
     elseif reg == either_closed then
@@ -344,7 +410,8 @@ local function do_copy(initial_mode)
       target_geometry = evt.data.new_size
     end
     if disposed then break end
-    draw()
+    local success, result = xpcall(draw, debug.traceback)
+    if not success then printerr(result) end
   end
 end
 
