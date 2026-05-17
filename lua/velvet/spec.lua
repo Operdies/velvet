@@ -271,6 +271,14 @@ return {
       },
     },
     {
+      name = "cell_color",
+      doc = "low level color",
+      fields = {
+        { name = "rgb",   type = "rgb_color", doc = "RGB color",                   optional = true },
+        { name = "table", type = "int",       doc = "xterm-256 color table value", optional = true },
+      }
+    },
+    {
       name = "theme",
       fields = {
         -- 30-37 / 40-47
@@ -404,6 +412,25 @@ return {
         { name = "text", type = "string", doc = "Text content" },
         { name = "wraps", type = "bool", doc = "Set if the line continues on the next row" },
         { name = "truncated", type = "bool", doc = "Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space." },
+      },
+    },
+    {
+      name = "cell",
+      doc = "A terminal cell",
+      fields = {
+        { name = "content",    type = "string",     doc = "Cell content. If nil, the previous cell is a wide character which occupies this cell." },
+        { name = "style",      type = "int",        doc = "A bit mask indicating style of this cell." },
+        { name = "foreground", type = "cell_color", doc = "The foreground color of this cell." },
+        { name = "background", type = "cell_color", doc = "The background color of this cell." },
+      },
+    },
+    {
+      name = "cell_line",
+      doc =
+      "A line of cells extracted from a window. This is easier to work with than text when grid alignment matters, or extended cell attributes are needed.",
+      fields = {
+        { name = "cells", type = "cell[]", doc = "A list of cells such that cells[n] corresponds to the nth terminal column." },
+        { name = "wraps", type = "bool",   doc = "Set if the line continues on the next row" },
       },
     },
     {
@@ -661,6 +688,15 @@ return {
         { name = "region", type = "rect", doc = "The region to get text from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on." },
       },
       returns = { type = "line[]", doc = "The text in the specified region." },
+    },
+    {
+      name = "window_get_cells",
+      doc = "Get window cells contained in |region|. 1-indexed.",
+      params = {
+        { name = "win_id", type = "int",  doc = "Window id" },
+        { name = "region", type = "rect", doc = "The region to get cells from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on." },
+      },
+      returns = { type = "cell_line[]", doc = "The lines in the specified region." },
     },
     {
       name = "window_get_mouse_settings",
