@@ -129,6 +129,12 @@ local function chord_from_key_event(key)
   return { key = base_key, mods = mods, alt_key = alt_key }
 end
 
+--- @param args velvet.api.on_key.event_args
+--- @return boolean
+function Keys.is_modifier(args)
+  return modifier_keys[args.key.name] ~= nil
+end
+
 --- @param x string
 --- @return integer[]
 local function string_to_codepoints(x)
