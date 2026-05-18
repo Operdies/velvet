@@ -2,6 +2,7 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	DEFINES += -D_POSIX_C_SOURCE=199309L -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700
 	OBJECTS += platform_linux
+	CFLAGS += -rdynamic
 endif
 
 ifeq ($(UNAME_S),Darwin)
@@ -48,19 +49,26 @@ SUBMODULE_INIT = deps/utf8proc/utf8proc.c
 
 BUILD_DEPS = $(UTF8PROC) $(LUA_LIBS)
 
-OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc dcs io velvet_scene velvet_input velvet_cmd velvet_lua velvet_api velvet_alloc platform_unix velvet_process
+LUA_MODULES = velvet_api
+LUA_MODULE_DIR = lua_modules
+OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc dcs io velvet_scene velvet_input velvet_cmd velvet_lua velvet_alloc platform_unix velvet_process
 OBJECT_DIR = src
+DEBUG_LUA_MODULE_DIR = $(DEBUG_DIR)
+RELEASE_LUA_MODULE_DIR = $(RELEASE_DIR)
 
 DEBUG_OBJECT_OUT = $(patsubst $(OBJECT_DIR)/%.c, $(DEBUG_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
 RELEASE_OBJECT_OUT = $(patsubst $(OBJECT_DIR)/%.c, $(RELEASE_DIR)/%.c.o, $(OBJECTS:%=$(OBJECT_DIR)/%.c))
+
+DEBUG_LUA_MODULES_OUT = $(patsubst $(LUA_MODULE_DIR)/%.c, $(DEBUG_LUA_MODULE_DIR)/%.so, $(LUA_MODULES:%=$(LUA_MODULE_DIR)/%.c))
+RELEASE_LUA_MODULES_OUT = $(patsubst $(LUA_MODULE_DIR)/%.c, $(RELEASE_LUA_MODULE_DIR)/%.so, $(LUA_MODULES:%=$(LUA_MODULE_DIR)/%.c))
 
 OBJECT_DEPS = $(DEBUG_OBJECT_OUT:.o=.d) $(RELEASE_OBJECT_OUT:.o=.d)
 
 DEFINES += -DVELVET_VERSION='"$(VELVET_VERSION)"'
 
 # c11: velvet uses a couple of unnamed anonymous structs and unions, which is a c11 feature.
-CFLAGS = -std=c11 -Wall -Wextra -pedantic $(INCLUDE_DIR)  -MMD -MP $(DEFINES)
-LDFLAGS = -lm
+CFLAGS += -std=c11 -Wall -Wextra -pedantic $(INCLUDE_DIR) -MMD -MP $(DEFINES)
+LDFLAGS += -lm
 
 DEBUG_CFLAGS = $(CFLAGS) -O0 -g
 DEBUG_LDFLAGS = $(LDFLAGS)
@@ -68,8 +76,19 @@ DEBUG_LDFLAGS = $(LDFLAGS)
 RELEASE_CFLAGS = $(CFLAGS) -O2 -DNDEBUG -DRELEASE_BUILD
 RELEASE_LDFLAGS = $(LDFLAGS)
 
+DEBUG_MODULE_CFLAGS = $(DEBUG_CFLAGS) -fPIC -shared
+RELEASE_MODULE_CFLAGS = $(RELEASE_CFLAGS) -fPIC -shared
+
 .PHONY: all
 all: release
+
+$(DEBUG_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_LUA_AUTOGEN) $(BUILD_DEPS)
+	@mkdir -p $(DEBUG_LUA_MODULE_DIR)
+	$(CC) $(DEBUG_MODULE_CFLAGS) $< -o $@
+
+$(RELEASE_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_LUA_AUTOGEN) $(BUILD_DEPS)
+	@mkdir -p $(RELEASE_LUA_MODULE_DIR)
+	$(CC) $(RELEASE_MODULE_CFLAGS) $< -o $@
 
 $(DEBUG_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(SUBMODULE_INIT)
 	@mkdir -p $(DEBUG_DIR)
@@ -102,10 +121,10 @@ $(RELEASE_DIR)/%: $(RELEASE_DIR)/%.c.o $(RELEASE_OBJECT_OUT) $(BUILD_DEPS)
 	$(CC) $(RELEASE_CFLAGS) $^ -o $@ $(RELEASE_LDFLAGS)
 
 .PHONY: release
-release: $(RELEASE_CMD_OUT)
+release: $(RELEASE_CMD_OUT) $(RELEASE_LUA_MODULES_OUT)
 
 .PHONY: debug
-debug: $(DEBUG_CMD_OUT)
+debug: $(DEBUG_CMD_OUT) $(DEBUG_LUA_MODULES_OUT)
 
 .PHONY: clean
 clean:
@@ -137,6 +156,7 @@ install: release
 	mkdir -p $(INSTALL_LUA) $(INSTALL_BIN) $(INSTALL_BIN2) $(INSTALL_MAN)/man1 $(INSTALL_MAN)/man3
 	mkdir -p $(INSTALL_BASH_COMPLETION) $(INSTALL_ZSH_COMPLETION)
 	install -m 755 $(RELEASE_DIR)/vv $(INSTALL_BIN2)/vv
+	install -m 755 $(RELEASE_DIR)/velvet_api.so $(INSTALL_BIN2)/velvet_api.so
 	ln -sf ../share/velvet/bin/vv $(INSTALL_BIN)/vv
 	install -m 644 doc/man1/velvet.1 $(INSTALL_MAN)/man1/
 	install -m 644 doc/man3/*.3 $(INSTALL_MAN)/man3/
@@ -146,6 +166,7 @@ install: release
 
 uninstall:
 	rm -f $(INSTALL_BIN)/vv
+	rm -f $(INSTALL_BIN)/velvet_api.so
 	rm -f $(INSTALL_MAN)/man1/velvet.1
 	rm -f $(INSTALL_MAN)/man3/velvet*.3
 	rm -f $(INSTALL_BASH_COMPLETION)/vv

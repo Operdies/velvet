@@ -58,7 +58,7 @@ local vv = {
   tbl_deep_extend = require('velvet.lib.deep_extend'),
 
   --- @type velvet.api
-  api = {},
+  api = require('velvet_api'),
   --- @type velvet.options
   options = {},
   events = ev,
