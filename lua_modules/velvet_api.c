@@ -4,15 +4,23 @@
 #include "utf8proc/utf8proc.h"
 #include "velvet.h"
 #include "velvet_lua.h"
+#include "velvet_lua_autogen.c"
+#include "velvet_process.h"
+#include <ctype.h>
 #include <dirent.h>
+#include <lua.h>
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <ctype.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
-#include "velvet_process.h"
+
+#define NUM_FUNCTIONS (LENGTH(velvet_lua_function_table))
+int luaopen_velvet_api(lua_State *L) {
+  luaL_newlib(L, velvet_lua_function_table);
+  return 1;
+}
 
 _Noreturn static void lua_bail(struct velvet *v, char *fmt, ...) {
   va_list ap;

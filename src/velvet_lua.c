@@ -2,10 +2,10 @@
 #include "lauxlib.h"
 #include "lua.h"
 #include "lualib.h"
-#include "velvet_lua_autogen.c"
 #include <string.h>
 #include <sys/stat.h>
 #include "platform.h"
+#include "velvet_lua_autogen.c"
 
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)osize;
@@ -76,14 +76,6 @@ static void velvet_lua_init_arg(struct velvet *v) {
   lua_setfield(L, -2, "startup_arguments");
 }
 
-static void velvet_lua_init_api(struct velvet *v) {
-  lua_State *L = v->L;
-  lua_getglobal(L, "vv");
-  luaL_newlib(L, velvet_lua_function_table);
-  lua_setfield(L, 1, "api");
-  lua_pop(L, lua_gettop(L));
-}
-
 static void velvet_lua_set_default_options(struct velvet *v) {
   lua_State *L = v->L;
   if (luaL_dostring(L, "require('velvet.default_options')") != LUA_OK)
@@ -141,12 +133,15 @@ void velvet_lua_init(struct velvet *v) {
     lua_die(L);
   }
 
+  if (luaL_dostring(L, "package.cpath = '../lua/velvet/c_modules/?.so'") != LUA_OK) {
+    lua_die(L);
+  }
+
   /* set `vv` in the global scope */
   if (luaL_dostring(L, "vv = require('velvet')") != LUA_OK) {
     lua_die(L);
   }
 
-  velvet_lua_init_api(v);
   /* set args from command line */
   velvet_lua_init_arg(v);
   velvet_lua_init_coroutine_helper(v);
