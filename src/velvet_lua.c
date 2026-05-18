@@ -5,7 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "platform.h"
-#include "velvet_lua_autogen.c"
+#include "velvet_lua_event_emitters.c"
 
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)osize;
@@ -133,7 +133,7 @@ void velvet_lua_init(struct velvet *v) {
     lua_die(L);
   }
 
-  if (luaL_dostring(L, "package.cpath = '../lua/velvet/c_modules/?.so'") != LUA_OK) {
+  if (luaL_dostring(L, "package.cpath = './?.so'") != LUA_OK) {
     lua_die(L);
   }
 
