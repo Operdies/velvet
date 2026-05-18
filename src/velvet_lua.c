@@ -4,8 +4,8 @@
 #include "lualib.h"
 #include <string.h>
 #include <sys/stat.h>
-#include "platform.h"
 #include "velvet_lua_event_emitters.c"
+#include "velvet_process.h"
 
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)osize;
@@ -17,6 +17,40 @@ static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
     ptr = realloc(ptr, nsize);
   }
   return ptr;
+}
+
+void velvet_lua_restart_vm(void *data) {
+  struct velvet *v = data;
+  struct lua_State *L = v->L;
+  assert(L);
+  /* unassign the lua state to ensure lua functions cannot be called during shutdown. */
+  v->L = v->current = NULL;
+
+  for (size_t idx = 0; idx < v->scene.windows.length; idx++) {
+    struct velvet_window *w = vec_nth(v->scene.windows, idx);
+    if (w->is_lua_window) {
+      velvet_scene_close_and_remove_window(&v->scene, w);
+      /* closing a window can cause other windows to be closed
+       * if they are parented, and removing a window causes subsequent
+       * windows to be shifted back in the window vector.
+       * So if we close a window, we can't increment the index. */
+      idx--;
+    }
+  }
+
+  velvet_process_kill_all(v);
+
+  struct velvet_coroutine *co;
+  vec_foreach(co, v->coroutines) {
+    co->coroutine = NULL;
+    string_push_cstr(&co->pending_error, "Coroutine exited due to lua reload.\n");
+    co->status = VELVET_COROUTINE_KILLED_RELOAD;
+  }
+
+  vec_clear(&v->event_loop.scheduled_actions);
+  lua_close(L);
+  velvet_lua_init(v);
+  velvet_source_config(v);
 }
 
 int lua_debug_traceback_handler(lua_State *L) {

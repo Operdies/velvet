@@ -140,5 +140,6 @@ void velvet_client_destroy(struct velvet *velvet, struct velvet_client *s);
 bool window_visible(struct velvet *v, struct velvet_window *w);
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_context ctx);
 int velvet_next_id(void);
+void velvet_lua_restart_vm(void*);
 
 #endif

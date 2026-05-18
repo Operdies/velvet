@@ -16,9 +16,7 @@
 #include <sys/un.h>
 
 static struct string stringbuf = {0};
-static struct string envbuf = {0};
 static struct vec envlist = vec(char*);
-static struct string pathbuf = {0};
 
 _Noreturn static void lua_bail(struct velvet *v, char *fmt, ...) {
   va_list ap;
@@ -188,7 +186,7 @@ static void split_and_push_string_array(lua_State *L) {
 
 static lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
   vec_clear(&envlist);
-  string_clear(&envbuf);
+  string_clear(&stringbuf);
 
   lua_State *L = v->current;
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
@@ -242,18 +240,18 @@ static lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex c
 
       /* ensure the string does not get resized while pushing.
        * this would invalidate all the pointers in envlist */
-      string_ensure_capacity(&envbuf, capacity * 2);
+      string_ensure_capacity(&stringbuf, capacity * 2);
 
-      /* second pass: write the values to envlist/envbuf */
+      /* second pass: write the values to envlist/stringbuf */
       lua_pushnil(L);
       while (lua_next(L, -2) != 0) {
         key = luaL_checkslice(L, -2);
         value = luaL_checkslice(L, -1);
-        char *entry = (char*)envbuf.content + envbuf.len;
-        string_push_slice(&envbuf, key);
-        string_push_char(&envbuf, '=');
-        string_push_slice(&envbuf, value);
-        string_push_char(&envbuf, 0);
+        char *entry = (char*)stringbuf.content + stringbuf.len;
+        string_push_slice(&stringbuf, key);
+        string_push_char(&stringbuf, '=');
+        string_push_slice(&stringbuf, value);
+        string_push_char(&stringbuf, 0);
         vec_push(&envlist, &entry);
         lua_pop(L, 1);
       }
@@ -370,12 +368,12 @@ static void vv_api_client_detach(struct velvet *v, lua_Integer client_id) {
 
 #define SOCKET_PATH_MAX (int)((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
 static void check_server(struct velvet *v, struct u8_slice server) {
-  string_clear(&pathbuf);
-  string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", (char*)server.content);
-  string_ensure_null_terminated(&pathbuf);
+  string_clear(&stringbuf);
+  string_joinpath(&stringbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", (char*)server.content);
+  string_ensure_null_terminated(&stringbuf);
   if (strchr((char*)server.content, '/')) lua_bail(v, "Socket name must not contain '/'");
-  if (pathbuf.len > SOCKET_PATH_MAX) lua_bail(v, "Socket name too long.");
-  string_destroy(&pathbuf);
+  if (stringbuf.len > SOCKET_PATH_MAX) lua_bail(v, "Socket name too long.");
+  string_destroy(&stringbuf);
 }
 
 static void vv_api_client_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
@@ -965,44 +963,6 @@ static void vv_api_window_send_raw_key(struct velvet *v, lua_Integer win_id, str
   velvet_input_send_key_to_window(v, key, check_window(v, win_id));
 }
 
-static void reload_callback(void *data) {
-  struct velvet *v = data;
-  struct lua_State *L = v->L;
-  assert(L);
-  /* unassign the lua state to ensure lua functions cannot be called during shutdown. */
-  v->L = v->current = NULL;
-
-  string_destroy(&stringbuf);
-  string_destroy(&envbuf);
-  string_destroy(&pathbuf);
-  vec_destroy(&envlist);
-  for (size_t idx = 0; idx < v->scene.windows.length; idx++) {
-    struct velvet_window *w = vec_nth(v->scene.windows, idx);
-    if (w->is_lua_window) {
-      velvet_scene_close_and_remove_window(&v->scene, w);
-      /* closing a window can cause other windows to be closed
-       * if they are parented, and removing a window causes subsequent
-       * windows to be shifted back in the window vector.
-       * So if we close a window, we can't increment the index. */
-      idx--;
-    }
-  }
-
-  velvet_process_kill_all(v);
-
-  struct velvet_coroutine *co;
-  vec_foreach(co, v->coroutines) {
-    co->coroutine = NULL;
-    string_push_cstr(&co->pending_error, "Coroutine exited due to lua reload.\n");
-    co->status = VELVET_COROUTINE_KILLED_RELOAD;
-  }
-
-  vec_clear(&v->event_loop.scheduled_actions);
-  lua_close(L);
-  velvet_lua_init(v);
-  velvet_source_config(v);
-}
-
 static bool file_exists(const char *path) {
   struct stat st;
   return stat(path, &st) == 0;
@@ -1061,7 +1021,15 @@ static void vv_api_reload(struct velvet *v) {
   vec_clear(&v->event_loop.scheduled_actions);
   /* schedule the actual reload on the event loop so we can return from here. Otherwise we would return into an invalid
    * lua context */
-  io_schedule(&v->event_loop, 0, reload_callback, v);
+  io_schedule(&v->event_loop, 0, velvet_lua_restart_vm, v);
+
+  /* safeguard against using the api after reload has been called.
+   * note that this can be circumvented by using require('velvet_api'), but this is not meant to be bullet proof. */
+  if (luaL_dostring(v->current, "vv.api = nil") != LUA_OK)
+    lua_die(v->current);
+
+  string_destroy(&stringbuf);
+  vec_destroy(&envlist);
 }
 
 static lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string) {
@@ -1408,11 +1376,11 @@ static struct velvet_api_coordinate vv_api_get_mouse_position(struct velvet *v) 
 
 static lua_stackRetCount vv_api_get_servernames(struct velvet *v) {
   lua_State *L = v->current;
-  string_clear(&pathbuf);
-  string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets");
-  string_ensure_null_terminated(&pathbuf);
+  string_clear(&stringbuf);
+  string_joinpath(&stringbuf, getenv("HOME"), ".local", "share", "velvet", "sockets");
+  string_ensure_null_terminated(&stringbuf);
   lua_newtable(L);
-  DIR *dir = opendir((char *)pathbuf.content);
+  DIR *dir = opendir((char *)stringbuf.content);
   if (!dir) return 1;
 
   struct dirent *entry;
