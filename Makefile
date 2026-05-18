@@ -7,6 +7,7 @@ endif
 
 ifeq ($(UNAME_S),Darwin)
 	OBJECTS += platform_macos
+	MODULE_LDFLAGS +=  -Wl,-undefined,dynamic_lookup
 endif
 
 VELVET_VERSION ?= $(shell git describe --tags --always)
@@ -78,17 +79,18 @@ RELEASE_LDFLAGS = $(LDFLAGS)
 
 DEBUG_MODULE_CFLAGS = $(DEBUG_CFLAGS) -fPIC -shared
 RELEASE_MODULE_CFLAGS = $(RELEASE_CFLAGS) -fPIC -shared
+MODULE_LDFLAGS += $(LDFLAGS)
 
 .PHONY: all
 all: release
 
 $(DEBUG_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_LUA_AUTOGEN) $(BUILD_DEPS)
 	@mkdir -p $(DEBUG_LUA_MODULE_DIR)
-	$(CC) $(DEBUG_MODULE_CFLAGS) $< -o $@
+	$(CC) $(DEBUG_MODULE_CFLAGS) $< -o $@ $(MODULE_LDFLAGS)
 
 $(RELEASE_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_LUA_AUTOGEN) $(BUILD_DEPS)
 	@mkdir -p $(RELEASE_LUA_MODULE_DIR)
-	$(CC) $(RELEASE_MODULE_CFLAGS) $< -o $@
+	$(CC) $(RELEASE_MODULE_CFLAGS) $< -o $@ $(MODULE_LDFLAGS)
 
 $(DEBUG_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(SUBMODULE_INIT)
 	@mkdir -p $(DEBUG_DIR)
