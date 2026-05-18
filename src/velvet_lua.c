@@ -134,12 +134,6 @@ void velvet_lua_init(struct velvet *v) {
   struct velvet **extra = lua_getextraspace(v->L);
   *extra = v;
 
-  /* disable loading modules from the system path and C libraries. */
-  /* [1]: preload table, [2]: package.path */
-  if (luaL_dostring(L, "package.searchers = { package.searchers[1], package.searchers[2] }")) {
-    lua_die(L);
-  }
-
   /* The lua distribution is in the parent directory of the folder containing the vv binaries.
    * We don't want to load lua libraries from any other directories by default.
    * End users can manually add search paths if they want to. */
