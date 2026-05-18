@@ -343,7 +343,11 @@ local function do_copy(initial_mode)
     local c1 = overlay:get_cursor()
     overlay:set_background_color('#00000000')
     overlay:clear()
-    if mode ~= modes.none then
+    if mode == 'none' then
+      local cur = get_abs_cursor()
+      local text = vv.api.window_get_text(target, { left = cur.col, top = cur.row, width = 1, height = 1 })[1].text
+      overlay:draw(text)
+    else
       local row1 = start_selection.row < end_selection.row and start_selection.row or end_selection.row
       local ranges = get_selection_ranges(start_selection, end_selection, target, mode)
       overlay:set_background_color(selection_highlight_color)
