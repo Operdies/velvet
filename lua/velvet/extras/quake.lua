@@ -127,18 +127,6 @@ local function quake_builder(cmd, id)
       end
     end)
     quake:on_window_moved(function(_, args) quakeHost:set_geometry(args.new_size) end)
-    quake:on_focus_changed(function(_, args)
-      if args.new == quake then show() end
-      if args.old == quake and (args.new and not args.new:is_lua()) then hide() end
-      if args.new == quake then
-        if args.old and not quake_registry[args.old.id] then
-          -- don't track other quake windows for the purposes
-          -- of restoring focus. Otherwise, toggling quake windows will just
-          -- juggle focus between them which is rarely intended.
-          prevFocus = args.old.id
-        end
-      end
-    end)
     setsize()
   end
 
@@ -163,9 +151,15 @@ local function quake_builder(cmd, id)
   vv.async.run(function()
     local resized = 'screen.resized'
     local reloaded = 'pre_reload'
-    for reg, _ in vv.async.stream(resized, reloaded) do
+    local on_key = 'on_key'
+    for reg, _ in vv.async.stream(resized, reloaded, on_key) do
       if reg == resized then
         pcall(setsize)
+      elseif reg == on_key then
+        local focus = vv.api.get_focused_window()
+        if quake and focus ~= quake.id and quake:valid() and instance.visible and not vv.api.window_is_lua(focus) then
+          hide()
+        end
       elseif reg == reloaded then
         if id and quake and quake:valid() then
           -- hack: set the window as its own parent so dwm will not try to manage it.
