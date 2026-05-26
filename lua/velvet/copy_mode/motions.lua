@@ -1,9 +1,12 @@
 --- @alias velvet.copy.vim_motion 'a'|'i'|'b'|'B'|'e'|'E'|'w'|'W'|'{'|'}'|'f'|'F'|'t'|'T'|'h'|'j'|'k'|'l'|'$'|'0'|'^'|'g'|'G' |'<C-d>'| '<C-f>'| '<C-b>'| '<C-u>'| '<C-e>'| '<C-y>' | ';' | ',' | '%'
 
 --- @type velvet.api.rect
-local geom = nil -- for convenience, always initialized to the current window size
+local geom = nil  -- for convenience, always initialized to the current window size
 --- @type velvet.api.cell_line
 local line1 = nil -- for convenience, always initialized with the current cursor line
+
+--- @type velvet.api.cell_line[]
+local linebuf = {}
 
 --- @type integer
 local first_line = nil
@@ -27,6 +30,53 @@ local classes = {
   ws = make_class(whitespace),
 }
 
+--- @return velvet.api.cell_line?
+local function get_line(id, row)
+  if row < first_line or row > last_line then return nil end
+  if linebuf[row] then return linebuf[row] end
+  local ll = vv.api.window_get_cells(id, { left = 1, top = row, width = geom.width, height = 1 })[1]
+  linebuf[row] = ll
+  return ll
+end
+
+--- @param cur velvet.api.coordinate
+--- @return velvet.api.cell?
+local function get_cell(id, cur)
+  local line = get_line(id, cur.row)
+  return line and line.cells[cur.col]
+end
+
+local function row_empty(id, row)
+  local text = vv.api.window_get_text(id, { top = row, left = 1, width = geom.width, height = 1 })[1].text
+  return text:match('(.-)%s*$') == ''
+end
+
+local function row_width(id, row, trim)
+  local cells = assert(get_line(id, row)).cells
+  local w = #cells
+  while trim and w > 1 and cells[w].content == ' ' do w = w - 1 end
+  return w
+end
+
+local function cur_prev(id, cur)
+  local col, row = cur.col, cur.row
+  if col > 1 then
+    col = col - 1
+  elseif row > first_line then
+    row = row - 1
+    local l = assert(get_line(id, row))
+    col = #l.cells
+  end
+  return { col = col, row = row }
+end
+
+local function cur_next(cur)
+  local col, row = cur.col, cur.row
+  if col < geom.width then return { col = col + 1, row = row } end
+  if row < last_line then return { col = 1, row = row + 1 } end
+  return { col = col, row = row }
+end
+
 --- @param str? string
 --- @return 'punctuation'|'whitespace'|'word'|'continuation'
 local function classify(str)
@@ -39,20 +89,26 @@ end
 --- @param id integer
 --- @param col integer
 --- @param row integer
---- @param match fun(c: velvet.api.cell, col: integer, row: integer): boolean
+--- @param match fun(c: velvet.api.cell, col: integer, row: integer, peek?: velvet.api.cell): boolean
 --- @return integer col, integer row
 local function scan_backward(id, col, row, match)
-  local line = vv.api.window_get_cells(id, { left = 1, top = row, width = geom.width, height = 1 })[1]
+  local line = assert(get_line(id, row))
   while row >= first_line do
     local cells = line.cells
     col = math.min(col, #cells)
     while col >= 1 do
-      if match(cells[col], col, row) then return col, row end
+      local peek = nil
+      if col > 1 and cells[col - 1] then
+        peek = cells[col - 1]
+      elseif row - 1 > first_line then
+        peek = get_cell(id, { row = row - 1, col = row_width(id, row - 1, false) })
+      end
+      if match(cells[col], col, row, peek) then return col, row end
       col = col - 1
     end
     row = row - 1
     if row >= first_line then
-      line = vv.api.window_get_cells(id, { left = 1, top = row, width = geom.width, height = 1 })[1]
+      line = assert(get_line(id, row))
       col = #line.cells
     end
   end
@@ -63,14 +119,15 @@ end
 --- @param id integer
 --- @param col integer
 --- @param row integer
---- @param match fun(c: velvet.api.cell, col: integer, row: integer): boolean
+--- @param match fun(c: velvet.api.cell, col: integer, row: integer, peek?: velvet.api.cell): boolean
 --- @return integer col, integer row
 local function scan_forward(id, col, row, match)
   while row <= geom.height do
-    local line = vv.api.window_get_cells(id, { left = 1, top = row, width = geom.width, height = 1 })[1]
+    local line = assert(get_line(id, row))
     local cells = line.cells
     while col <= #cells do
-      if match(cells[col], col, row) then return col, row end
+      local peek = col < #cells and cells[col + 1] or get_cell(id, { col = 1, row = row + 1 })
+      if match(cells[col], col, row, peek) then return col, row end
       col = col + 1
     end
     row = row + 1
@@ -85,15 +142,6 @@ end
 --- @return { col: integer, row: integer }
 local function skip_whitespace(id, col, row)
   col, row = scan_forward(id, col, row, function(c) return c.content ~= ' ' end)
-  return { col = col, row = row }
-end
-
---- @param id integer
---- @param col integer
---- @param row integer
---- @return { col: integer, row: integer }
-local function skip_whitespace_backward(id, col, row)
-  col, row = scan_backward(id, col, row, function(c) return c.content ~= ' ' end)
   return { col = col, row = row }
 end
 
@@ -132,30 +180,12 @@ local function motion_W(id, cur)
   return skip_whitespace(id, col, row)
 end
 
-local function prev_cell(id, cur)
-  local col, row = cur.col, cur.row
-  if col > 1 then
-    col = col - 1
-  elseif row > first_line then
-    row = row - 1
-    local l = vv.api.window_get_cells(id, { left = 1, top = row, width = geom.width, height = 1 })[1]
-    col = #l.cells
-  end
-  return { col = col, row = row }
-end
-
-local function next_cell(cur)
-  local col, row = cur.col, cur.row
-  if col < geom.width then return { col = col + 1, row = row } end
-  if row < last_line then return { col = 1, row = row + 1 } end
-  return { col = col, row = row }
-end
 
 --- @param id integer
 --- @param cur velvet.api.coordinate
 --- @return velvet.api.coordinate
 local function motion_e(id, cur)
-  cur = next_cell(cur)
+  cur = cur_next(cur)
   cur = skip_whitespace(id, cur.col, cur.row)
   local cls = nil
   local pc, pr = cur.col, cur.row
@@ -179,7 +209,7 @@ end
 --- @param cur velvet.api.coordinate
 --- @return velvet.api.coordinate
 local function motion_b(id, cur)
-  cur = prev_cell(id, cur)
+  cur = cur_prev(id, cur)
   local col, row = cur.col, cur.row
   -- skip whitespace
   col, row = scan_backward(id, col, row, function(cell) return cell.content ~= ' ' end)
@@ -204,7 +234,7 @@ end
 --- @param cur velvet.api.coordinate
 --- @return velvet.api.coordinate
 local function motion_B(id, cur)
-  cur = prev_cell(id, cur)
+  cur = cur_prev(id, cur)
   local col, row = cur.col, cur.row
   col, row = scan_backward(id, col, row, function(cell) return cell.content ~= ' ' end)
   scan_backward(id, col, row, function(cell, c, r)
@@ -239,7 +269,7 @@ end
 --- @param cur velvet.api.coordinate
 --- @return velvet.api.coordinate
 local function motion_E(id, cur)
-  cur = next_cell(cur)
+  cur = cur_next(cur)
   cur = skip_whitespace(id, cur.col, cur.row)
   local pc, pr = cur.col, cur.row
   scan_forward(id, cur.col, cur.row, function(cell, c, r)
@@ -261,7 +291,7 @@ local function motion_g(id, cur, count, aux)
   count = count or 1
   if aux == 'g' then
     local row = math.min(first_line + count - 1, last_line)
-    local l = vv.api.window_get_cells(id, { top = row, left = 1, width = geom.width, height = 1 })[1]
+    local l = assert(get_line(id, row))
     local col = math.min(cur.col, #l.cells)
     return { col = col, row = row }
   elseif aux == 'e' then
@@ -282,21 +312,9 @@ local function motion_G(id, cur, count)
   return motion_g(id, cur, count or 1 + geom.height - first_line, 'g')
 end
 
-local function row_empty(id, row)
-  local text = vv.api.window_get_text(id, { top = row, left = 1, width = geom.width, height = 1 })[1].text
-  return text:match('(.-)%s*$') == ''
-end
-
-local function row_width(id, row, trim)
-  local cells = vv.api.window_get_cells(id, { top = row, left = 1, width = geom.width, height = 1 })[1].cells
-  local w = #cells
-  while trim and w > 1 and cells[w].content == ' ' do w = w - 1 end
-  return w
-end
-
 local function find_char_forwards(id, cur, count, ch)
   count = count or 1
-  local cur2 = next_cell(cur)
+  local cur2 = cur_next(cur)
   local col, row = cur2.col, cur2.row
   local found = 0
   col, row = scan_forward(id, col, row, function(cell, c, r)
@@ -312,7 +330,7 @@ end
 
 local function find_char_backwards(id, cur, count, ch)
   count = count or 1
-  local cur2 = prev_cell(id, cur)
+  local cur2 = cur_prev(id, cur)
   local col, row = cur2.col, cur2.row
   local found = 0
   col, row = scan_backward(id, col, row, function(cell, c, r)
@@ -338,11 +356,11 @@ end
 
 local function motion_t(id, cur, count, ch)
   local cur2, found = find_char_forwards(id, cur, count, ch)
-  return found and prev_cell(id, cur2) or cur
+  return found and cur_prev(id, cur2) or cur
 end
 local function motion_T(id, cur, count, ch)
   local cur2, found = find_char_backwards(id, cur, count, ch)
-  return found and next_cell(cur2) or cur
+  return found and cur_next(cur2) or cur
 end
 
 local inverse_tbl = {
@@ -423,13 +441,13 @@ local motion_table = {
     if open then
       close = delims[open]
       count = 1
-      local c1 = next_cell(match_start)
+      local c1 = cur_next(match_start)
       col, row = c1.col, c1.row
       scanner = scan_forward
     else
       open = reverse[close]
       count = -1
-      local c1 = prev_cell(id, match_start)
+      local c1 = cur_prev(id, match_start)
       col, row = c1.col, c1.row
       scanner = scan_backward
     end
@@ -456,43 +474,26 @@ motion_table[';'] = function(id, cur, count)
   return motion_table[prev_search.motion](id, cur, count, prev_search.char)
 end
 
---- @return velvet.api.coordinate, velvet.api.coordinate
-local function motion_ix(id, cur, count, motion)
-  local pairs = {
-    w = { 'b', 'e' }, W = { 'B', 'E' }, p = {'{', '}'}
-  }
-  local pair = pairs[motion]
-  if not pair then
-    error(string.format("Unsupported motion 'a%s'", motion))
-  end
-
-  local s, e = pair[1], pair[2]
-  local cur_end = motion_table[e](id, cur)
-  local cur_start = motion_table[s](id, cur_end)
-  for _ = 2, (count or 1) do
-    cur_end = motion_table[e](id, cur_end)
-  end
-  cur_start = skip_whitespace(id, cur_start.col, cur_start.row)
-  cur_end = skip_whitespace_backward(id, cur_end.col, cur_end.row)
-  return cur_end, cur_start
+local function seed(id, cursor)
+  geom = vv.api.window_get_geometry(id)
+  first_line = -(vv.api.window_get_scrollback_size(id) - 1)
+  last_line = geom.height
+  linebuf = {}
+  line1 = assert(get_line(id, cursor.row))
 end
-
-motion_table['i'] = motion_ix
-motion_table['a'] = motion_ix
 
 --- @param id integer window id
 --- @param cursor velvet.api.coordinate initial cursor position
 --- @param motion velvet.copy.vim_motion motion
 --- @param count? integer number of repetitions (default 1)
 --- @param arg1? any optional parameter, such as a string for 'f'|'F'|'t'|'T' (default nil)
---- @return velvet.api.coordinate coordinate, velvet.api.coordinate? start the cursor position after the motion, and optionally a match start position
+--- @return velvet.api.coordinate coordinate the cursor position after the motion
 local function move(id, cursor, motion, count, arg1)
-  geom = vv.api.window_get_geometry(id)
-  line1 = vv.api.window_get_cells(id, { left = 1, top = cursor.row, width = geom.width, height = 1 })[1]
-  first_line = -(vv.api.window_get_scrollback_size(id) - 1)
-  last_line = geom.height
+  seed(id, cursor)
 
-  if not motion_table[motion] then printerr(string.format("Motion %s not implemented.", motion)); return cursor; end
+  if not motion_table[motion] then
+    printerr(string.format("Motion %s not implemented.", motion)); return cursor;
+  end
 
   if inverse_tbl[motion] then
     prev_search = { motion = motion, char = arg1 }
@@ -503,24 +504,213 @@ local function move(id, cursor, motion, count, arg1)
   local counted = { g = true, G = true, f = true, F = true, t = true, T = true, a = true, i = true }
   local fn = motion_table[motion]
   local rep = (counted[motion] and 1) or count or 1
-  local match_start = nil
   for _ = 1, rep do
     local c1, r1 = cursor.col, cursor.row
-    cursor, match_start = fn(id, cursor, count, arg1)
+    cursor = fn(id, cursor, count, arg1)
     if cursor.col == c1 and cursor.row == r1 then break end
     if cursor.row ~= r1 then
-      line1 = vv.api.window_get_cells(id, { left = 1, top = cursor.row, width = geom.width, height = 1 })[1]
+      line1 = assert(get_line(id, cursor.row))
     end
   end
-  return cursor, match_start
+  return cursor
 end
 
-local motions = {
+local function cur_eq(cur1, cur2) return cur1.col == cur2.col and cur1.row == cur2.row end
+local function cur_lt(cur1, cur2)
+  if cur1.row ~= cur2.row then return cur1.row < cur2.row end
+  return cur1.col < cur2.col
+end
+
+--- @param state velvet.copy.selection_state
+--- @return 'back'|'forward'|'both'
+local function selection_direction(state)
+  -- in line selection mode, don't consider columns for ordering purposes.
+  if state.mode == 'lines' then
+    return (state.start.row == state.cursor.row and 'both')
+        or (state.start.row < state.cursor.row and 'forward') or 'back'
+  end
+  return (cur_eq(state.start, state.cursor) and 'both')
+      or (cur_lt(state.start, state.cursor) and 'forward') or 'back'
+end
+
+--- @type table<string, fun(id: integer, state: velvet.copy.selection_state, count?: integer): velvet.copy.selection_state>
+local textobject_dispatch = {}
+textobject_dispatch.iw = function(id, state, count)
+  count = count or 1
+  state.mode = 'visual'
+  for _ = 1, count do
+    local c, s = state.cursor, state.start
+    local c1, s1 = { col = c.col, row = c.row }, { col = s.col, row = s.row }
+    local dir = selection_direction(state)
+    local l = assert(get_line(id, state.cursor.row))
+    local cls = l.cells[state.cursor.col] and classify(l.cells[state.cursor.col].content) or 'whitespace'
+    local function same_class(_, _, _, peek) return peek == nil or classify(peek.content) ~= cls end
+    if dir == 'both' then
+      c.col, c.row = scan_forward(id, c.col, c.row, same_class)
+      s.col, s.row = scan_backward(id, s.col, s.row, same_class)
+    elseif dir == 'forward' then
+      local start = cur_next(c)
+      cls = classify(get_cell(id, start).content)
+      c.col, c.row = scan_forward(id, start.col, start.row, same_class)
+    else
+      local start = cur_prev(id, c)
+      cls = classify(get_cell(id, start).content)
+      c.col, c.row = scan_backward(id, start.col, start.row, same_class)
+    end
+    if cur_eq(c, c1) and cur_eq(s, s1) then break end
+  end
+  return state
+end
+
+textobject_dispatch.aw = function(id, state, count)
+  count = count or 1
+  state.mode = 'visual'
+
+  local function before_next_non_whitespace(scanner, cur)
+    local col, row = scanner(id, cur.col, cur.row, function(_, _, _, p) return p and p.content ~= ' ' end)
+    return { col = col, row = row }
+  end
+
+  local function consume_whitespace(both)
+    local dir = selection_direction(state)
+    if both and dir == 'both' then
+      local cur1 = before_next_non_whitespace(scan_forward, state.cursor)
+      if not cur_eq(state.cursor, cur1) then
+        state.cursor = cur1
+      else
+        state.start = before_next_non_whitespace(scan_backward, state.start)
+      end
+    elseif dir == 'back' then
+      state.cursor = before_next_non_whitespace(scan_backward, state.cursor)
+    elseif dir == 'forward' then
+      state.cursor = before_next_non_whitespace(scan_forward, state.cursor)
+    end
+  end
+
+  for _ = 1, count do
+    consume_whitespace(false)
+    state = textobject_dispatch.iw(id, state, 1)
+    consume_whitespace(true)
+  end
+  return state
+end
+
+--- @param id integer
+--- @param delimiters string[][]
+--- @param cur velvet.api.coordinate
+--- @param count integer
+--- @return boolean, velvet.api.coordinate, velvet.api.coordinate
+local function select_block(id, delimiters, cur, count)
+  local other_end = nil
+  local open, close, counter = {}, {}, {}
+  for _, p in ipairs(delimiters) do
+    open[p[1]] = p[2]
+    close[p[2]] = p[1]
+    counter[p[1]] = count
+  end
+
+  do
+    -- first try finding a match on the current line
+    local function line_scan(scanner)
+      local found = false
+      local c, r = scanner(id, cur.col, cur.row, function(cell, _, r1)
+        if r1 ~= cur.row then return true end
+        found = open[cell.content]
+        return found or close[cell.content]
+      end)
+      local match_start = { col = c, row = r }
+      if found and match_start.row == cur.row then
+        local match_end = motion_table['%'](id, match_start)
+        if match_end.row == cur.row and not cur_eq(match_end, match_start) then
+          return true, match_start, match_end
+        end
+      end
+    end
+    local success, match_start, match_end = line_scan(scan_backward)
+    if not success then
+      success, match_start, match_end = line_scan(scan_forward)
+    end
+    if success then return success, match_start, match_end end
+  end
+
+  local col, row = scan_backward(id, cur.col, cur.row, function(c, c1, r1)
+    if c.content then
+      if close[c.content] then
+        counter[close[c.content]] = counter[close[c.content]] + 1
+      elseif open[c.content] then
+        counter[c.content] = counter[c.content] - 1
+        if counter[c.content] == 0 then
+          local cand = { col = c1, row = r1 }
+          local match = motion_table['%'](id, cand)
+          if not cur_eq(cand, match) then
+            other_end = match
+          end
+        end
+      end
+    end
+    return other_end ~= nil
+  end)
+  if other_end then return true, { col = col, row = row }, other_end end
+  return false, {}, {}
+end
+
+local function ab_gen(delims)
+  return function(id, state, count)
+    local success, start, finish = select_block(id, delims, state.cursor, count or 1)
+    if success then
+      state.start = start
+      state.cursor = finish
+    end
+    return state
+  end
+end
+
+local function ib_gen(delims)
+  return function(id, state, count)
+    count = count or 1
+    local success, start, finish = select_block(id, delims, state.cursor, count or 1)
+    if success then
+      state.start = cur_next(start)
+      state.cursor = cur_prev(id, finish)
+    end
+    return state
+  end
+end
+
+local block_delimiters = { { '{', '}' }, { '[', ']' }, { '(', ')' }, { '<', '>' } }
+textobject_dispatch.ib = ib_gen(block_delimiters)
+textobject_dispatch.ab = ab_gen(block_delimiters)
+for _, pair in ipairs(block_delimiters) do
+  for _, sym in ipairs(pair) do
+    textobject_dispatch['i' .. sym] = ib_gen({pair})
+    textobject_dispatch['a' .. sym] = ab_gen({pair})
+  end
+end
+
+--- @class velvet.copy.selection_state
+--- @field start velvet.api.coordinate
+--- @field cursor velvet.api.coordinate
+--- @field mode velvet.copy_mode
+
+--- @param id integer window id
+--- @param state velvet.copy.selection_state
+--- @param selector velvet.copy.vim_text_selection selector
+--- @param count? integer optional count
+--- @return velvet.copy.selection_state new_state
+local function textobject_select(id, state, selector, count)
+  seed(id, state.cursor)
+  if textobject_dispatch[selector] then return textobject_dispatch[selector](id, state, count) end
+  printerr(string.format("selector %s not implemented.", selector))
+  return state
+end
+
+--- @alias velvet.copy.vim_text_selection 'aw'|'iw'|'aW'|'iW'|'ap'|'ip'|'a]'|'a['|'i]'|'i['|'a)'|'a('|'i)'|'i('|'a}'|'a{'|'i}'|'i{'|'ab'|'ib'|'a"'|"a'"|'a`'|'i"'|"i'"|'i`'|'a>'|'a<'|'i>'|'i<'|'aq'|'iq' -- |'as'|'is'|'aB'|'iB'|'at'|'it'
+
+local M = {
   --- @type velvet.copy.vim_motion[]
   motions = {
     '%',                          -- match closing symbol
     'b', 'B', 'e', 'E', 'w', 'W', -- word motions
-    'a', 'i',                     -- around / inside
     '{', '}',                     -- paragraphs
     'f', 'F', 't', 'T',           -- search
     'h', 'j', 'k', 'l',           -- cursor movement
@@ -532,7 +722,22 @@ local motions = {
     -- maybe do this later -- copy_mode already implements window scrolling
     -- '<C-e>', '<C-y>'              -- scroll window
   },
+  --- @type velvet.copy.vim_text_selection[]
+  selectors = {
+    'aw', 'aW', 'iw', 'iW',             -- words
+    'ap', 'ip',                         -- paragraphs
+    'a]', 'a[', 'a)', 'a(', 'a}', 'a{', -- a block
+    'i]', 'i[', 'i)', 'i(', 'i}', 'i{', -- inner block
+    'ab', 'ib',                         -- any block
+    'a"', "a'", 'a`', 'i"', "i'", 'i`', -- a / inner quotes
+    'aq', 'iq',                         -- a quote / inner quote. Non-standard extension, like ab/ib for quotes
+    'a>', 'a<', 'i>', 'i<',             -- a / inner angle brackets
+    -- 'as', 'is', -- a / inner sentence -- not implemented
+    -- 'aB', 'iB', -- any escaped block -- not implemented
+    -- 'at', 'it', -- a tag / inner tag - will not be implemented
+  },
   move = move,
+  select = textobject_select,
 }
 
-return motions
+return M

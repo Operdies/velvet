@@ -186,16 +186,21 @@ local function do_copy(initial_mode)
     end)
   end
 
+  -- TIL: a count can be specified both for an operator,
+  -- but also for the operation used; e.g. 3y3fx will find the 9th x
   local digit = nil
+  local yank_digit = nil
+
   local function copy_or_yank()
     local cur = get_abs_cursor()
     if mode == 'none' then
       mode = 'yank'
+      yank_digit = digit
       start_selection = { col = cur.col, row = cur.row }
       end_selection = start_selection
       return
     elseif mode == 'yank' then
-      local count = digit or 1
+      local count = (digit or 1) * (yank_digit or 1)
       mode = 'lines'
       end_selection = { col = start_selection.col, row = math.min(cur.row + count - 1, target_geometry.height) }
     end
@@ -240,6 +245,27 @@ local function do_copy(initial_mode)
     end_selection = get_abs_cursor()
   end
 
+  local function vim_select_textobject(motion, count)
+    local yank = mode == 'yank'
+
+    local repeats = yank and yank_digit or 1
+    for _ = 1, repeats do
+      local state = {
+        start = start_selection,
+        cursor = get_abs_cursor(),
+        mode = mode,
+      }
+      state = mo.select(target, state, motion, count or 1)
+      start_selection = state.start
+      end_selection = state.cursor
+      mode = state.mode
+      set_abs_cursor(state.cursor)
+    end
+    if yank then
+      copy_and_dispose()
+    end
+  end
+
   --- @param motion velvet.copy.vim_motion
   --- @param count? integer
   local function vim_motion(motion, count)
@@ -257,25 +283,15 @@ local function do_copy(initial_mode)
       -- don't attempt to handle named keys
       if op ~= ' ' and vk[op] then return end
     end
-    local cur1 = get_abs_cursor()
-    local _end, _start = mo.move(target, cur1, motion, count, op)
-    if _start then
-      -- TODO: this approach doesn't really work.
-      -- It was intended to make e.g. vap select a paragraph by updating both
-      -- ranges, but I hadn't considered that vap->ap->ap should extend
-      -- the selection with an additional paragraph each timer.
-      -- This hack works for that specific appraoch, but o->ap should extend
-      -- the selection in the other direction, so we really need a more
-      -- extensive visual mode emulation which can properly account
-      -- for which end of the selection is active, and pass that information
-      -- to the motion implementation so it knows which direction to extend in.
-      if cur1.col == start_selection.col and cur1.row == start_selection.row then
-        start_selection = _start
-      end
+    local yank = mode == 'yank'
+    local repeats = yank and yank_digit or 1
+    for _ = 1, repeats do
+      local cur1 = get_abs_cursor()
+      local cur2 = mo.move(target, cur1, motion, count or (mode == 'yank' and yank_digit or nil), op)
+      set_abs_cursor(cur2)
+      end_selection = cur2
     end
-    set_abs_cursor(_end)
-    end_selection = _end
-    if mode == 'yank' then
+    if yank then
       -- some motions implicitly select whole lines
       -- this is probably not exhaustive.
       local yank_motion_modes = {
@@ -287,10 +303,6 @@ local function do_copy(initial_mode)
     end
   end
 
-
-  -- TODO: 
-  -- %: match closing symbol
-  -- dwm transient modeline
   local keymap = {
     { { 'q', '<esc>' },                dispose },
     { { 'v' },                         apply(selection_mode, modes.visual) },
@@ -319,6 +331,16 @@ local function do_copy(initial_mode)
     lst[#lst + 1] = m
     keymap[#keymap + 1] = { lst, function()
       local cnt = digit; digit = nil; vim_motion(m, cnt)
+    end }
+  end
+
+  for _, m in ipairs(mo.selectors) do
+    keymap[#keymap + 1] = { { m }, function()
+      if mode ~= 'none' then
+        local cnt = digit;
+        digit = nil
+        vim_select_textobject(m, cnt)
+      end
     end }
   end
 
@@ -404,7 +426,7 @@ local function do_copy(initial_mode)
     end
     if reg == on_key then
       km:on_key(evt.data)
-      if tonumber(evt.data.key.name) == nil then digit = nil end
+      if not evt.data.key.name:match("[0-9ai]") then digit = nil end
     elseif reg == focus_lost then
       dispose()
     elseif reg == either_closed then
