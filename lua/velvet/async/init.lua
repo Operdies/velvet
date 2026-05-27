@@ -45,8 +45,8 @@ local function exec_defer(co)
     -- Further defer calls will now error().
     co_defer[co] = nil
     for i = #defer, 1, -1 do
-      local fn = defer[i]
-      local ok, err = xpcall(fn, debug.traceback)
+      local df = defer[i]
+      local ok, err = xpcall(df[1], debug.traceback, table.unpack(df, 2, #df))
       if not ok then
         printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
       end
@@ -107,17 +107,18 @@ function M.cancel(co)
   exec_defer(co)
 end
 
-local function defer_on(co, defer)
+local function defer_on(co, defer, ...)
   if deferring[co] then error("Cannot add new defers during defer.") end
   assert(type(defer) == 'function', string.format('Bad argument #1 (function expected, got %s)', type(defer)))
   local defers = co_defer[co] or error("Provided coroutine is not managed by vv.async.")
-  defers[#defers + 1] = defer
+  defers[#defers + 1] = { defer, ... }
 end
 
 --- defer a function which runs when the current coroutine completes or is cancelled.
 --- @param defer fun() deferred action
-function M.defer(defer)
-  defer_on(coroutine.running(), defer)
+--- @param ... any parameters passed to |defer|
+function M.defer(defer, ...)
+  defer_on(coroutine.running(), defer, ...)
 end
 
 local function resolve(name, data)
