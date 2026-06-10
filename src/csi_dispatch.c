@@ -803,7 +803,11 @@ bool DECRQM(struct vte *vte, struct csi *csi) {
   return true;
 }
 
-bool SCOSC(struct vte *vte, struct csi *csi){ (void)vte, (void)csi; TODO("SCOSC"); return false; }
+bool SCOSC(struct vte *vte, struct csi *csi){ (void)vte, (void)csi; 
+  struct screen *g = vte_get_current_screen(vte);
+  screen_save_cursor(g);
+  return true;
+}
 
 bool DECLL(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECLL"); return false; }
 
@@ -868,7 +872,12 @@ bool DECSWBV(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DEC
 
 bool DECRARA(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECRARA"); return false; }
 
-bool SCORC(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("SCORC"); return false; }
+bool SCORC(struct vte *vte, struct csi *csi) { 
+  (void)csi;
+  struct screen *g = vte_get_current_screen(vte);
+  screen_restore_cursor(g);
+  return true;
+}
 
 bool DECRQUPSS(struct vte *vte, struct csi *csi) { (void)vte, (void)csi; TODO("DECRQUPSS"); return false; }
 
@@ -995,6 +1004,6 @@ bool DECSLRM_OR_SCOSC(struct vte *vte, struct csi *csi) {
    */
   (void)DECSLRM;
   (void)SCOSC;
-  (void)vte, (void)csi; TODO("DECSLRM_OR_SCOSC"); return false; 
+  return SCOSC(vte, csi);
 }
 
