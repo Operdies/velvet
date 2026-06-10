@@ -505,6 +505,7 @@ velvet_input_send_kitty_encoding(struct velvet_window *f, struct velvet_key_even
       || (e.key.escape && e.key.escape[0] == ESC) /* encode any key which is otherwise encoded with a leading ESC */
       || (e.key.codepoint < 0x20 && (e.modifiers & VELVET_API_KEY_MODIFIER_SHIFT)) /* encode keys in the ctrl range if shift is pressed */
       || (is_keypad(e.key) && !is_keypad_with_text(e.key)) /* all non-text keypad keys */
+      || (e.modifiers & VELVET_API_KEY_MODIFIER_SUPER)  /* disambiguate super */
       || (e.modifiers & VELVET_API_KEY_MODIFIER_CONTROL); /* disambiguate ctrl */
 
   if (!do_send_encoded) {
