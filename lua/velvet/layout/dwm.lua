@@ -406,7 +406,7 @@ local function tile()
   local left_geom = { left = left, top = top, width = master_width, height = term.height }
   local right_geom = { left = master_width + left, top = top, width = term.width - master_width, height = term.height }
   if solitary then
-    win_stack(left_geom, { left_stack[1] or right_stack[1] })
+    if left_stack[1] then win_stack(left_geom, left_stack) else win_stack(right_geom, right_stack) end
   else
     for _, w in ipairs(left_stack) do w:set_frame_enabled(true) end
     for _, w in ipairs(right_stack) do w:set_frame_enabled(true) end
