@@ -1,6 +1,8 @@
 --- @class dwm.options
 --- @field focus_follows_mouse boolean if set, focus windows on mouseover
 
+local arrange_event = 'dwm.arrange'
+
 --- @alias dwm.layer
 --- | 'tiled' window is managed in the tiling layer
 --- | 'floating' window floats above tiled windows and is not managed
@@ -176,21 +178,28 @@ local function set_focus(id)
   win:focus()
 end
 
---- @return velvet.window?
-local function get_focus()
+local function prune_focus_order()
   for i = #state.focus_order, 1, -1 do
     local id = state.focus_order[i]
     if id and not vv.api.window_is_valid(id) then
       state.focus_order[i] = nil
     else
-      return window.from_handle(id)
+      break
     end
   end
+end
+
+--- @return velvet.window?
+local function get_focus()
+  prune_focus_order()
+  local id = state.focus_order[#state.focus_order]
+  return id and vv.api.window_is_valid(id) and window.from_handle(id) or nil
 end
 
 --- Set the focus to the most recently focused visible item
 --- @return nil
 local function focus_first_visible()
+  prune_focus_order()
   for i = #state.focus_order, 1, -1 do
     local id = state.focus_order[i]
     if visibleontags(id) then
@@ -330,10 +339,7 @@ local function tile()
   local focused_id = vv.api.get_focused_window()
   -- don't steal focus from lua windows since they are not managed here
   if not ignore_window(focused_id) then
-    if focused_id ~= nil and focused_id ~= get_focus() and focused_id ~= 0 then
-      -- if focus was changed outside of this module, update internal focus order tracking
-      set_focus(focused_id)
-    end
+    focus_first_visible()
   end
 
   focused_id = vv.api.get_focused_window()
@@ -414,7 +420,9 @@ local arranging = false
 local function arrange()
   if arranging then return end
   arranging = true
-  pcall(tile)
+  local success, result = xpcall(tile, debug.traceback)
+  if not success then printerr("dwm arrange: " .. result) end
+  vv.events.emit(arrange_event)
   arranging = false
 end
 
@@ -701,7 +709,7 @@ function dwm.activate()
       -- don't keep setting focus if the cursor hasn't moved away from the window
       if id == win_under_cursor then goto continue end
       win_under_cursor = id
-      vv.api.set_focused_window(id)
+      set_focus(id)
 
       ::continue::
     end
