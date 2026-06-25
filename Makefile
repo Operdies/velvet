@@ -8,7 +8,7 @@ ifeq ($(UNAME_S),Darwin)
 	OBJECTS += platform_macos
 endif
 
-VELVET_VERSION=$(shell git describe --tags --always)
+VELVET_VERSION ?= $(shell git describe --tags --always)
 PREFIX ?= /usr/local
 INSTALL_BIN = $(PREFIX)/bin
 INSTALL_MAN = $(PREFIX)/share/man
