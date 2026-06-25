@@ -209,6 +209,34 @@ local function focus_first_visible()
   end
 end
 
+local function remove_if(t, pred)
+  local j = 1
+  for i = 1, #t do
+    if not pred(t[i]) then
+      t[j] = t[i]
+      j = j + 1
+    end
+  end
+  for i = j, #t do
+    t[i] = nil
+  end
+end
+
+local function unset_if_key(t, pred)
+  for k, _ in pairs(t) do
+    if pred(k) then t[k] = nil end
+  end
+end
+
+local function remove_invalid_windows()
+  local function win_invalid(id) return not vv.api.window_is_valid(id) end
+  remove_if(state.windows, win_invalid)
+  remove_if(state.focus_order, win_invalid)
+  unset_if_key(state.layers, win_invalid)
+  unset_if_key(state.tags, win_invalid)
+  focus_first_visible()
+end
+
 --- @param id integer
 local function tiled(id)
   return state.layers[id] == 'tiled'
@@ -217,7 +245,6 @@ end
 -- arbitrarily decide where floating and tiled windows begin
 local tiled_z = vv.z_hint.tiled
 local floating_z = vv.z_hint.floating
-
 local dim_inactive = 0
 
 --- @return velvet.window
@@ -419,6 +446,7 @@ end
 local arranging = false
 local function arrange()
   if arranging then return end
+  remove_invalid_windows()
   arranging = true
   local success, result = xpcall(tile, debug.traceback)
   if not success then printerr("dwm arrange: " .. result) end
@@ -574,35 +602,6 @@ local function add_window(id, init)
   end
 end
 
-local function remove_if(t, pred)
-  local j = 1
-  for i = 1, #t do
-    if not pred(t[i]) then
-      t[j] = t[i]
-      j = j + 1
-    end
-  end
-  for i = j, #t do
-    t[i] = nil
-  end
-end
-
-local function unset_if_key(t, pred)
-  for k, _ in pairs(t) do
-    if pred(k) then t[k] = nil end
-  end
-end
-
-local function remove_window()
-  local function win_invalid(id) return not vv.api.window_is_valid(id) end
-  remove_if(state.windows, win_invalid)
-  remove_if(state.focus_order, win_invalid)
-  unset_if_key(state.layers, win_invalid)
-  unset_if_key(state.tags, win_invalid)
-  focus_first_visible()
-  arrange()
-end
-
 local function set_view(new_view)
   for i = 1, 9 do
     if new_view[i] ~= state.view[i] then
@@ -685,7 +684,7 @@ function dwm.activate()
     add_window(args.win_id, false)
   end
 
-  event_handler.window_closed = function(_) remove_window() end
+  event_handler.window_closed = function(_) arrange() end
   event_handler.window_focus_changed = function(args)
     if ignore_window(args.new_focus) then return end
     arrange()
