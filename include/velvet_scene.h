@@ -35,13 +35,6 @@ bool velvet_window_resize(struct velvet_window *velvet_window, struct rect windo
 void velvet_window_process_output(struct velvet_window *velvet_window, struct u8_slice str);
 
 struct velvet_render_option {
-  /* unfortunately some emulators don't support repeating multi-byte characters.
-   * I observed this with the stock emulator on MacOS.
-   * If we detect the host emulator of the active client is AppleTerminal, then we disable this feature.
-   */
-  bool no_repeat_multibyte_symbols;
-  /* some emulators don't support repeating at all. */
-  bool no_repeat;
   /* debugging option for highlighting changed regions */
   bool display_damage;
   /* debugging option for highlighting line ends */
@@ -167,16 +160,7 @@ static const struct velvet_render_state_cache render_state_cache_invalidated = {
 static const struct velvet_scene velvet_scene_default = {
     .windows = vec(struct velvet_window),
     .theme = velvet_theme_default,
-    .renderer =
-        {
-            .options =
-                {
-                    .no_repeat_multibyte_symbols = false,
-                    .display_eol = false,
-                },
-            .state = render_state_cache_invalidated,
-
-        },
+    .renderer = {.state = render_state_cache_invalidated},
 };
 
 #endif // VELVET_SCENE_H

@@ -446,28 +446,15 @@ static int socket_send_files(int sockfd, int *fds, int n_fds, void *payload, int
 static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int output_fd) {
   static char cmdbuf[256];
   int fds[2] = {input_fd, output_fd};
-  bool no_repeat = false;
-  bool no_repeat_wide_chars = false;
-  char *term, *emulator;
-  if ((term = getenv("TERM_PROGRAM")) && strcmp(term, "Apple_Terminal") == 0) {
-    no_repeat_wide_chars = true;
-  }
-  if ((emulator = getenv("TERMINAL_EMULATOR")) && strcmp(emulator, "JetBrains-JediTerm") == 0) {
-    no_repeat = true;
-  }
 
   char codebuf[1024];
   int n_codebuf = snprintf(codebuf,
                            sizeof(codebuf),
-                           "vv.api.client_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d, "
-                           "supports_repeating_characters = %s, "
-                           "supports_repeating_multibyte_characters = %s })\n",
+                           "vv.api.client_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d |) ",
                            size.height,
                            size.width,
                            size.y_pixel,
-                           size.x_pixel,
-                           no_repeat ? "false" : "true",
-                           no_repeat_wide_chars ? "false" : "true");
+                           size.x_pixel);
   int n_cmdbuf = snprintf(cmdbuf, sizeof(cmdbuf), "%d%s", n_codebuf, codebuf);
 
   if (socket_send_files(sockfd, fds, 2, cmdbuf, n_cmdbuf) == -1) {

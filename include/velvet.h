@@ -58,11 +58,6 @@ struct velvet_input {
   int input_socket;
 };
 
-struct velvet_client_features {
-  bool no_repeat; // compatibility with primitive terminals (intellij)
-  bool no_repeat_multibyte_graphemes; // compatibility with some terminals with poor multibyte handling
-};
-
 struct velvet_coroutine {
   int socket; /* Socket connection. Used for the status code on close */
   int out_fd, err_fd; /* stdout / stderr for the coroutine */
@@ -79,7 +74,6 @@ struct velvet_client {
   int output;                   // stdout
   struct rect ws;               // window size
   struct string command_buffer; // vv lua commands
-  struct velvet_client_features features;
 };
 
 struct velvet_kvp {

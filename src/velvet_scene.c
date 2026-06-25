@@ -438,9 +438,6 @@ static void velvet_render_render_buffer(struct velvet_render *r,
                                         struct velvet_render_buffer *front,
                                         bool highlight_damage,
                                         struct screen_cell_style highlight) {
-  bool repeat_mb, repeat;
-  repeat_mb = r->options.no_repeat_multibyte_symbols == false;
-  repeat = r->options.no_repeat == false;
   for (int line = 0; line < r->h; line++) {
     struct velvet_render_buffer_line *f = &front->lines[line];
     for (int dmg = 0; dmg < f->n_damage; dmg++) {
@@ -466,25 +463,7 @@ static void velvet_render_render_buffer(struct velvet_render *r,
         struct u8_slice text = {.content = buf, .len = utf8_len};
         string_push_slice(&r->draw_buffer, text);
 
-        bool wide = c->cp.is_wide;
-        int stride = wide ? 2 : 1;
-        int repeats = 1;
-        int remaining = end - col - 1;
-        for (; repeats * stride < remaining && cell_equals(c[0], c[repeats * stride]); repeats++);
-        repeats--;
-        if (repeats > 0) {
-          int num_bytes = utf8_len * repeats;
-          bool can_repeat = repeat && (utf8_len == 1 || repeat_mb);
-          if (num_bytes > 10 && can_repeat) {
-            string_push_csi(&r->draw_buffer, 0, INT_SLICE(repeats), "b");
-          } else {
-            for (int i = 0; i < repeats; i++) {
-              string_push_slice(&r->draw_buffer, text);
-            }
-          }
-        }
-        col += repeats * stride;
-        if (wide) col++;
+        if (c->cp.is_wide) col++;
         r->state.cursor.position.column = MIN(col + 1, r->w - 1);
       }
     }
