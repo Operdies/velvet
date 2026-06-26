@@ -841,7 +841,7 @@ static void vv_attach(struct velvet_args args) {
 
   struct sigaction sa = {0};
   sa.sa_sigaction = &attach_sighandler;
-  sa.sa_flags = SA_RESTART;
+  sa.sa_flags = SA_SIGINFO | SA_RESTART;
 
   if (sigaction(SIGWINCH, &sa, NULL) == -1) velvet_die("sigaction:");
 
