@@ -450,7 +450,7 @@ static void vv_attach_handshake(int sockfd, struct rect size, int input_fd, int 
   char codebuf[1024];
   int n_codebuf = snprintf(codebuf,
                            sizeof(codebuf),
-                           "vv.api.client_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d |) ",
+                           "vv.api.client_set_options(0, { lines = %d, columns = %d, y_pixel = %d, x_pixel = %d }) ",
                            size.height,
                            size.width,
                            size.y_pixel,
