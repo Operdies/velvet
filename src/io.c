@@ -204,6 +204,11 @@ io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), 
   return schedule.id;
 }
 
+void io_reschedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data, io_schedule_id *schedule) {
+  io_schedule_cancel(io, *schedule);
+  *schedule = io_schedule(io, ms, callback, data);
+}
+
 io_schedule_id io_schedule_idle(struct io *io, void (*callback)(void*), void *data) {
   struct io_schedule schedule = { .callback = callback, .data = data };
   schedule.id = get_schedule_id();

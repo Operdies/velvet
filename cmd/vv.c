@@ -741,6 +741,8 @@ static int vv_send_lua_chunk(struct velvet_args args) {
 
 struct vv_attach_context {
   int socket;
+  struct io loop;
+  io_schedule_id resize_token;
 };
 
 _Noreturn static void quit(char *reason, int status) {
@@ -783,6 +785,11 @@ static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
   }
 }
 
+static void vv_update_size_schedule(void *data) {
+  struct vv_attach_context *ctx = data;
+  vv_attach_update_size(ctx->socket);
+}
+
 static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
   struct vv_attach_context *ctx = src->data;
   // 1. Dispatch any pending signals
@@ -792,6 +799,8 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
     switch (signal) {
     case SIGWINCH: {
       vv_attach_update_size(ctx->socket);
+      /* on macOS, it seems SIGWINCH does not always update the screen size. Let's try to coerce it by trying again after a brief delay */
+      io_reschedule(&ctx->loop, 100, vv_update_size_schedule, ctx, &ctx->resize_token);
     } break;
     case SIGTERM: quit("SIGTERM", 128 + signal); break;
     case SIGQUIT: quit("SIGQUIT", 128 + signal); break;
@@ -841,7 +850,7 @@ static void vv_attach(struct velvet_args args) {
 
   struct sigaction sa = {0};
   sa.sa_sigaction = &attach_sighandler;
-  sa.sa_flags = SA_SIGINFO | SA_RESTART;
+  sa.sa_flags = SA_SIGINFO;
 
   if (sigaction(SIGWINCH, &sa, NULL) == -1) velvet_die("sigaction:");
 
@@ -868,32 +877,31 @@ static void vv_attach(struct velvet_args args) {
   pipe_cloexec(output_pipe);
   vv_attach_handshake(sockfd, ws, STDIN_FILENO, output_pipe[1]);
 
-  struct io io = io_default;
-  struct vv_attach_context ctx = { .socket = sockfd };
+  struct vv_attach_context ctx = { .socket = sockfd, .loop = io_default };
 
   while (true) {
-    io_clear_sources(&io);
+    io_clear_sources(&ctx.loop);
     struct io_source signal_source = {
         .data = &ctx,
         .fd = signal_read,
         .events = IO_SOURCE_POLLIN,
         .on_read = vv_attach_on_signal,
     };
-    io_add_source(&io, signal_source);
+    io_add_source(&ctx.loop, signal_source);
     struct io_source output_source = {
         .data = &ctx,
         .fd = output_pipe[0],
         .events = IO_SOURCE_POLLIN,
         .on_read = vv_attach_on_output,
     };
-    io_add_source(&io, output_source);
+    io_add_source(&ctx.loop, output_source);
     struct io_source socket_source = {
         .data = &ctx,
         .fd = sockfd,
         .events = IO_SOURCE_POLLIN,
         .on_read = vv_attach_on_socket,
     };
-    io_add_source(&io, socket_source);
-    io_dispatch(&io);
+    io_add_source(&ctx.loop, socket_source);
+    io_dispatch(&ctx.loop);
   }
 }

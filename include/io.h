@@ -76,6 +76,8 @@ void io_destroy(struct io *io);
 ssize_t io_write(int fd, struct u8_slice content);
 ssize_t io_write_format_slow(int fd, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data);
+/* schedule or reschedule an operation. If *schedule refers to an existing schedule, it is cancelled. The new schedule is stored in *schedule. */
+void io_reschedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data, io_schedule_id *schedule);
 io_schedule_id io_schedule_idle(struct io *io, void (*callback)(void*), void *data);
 bool io_schedule_cancel(struct io *io, io_schedule_id id);
 bool io_schedule_exists(struct io *io, io_schedule_id id);
