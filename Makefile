@@ -8,6 +8,7 @@ ifeq ($(UNAME_S),Darwin)
 	OBJECTS += platform_macos
 endif
 
+GIT ?= git
 VELVET_VERSION ?= $(shell git describe --tags --always)
 PREFIX ?= /usr/local
 INSTALL_BIN = $(PREFIX)/bin
@@ -119,8 +120,8 @@ $(UTF8PROC): $(SUBMODULE_INIT)
 $(LUA_LIBS): $(LUA)
 
 $(SUBMODULE_INIT):
-	git submodule init
-	git submodule update
+	$(GIT) submodule init
+	$(GIT) submodule update
 
 $(LUA):
 	$(MAKE) -C $(LUA_DIR) all
