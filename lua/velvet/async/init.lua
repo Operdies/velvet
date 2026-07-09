@@ -25,6 +25,7 @@ local co_to_seq = make_weaktable()
 local co_defer = make_weaktable()
 local deferring = make_weaktable()
 local co_result = make_weaktable()
+local event_source_waiters = make_weaktable()
 
 -- Monotonically increasing sequence number used to invalidate multi-waits
 local sequence = 1
@@ -159,6 +160,12 @@ local function resolve(name, data)
     end
   end
 
+  if type(name) == 'table' then
+    local waiters = event_source_waiters[name]
+    if waiters then resolve_table(waiters) end
+    return
+  end
+
   if not known_events[name] then known_events[name] = true end
   local segments = {}
   for segment in name:gmatch('[^.]+') do
@@ -187,11 +194,36 @@ end
 local e = require('velvet.events').create_group('velvet.async', true)
 e['**'] = resolve
 
+--- @class velvet.async.event_source
+local EventSource = {}
+EventSource.__index = EventSource
+
+--- @param event any
+function EventSource:emit(event)
+  assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
+  resolve(self, event)
+end
+
+--- @return velvet.async.wait.result
+function EventSource:wait()
+  assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
+  local _, evt = M.wait(self)
+  return evt
+end
+
+--- Create an event source. The event source can be signaled with an object, and awaited with async.wait()
+--- @return velvet.async.event_source src
+function M.event_source()
+  local instance = setmetatable({}, EventSource)
+  event_source_waiters[instance] = {}
+  return instance
+end
+
 --- @class velvet.async.conditional_event
 --- @field event velvet.async.event|string event
 --- @field when fun(registration: velvet.async.event_registration, result: velvet.async.wait.result): boolean predicate function
 
---- @alias velvet.async.event_registration velvet.async.event|velvet.async.conditional_event|thread|'*'|'**'|string
+--- @alias velvet.async.event_registration velvet.async.event|velvet.async.event_source|velvet.async.conditional_event|thread|'*'|'**'|string
 
 --- @class velvet.async.wait.result
 --- @field name velvet.async.event|string the name of the raised event
@@ -312,6 +344,9 @@ function M.wait(...)
   for idx, evt in ipairs(args) do
     if type(evt) == 'thread' then
       defer_callback(co, evt, seq)
+    elseif type(evt) == 'table' and getmetatable(evt) == EventSource then
+      local event_waiters = event_source_waiters[evt]
+      event_waiters[seq] = { evt }
     elseif type(evt) == 'string' or type(evt) == 'table' then
       local event = evt
       if type(evt) == 'table' then
