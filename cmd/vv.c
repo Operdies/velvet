@@ -793,7 +793,10 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
     case SIGWINCH: {
       vv_attach_update_size(ctx->socket);
     } break;
-    default: quit("Shutdown"); break;
+    case SIGTERM: quit("SIGTERM"); break;
+    case SIGQUIT: quit("SIGQUIT"); break;
+    case SIGINT: quit("SIGINT"); break;
+    default: quit("Killed by signal"); break;
     }
   }
 }
@@ -841,6 +844,15 @@ static void vv_attach(struct velvet_args args) {
   sa.sa_flags = SA_RESTART;
 
   if (sigaction(SIGWINCH, &sa, NULL) == -1) velvet_die("sigaction:");
+
+  /* we should handle these signals because we need to restore terminal state before exiting. */
+  if (sigaction(SIGTERM, &sa, NULL) == -1) velvet_die("sigaction:");
+  /* SIGINT is not an expected termination signal since we put stdin in raw mode,
+   * but if we don't install a handler the default handler will kill us anyway.
+   * For good measure, SIGINT should trigger the SIGTERM cleanup path. */
+  if (sigaction(SIGINT, &sa, NULL) == -1) velvet_die("sigaction:");
+  /* SIGQUIT is also not really expected, but we just treat it like SIGTERM */
+  if (sigaction(SIGQUIT, &sa, NULL) == -1) velvet_die("sigaction:");
 
   struct rect ws;
   platform_get_winsize(&ws);
