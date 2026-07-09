@@ -147,7 +147,7 @@ $(SUBMODULE_INIT):
 	git submodule update
 
 $(LUA):
-	$(MAKE) -C $(LUA_DIR) all
+	$(MAKE) CC="$(CC) -std=gnu99" -C $(LUA_DIR) all
 
 $(GEN_LUA_AUTOGEN): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
 	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
