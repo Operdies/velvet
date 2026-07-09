@@ -743,10 +743,10 @@ struct vv_attach_context {
   int socket;
 };
 
-_Noreturn static void quit(char *reason) {
+_Noreturn static void quit(char *reason, int status) {
   terminal_reset();
   printf("[%s]\n", reason);
-  exit(0);
+  exit(status);
 }
 
 static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
@@ -756,9 +756,9 @@ static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
 
 static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
   (void)src;
-  if (str.len == 0) quit("Shutdown");
-  if (str.len == 1 && str.content[0] == 'Q') quit("Shutdown");
-  if (str.len == 1 && str.content[0] == 'D') quit("Detached");
+  if (str.len == 0) quit("Shutdown", 0);
+  if (str.len == 1 && str.content[0] == 'Q') quit("Shutdown", 0);
+  if (str.len == 1 && str.content[0] == 'D') quit("Detached", 0);
   if (str.len > 1 && str.content[0] == 'R') {
     /* hack: writing to the buffer is technically illegal,
      * but it's guaranteed to be large enough and we are about to exec(). */
@@ -793,10 +793,10 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
     case SIGWINCH: {
       vv_attach_update_size(ctx->socket);
     } break;
-    case SIGTERM: quit("SIGTERM"); break;
-    case SIGQUIT: quit("SIGQUIT"); break;
-    case SIGINT: quit("SIGINT"); break;
-    default: quit("Killed by signal"); break;
+    case SIGTERM: quit("SIGTERM", 128 + signal); break;
+    case SIGQUIT: quit("SIGQUIT", 128 + signal); break;
+    case SIGINT: quit("SIGINT", 128 + signal); break;
+    default: quit("Killed by signal", 128 + signal); break;
     }
   }
 }
