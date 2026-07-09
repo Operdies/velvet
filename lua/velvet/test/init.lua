@@ -1,6 +1,7 @@
 local tests = {
   'velvet.test.test_deep_extend',
   'velvet.test.test_runtime_storage',
+  'velvet.test.test_async'
 }
 
 -- vv redefines print() to use vv.log,
@@ -8,15 +9,16 @@ local tests = {
 -- under normal operation, io.write() is not supported because
 -- velvet doesn't really define where the STDOUT / STDERR file descriptors
 -- are pointing, but this will only be used in a unit-testing context.
-local function print(...)
-  local str = table.concat({...}, "\t")
+function print(...)
+  local str = table.concat({ ... }, "\t")
   io.write(str .. "\n")
 end
 
 local function run()
   local failed = 0
   for _, mod in ipairs(tests) do
-    local ok, err = pcall(require, mod)
+    local test = require(mod).test
+    local ok, err = pcall(test)
     if not ok then
       print('FAIL: ' .. mod .. ': ' .. tostring(err))
       failed = failed + 1
@@ -27,4 +29,12 @@ local function run()
   end
 end
 
-return { run = run }
+return {
+  run = function()
+    vv.async.run(function()
+      local status, result = pcall(run)
+      if not status then print(result) end
+      TEST_STATUS = status
+    end)
+  end
+}
