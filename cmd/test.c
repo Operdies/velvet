@@ -1318,18 +1318,16 @@ int main(void) {
 #include "lua.h"
 
 static void lua_assert(lua_State *L, char *cmd) {
-  lua_pushcfunction(L, lua_debug_traceback_handler);
-  int handler_idx = lua_gettop(L);
-
   if (luaL_loadstring(L, cmd) != LUA_OK) {
     lua_die(L);
   }
 
-  if (lua_pcall(L, 0, 0, handler_idx) != LUA_OK) {
-    lua_die(L);
+  if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+    const char *err = luaL_tolstring(L, 1, 0);
+    printf("%s", err);
+    exit(1);
   }
 
-  lua_remove(L, handler_idx); // pop the handler
   lua_pop(L, lua_gettop(L));
 }
 
