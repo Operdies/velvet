@@ -1375,5 +1375,19 @@ void test_lua_modules(void) {
   lua_pop(L, lua_gettop(L));
 
   lua_assert(L, "require('velvet.test').run()");
+
+  bool success = false;
+  for (int i = 0; i < 1000; i++) {
+    lua_getglobal(L, "TEST_STATUS");
+    if (!lua_isnoneornil(L, -1)) {
+      success = lua_toboolean(L, -1);
+      break;
+    }
+    /* io_dispatch will wait for and invoke any pending schedules */
+    assert(v.event_loop.scheduled_actions.length > 0);
+    io_dispatch(&v.event_loop);
+    lua_pop(L, 1);
+  }
+  assert(success);
   velvet_destroy(&v);
 }
