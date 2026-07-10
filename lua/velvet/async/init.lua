@@ -122,7 +122,7 @@ function M.defer(defer, ...)
   defer_on(coroutine.running(), defer, ...)
 end
 
-local function resolve(name, data)
+local function resolve(event, data)
   -- capture the current sequence number and ensure we don't resolve anything higher.
   -- Otherwise a waiter() invocation can trigger on the currently processing event.
   local current_sequence = sequence
@@ -139,11 +139,11 @@ local function resolve(name, data)
       end
       for _, reg in ipairs(regs) do
         local is_match = true
-        local wait_result = { name = name, data = data }
+        local wait_result = { event = event, data = data }
         if reg.when then
           local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
           if not ok then
-            printerr(string.format("Unhandled error during when(%s): %s", name, result))
+            printerr(string.format("Unhandled error during when(%s): %s", type(event) == 'string' and event or 'event_source', result))
             is_match = false
           else
             is_match = result
@@ -160,24 +160,24 @@ local function resolve(name, data)
     end
   end
 
-  if type(name) == 'table' then
-    local waiters = event_source_waiters[name]
+  if type(event) == 'table' then
+    local waiters = event_source_waiters[event]
     if waiters then resolve_table(waiters) end
     return
   end
 
-  if not known_events[name] then known_events[name] = true end
+  if not known_events[event] then known_events[event] = true end
   local segments = {}
-  for segment in name:gmatch('[^.]+') do
+  for segment in event:gmatch('[^.]+') do
     segments[#segments + 1] = segment
   end
 
-  local function recursive_resolve(level, word, ...)
+  local function recursive_resolve(wait_table, word, ...)
     local leaf = select('#', ...) == 0
-    local any = level['**']
+    local any = wait_table['**']
     if any then resolve_table(any) end
-    local star = level['*']
-    local match = level[word]
+    local star = wait_table['*']
+    local match = wait_table[word]
 
     if leaf then
       if star then resolve_table(star) end
@@ -208,7 +208,7 @@ end
 function EventSource:wait()
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
   local _, evt = M.wait(self)
-  return evt
+  return evt.data
 end
 
 --- Create an event source. The event source can be signaled with an object, and awaited with async.wait()
@@ -220,13 +220,13 @@ function M.event_source()
 end
 
 --- @class velvet.async.conditional_event
---- @field event velvet.async.event|string event
+--- @field event velvet.async.event|velvet.async.event_source|string event
 --- @field when fun(registration: velvet.async.event_registration, result: velvet.async.wait.result): boolean predicate function
 
 --- @alias velvet.async.event_registration velvet.async.event|velvet.async.event_source|velvet.async.conditional_event|thread|'*'|'**'|string
 
 --- @class velvet.async.wait.result
---- @field name velvet.async.event|string the name of the raised event
+--- @field event velvet.async.event|string|velvet.async.event_source the raised event
 --- @field data any the event args
 
 local function timeout_callback(co, timeout, seq)
@@ -351,31 +351,29 @@ function M.wait(...)
       local event = evt
       if type(evt) == 'table' then
         assert(type(evt.event) == 'string', ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
-        if evt.when ~= nil then
-          assert(type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
-        end
+        assert(evt.when == nil or type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
         event = evt.event
       end
       assert(type(event) == 'string')
-      local tbl = registered_waits
+      local wait_table = registered_waits
       for segment in event:gmatch('[^.]+') do
-        local sub = tbl[segment]
-        if not sub then
-          sub = {}; tbl[segment] = sub
+        local sub_table = wait_table[segment]
+        if not sub_table then
+          sub_table = {}; wait_table[segment] = sub_table
         end
-        tbl = sub
+        wait_table = sub_table
       end
-      if tbl == registered_waits then 
+      if wait_table == registered_waits then 
         error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      if tbl[seq] then
+      if wait_table[seq] then
         -- this event has multiple registrations on the same event.
         -- there is nothing wrong with this since the registrations can have
         -- different |when| triggers, but we need to handle this by chaining
         -- the registrations.
-        table.insert(tbl[seq], evt)
+        table.insert(wait_table[seq], evt)
       else
-        tbl[seq] = { evt }
+        wait_table[seq] = { evt }
       end
     else
       error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
