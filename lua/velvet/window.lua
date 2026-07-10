@@ -21,9 +21,12 @@
 --- @field bottom velvet.window left border
 
 --- @class velvet.window.events
---- @field mouse_click velvet.async.event
---- @field mouse_move velvet.async.event
---- @field mouse_scroll velvet.async.event
+--- @field mouse table<velvet.window.mouse_event, velvet.async.event_source>
+
+--- @alias velvet.window.mouse_event
+--- | 'click'
+--- | 'scroll'
+--- | 'move'
 
 --- @class velvet.window
 --- @field id integer window handle
@@ -34,7 +37,7 @@
 --- @field bottom_text? string text showed on the bottom border
 --- @field on_drag? fun(self: velvet.window, args: window.drag_args): nil
 --- @field is_border? boolean if set, this is a border of |self.parent|
---- @field event velvet.window.events async event names which can be used with the async system.
+--- @field events velvet.window.events async event names which can be used with the async system.
 local Window = {}
 Window.__index = Window
 
@@ -395,6 +398,13 @@ local function route_mouse_events(event, args)
     end
     -- only emit the mouse event if the window did not 'passthrough'.
     vv.events.emit(("window.%s.%d"):format(event, args.win_id), args)
+    if event == 'mouse.click' then
+      win.events.mouse.click:emit(args)
+    elseif event == 'mouse.scroll' then
+      win.events.mouse.scroll:emit(args)
+    elseif event == 'mouse.move' then
+      win.events.mouse.move:emit(args)
+    end
   end
 end
 
@@ -517,10 +527,12 @@ function Window.from_handle(id)
   local self = { id = id, child_windows = {} }
   local instance = setmetatable(self, Window)
   win_registry[id] = instance
-  instance.event = {
-    mouse_click = 'window.mouse.click.' .. id,
-    mouse_move = 'window.mouse.move.' .. id,
-    mouse_scroll = 'window.mouse.scroll.' .. id
+  instance.events = {
+    mouse = {
+      click = vv.async.event_source(),
+      move = vv.async.event_source(),
+      scroll = vv.async.event_source(),
+    }
   }
   return instance
 end
