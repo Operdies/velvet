@@ -17,10 +17,15 @@ meaning the only handle is now the fact that it is running, and so forth.
 --- @param mode 'k'|'v'
 local function make_weaktable(mode) return setmetatable({}, { __mode = mode }) end
 
+--- @generic T any
+--- @param obj T object to wrap
+--- @return [T] wrap array containing a weak reference to |obj|
+local function weakref(obj) return setmetatable({obj}, { __mode = 'v' }) end
+
 --- @alias velvet.async.resolve fun(reg: velvet.async.event_registration, result: velvet.async.wait.result)
 --- @alias velvet.async.resolve_table table<integer, velvet.async.resolve>
 
---- @class velvet.async.waiter_registry 
+--- @class velvet.async.waiter_registry
 --- @field [integer] velvet.async.event_registration[]
 --- @field [string] velvet.async.waiter_registry
 
@@ -30,35 +35,22 @@ local sequence_callbacks = {}
 --- @type velvet.async.waiter_registry
 local waiter_registry = {}
 
---- Maps a coroutine to a sequence number.
---- A sequence number is an integer key in the sequence_callbacks table.
---- When there are no more strong references to a coroutine, the entry is dropped from this table.
-local co_to_seq = make_weaktable('k')
---- Maps a coroutine object to zero or more deferred functions and parameters.
---- Deferred functions are executed in reverse order when a coroutine completes,
---- or when it is canceled.
-local co_defer = make_weaktable('k')
---- Lookup table indicating whether a coroutine is currently deferring.
---- We need to track this information in order to reject further defer operations
---- before the coroutine is cleared.
---- @type table<thread, boolean>
-local deferring = make_weaktable('k')
---- Lookup table mapping a coroutine to its result.
---- co_result uses the same semantics as pcall();
---- The first value is a status boolean indicating success,
---- and the remaining values represent either an error
---- or zero or more return values.
-local co_result = make_weaktable('k')
---- Lookup table mapping event_source objects to their waitings;
---- This is similar to registered_waits, except it is using weak keys,
---- which means waiters can be collected if the event source is no longer reachable.
---- @type table<velvet.async.event_source, velvet.async.event_registration[]>
+--- @class velvet.async.coroutine_state
+--- @field deferring? boolean true if the coroutine is currently deferring
+--- @field result? any[]? set if the coroutine is completed or canceled
+--- @field sequence? integer lookup key to |sequence_callbacks|
+--- @field defers any[] list of deferred functions and their parameters
+--- @field timeout? integer timeout token for this coroutine
+
+--- @type table<thread, velvet.async.coroutine_state>
+local co_state = make_weaktable('k')
+
 local event_source_waiter_registry = make_weaktable('k')
 --- weak-valued table containing the currently deferring coroutine, or nil
 --- @type [thread?]
 local currently_deferring_coroutine = make_weaktable('v')
 
--- Monotonically increasing sequence number used to invalidate multi-waits
+-- Monotonically increasing sequence number used to invalidate stale waiters
 local sequence = 1
 
 --- @return table<string, string|boolean> seen known events
@@ -66,16 +58,22 @@ function M.get_observed_events()
   return vv.deepcopy(known_events)
 end
 
+local function state_cancel_timeout(state)
+  if state.timeout then
+    vv.api.schedule_cancel(state.timeout)
+    state.timeout = nil
+  end
+end
+
 --- Resolve all defers for |co|
 --- This is called when |co| completes.
 local function exec_defer(co)
-  local defer = co_defer[co]
+  local state = co_state[co]
+  state_cancel_timeout(state)
+  local defer = state.defers
   if defer then
     -- ensure no new wait() and defer() calls are made on this thread during defer
-    deferring[co] = true
-    -- Ensure co_defer is nilled in case a defer calls M.cancel()
-    -- Further defer calls will now error().
-    co_defer[co] = nil
+    state.deferring = true
     for i = #defer, 1, -1 do
       local df = defer[i]
 
@@ -92,7 +90,6 @@ local function exec_defer(co)
         printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
       end
     end
-    deferring[co] = nil
   end
 end
 
@@ -111,7 +108,8 @@ function M.run(f, ...)
   end
 
   local co = coroutine.create(function()
-    co_defer[coroutine.running()] = {}
+    local state = { defers = {}, deferring = false }
+    co_state[coroutine.running()] = state
     if get_print() then
       COROUTINE_PRINT[coroutine.running()] = function(stream, ...)
         local parent_print = get_print()
@@ -128,8 +126,7 @@ function M.run(f, ...)
         end
       end
     end
-    local result = { xpcall(f, debug.traceback, table.unpack(args)) }
-    co_result[coroutine.running()] = result
+    state.result = { xpcall(f, debug.traceback, table.unpack(args)) }
     exec_defer(coroutine.running())
   end)
   coroutine.resume(co)
@@ -139,19 +136,20 @@ end
 --- Cancel all continuations for |co| and trigger deferred actions.
 --- @param co thread the thread to cancel
 function M.cancel(co)
-  local seq = co_to_seq[co]
-  if seq then
-    co_to_seq[co] = nil
-    sequence_callbacks[seq] = nil
+  local state = co_state[co]
+  if state.sequence then
+    sequence_callbacks[state.sequence] = nil
+    state.sequence = nil
   end
-  co_result[co] = { false, 'canceled' }
+  state.result = { false, 'canceled' }
   exec_defer(co)
 end
 
 local function defer_on(co, defer, ...)
-  if deferring[co] then error("Cannot add new defers during defer.") end
+  local state = co_state[co]
+  if state.deferring then error("Cannot add new defers during defer.") end
   assert(type(defer) == 'function', string.format('Bad argument #1 (function expected, got %s)', type(defer)))
-  local defers = co_defer[co] or error("Provided coroutine is not managed by vv.async.")
+  local defers = state.defers or error("Provided coroutine is not managed by vv.async.")
   defers[#defers + 1] = { defer, ... }
 end
 
@@ -191,7 +189,6 @@ local function resolve(event, data)
           end
         end
         if is_match then
-          sequence_callbacks[seq] = nil
           waiter(reg, wait_result)
           tbl[seq] = nil
           break
@@ -270,27 +267,37 @@ end
 --- @field event velvet.async.event|string|velvet.async.event_source the raised event
 --- @field data any the event args
 
+--- @param seq integer
+--- @param co thread
+--- @param ... any
+local function co_resume(seq, co, ...)
+  local state = co_state[co]
+  if state.sequence ~= seq then return end
+  state.sequence = nil
+  state_cancel_timeout(state)
+  sequence_callbacks[seq] = nil
+  coroutine.resume(co, ...)
+end
+
 local function timeout_callback(co, timeout, seq)
   return vv.api.schedule_after(timeout, function()
-    -- if sequence_callbacks was unset, that means this coroutine was cancelled.
-    if not sequence_callbacks[seq] then return end
-    sequence_callbacks[seq] = nil
-    coroutine.resume(co, nil, 'timeout')
+    co_resume(seq, co, nil, 'timeout')
   end)
 end
 
 local function defer_callback(co, trd, seq)
+  -- we must not capture |co| in this context.
+  -- Otherwise this defer will pin |co| even if it is
+  -- no longer possible to resume it.
+  local wrap = weakref(co)
   defer_on(trd, function()
-    if not sequence_callbacks[seq] then return end
-    sequence_callbacks[seq] = nil
-    coroutine.resume(co, trd, co_result[trd])
+    co_resume(seq, wrap[1], trd, co_state[trd].result)
   end)
 end
 
-local function resolve_callback(co, timeout)
+local function resolve_callback(co, seq)
   return function(registration, result)
-    if timeout then vv.api.schedule_cancel(timeout) end
-    coroutine.resume(co, registration, result)
+    co_resume(seq, co, registration, result)
   end
 end
 
@@ -301,7 +308,9 @@ local function is_event_source(evt)
 end
 
 local function emit_coroutine_result(evt)
-  evt:emit(co_result[currently_deferring_coroutine[1]])
+  local co = assert(currently_deferring_coroutine[1], "coroutine not alive")
+  local state = co_state[co]
+  evt:emit(state.result)
 end
 
 --- Wait for all registrations in |events| to fire, or |timeout|.
@@ -367,12 +376,13 @@ end
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
 function M.wait(...)
-  local timeout = nil
   local co = coroutine.running()
-  if deferring[co] then error("Cannot wait() during defer.") end
+  local state = co_state[co]
+  if state.deferring then error("Cannot wait() during defer.") end
   sequence = sequence + 1
   -- local capture to preserve the sequence number
   local seq = sequence
+  state.sequence = seq
 
   local compatible_types = { number = true, string = true, table = true, thread = true }
   local raw_args = { ... }
@@ -386,11 +396,9 @@ function M.wait(...)
     end
     if tp == 'thread' then
       -- if the coroutine completed, or is not running, return immediately.
-      if co_result[evt] then return evt, co_result[evt] end
-      if not co_defer[evt] then
-        ---@diagnostic disable-next-line: return-type-mismatch
-        return evt, nil
-      end
+      local evt_state = co_state[evt] or
+      error(string.format("bad argument %d (Provided coroutine is not managed by vv.async.)", i))
+      if evt_state.result then return evt, evt_state.result end
     elseif tp == 'number' then
       if math.type(evt) ~= 'integer' then
         error(("Bad argument #%d (integer expected, got number)"):format(i))
@@ -403,11 +411,10 @@ function M.wait(...)
   end
 
   if timeout_value then
-    timeout = timeout_callback(co, timeout_value, seq)
+    state.timeout = timeout_callback(co, timeout_value, seq)
   end
 
-  co_to_seq[co] = seq
-  sequence_callbacks[seq] = resolve_callback(co, timeout)
+  sequence_callbacks[seq] = resolve_callback(co, seq)
 
   for idx, evt in ipairs(args) do
     if type(evt) == 'thread' then
