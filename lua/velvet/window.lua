@@ -397,7 +397,7 @@ local function route_mouse_events(event, args)
       end
     end
     -- only emit the mouse event if the window did not 'passthrough'.
-    vv.events.emit(("window.%s.%d"):format(event, args.win_id), args)
+    vv.events.emit(("window.%s"):format(event), args)
     if event == 'mouse.click' then
       win.events.mouse.click:emit(args)
     elseif event == 'mouse.scroll' then
