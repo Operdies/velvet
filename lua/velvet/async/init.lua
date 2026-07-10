@@ -14,18 +14,46 @@ While the coroutine is not running, ideally the only handle should be the value 
 |sequence_callbacks|. When a coroutine is resumed, the entry is cleared from |sequence_callbacks|,
 meaning the only handle is now the fact that it is running, and so forth.
 --]]
-local function make_weaktable() return setmetatable({}, { __mode = 'k' }) end
+--- @param mode 'k'|'v'
+local function make_weaktable(mode) return setmetatable({}, { __mode = mode }) end
 
---- @type table<integer, fun(velvet.async.event_registration, velvet.async.wait.result )>
+--- @alias velvet.async.resolve fun(reg: velvet.async.event_registration, result: velvet.async.wait.result)
+--- @alias velvet.async.resolve_table table<integer, velvet.async.resolve>
+
+--- @class velvet.async.waiter_registry 
+--- @field [integer] velvet.async.event_registration[]
+--- @field [string] velvet.async.waiter_registry
+
 --- mapping from an integer handle to a resolve callback.
+--- @type velvet.async.resolve_table
 local sequence_callbacks = {}
-local registered_waits = {}
+--- @type velvet.async.waiter_registry
+local waiter_registry = {}
 
-local co_to_seq = make_weaktable()
-local co_defer = make_weaktable()
-local deferring = make_weaktable()
-local co_result = make_weaktable()
-local event_source_waiters = make_weaktable()
+--- Maps a coroutine to a sequence number.
+--- A sequence number is an integer key in the sequence_callbacks table.
+--- When there are no more strong references to a coroutine, the entry is dropped from this table.
+local co_to_seq = make_weaktable('k')
+--- Maps a coroutine object to zero or more deferred functions and parameters.
+--- Deferred functions are executed in reverse order when a coroutine completes,
+--- or when it is canceled.
+local co_defer = make_weaktable('k')
+--- Lookup table indicating whether a coroutine is currently deferring.
+--- We need to track this information in order to reject further defer operations
+--- before the coroutine is cleared.
+--- @type table<thread, boolean>
+local deferring = make_weaktable('k')
+--- Lookup table mapping a coroutine to its result.
+--- co_result uses the same semantics as pcall();
+--- The first value is a status boolean indicating success,
+--- and the remaining values represent either an error
+--- or zero or more return values.
+local co_result = make_weaktable('k')
+--- Lookup table mapping event_source objects to their waitings;
+--- This is similar to registered_waits, except it is using weak keys,
+--- which means waiters can be collected if the event source is no longer reachable.
+--- @type table<velvet.async.event_source, velvet.async.event_registration[]>
+local event_source_waiter_registry = make_weaktable('k')
 --- weak-valued table containing the currently deferring coroutine, or nil
 --- @type [thread?]
 local currently_deferring_coroutine = make_weaktable('v')
@@ -74,7 +102,7 @@ end
 --- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
 function M.run(f, ...)
   if type(f) ~= 'function' then error(string.format("Bad argument #1 (function expected, got %s)", type(f))) end
-  local args = {...}
+  local args = { ... }
   local parent = setmetatable({ coroutine.running() }, { __mode = 'kv' })
   local get_print = function()
     if parent and parent[1] then
@@ -155,7 +183,8 @@ local function resolve(event, data)
         if reg.when then
           local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
           if not ok then
-            printerr(string.format("Unhandled error during when(%s): %s", type(event) == 'string' and event or 'event_source', result))
+            printerr(string.format("Unhandled error during when(%s): %s",
+              type(event) == 'string' and event or 'event_source', result))
             is_match = false
           else
             is_match = result
@@ -173,7 +202,7 @@ local function resolve(event, data)
   end
 
   if type(event) == 'table' then
-    local waiters = event_source_waiters[event]
+    local waiters = event_source_waiter_registry[event]
     if waiters then resolve_table(waiters) end
     return
   end
@@ -200,7 +229,7 @@ local function resolve(event, data)
     end
   end
 
-  recursive_resolve(registered_waits, table.unpack(segments))
+  recursive_resolve(waiter_registry, table.unpack(segments))
 end
 
 local e = require('velvet.events').create_group('velvet.async', true)
@@ -227,7 +256,7 @@ end
 --- @return velvet.async.event_source src
 function M.event_source()
   local instance = setmetatable({}, EventSource)
-  event_source_waiters[instance] = {}
+  event_source_waiter_registry[instance] = {}
   return instance
 end
 
@@ -259,7 +288,7 @@ local function defer_callback(co, trd, seq)
 end
 
 local function resolve_callback(co, timeout)
-return function(registration, result)
+  return function(registration, result)
     if timeout then vv.api.schedule_cancel(timeout) end
     coroutine.resume(co, registration, result)
   end
@@ -346,7 +375,7 @@ function M.wait(...)
   local seq = sequence
 
   local compatible_types = { number = true, string = true, table = true, thread = true }
-  local raw_args = {...}
+  local raw_args = { ... }
   if #raw_args == 0 then error("No events specified.") end
   local timeout_value = nil
   local args = {}
@@ -358,7 +387,7 @@ function M.wait(...)
     if tp == 'thread' then
       -- if the coroutine completed, or is not running, return immediately.
       if co_result[evt] then return evt, co_result[evt] end
-      if not co_defer[evt] then 
+      if not co_defer[evt] then
         ---@diagnostic disable-next-line: return-type-mismatch
         return evt, nil
       end
@@ -384,17 +413,19 @@ function M.wait(...)
     if type(evt) == 'thread' then
       defer_callback(co, evt, seq)
     elseif is_event_source(evt) then
-      local event_waiters = event_source_waiters[evt.event or evt]
+      local event_waiters = event_source_waiter_registry[evt.event or evt]
       event_waiters[seq] = { evt }
     elseif type(evt) == 'string' or type(evt) == 'table' then
       local event = evt
       if type(evt) == 'table' then
-        assert(type(evt.event) == 'string', ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
-        assert(evt.when == nil or type(evt.when) == 'function', ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
+        assert(type(evt.event) == 'string',
+          ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
+        assert(evt.when == nil or type(evt.when) == 'function',
+          ("Bad argument #%d: bad field 'when' (function expected, got %s)"):format(idx, type(evt.when)))
         event = evt.event
       end
       assert(type(event) == 'string')
-      local wait_table = registered_waits
+      local wait_table = waiter_registry
       for segment in event:gmatch('[^.]+') do
         local sub_table = wait_table[segment]
         if not sub_table then
@@ -402,7 +433,7 @@ function M.wait(...)
         end
         wait_table = sub_table
       end
-      if wait_table == registered_waits then 
+      if wait_table == waiter_registry then
         error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
       if wait_table[seq] then
@@ -426,7 +457,7 @@ end
 --- @param ... velvet.async.event_registration|integer One or more events to stream. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return fun(): velvet.async.event_registration, velvet.async.wait.result Iterator which streams the input events
 function M.stream(...)
-  local args = {...}
+  local args = { ... }
   return function()
     local registration, result = M.wait(table.unpack(args))
     return registration or 'timeout', result
