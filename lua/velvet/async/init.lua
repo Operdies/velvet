@@ -262,6 +262,12 @@ function M.wait_all(events, timeout)
   local result = {}
   local args = {}
   local missing = 0
+
+  if timeout ~= nil then
+    assert(math.type(timeout) == 'integer', string.format("Bad argument #2 (integer expected, got %s)", type(timeout)))
+    args[1] = timeout
+  end
+
   for key, reg in pairs(events) do
     local inner_when, found, event
     event = reg
@@ -282,7 +288,8 @@ function M.wait_all(events, timeout)
     args[#args + 1] = { event = event, when = when }
     missing = missing + 1
   end
-  if missing > 0 then vv.async.wait(timeout, table.unpack(args)) end
+  if missing == 0 then return {} end
+  vv.async.wait(table.unpack(args))
   return result
 end
 
