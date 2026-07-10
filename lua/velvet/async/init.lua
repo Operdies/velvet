@@ -341,11 +341,17 @@ function M.wait(...)
   co_to_seq[co] = seq
   sequence_callbacks[seq] = resolve_callback(co, timeout)
 
+  local function is_event_source(evt)
+    return type(evt) == "table" and (
+      getmetatable(evt) == EventSource or
+      getmetatable(evt.event) == EventSource)
+  end
+
   for idx, evt in ipairs(args) do
     if type(evt) == 'thread' then
       defer_callback(co, evt, seq)
-    elseif type(evt) == 'table' and getmetatable(evt) == EventSource then
-      local event_waiters = event_source_waiters[evt]
+    elseif is_event_source(evt) then
+      local event_waiters = event_source_waiters[evt.event or evt]
       event_waiters[seq] = { evt }
     elseif type(evt) == 'string' or type(evt) == 'table' then
       local event = evt
