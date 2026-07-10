@@ -69,26 +69,27 @@ end
 --- This is called when |co| completes.
 local function exec_defer(co)
   local state = co_state[co]
+  -- ensure no new wait() and defer() calls are made on this thread during defer
+  state.deferring = true
+
+  local defers = state.defers
+  state.defers = nil
   state_cancel_timeout(state)
-  local defer = state.defers
-  if defer then
-    -- ensure no new wait() and defer() calls are made on this thread during defer
-    state.deferring = true
-    for i = #defer, 1, -1 do
-      local df = defer[i]
 
-      -- store a reference to the currently deferring coroutine.
-      -- this makes it possible for (internal) defer operations
-      -- to access the deferring coroutine for e.g. lookup tables
-      -- without keeping a long-lived strong reference to its associated resources.
-      local tmp = currently_deferring_coroutine[1]
-      currently_deferring_coroutine[1] = co
-      local ok, err = xpcall(df[1], debug.traceback, table.unpack(df, 2, #df))
-      currently_deferring_coroutine[1] = tmp
+  for i = #defers, 1, -1 do
+    local defer = defers[i]
 
-      if not ok then
-        printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
-      end
+    -- store a reference to the currently deferring coroutine.
+    -- this makes it possible for (internal) defer operations
+    -- to access the deferring coroutine for e.g. lookup tables
+    -- without keeping a long-lived strong reference to its associated resources.
+    local tmp = currently_deferring_coroutine[1]
+    currently_deferring_coroutine[1] = co
+    local ok, err = xpcall(defer[1], debug.traceback, table.unpack(defer, 2, #defer))
+    currently_deferring_coroutine[1] = tmp
+
+    if not ok then
+      printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
     end
   end
 end
@@ -100,9 +101,9 @@ end
 function M.run(f, ...)
   if type(f) ~= 'function' then error(string.format("Bad argument #1 (function expected, got %s)", type(f))) end
   local args = { ... }
-  local parent = setmetatable({ coroutine.running() }, { __mode = 'kv' })
+  local parent = setmetatable({ coroutine.running() }, { __mode = 'v' })
   local get_print = function()
-    if parent and parent[1] then
+    if parent[1] then
       return COROUTINE_PRINT[parent[1]]
     end
   end
