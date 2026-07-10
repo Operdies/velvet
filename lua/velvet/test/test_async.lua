@@ -51,19 +51,18 @@ local function test_event_sources()
     src:emit(obj)
     assert(#resolve_tbl == i)
     assert(resolve_tbl[i] == obj)
-    assert(resolve_tbl[i-1] ~= obj)
+    assert(resolve_tbl[i - 1] ~= obj)
   end
 end
 
 local function test_coroutine_return()
   local function test_multireturn(yield)
     local trd = async.run(function()
-      -- waiting for a duration of 0 still causes the lua context to yield back to C 
+      -- waiting for a duration of 0 still causes the lua context to yield back to C
       -- where the main event loop will resume the test code
       if yield then async.wait(0) end
       return 123, 456
-    end
-    )
+    end)
     local reg, res = async.wait(trd)
     assert(reg == trd)
     assert(res[1], "Coroutine should have succeeded")
@@ -79,7 +78,7 @@ end
 local function test_event_source_when()
   local src = async.event_source()
   local result = nil
-  vv.async.run(function()
+  async.run(function()
     local _, v = async.wait({
       event = src,
       when = function(_, v)
@@ -97,7 +96,7 @@ end
 
 local function test_when()
   local result = nil
-  vv.async.run(function()
+  async.run(function()
     local _, v = async.wait({ event = 'my_event', when = function(_, v) return v.data.x == 1 end })
     result = v.data
   end)
@@ -118,7 +117,7 @@ local function test_wait_all()
   local event2 = 'custom_event_2'
   local result = nil
   local function go_await()
-    result = async.wait_all({event1, event2}, 0)
+    result = async.wait_all({ event1, event2 }, 0)
   end
 
   async.run(go_await)
@@ -129,7 +128,7 @@ local function test_wait_all()
 
   -- verify timeout returns the events that fired, and not the ones that did not
   async.run(go_await)
-  local o1, o2 = {x=1}, {y=2}
+  local o1, o2 = { x = 1 }, { y = 2 }
   events.emit(event1, o1)
   async.wait(0)
   assert(result and result[1] and not result[2])
@@ -224,6 +223,58 @@ local function test_event_source_wait_all()
   assert(cancel_result[1].data[2] == 'canceled')
 end
 
+local function test_coroutine_weakrefs()
+  local threads = setmetatable({}, { __mode = 'v' })
+
+  -- wait for every kind of supported event to
+  -- verify none of the wait scenarios pin the coroutines
+  local event_generators = {
+    conditional_wait = function() return { event = 'some_event', when = function() return true end } end,
+    named_event = function() return 'named.event' end,
+    source_wait = async.event_source,
+    thread_wait = function() return async.run(function() async.wait(1000) end) end,
+    timeout = function() return 1000 end,
+  }
+
+  local function test_garbage_collection(name, gen)
+    for i = 1, 100 do
+      threads[i] = async.run(function() async.wait(gen()) end)
+    end
+
+    local function assert_liveness(liveness)
+      local err = string.format(
+        liveness and "wait object '%s' does not pin coroutines"
+        or "wait object '%s' leaks coroutine handles", name)
+      for i = 1, 100 do
+        assert(liveness == (not not threads[i]), err)
+      end
+    end
+
+    -- verify threads are pinned by the awaited event
+    assert_liveness(true)
+    collectgarbage()
+    assert_liveness(true)
+
+    -- cancel all the timers
+    for i = 1, 100 do async.cancel(threads[i]) end
+
+    -- verify collectgarbage() will collect the threads
+    assert_liveness(true)
+    collectgarbage()
+    assert_liveness(false)
+  end
+
+  for name, gen in pairs(event_generators) do
+    test_garbage_collection(name, gen)
+  end
+
+  test_garbage_collection("everything", function()
+    local all = {}
+    for _, gen in pairs(event_generators) do all[#all + 1] = gen() end
+    return table.unpack(all)
+  end)
+end
+
 return {
   test = function()
     test_when()
@@ -232,5 +283,6 @@ return {
     test_coroutine_return()
     test_wait_all()
     test_event_source_wait_all()
+    test_coroutine_weakrefs()
   end
 }

@@ -18,9 +18,18 @@ local function run()
   local failed = 0
   for _, mod in ipairs(tests) do
     local test = require(mod).test
-    local ok, err = pcall(test)
+    local ok, err = xpcall(test, debug.traceback)
     if not ok then
-      print('FAIL: ' .. mod .. ': ' .. tostring(err))
+      local lines = {}
+      for line in err:gmatch("[^\r\n]+") do
+        lines[#lines+1] = line
+      end
+      print('FAIL: ' .. mod .. ': ' .. lines[1])
+      for i = 2,#lines do
+        local line = lines[i]
+        if line:match("in global 'xpcall'") then break end
+        print(line)
+      end
       failed = failed + 1
     end
   end
