@@ -26,6 +26,9 @@ local co_defer = make_weaktable()
 local deferring = make_weaktable()
 local co_result = make_weaktable()
 local event_source_waiters = make_weaktable()
+--- weak-valued table containing the currently deferring coroutine, or nil
+--- @type [thread?]
+local currently_deferring_coroutine = make_weaktable('v')
 
 -- Monotonically increasing sequence number used to invalidate multi-waits
 local sequence = 1
@@ -47,7 +50,16 @@ local function exec_defer(co)
     co_defer[co] = nil
     for i = #defer, 1, -1 do
       local df = defer[i]
+
+      -- store a reference to the currently deferring coroutine.
+      -- this makes it possible for (internal) defer operations
+      -- to access the deferring coroutine for e.g. lookup tables
+      -- without keeping a long-lived strong reference to its associated resources.
+      local tmp = currently_deferring_coroutine[1]
+      currently_deferring_coroutine[1] = co
       local ok, err = xpcall(df[1], debug.traceback, table.unpack(df, 2, #df))
+      currently_deferring_coroutine[1] = tmp
+
       if not ok then
         printerr(("Unhandled error in coroutine defer: %s"):format(err), 'error')
       end
@@ -253,6 +265,16 @@ return function(registration, result)
   end
 end
 
+local function is_event_source(evt)
+  return type(evt) == "table" and (
+    getmetatable(evt) == EventSource or
+    getmetatable(evt.event) == EventSource)
+end
+
+local function emit_coroutine_result(evt)
+  evt:emit(co_result[currently_deferring_coroutine[1]])
+end
+
 --- Wait for all registrations in |events| to fire, or |timeout|.
 --- @param events table<any, velvet.async.event_registration> One or more events to wait for.
 --- @param timeout? integer optional timeout
@@ -271,9 +293,19 @@ function M.wait_all(events, timeout)
   for key, reg in pairs(events) do
     local inner_when, found, event
     event = reg
-    if type(reg) == 'table' then
+
+    if is_event_source(reg) then
+      event = reg.event or reg
+      inner_when = reg.when
+    elseif type(reg) == 'table' then
       event = reg.event
       inner_when = reg.when
+    elseif type(reg) == 'thread' then
+      -- threads do not support 'when' clauses, so we must wrap thread
+      -- completions in an event source for the resolve handler to function.
+      -- This is not so bad because event sources are very lightweight.
+      event = M.event_source()
+      defer_on(reg, emit_coroutine_result, event)
     end
 
     local when = function(_, evt)
@@ -347,12 +379,6 @@ function M.wait(...)
 
   co_to_seq[co] = seq
   sequence_callbacks[seq] = resolve_callback(co, timeout)
-
-  local function is_event_source(evt)
-    return type(evt) == "table" and (
-      getmetatable(evt) == EventSource or
-      getmetatable(evt.event) == EventSource)
-  end
 
   for idx, evt in ipairs(args) do
     if type(evt) == 'thread' then
