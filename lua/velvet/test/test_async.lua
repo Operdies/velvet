@@ -1,4 +1,6 @@
 local async = vv.async
+local events = vv.events
+
 local function test_event_sources()
   local src = async.event_source()
   local resolve_tbl = {}
@@ -100,10 +102,126 @@ local function test_when()
     result = v.data
   end)
   assert(not result)
-  vv.events.emit('my_event', { x = 2 })
+  events.emit('my_event', { x = 2 })
   assert(not result)
-  vv.events.emit('my_event', { x = 1 })
+  events.emit('my_event', { x = 1 })
   assert(result and result.x == 1)
+end
+
+local function test_wait_all()
+  -- wait_all on an empty table should return immediately with an empty table
+  assert(not next(async.wait_all({})))
+  -- timeout should be ignored
+  assert(not next(async.wait_all({}, 1000)))
+
+  local event1 = 'custom_event_1'
+  local event2 = 'custom_event_2'
+  local result = nil
+  local function go_await()
+    result = async.wait_all({event1, event2}, 0)
+  end
+
+  async.run(go_await)
+  assert(not result)
+  async.wait(0)
+  -- timeout with an empty table
+  assert(result and not next(result))
+
+  -- verify timeout returns the events that fired, and not the ones that did not
+  async.run(go_await)
+  local o1, o2 = {x=1}, {y=2}
+  events.emit(event1, o1)
+  async.wait(0)
+  assert(result and result[1] and not result[2])
+  assert(result[1].data.x == 1)
+
+  -- resolve all events
+  async.run(go_await)
+  events.emit(event1, o1)
+  events.emit(event2, o2)
+  assert(result and result[1] and result[2])
+  assert(result[1].data.x == 1)
+  assert(result[2].data.y == 2)
+
+  -- verify when() conditions work
+  result = nil
+  async.run(function()
+    result = async.wait_all({
+      x = { event = event1, when = function(_, evt) return evt.data.x == 1 end },
+      y = { event = event2, when = function(_, evt) return evt.data.y == 2 end },
+    })
+  end)
+
+  assert(not result)
+  events.emit(event1, o1)
+  assert(not result)
+  events.emit(event2, { y = 3 })
+  assert(not result)
+  events.emit(event2, o2)
+  assert(result)
+  assert(result.x.data.x == 1)
+  assert(result.y.data.y == 2)
+end
+
+local function test_event_source_wait_all()
+  local s1 = async.event_source()
+  local s2 = async.event_source()
+  local t1 = async.run(function()
+    local v1 = s1:wait()
+    local v2 = s2:wait()
+    return v1, v2
+  end)
+
+  local result = nil
+  async.run(function()
+    result = async.wait_all({ s1 = s1, s2 = s2 })
+  end)
+
+  assert(not result)
+  s2:emit { 123 }
+  s1:emit { 456 }
+  assert(result)
+  assert(result.s1.data[1] == 456)
+  assert(result.s2.data[1] == 123)
+
+  s2:emit { 789 }
+  local status, v1, v2 = async.wait_for_coroutine(t1)
+  assert(status and v1[1] == 456 and v2[1] == 789)
+
+  result = nil
+  async.run(function()
+    local trd = async.run(function() return s1:wait(), s2:wait() end)
+    result = async.wait_all({ s1 = s1, s2 = { event = s2, when = function(_, evt) return evt.data == 4 end }, t1 = trd })
+  end)
+
+  assert(not result)
+  s1:emit(1) -- s1 received by wait_all and trd
+  assert(not result)
+  s2:emit(3) -- received by trd, rejected by wait_all
+  assert(not result)
+  s2:emit(4)
+  assert(result)
+  assert(result.s1.data == 1)
+  assert(result.s2.data == 4)
+  assert(result.t1.data[1] == true)
+  assert(result.t1.data[2] == 1)
+  assert(result.t1.data[3] == 3)
+
+  -- verify timeout waiting for thread
+  local co = async.run(function() async.wait(99999999) end)
+  local cancel_result = async.wait_all({ co }, 10)
+  assert(cancel_result and not next(cancel_result))
+
+  -- verify coroutine cancelation
+  cancel_result = {}
+  async.run(function()
+    cancel_result = async.wait_all({ co })
+  end)
+  assert(not cancel_result[1])
+  async.cancel(co)
+  assert(cancel_result[1])
+  assert(cancel_result[1].data[1] == false)
+  assert(cancel_result[1].data[2] == 'canceled')
 end
 
 return {
@@ -112,5 +230,7 @@ return {
     test_event_sources()
     test_event_source_when()
     test_coroutine_return()
+    test_wait_all()
+    test_event_source_wait_all()
   end
 }
