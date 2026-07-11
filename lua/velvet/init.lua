@@ -129,14 +129,18 @@ local theme = setmetatable({}, {
     return pairs(combo)
   end,
   __newindex = function(_, k, v)
+    if type(v) == 'string' then
+      local color, err = string_to_rgb(v)
+      if not color then error(err) end
+      v = color
+    end
+
     local tbl = vv.api.get_theme()
     if tbl[k] then
       tbl[k] = v
       vv.options.theme = tbl
     else
-      local color, err = string_to_rgb(v)
-      if not color then error(err) end
-      extra_theme[k] = color
+      extra_theme[k] = v
     end
   end,
 })
