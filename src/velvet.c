@@ -306,6 +306,8 @@ static void on_coroutine_hangup(struct io_source *src) {
   struct velvet_coroutine *co;
   vec_find(co, velvet->coroutines, co->socket == src->fd);
   if (co) {
+    close(co->socket);
+    co->socket = 0;
     velvet_coroutine_destroy(velvet, co);
   }
 }
