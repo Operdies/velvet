@@ -64,6 +64,13 @@ local vv = {
   events = ev,
 }
 
+--- @param rgb velvet.api.rgb_color
+--- @return string hex #rrggbb(aa) formatted string
+local function rgb_to_hex(rgb)
+  local function conv(x) return math.floor(x * 255) end
+  return string.format("#%x%x%x%x", conv(rgb.red), conv(rgb.blue), conv(rgb.green), conv(rgb.alpha))
+end
+
 --- @return velvet.api.rgb_color?,string?
 local function string_to_rgb(hex)
   if type(hex) ~= "string" then
@@ -109,11 +116,16 @@ local extra_theme = {}
 local theme = setmetatable({}, {
   __index = function(_, k)
     local tbl = vv.api.get_theme()
-    return tbl[k] or extra_theme[k]
+    local color = tbl[k] or extra_theme[k]
+    if type(color) == 'table' then color = setmetatable(color, { __tostring = rgb_to_hex }) end
+    return color
   end,
   __pairs = function()
     local tbl = vv.api.get_theme()
     local combo = vv.tbl_deep_extend('force', extra_theme, tbl)
+    for name, color in pairs(combo) do
+      if type(color) == 'table' then combo[name] = setmetatable(color, { __tostring = rgb_to_hex }) end
+    end
     return pairs(combo)
   end,
   __newindex = function(_, k, v)
