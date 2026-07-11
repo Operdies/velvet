@@ -136,14 +136,26 @@ end
 
 --- Cancel all continuations for |co| and trigger deferred actions.
 --- @param co thread the thread to cancel
+---@return boolean noerror
+---@return any errorobject
 function M.cancel(co)
   local state = co_state[co]
+  if type(co) ~= 'thread' then
+    return false, string.format("Bad argument #1 (thread expected, got %s)", type(co))
+  end
+  -- probably not managed by async
+  if not state then return false, "provided coroutine not managed by vv.async" end
   if state.sequence then
     sequence_callbacks[state.sequence] = nil
     state.sequence = nil
   end
   state.result = { false, 'canceled' }
   exec_defer(co)
+
+  if coroutine.status(co) == 'suspended' then
+    return coroutine.close(co)
+  end
+  return true
 end
 
 local function defer_on(co, defer, ...)
