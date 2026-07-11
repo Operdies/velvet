@@ -33,33 +33,50 @@ static int l_coroutine_setup(lua_State *co) {
   return 0;
 }
 
+static void lua_push_thread_onto(lua_State *from, lua_State *to) {
+  lua_pushthread(from);
+  lua_xmove(from, to, 1);
+}
+
 static void coroutine_cleanup(lua_State *co) {
-  /* cancelling the coroutine does two things:
+  /* cancelling the coroutine does the following:
    * 1. Triggers any functions registered with vv.async.defer()
    * 2. Removes the coroutine from the resume table in vv.async,
-   * preventing it from being resumed. Hopefully later garbage collected. */
+   * preventing it from being resumed. Hopefully later garbage collected.
+   * 3. closes the thread if possible, telling the lua vm it cannot be resumed,
+   * thus closing all variables on its stack. */
+
+  /* NOTE:
+   * This is being executed on the main thread (L) because vv.async.cancel()
+   * will call close() on the input coroutine only if it is yielded.
+   * Calling close() on a running coroutine stops its execution,
+   * which means lua_call() would not return to this frame.
+   */
+
+  struct velvet *v = *(struct velvet **)lua_getextraspace(co);
+  lua_State *L = v->L;
 
   // vv.async.cancel(co)
-  lua_getglobal(co, "vv");
-  lua_getfield(co, -1, "async");
-  lua_getfield(co, -1, "cancel");
-  lua_pushthread(co);
-  lua_call(co, 1, 0);
-  lua_pop(co, 2); /* pop async, vv */
+  lua_getglobal(L, "vv");
+  lua_getfield(L, -1, "async");
+  lua_getfield(L, -1, "cancel");
+  lua_push_thread_onto(co, L);
+  lua_call(L, 1, 0);
+  lua_pop(L, 2); /* pop async, vv */
 
   // COROUTINE_PRINT[co] = nil
-  lua_getglobal(co, "COROUTINE_PRINT");
-  lua_pushthread(co);
-  lua_pushnil(co);
-  lua_settable(co, -3);
-  lua_pop(co, 1); /* pop COROUTINE_PRINT */
+  lua_getglobal(L, "COROUTINE_PRINT");
+  lua_push_thread_onto(co, L);
+  lua_pushnil(L);
+  lua_settable(L, -3);
+  lua_pop(L, 1); /* pop COROUTINE_PRINT */
 
   // COROUTINE_ARGS[co] = nil
-  lua_getglobal(co, "COROUTINE_ARGS");
-  lua_pushthread(co);
-  lua_pushnil(co);
-  lua_settable(co, -3);
-  lua_pop(co, 1); /* pop COROUTINE_ARGS */
+  lua_getglobal(L, "COROUTINE_ARGS");
+  lua_push_thread_onto(co, L);
+  lua_pushnil(L);
+  lua_settable(L, -3);
+  lua_pop(L, 1); /* pop COROUTINE_ARGS */
 }
 
 static int l_coroutine_cleanup(lua_State *co) {
