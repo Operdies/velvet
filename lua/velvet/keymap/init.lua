@@ -1,3 +1,8 @@
+--- @class velvet.keymap.events
+--- @field passthrough_changed velvet.async.event_source<boolean> invoked when passthrough mode is toggled with a boolean indicating the new state
+--- @field chain_changed velvet.async.event_source<string> invoked when the state of the keymap is changed with a string representing the current pending keys
+--- @field keymap_changed velvet.async.event_source<nil> invoked when a mapping is added or removed
+
 --- @class velvet.keymap
 --- @field current_chain velvet.keymap.keybind current keymap
 --- @field root velvet.keymap.keybind root keymap
@@ -12,14 +17,9 @@
 --- @field passthrough boolean if set, all keys are passed through as unhandled
 --- @field async boolean if true, mappings will execute in a detached async context
 --- @field unwind_schedule? integer handle to scheduled unwind callback
+--- @field events velvet.keymap.events awaitable events invoked when keymap state changes
 local Keys = {}
 Keys.__index = Keys
-
-Keys.events = {
-  passthrough_changed = "keymap.passthrough_changed",
-  chain_changed = "keymap.chain_changed",
-  keymap_changed = "keymap.keymap_changed",
-}
 
 local vk = require('velvet.keymap.named_keys')
 
@@ -32,6 +32,11 @@ local vk = require('velvet.keymap.named_keys')
 function Keys.create(opt)
   opt = opt or {async = false}
   local instance = setmetatable({
+    events = {
+      passthrough_changed = vv.async.event_source(),
+      chain_changed = vv.async.event_source(),
+      keymap_changed = vv.async.event_source(),
+    },
     repeat_timeout = 300,
     chain_unwind_timeout = 2000,
     remapped_keys = {},
@@ -314,6 +319,7 @@ function Keys:del(lhs)
     map = map.parent
   end
   if self.on_keymap_changed then self:on_keymap_changed() end
+  self.events.keymap_changed:emit(nil)
 end
 
 --- @class velvet.keys.set.options
@@ -359,6 +365,7 @@ local function set_current_chain(map, chain)
   if chain ~= map.current_chain then
     map.current_chain = chain
     if map.on_chain_changed then map:on_chain_changed() end
+    map.events.chain_changed:emit(chain_str(chain))
   end
 end
 
@@ -617,6 +624,7 @@ function Keys:set_passthrough(b)
     self.last_repeat = 0
     set_current_chain(self, self.root)
     if self.on_passthrough_changed then self:on_passthrough_changed() end
+    self.events.passthrough_changed:emit(set)
   end
 end
 function Keys:get_passthrough() return self.passthrough end
@@ -625,14 +633,6 @@ function Keys:get_passthrough() return self.passthrough end
 -- delay key propagation. The global keymap is responsible for routing output to windows,
 -- so blocking here is devastating.
 local global_keymap = Keys.create({async = true})
-global_keymap.on_chain_changed = function(self)
-  local data = self.current_chain == self.root and nil or chain_str(self.current_chain)
-  vv.events.emit(Keys.events.chain_changed, data)
-end
-global_keymap.on_keymap_changed = function() vv.events.emit(Keys.events.keymap_changed) end
-global_keymap.on_passthrough_changed = function(self)
-  vv.events.emit(Keys.events.passthrough_changed, self.passthrough)
-end
 global_keymap.on_unhandled_key = function(_, args)
   local win = vv.api.get_focused_window()
   if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
