@@ -248,7 +248,7 @@ e['**'] = resolve
 --- @generic T
 --- @class velvet.async.event_source<T>
 --- @field emit fun(self: velvet.async.event_source<T>, data: T)
---- @field wait fun(self: velvet.async.event_source<T>): T
+--- @field wait fun(self: velvet.async.event_source<T>, timeout?: nil|integer, when?: nil|fun(event: velvet.async.event_source<T>, data: { data: T }): boolean): T
 
 local EventSource = {}
 EventSource.__index = EventSource
@@ -263,11 +263,14 @@ end
 
 --- @generic T
 --- @param self velvet.async.event_source<T>
---- @return T
-function EventSource:wait()
+--- @param timeout? nil|integer Optional timeout.
+--- @param when? nil|fun(event: velvet.async.event_source<T>, data: { data: T }): boolean predicate function
+--- @return T ret Result, or nil on timeout
+function EventSource:wait(timeout, when)
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
-  local _, evt = M.wait(self)
-  return evt.data
+  local registration = when and { event = self, when = when } or self
+  local _, result = M.wait(registration, timeout)
+  return result.data
 end
 
 --- Create an event source. The event source can be signaled with an object, and awaited with async.wait()
@@ -385,12 +388,13 @@ function M.wait_all(events, timeout)
 end
 
 --- @param co thread
+--- @param timeout? nil|integer Optional timeout
 --- @return boolean success
 --- @return any result
 --- @return any ...
-function M.wait_for_coroutine(co)
-  local _, tbl = M.wait(co)
-  return table.unpack(tbl)
+function M.wait_for_coroutine(co, timeout)
+  local r, tbl = M.wait(co, timeout)
+  if r == co then return table.unpack(tbl) else return false, 'timeout' end
 end
 
 --- Wait for one of the events to fire, or |timeout|.
