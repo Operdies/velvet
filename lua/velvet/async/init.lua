@@ -245,17 +245,25 @@ end
 local e = require('velvet.events').create_group('velvet.async', true)
 e['**'] = resolve
 
---- @class velvet.async.event_source
+--- @generic T
+--- @class velvet.async.event_source<T>
+--- @field emit fun(self: velvet.async.event_source<T>, data: T)
+--- @field wait fun(self: velvet.async.event_source<T>): T
+
 local EventSource = {}
 EventSource.__index = EventSource
 
---- @param event any
+--- @generic T
+--- @param self velvet.async.event_source<T>
+--- @param event T
 function EventSource:emit(event)
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
   resolve(self, event)
 end
 
---- @return velvet.async.wait.result
+--- @generic T
+--- @param self velvet.async.event_source<T>
+--- @return T
 function EventSource:wait()
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
   local _, evt = M.wait(self)
