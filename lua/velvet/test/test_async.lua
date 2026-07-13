@@ -105,6 +105,18 @@ local function test_when()
   assert(not result)
   events.emit('my_event', { x = 1 })
   assert(result and result.x == 1)
+
+  result = nil
+  async.run(function()
+    result = async.wait_for_mouse_click(nil, function(x)
+      return x.event_type == 'mouse_up'
+    end)
+  end)
+  assert(not result)
+  events.emit('mouse.click', { event_type = 'mouse_down' })
+  assert(not result)
+  events.emit('mouse.click', { event_type = 'mouse_up' })
+  assert(result)
 end
 
 local function test_wait_all()
