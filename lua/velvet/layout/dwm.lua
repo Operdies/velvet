@@ -171,10 +171,12 @@ end
 --- @param id integer
 local function set_focus(id)
   local win = window.from_handle(id)
-  if win == nil or id == taskbar.id then return end
-  local current_index = table_index(state.focus_order, win.id)
-  if current_index ~= nil then table.remove(state.focus_order, current_index) end
-  table.insert(state.focus_order, win.id)
+  if win == nil then return end
+  if not win:is_lua() then
+    local current_index = table_index(state.focus_order, win.id)
+    if current_index ~= nil then table.remove(state.focus_order, current_index) end
+    table.insert(state.focus_order, win.id)
+  end
   win:focus()
 end
 
