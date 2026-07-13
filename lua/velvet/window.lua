@@ -14,12 +14,6 @@
 --- @field old? velvet.window previous focus or nil
 --- @field new? velvet.window new focus or nil
 
---- @class velvet.window.border
---- @field left velvet.window left border
---- @field right velvet.window left border
---- @field top velvet.window left border
---- @field bottom velvet.window left border
-
 --- @class velvet.window.events
 --- @field mouse table<velvet.window.mouse_event, velvet.async.event_source>
 
@@ -28,10 +22,23 @@
 --- | 'scroll'
 --- | 'move'
 
+--- @alias velvet.window.anchor_point 'left'|'top'|'bottom'|'right'
+
+--- @class velvet.window.anchor_definition
+--- @field to velvet.window.anchor_point
+--- @field of velvet.window|nil|'parent' what is the anchor anchored to -- defaults to parent window or screen
+--- @field offset? integer offset added to the anchor
+
+--- @class velvet.window.z_anchor
+--- @field of velvet.window|'parent' what is the anchor anchored to
+--- @field offset? integer offset added to the anchor
+
 --- @class velvet.window
 --- @field id integer window handle
+--- @field anchors table<velvet.window.anchor_point, velvet.window.anchor_definition> optional anchor points
+--- @field z_anchor? velvet.window.z_anchor
 --- @field parent velvet.window handle of parent window
---- @field borders velvet.window.border borders
+--- @field borders table<velvet.window.anchor_point, velvet.window> borders
 --- @field child_windows velvet.window[] child windows
 --- @field title? string user provided title
 --- @field bottom_text? string text showed on the bottom border
@@ -129,15 +136,10 @@ local function update_borders(self)
   if not self.borders then return end
   local l, r, t, b = self.borders.left, self.borders.right, self.borders.top, self.borders.bottom
   local geom = self:get_geometry()
-  l:set_geometry({ left = geom.left - 1, top = geom.top, width = 1, height = geom.height })
-  r:set_geometry({ left = geom.left + geom.width, top = geom.top, width = 1, height = geom.height })
-  t:set_geometry({ left = geom.left - 1, top = geom.top - 1, width = geom.width + 2, height = 1 })
-  b:set_geometry({ left = geom.left - 1, top = geom.top + geom.height, width = geom.width + 2, height = 1 })
 
   local vis = self:get_visibility()
   for _, brd in pairs(self.borders) do
     brd:set_visibility(vis)
-    brd:set_z_index(self:get_z_index())
     brd:set_transparency_mode(vv.api.window_get_transparency_mode(self.id))
     brd:set_alpha(vv.api.window_get_alpha(self.id))
     if vis then
@@ -235,10 +237,63 @@ local function route_window_events(event, args)
   if win and win[event] then win[event](win, args) end
 end
 
+--- @param win velvet.window
+local function apply_anchors(win, cache)
+  if not win.anchors then return end
+  if cache[win.id] then return end
+  cache[win.id] = true
+  local function rect(x)
+    return { left = x.left, top = x.top, bottom = x.top + x.height - 1, right = x.left + x.width - 1 }
+  end
+  local sz = vv.api.get_screen_geometry()
+  local sg = { left = 1, top = 1, right = sz.width, bottom = sz.height }
+  -- apply anchors to parent windows first since child anchors can depend on the parent
+  if win.parent then apply_anchors(win.parent, cache) end
+  if win.z_anchor then
+    local rel_win = win.z_anchor.of == 'parent' and win.parent or win.z_anchor.of
+    if rel_win then 
+      --- @cast rel_win velvet.window
+      apply_anchors(rel_win, cache)
+      win:set_z_index(rel_win:get_z_index() + (win.z_anchor.offset or 0)) 
+    end
+  end
+  local wr = rect(win:get_geometry())
+  for side, anchor in pairs(win.anchors) do
+    local anchor_geom = sg
+    local rel_win = getmetatable(anchor.of) == Window and anchor.of or win.parent
+    if rel_win then 
+      --- @cast rel_win velvet.window
+      apply_anchors(rel_win, cache)
+      anchor_geom = rect(rel_win:get_geometry())
+    end
+
+    if side == 'left' then
+      wr.left = anchor_geom[anchor.to] + anchor.offset
+    elseif side == 'right' then
+      wr.right = anchor_geom[anchor.to] + anchor.offset
+    elseif side == 'top' then
+      wr.top = anchor_geom[anchor.to] + anchor.offset
+    elseif side == 'bottom' then
+      wr.bottom = anchor_geom[anchor.to] + anchor.offset
+    end
+  end
+  local new_geom = { left = wr.left, top = wr.top, width = 1 + wr.right - wr.left, height = 1 + wr.bottom - wr.top }
+  win:set_geometry(new_geom)
+end
+
+local function apply_all_anchors()
+  local anchor_cache = {}
+  for _, win in pairs(win_registry) do
+    local status, result = xpcall(apply_anchors, debug.traceback, win, anchor_cache)
+    if not status then printerr(result) end
+  end
+end
+
 hooks.window_moved = function(evt) route_window_events('on_window_moved_handler', evt) end
 hooks.window_resized = function(evt) route_window_events('on_window_resized_handler', evt) end
 hooks.window_on_key = function(evt) route_window_events('on_window_on_key_handler', evt) end
 hooks.pre_render = function() 
+  apply_all_anchors()
   for _, win in pairs(win_registry) do
     update_borders(win)
   end
@@ -604,7 +659,7 @@ end
 --- Create an automatically managed frame for the window. The frame will occupy one cell around the window.
 --- @param enabled boolean set 
 function Window:set_frame_enabled(enabled)
-  assert(not self.is_border, "Bad argument #0 (self is a border)")
+  assert(not self.is_border, "Bad argument #0 (window is a border)")
   if self.frame_visible == enabled then return end
   self.frame_visible = enabled
   if enabled and not self.borders then
@@ -620,11 +675,39 @@ function Window:set_frame_enabled(enabled)
       brd.is_border = true
       brd:set_cursor_visible(false)
       brd:set_title(string.format("%d: %s border", self.id, name))
+      -- set initial size to 1x1. The actual dimensions will be controlled by anchors
+      brd:set_geometry({left = 1, top = 1, width = 1, height = 1})
+      brd:set_z_anchor({ offset = 0, of = 'parent' })
     end
     self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse.click") end)
     self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse.move") end)
     self.borders.bottom:on_mouse_click(function(win, args) corner_resize_drag(win, args, "mouse.click") end)
     self.borders.bottom:on_mouse_move(function(win, args) corner_resize_drag(win, args, "mouse.move") end)
+
+    self.borders.left:set_anchors({
+      left   = { to = 'left', offset   = -1 },
+      right  = { to = 'left', offset   = -1 },
+      top    = { to = 'top', offset    = 0 },
+      bottom = { to = 'bottom', offset = 0 },
+    })
+    self.borders.right:set_anchors({
+      left   = { to = 'right', offset  = 1 },
+      right  = { to = 'right', offset  = 1 },
+      top    = { to = 'top', offset    = 0 },
+      bottom = { to = 'bottom', offset = 0 },
+    })
+    self.borders.top:set_anchors({
+      left   = { to = 'left', offset  = -1 },
+      right  = { to = 'right', offset = 1 },
+      top    = { to = 'top', offset   = -1 },
+      bottom = { to = 'top', offset   = -1 },
+    })
+    self.borders.bottom:set_anchors({
+      left   = { to = 'left', offset   = -1 },
+      right  = { to = 'right', offset  = 1 },
+      top    = { to = 'bottom', offset = 1 },
+      bottom = { to = 'bottom', offset = 1 },
+    })
   end
   if not enabled and self.borders then
     for _, brd in pairs(self.borders) do
@@ -823,6 +906,30 @@ function Window.get_window_at_coordinate(cord, below_z)
     return xz > yz
   end)
   return windows
+end
+
+--- @param where table<velvet.window.anchor_point, velvet.window.anchor_definition>
+function Window:set_anchors(where)
+  local valid_anchors = { left = true, top = true, right = true, bottom = true }
+  local function validate(x)
+    assert(valid_anchors[x], string.format("Invalid anchor %s; must be one of 'top', 'left', 'right', or 'bottom'", x))
+  end
+  for side, anchor in pairs(where) do
+    validate(side)
+    validate(anchor.to)
+    anchor.offset = anchor.offset or 0
+    if side == 'left' or side == 'right' then
+      assert(anchor.to == 'left' or anchor.to == 'right', "left/right can only be anchored to left/right")
+    elseif side == 'top' or side == 'bottom' then
+      assert(anchor.to == 'top' or anchor.to == 'bottom', "top/bottom can only be anchored to top/bottom")
+    end
+  end
+  self.anchors = where
+end
+
+--- @param anchor velvet.window.z_anchor
+function Window:set_z_anchor(anchor)
+  self.z_anchor = anchor
 end
 
 return Window
