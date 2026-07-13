@@ -25,6 +25,12 @@ local function weakref(obj) return setmetatable({obj}, { __mode = 'v' }) end
 --- @alias velvet.async.resolve fun(reg: velvet.async.event_registration, result: velvet.async.wait.result)
 --- @alias velvet.async.resolve_table table<integer, velvet.async.resolve>
 
+--- @generic T
+--- @alias velvet.async.single_when<T> fun(data: T): boolean
+
+--- @generic T
+--- @alias velvet.async.generic_when<T> fun(registration: velvet.async.event_registration, event: velvet.async.wait.result): boolean
+
 --- @class velvet.async.waiter_registry
 --- @field [integer] velvet.async.event_registration[]
 --- @field [string] velvet.async.waiter_registry
@@ -247,28 +253,26 @@ e['**'] = resolve
 
 --- @generic T
 --- @class velvet.async.event_source<T>
---- @field emit fun(self: velvet.async.event_source<T>, data: T)
---- @field wait fun(self: velvet.async.event_source<T>, timeout?: nil|integer, when?: nil|fun(event: velvet.async.event_source<T>, data: { data: T }): boolean): T
-
+--- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T
+--- @field emit fun(self, event: T)
 local EventSource = {}
 EventSource.__index = EventSource
 
---- @generic T
---- @param self velvet.async.event_source<T>
---- @param event T
 function EventSource:emit(event)
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
   resolve(self, event)
 end
 
---- @generic T
---- @param self velvet.async.event_source<T>
---- @param timeout? nil|integer Optional timeout.
---- @param when? nil|fun(event: velvet.async.event_source<T>, data: { data: T }): boolean predicate function
---- @return T ret Result, or nil on timeout
 function EventSource:wait(timeout, when)
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
-  local registration = when and { event = self, when = when } or self
+  --- @type velvet.async.event_source|velvet.async.conditional_event
+  local registration = self
+  if when then
+    registration = {
+      event = self,
+      when = function(_, event) return when(event.data) end
+    }
+  end
   local _, result = M.wait(registration, timeout)
   return result.data
 end
@@ -283,7 +287,7 @@ end
 
 --- @class velvet.async.conditional_event
 --- @field event velvet.async.event|velvet.async.event_source|string event
---- @field when fun(registration: velvet.async.event_registration, result: velvet.async.wait.result): boolean predicate function
+--- @field when velvet.async.generic_when<any> predicate function
 
 --- @alias velvet.async.event_registration velvet.async.event|velvet.async.event_source|velvet.async.conditional_event|thread|'*'|'**'|string
 
