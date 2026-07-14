@@ -40,7 +40,7 @@ void velvet_lua_restart_vm(void *data) {
     }
   }
 
-  velvet_process_kill_all(v);
+  velvet_process_kill_and_destroy_all(v);
 
   struct velvet_coroutine *co;
   vec_foreach(co, v->coroutines) {

@@ -117,6 +117,7 @@ struct velvet {
   char **positional_args;
 };
 
+void velvet_reap_exited_processes(struct velvet *v);
 void velvet_force_full_redraw(struct velvet *scene);
 void velvet_invalidate_render(struct velvet *velvet, const char *reason);
 void velvet_loop(struct velvet *velvet, struct rect initial_size);
