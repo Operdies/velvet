@@ -100,6 +100,7 @@ struct velvet {
   bool quit;
   bool daemon;
   bool clean;
+  bool reloading; /* flag set if the system is currently reloading */
   io_schedule_id active_render_token;
   io_schedule_id idle_render_token;
   /* velvet will try to render when io is idle, but if io is constantly busy

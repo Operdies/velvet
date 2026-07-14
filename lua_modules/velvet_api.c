@@ -556,10 +556,9 @@ static bool vv_api_schedule_cancel(struct velvet *v, lua_Integer cancellation_id
   struct io_schedule *sched = io_schedule_get(&v->event_loop, cancellation_id);
   if (sched) {
     struct schedule_data *d = sched->data;
-    if (d->magic == SCHEDULE_MAGIC) { 
-      schedule_unref(d);
-      free(d);
-    }
+    if (d->magic != SCHEDULE_MAGIC) return false;
+    schedule_unref(d);
+    free(d);
     return io_schedule_cancel(&v->event_loop, cancellation_id);
   }
   return false;
@@ -1013,20 +1012,29 @@ static void check_config(struct velvet *v) {
 }
 
 static void vv_api_reload(struct velvet *v) {
+  if (v->reloading) return;
+  /* reject the reload request if the config has syntax errors */
   check_config(v);
+
+  /* raise reload event to allow modules to store important state */
   struct velvet_api_pre_reload_event_args args = {.time = get_ms_since_startup()};
   velvet_api_raise_pre_reload(v, args);
-  /* ensure there are no lua actions scheduled by crudely clearing schedules.
-   * This is fine because schedules are currently used exclusively for scheduling renders and lua actions. */
-  vec_clear(&v->event_loop.scheduled_actions);
-  /* schedule the actual reload on the event loop so we can return from here. Otherwise we would return into an invalid
-   * lua context */
-  io_schedule(&v->event_loop, 0, velvet_lua_restart_vm, v);
 
-  /* safeguard against using the api after reload has been called.
-   * note that this can be circumvented by using require('velvet_api'), but this is not meant to be bullet proof. */
-  if (luaL_dostring(v->current, "vv.api = nil") != LUA_OK)
-    lua_die(v->current);
+  /* we need to unwind the stack before reloading because
+   * it is not possible to return to the lua vm after closing it.
+   * Otherwise we would return into an invalid lua context.
+   *
+   * Setting the reload flag also poisons the API so all
+   * vv.api functions will fail with an error, hopefully causing
+   * the lua stack to unwind asap if callers are doing naughty
+   * things after calling reload. */
+  v->reloading = true;
+
+  /* break the main dispatcher loop after reloading.
+   * this prevents other cli actions from spuriously failing because they
+   * were unfortunate enough to be handled while the lua vm is in an invalid state.
+   * By breaking the main dispatcher loop, velvet can boot up a new vm before handling pending requests. */
+  v->event_loop.dispatch_break = true;
 
   string_destroy(&stringbuf);
   vec_destroy(&envlist);

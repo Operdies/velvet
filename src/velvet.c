@@ -557,6 +557,7 @@ int velvet_next_id(void) {
 }
 
 static void velvet_dispatch(struct velvet *velvet) {
+  if (velvet->reloading) velvet_lua_restart_vm(velvet);
   struct io *const loop = &velvet->event_loop;
   struct velvet_client *focus = velvet_get_focused_client(velvet);
   if (focus) velvet_align_and_arrange(velvet, focus);

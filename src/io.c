@@ -7,12 +7,17 @@
 #include <sys/wait.h>
 #include <time.h>
 
-static void io_dispatch_schedules(struct vec v) {
-  struct io_schedule *schedule;
-  vec_foreach(schedule, v) {
+static size_t io_dispatch_schedules(struct io *io, struct vec v) {
+  for (size_t i = 0; i < v.length; i++) {
+    if (io->dispatch_break) return v.length - i;
+    struct io_schedule *schedule = vec_nth(v, i);
     schedule->callback(schedule->data);
   }
+  return 0;
 }
+
+/* insert `schedule` at the appropriate index in io->scheduled_actions based on its time and id */
+static void io_schedule_insert_sorted(struct io *io, struct io_schedule *schedule);
 
 static void io_dispatch_scheduled(struct io *io) {
   uint64_t now = get_ms_since_startup();
@@ -22,7 +27,12 @@ static void io_dispatch_scheduled(struct io *io) {
     vec_push(&io->schedule_buffer, s);
   }
   io->scheduled_actions.length -= io->schedule_buffer.length;
-  io_dispatch_schedules(io->schedule_buffer);
+
+  size_t missing = io_dispatch_schedules(io, io->schedule_buffer);
+  for (; missing; missing--) {
+    struct io_schedule *s = vec_pop(&io->schedule_buffer);
+    io_schedule_insert_sorted(io, s);
+  }
   vec_clear(&io->schedule_buffer);
 }
 
@@ -30,11 +40,16 @@ static void io_dispatch_idle_schedules(struct io *io) {
   struct vec tmp = io->idle_schedule;
   io->idle_schedule = io->schedule_buffer;
   io->schedule_buffer = tmp;
-  io_dispatch_schedules(io->schedule_buffer);
+  size_t missing = io_dispatch_schedules(io, io->schedule_buffer);
+  for (; missing; missing--) {
+    void *schedule = vec_pop(&io->schedule_buffer);
+    vec_push(&io->idle_schedule, schedule);
+  }
   vec_clear(&io->schedule_buffer);
 }
 
 void io_dispatch(struct io *io) {
+  io->dispatch_break = false;
   vec_clear(&io->pollfds);
   struct io_source *src;
   vec_foreach(src, io->sources) {
@@ -42,7 +57,6 @@ void io_dispatch(struct io *io) {
     vec_push(&io->pollfds, &fd);
   }
 
-  /* TODO: Switch to epoll / kqueue based implementation */
   struct io_schedule *next_schedule = NULL;
   if (io->scheduled_actions.length > 0) next_schedule = vec_nth(io->scheduled_actions, io->scheduled_actions.length - 1);
 
@@ -73,6 +87,7 @@ void io_dispatch(struct io *io) {
     assert((pfd->revents & POLLNVAL) == 0);
     if (pfd->revents) remaining--;
     for (int repeats = 0; pfd->revents && repeats < io->max_iterations; repeats++) {
+      if (io->dispatch_break) return;
       // Read output
       if ((pfd->revents & POLLIN) && src->on_readable) {
         src->on_readable(src);
@@ -186,21 +201,35 @@ bool io_schedule_cancel(struct io *io, io_schedule_id id) {
   return false;
 }
 
+static int int_cmp(int a, int b) {
+  if (a > b) return -1;
+  if (b > a) return 1;
+  return 0;
+}
+
 /* sort the schedules such that the next-up schedule is at the last index.
  * This is on the assumption that long-lived schedules will linger in the
  * buffer for longer, and short-lived schedules will be allocated often, so they should go on the end to reduce
  * shifting. This also makes dispatch much cheaper since no shifting is needed. */
 static int schedule_cmp(const void *_a, const void *_b) {
   const struct io_schedule *a = _a, *b = _b;
-  return a->when > b->when ? -1 : a->when < b->when ? 1 : 0;
+  /* in case of ties, put the newest schedule before the oldest schedule.
+   * This makes two successive vv.api.schedule_after(0) calls execute in the order one would expect.
+   * It also alleviates schedule dispatch order discrepancies when the system clock has a funny resolution. 
+   * This exploits the fact that schedule IDs are monotonically increasing. */
+  return a->when == b->when ? int_cmp(a->id, b->id) : int_cmp(a->when, b->when);
 }
 
-io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void*), void *data) {
-  struct io_schedule schedule = { .callback = callback, .data = data, .when = get_ms_since_startup() + ms };
-  schedule.id = get_schedule_id();
-  int insert_at = vec_binsearch(io->scheduled_actions, &schedule, schedule_cmp);
+static void io_schedule_insert_sorted(struct io *io, struct io_schedule *schedule) {
+  int insert_at = vec_binsearch(io->scheduled_actions, schedule, schedule_cmp);
   if (insert_at < 0) insert_at = ~insert_at;
-  vec_insert(&io->scheduled_actions, insert_at, &schedule);
+  vec_insert(&io->scheduled_actions, insert_at, schedule);
+}
+
+io_schedule_id io_schedule(struct io *io, uint64_t ms, void (*callback)(void *), void *data) {
+  struct io_schedule schedule = {.callback = callback, .data = data, .when = get_ms_since_startup() + ms};
+  schedule.id = get_schedule_id();
+  io_schedule_insert_sorted(io, &schedule);
   return schedule.id;
 }
 

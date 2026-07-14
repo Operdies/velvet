@@ -628,7 +628,7 @@ return {
     },
     {
       name = "reload",
-      doc = "Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then load your config.",
+      doc = "Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then reload user configs. After calling reload, vv.api functions are no longer available.",
     },
     {
       name = "get_startup_directory",

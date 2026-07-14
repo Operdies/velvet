@@ -312,7 +312,7 @@ function api.client_set_options(client_id, options) end
 --- @return nil ret 
 function api.quit() end
 
---- Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then load your config.
+--- Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then reload user configs. After calling reload, vv.api functions are no longer available.
 --- @return nil ret 
 function api.reload() end
 

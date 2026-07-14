@@ -21,6 +21,8 @@ static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
 
 void velvet_lua_restart_vm(void *data) {
   struct velvet *v = data;
+  assert(v->reloading);
+  v->reloading = false;
   struct lua_State *L = v->L;
   assert(L);
   /* unassign the lua state to ensure lua functions cannot be called during shutdown. */
