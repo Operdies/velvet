@@ -7,7 +7,100 @@
 #include "velvet_lua_event_emitters.c"
 #include "velvet_process.h"
 
+static ssize_t in_use = 0;
+struct pattern {
+  size_t size;
+  size_t num_allocations;
+  size_t num_frees;
+  size_t live;
+  size_t max_live;
+  size_t pool;
+};
+
+struct reallocation {
+  size_t from;
+  size_t to;
+  size_t count;
+  size_t relocated;
+};
+
+static size_t total_allocations = 0;
+
+static int realloc_pattern_compare(const void *a, const void *b) {
+  /* order first by initial size, then by number of reallocations */
+  const struct reallocation *p1, *p2;
+  p1 = a; p2 = b;
+  return (p1->from * p1->relocated) - (p2->from * p2->relocated);
+}
+
+static int alloc_pattern_compare(const void *a, const void *b) {
+  const struct pattern *p1, *p2;
+  p1 = a; p2 = b;
+  return p2->num_allocations - p1->num_allocations;
+}
+
+size_t pool_size(size_t size) {
+  if (size <= 8) return 8;
+  if (size <= 16) return 16;
+  if (size <= 24) return 24;
+  if (size <= 32) return 32;
+  if (size <= 48) return 48;
+  if (size <= 64) return 64;
+  if (size <= 96) return 96;
+  if (size <= 128) return 128;
+  if (size <= 256) return 256;
+  if (size <= 512) return 512;
+  if (size <= 1024) return 1024;
+  if (size <= 2048) return 2048;
+  if (size <= 4096) return 4096;
+
+  return size;
+}
+
+static struct vec alloc_patterns = vec(struct pattern);
+static struct vec realloc_patterns = vec(struct reallocation);
+
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
+  static size_t total_freed = 0;
+  static size_t total_alloc = 0;
+  static size_t in_use = 0;
+  struct pattern *freed, *alloc;
+
+  vec_find(freed, alloc_patterns, freed->pool == pool_size(osize));
+  vec_find(alloc, alloc_patterns, alloc->pool == pool_size(nsize));
+
+  if (ptr != NULL) {
+    if (osize == nsize) {
+      velvet_log("realloc same size: %zu", osize);
+    }
+  }
+
+  void *initial_ptr = ptr;
+
+  if (ptr && osize) {
+    total_freed += osize;
+    in_use -= osize;
+    if (freed) {
+      freed->live--;
+      freed->num_frees++;
+    } else {
+      velvet_die("free'd unrecorded size: %zu", osize);
+    }
+  }
+  if (nsize) {
+    total_alloc += nsize;
+    total_allocations++;
+    in_use += nsize;
+    if (alloc) {
+      alloc->num_allocations++;
+      alloc->live++;
+      alloc->max_live = MAX(alloc->live, alloc->max_live);
+    } else {
+      struct pattern new_pattern = { .num_allocations = 1, .size = nsize, .live = 1, .max_live = 1, .pool = pool_size(nsize) };
+      vec_push(&alloc_patterns, &new_pattern);
+    }
+  }
+
   (void)osize;
   (void)ud;
   if (nsize == 0) {
@@ -16,6 +109,41 @@ static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   } else {
     ptr = realloc(ptr, nsize);
   }
+
+  if (initial_ptr && osize && nsize) {
+    struct reallocation *realloc;
+    vec_find(realloc, realloc_patterns, realloc->from == osize && realloc->to == nsize);
+    if (!realloc) {
+      realloc = vec_new_element(&realloc_patterns);
+      realloc->from = osize; realloc->to = nsize; realloc->count = 0;
+    }
+    realloc->count++;
+    if (initial_ptr != ptr) realloc->relocated++;
+  }
+
+  if (total_allocations % 50000 == 0) {
+    vec_sort(&alloc_patterns, alloc_pattern_compare);
+    // velvet_log("========== ALLOCATIONS =================================");
+    double cumsum = 0;
+    for (size_t i = 0; i < alloc_patterns.length; i++) {
+      struct pattern *pat = vec_nth(alloc_patterns, i);
+      if (pat->pool > 2000) continue;
+      double pct = 100 * (double)pat->num_allocations / (double)total_allocations;
+      cumsum += pct;
+      // velvet_log("pool=%zu, pct=%.1lf%%, cum=%.1lf%%, count=%zu, frees=%zu, live=%zu, max_live=%zu", pat->pool, pct, cumsum, pat->num_allocations, pat->num_frees, pat->live, pat->max_live);
+    }
+    // velvet_log("total: count=%zu total=%zu in_use=%zu freed=%zu", total_allocations, total_alloc, in_use, total_freed);
+
+    // velvet_log("========= REALLOCATIONS ================================");
+    vec_sort(&realloc_patterns, realloc_pattern_compare);
+
+    for (size_t i = 0; i < realloc_patterns.length; i++) {
+      struct reallocation *r = vec_nth(realloc_patterns, i);
+      double relocate_percentage = 100 * (double)r->relocated / (double)r->count;
+      // velvet_log("from=%4zu to=%4zu count=%4zu relocated=%3.1lf%%", r->from, r->to, r->count, relocate_percentage);
+    }
+  }
+
   return ptr;
 }
 
