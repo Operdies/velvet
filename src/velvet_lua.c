@@ -44,9 +44,14 @@ void velvet_lua_restart_vm(void *data) {
 
   struct velvet_coroutine *co;
   vec_foreach(co, v->coroutines) {
+    /* if the coroutine is yielded (waiting for something, not completed),
+     * indicate the reason it is being closed. If it is not yielded,
+     * assume its exit status is already handled */
+    if (co->coroutine && lua_status(co->coroutine) == LUA_YIELD) {
+      string_push_cstr(&co->pending_error, "Coroutine exited due to lua reload.\n");
+      co->status = VELVET_COROUTINE_KILLED_RELOAD;
+    }
     co->coroutine = NULL;
-    string_push_cstr(&co->pending_error, "Coroutine exited due to lua reload.\n");
-    co->status = VELVET_COROUTINE_KILLED_RELOAD;
   }
 
   vec_clear(&v->event_loop.scheduled_actions);
