@@ -117,7 +117,7 @@ static int create_socket(char *name) {
     velvet_fatal("bind:");
   }
 
-  if (listen(sockfd, 1) == -1) {
+  if (listen(sockfd, SOMAXCONN) == -1) {
     unlink(addr.sun_path);
     close(sockfd);
     velvet_fatal("listen:");
