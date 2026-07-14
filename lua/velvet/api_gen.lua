@@ -503,6 +503,10 @@ for _, fn in ipairs(spec.api) do
 
 static int l_vv_api_%s(lua_State *L) {
   struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  if (v->reloading) {
+    lua_pushstring(L, "vv.api cannot be used after calling reload.");
+    lua_error(L);
+  }
   v->current = L;
 ]])
     :format(fn.name))

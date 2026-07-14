@@ -52,6 +52,8 @@ struct io {
   int max_iterations;
   /* how many ms without activity is considered idle */
   int idle_timeout_ms;
+  /* can be set during dispatch to break the dispatch loop as soon as possible */
+  bool dispatch_break;
   uint8_t buffer[kB(64)];
 };
 
