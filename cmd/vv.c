@@ -90,8 +90,6 @@ static int create_socket(char *name) {
 
   char namebuf[256] = {0};
   if (name) {
-    if (name[0] == '/') {
-    }
     snprintf(namebuf, LENGTH(namebuf) - 1, "%s", name);
   } else {
     snprintf(namebuf, LENGTH(namebuf) - 1, "sock.%d", getpid());
