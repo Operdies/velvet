@@ -1,7 +1,7 @@
 --- @class dwm.options
 --- @field focus_follows_mouse boolean if set, focus windows on mouseover
 
-local arrange_event = 'dwm.arrange'
+local arrange_event = vv.async.event_source()
 
 --- @alias dwm.layer
 --- | 'tiled' window is managed in the tiling layer
@@ -10,8 +10,10 @@ local dwm = {
   --- @type dwm.options
   options = {
     focus_follows_mouse = true,
-  }
+  },
+  events = { arrange = arrange_event:listener() },
 }
+
 
 --- @param v number
 --- @param lo number
@@ -452,7 +454,7 @@ local function arrange()
   arranging = true
   local success, result = xpcall(tile, debug.traceback)
   if not success then printerr("dwm arrange: " .. result) end
-  vv.events.emit(arrange_event)
+  arrange_event:emit()
   arranging = false
 end
 
@@ -921,6 +923,11 @@ function dwm.is_visible(win)
     win = window.from_handle(win)
   end
   return visibleontags(win)
+end
+
+--- @return velvet.dwm.state
+function dwm.get_state()
+  return vv.deepcopy(state)
 end
 
 return dwm
