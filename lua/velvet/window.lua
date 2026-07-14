@@ -737,19 +737,27 @@ function Window:get_frame_enabled()
   return self.frame_visible
 end
 
---- @param color velvet.color the new foreground color
-function Window:set_foreground_color(color)
-  if indexed_colors[color] then
-    local idx = indexed_colors[color]
-    if idx < 8 then
-      self:draw(('\x1b[3%dm'):format(idx))
-    else
-      self:draw(('\x1b[9%dm'):format(idx - 8))
-    end
+local function window_set_color(self, color, fg)
+  local index = indexed_colors[color]
+  if index ~= nil then
+    local ansi = fg and '3' or '4'
+    local bright = fg and '9' or '10'
+    local prefix = index < 8 and ansi or bright
+    self:draw('\x1b[' .. prefix .. index .. 'm')
   else
     if type(color) == 'string' then color = color_from_string(color) end
-    vv.api.window_set_drawing_color(self.id, 'foreground', color)
+    vv.api.window_set_drawing_color(self.id, fg and 'foreground' or 'background', color)
   end
+end
+
+--- @param color velvet.color the new foreground color
+function Window:set_foreground_color(color)
+  window_set_color(self, color, true)
+end
+
+--- @param color velvet.color the new background color
+function Window:set_background_color(color)
+  window_set_color(self, color, false)
 end
 
 --- Set the current background color to the default terminal background
@@ -760,21 +768,6 @@ end
 --- Set the current foreground color to the default terminal foreground
 function Window:clear_foreground_color()
   self:draw('\x1b[39m')
-end
-
---- @param color velvet.color the new background color
-function Window:set_background_color(color)
-  if indexed_colors[color] then
-    local idx = indexed_colors[color]
-    if idx < 8 then
-      self:draw(('\x1b[4%dm'):format(idx))
-    else
-      self:draw(('\x1b[10%dm'):format(idx - 8))
-    end
-  else
-    if type(color) == 'string' then color = color_from_string(color) end
-    vv.api.window_set_drawing_color(self.id, 'background', color)
-  end
 end
 
 --- @param z integer new z index
