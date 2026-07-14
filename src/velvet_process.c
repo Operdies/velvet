@@ -212,6 +212,7 @@ int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp, s
   p.in = in; p.out = out; p.err = err;
   if (streams.in) p.stdin_closed = true;
   vec_push(&v->processes, &p);
+  assert(p.pid);
   return p.id;
 }
 
@@ -225,28 +226,31 @@ void velvet_process_close_stdin(struct velvet *v, struct velvet_process *p) {
   p->stdin_closed = true;
 }
 
-void velvet_process_kill_all(struct velvet *v) {
+void velvet_process_kill_and_destroy_all(struct velvet *v) {
   struct velvet_process *p;
   vec_rforeach(p, v->processes) {
     velvet_process_kill(v, p);
   }
+  velvet_reap_exited_processes(v);
 }
 
 void velvet_process_kill(struct velvet *v, struct velvet_process *p) {
   assert(p);
-  assert(p->pid);
-  kill(p->pid, SIGTERM);
-  int status;
-  pid_t result = waitpid(p->pid, &status, WNOHANG);
-  if (result == -1) {
-    /* This is fine to ignore. It just means the process did not exit
+  /* pid is not set if this process already exited but was not yet reaped */
+  if (p->pid) {
+    kill(p->pid, SIGTERM);
+    int status;
+    pid_t result = waitpid(p->pid, &status, WNOHANG);
+    if (result == -1) {
+      /* This is fine to ignore. It just means the process did not exit
      * immediately. We will handle this later. */
-    p->destroy_pending = true;
-  } else {
-    p->pid = 0;
-    p->exit_code = WEXITSTATUS(status);;
-    velvet_process_destroy(v, p);
+      p->destroy_pending = true;
+    } else {
+      p->pid = 0;
+      p->exit_code = WEXITSTATUS(status);;
+    }
   }
+  velvet_process_destroy(v, p);
 }
 
 void velvet_process_destroy(struct velvet *v, struct velvet_process *p) {
