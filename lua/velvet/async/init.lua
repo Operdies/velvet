@@ -14,7 +14,7 @@ While the coroutine is not running, ideally the only handle should be the value 
 |sequence_callbacks|. When a coroutine is resumed, the entry is cleared from |sequence_callbacks|,
 meaning the only handle is now the fact that it is running, and so forth.
 --]]
---- @param mode 'k'|'v'
+--- @param mode 'k'|'v'|'kv'
 local function make_weaktable(mode) return setmetatable({}, { __mode = mode }) end
 
 --- @generic T any
@@ -251,12 +251,38 @@ end
 local e = require('velvet.events').create_group('velvet.async', true)
 e['**'] = resolve
 
+--- @type table<velvet.async.event_listener, velvet.async.event_source>
+local listener_to_source = make_weaktable('kv')
+--- @type table<velvet.async.event_listener, velvet.async.event_source>
+local source_to_listener = make_weaktable('kv')
+
+--- listener for an event source which cannot emit new events
+--- @generic T
+--- @class velvet.async.event_listener<T>
+--- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by the source of this listener
+local EventListener = {}
+EventListener.__index = EventListener
+
+function EventListener:wait(...)
+  return listener_to_source[self]:wait(...)
+end
+
 --- @generic T
 --- @class velvet.async.event_source<T>
---- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T
---- @field emit fun(self, event: T)
+--- @field emit fun(self, event?: T) emit a new event which is propagated to callers of |wait()|
+--- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by a call to |emit()|
+--- @field listener fun(self): velvet.async.event_listener<T> returns a readonly event listener which can only access |wait()|
 local EventSource = {}
 EventSource.__index = EventSource
+
+function EventSource:listener()
+  if not source_to_listener[self] then
+    local recv = setmetatable({}, EventListener)
+    listener_to_source[recv] = self
+    source_to_listener[self] = recv
+  end
+  return source_to_listener[self]
+end
 
 function EventSource:emit(event)
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
@@ -289,7 +315,15 @@ end
 --- @field event velvet.async.event|velvet.async.event_source|string event
 --- @field when velvet.async.generic_when<any> predicate function
 
---- @alias velvet.async.event_registration velvet.async.event|velvet.async.event_source|velvet.async.conditional_event|thread|'*'|'**'|string
+--- @alias velvet.async.event_registration
+--- | '*'
+--- | '**'
+--- | string
+--- | thread
+--- | velvet.async.conditional_event
+--- | velvet.async.event
+--- | velvet.async.event_listener
+--- | velvet.async.event_source
 
 --- @class velvet.async.wait.result
 --- @field event velvet.async.event|string|velvet.async.event_source the raised event
@@ -313,6 +347,9 @@ local function timeout_callback(co, timeout, seq)
   end)
 end
 
+--- @param co thread the thread to resume when |trd| completes
+--- @param trd thread the thread which |co| should wait for
+--- @param seq integer sequence number identifying the wait() invocation
 local function defer_callback(co, trd, seq)
   -- we must not capture |co| in this context.
   -- Otherwise this defer will pin |co| even if it is
@@ -330,9 +367,9 @@ local function resolve_callback(co, seq)
 end
 
 local function is_event_source(evt)
-  return type(evt) == "table" and (
-    getmetatable(evt) == EventSource or
-    getmetatable(evt.event) == EventSource)
+  if type(evt) ~= 'table' then return false end
+  local mt = getmetatable(evt.event or evt)
+  return mt == EventListener or mt == EventSource
 end
 
 local function emit_coroutine_result(evt)
@@ -446,14 +483,16 @@ function M.wait(...)
   sequence_callbacks[seq] = resolve_callback(co, seq)
 
   for idx, evt in ipairs(args) do
-    if type(evt) == 'thread' then
+    local typename = type(evt)
+    if typename == 'thread' then
       defer_callback(co, evt, seq)
     elseif is_event_source(evt) then
-      local event_waiters = event_source_waiter_registry[evt.event or evt]
+      local actual = listener_to_source[evt.event or evt] or evt.event or evt
+      local event_waiters = event_source_waiter_registry[actual]
       event_waiters[seq] = { evt }
-    elseif type(evt) == 'string' or type(evt) == 'table' then
+    elseif typename == 'string' or typename == 'table' then
       local event = evt
-      if type(evt) == 'table' then
+      if typename == 'table' then
         assert(type(evt.event) == 'string',
           ("Bad argument #%d: bad field 'event' (string expected, got %s)"):format(idx, type(evt.event)))
         assert(evt.when == nil or type(evt.when) == 'function',
