@@ -7,6 +7,16 @@ local function next_id()
   return sequence
 end
 
+local function dispatch_event(event_name, handler, ...)
+  local ok, err = xpcall(handler, debug.traceback, ...)
+  if not ok and event_name ~= 'system_message' then
+    printerr(string.format("Unhandled error in event handler (event %s): %s",
+      event_name, err))
+  end
+end
+
+local gsub_cache = {}
+
 ---@class events
 local event_handlers = {}
 local event_groups = {}
@@ -38,25 +48,29 @@ local events = {
   --- @param event_name string the raised event
   --- @param data any event data
   emit = function(event_name, data)
-    local lookup_key = event_name:gsub('[.]', '_')
-    for _, id in pairs(event_groups or {}) do
-      local group_func_table = event_handlers[id] or {}
-      local handler = group_func_table[lookup_key] or group_func_table[event_name]
-      local include_event_name = false
-      if not handler then
-        handler = group_func_table["**"]
-        include_event_name = true
-      end
-      if handler then
-        vv.async.run(function()
+    local lookup_name = gsub_cache[event_name]
+    if lookup_name == nil then
+      lookup_name = event_name:gsub('%.', '_')
+      gsub_cache[event_name] = lookup_name
+    end
+    for _, id in pairs(event_groups) do
+      local group_func_table = event_handlers[id]
+      if group_func_table then
+        local handler = group_func_table['**']
+        local include_event_name = true
+        if not handler then
+          handler = group_func_table[event_name] or group_func_table[lookup_name]
+          include_event_name = false
+        end
+        if handler then
           local d = vv.deepcopy(data)
-          local function get_args() if include_event_name then return event_name, d else return d end end
-          local ok, err = xpcall(handler, debug.traceback, get_args())
-          if not ok and event_name ~= 'system_message' then
-            printerr(string.format("Unhandled error in event handler (event %s): %s",
-              event_name, err))
-          end
-        end)
+          -- include_event_name:
+          --   true  -> handler(event_name, data)
+          --   false -> handler(data, nil)
+          local arg1 = include_event_name and event_name or d
+          local arg2 = include_event_name and d or nil
+          vv.async.run(dispatch_event, event_name, handler, arg1, arg2)
+        end
       end
     end
     if event_name == 'pre_reload' then
