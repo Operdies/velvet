@@ -15,12 +15,15 @@
 --- @field new? velvet.window new focus or nil
 
 --- @class velvet.window.events
---- @field mouse table<velvet.window.mouse_event, velvet.async.event_source>
+--- @field mouse velvet.window.mouse_event
+--- @field resized velvet.async.event_source<velvet.api.window.resized.event_args>
+--- @field moved velvet.async.event_source<velvet.api.window.moved.event_args>
+--- @field closed velvet.async.event_source<velvet.api.window.closed.event_args>
 
---- @alias velvet.window.mouse_event
---- | 'click'
---- | 'scroll'
---- | 'move'
+--- @class velvet.window.mouse_event
+--- @field click velvet.async.event_source<velvet.api.mouse.click.event_args>
+--- @field scroll velvet.async.event_source<velvet.api.mouse.scroll.event_args>
+--- @field move velvet.async.event_source<velvet.api.mouse.move.event_args>
 
 --- @alias velvet.window.anchor_point 'left'|'top'|'bottom'|'right'
 
@@ -220,21 +223,15 @@ end
 
 local hooks = require('velvet.events').create_group('velvet_window_callback_manager', true)
 
-hooks.window_created = function(win)
-  win_registry[win.win_id] = Window.from_handle(win.win_id)
+hooks.window_created = function(event)
+  win_registry[event.win_id] = Window.from_handle(event.win_id)
 end
 
-hooks.window_closed = function(win)
-  local w = win_registry[win.win_id]
-  if w and w.on_window_closed_handler then pcall(w.on_window_closed_handler, win) end
-  win_registry[win.win_id] = nil
-end
-
---- @param event string event name
---- @param args velvet.api.window.resized.event_args|velvet.api.window.on_key.event_args|velvet.api.window.moved.event_args
-local function route_window_events(event, args)
-  local win = win_registry[args.win_id]
-  if win and win[event] then win[event](win, args) end
+hooks.window_closed = function(event)
+  local w = win_registry[event.win_id]
+  if w then w.events.closed:emit(event) end
+  if w and w.on_window_closed_handler then pcall(w.on_window_closed_handler, event) end
+  win_registry[event.win_id] = nil
 end
 
 --- @param win velvet.window
@@ -289,9 +286,29 @@ local function apply_all_anchors()
   end
 end
 
-hooks.window_moved = function(evt) route_window_events('on_window_moved_handler', evt) end
-hooks.window_resized = function(evt) route_window_events('on_window_resized_handler', evt) end
-hooks.window_on_key = function(evt) route_window_events('on_window_on_key_handler', evt) end
+hooks.window_moved = function(evt) 
+  local win = win_registry[evt.win_id]
+  if win then
+    win.events.moved:emit(evt)
+    if win.on_window_moved_handler then win:on_window_moved_handler(evt) end
+  end
+end
+
+hooks.window_resized = function(evt) 
+  local win = win_registry[evt.win_id]
+  if win then
+    win.events.resized:emit(evt)
+    if win.on_window_resized_handler then win:on_window_resized_handler(evt) end
+  end
+end
+
+hooks.window_on_key = function(evt) 
+  local win = win_registry[evt.win_id]
+  if win then
+    if win.on_window_on_key_handler then win:on_window_on_key_handler(evt) end
+  end
+end
+
 hooks.pre_render = function() 
   apply_all_anchors()
   for _, win in pairs(win_registry) do
@@ -593,7 +610,10 @@ function Window.from_handle(id)
       click = vv.async.event_source(),
       move = vv.async.event_source(),
       scroll = vv.async.event_source(),
-    }
+    },
+    resized = vv.async.event_source(),
+    moved = vv.async.event_source(),
+    closed = vv.async.event_source(),
   }
   return instance
 end
