@@ -356,7 +356,8 @@ local function defer_callback(co, trd, seq)
   -- no longer possible to resume it.
   local wrap = weakref(co)
   defer_on(trd, function()
-    co_resume(seq, wrap[1], trd, co_state[trd].result)
+    local unwrap = wrap[1]
+    if unwrap then co_resume(seq, unwrap, trd, co_state[trd].result) end
   end)
 end
 
