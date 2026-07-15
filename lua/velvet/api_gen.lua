@@ -126,7 +126,7 @@ local type_lookup = {
 }
 
 local function get_cname(name)
-  return "velvet_api_" .. name:gsub("[.]", "_")
+  return "velvet_api_" .. name:gsub("%.", "_")
 end
 
 local function get_luaname(name)
@@ -300,7 +300,7 @@ lua_pop(L, 1);
 ]]):format(flag.name, path, flag_name))
       end
     else
-      local varname = path:gsub('[.]', '_') .. '_str'
+      local varname = path:gsub('%.', '_') .. '_str'
       table.insert(result, ([[
 struct u8_slice %s = luaL_checkslice(L, -1);
 int %s_conv = %s_slice_to_enum(%s);
@@ -403,7 +403,7 @@ struct %s {
 end
 
 for _, evt in ipairs(spec.events) do
-  local event_name = evt.name:gsub("[.]", "_")
+  local event_name = evt.name:gsub("%.", "_")
   local event_arg_name = get_cname(evt.args)
   table.insert(h, ([=[
 /* %s */
@@ -633,7 +633,7 @@ table.insert(event_emitters, [[
 ]])
 
 for _, evt in ipairs(spec.events) do
-  local event_name = evt.name:gsub("[.]", "_")
+  local event_name = evt.name:gsub("%.", "_")
   local event_arg_name = get_cname(evt.args)
   table.insert(event_emitters, ([=[
 
@@ -765,7 +765,7 @@ table.insert(lua, [[
 for _, evt in ipairs(spec.events) do
   table.insert(lua, ([[
 --- @field %s? fun(event_args: velvet.api.%s): nil %s
-]]):format(evt.name:gsub('[.]', '_'), evt.args, evt.doc))
+]]):format(evt.name:gsub('%.', '_'), evt.args, evt.doc))
 end
 
 -- Write _api.lua {{{3
@@ -874,7 +874,7 @@ for _, evt in ipairs(spec.events) do
 function M.wait_for_%s(timeout, when)
   return wait_impl('%s', timeout, when)
 end
-]]):format(evt.name, evt.args, evt.args, evt.name:gsub('[.]', '_'), evt.name))
+]]):format(evt.name, evt.args, evt.args, evt.name:gsub('%.', '_'), evt.name))
 end
 
 table.insert(async, "\nreturn { known_events, M }")

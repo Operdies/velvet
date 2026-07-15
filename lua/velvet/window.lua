@@ -433,24 +433,30 @@ local function route_mouse_events(event, args)
     args.pos = { col = 1 + gpos.col - geom.left, row = 1 + gpos.row - geom.top }
     args.win_id = win.id
 
-    local window_func = win['on_' .. event:gsub('[.]', '_') .. '_handler']
+    -- the lua-friendly event name uses '.' as separators, but
+    -- the C api uses '_' as separators.
+    local underscored_event = event:gsub('%.', '_')
     if not win:is_lua() then
-      vv.api['window_send_' .. event:gsub('[.]', '_')](args)
-    elseif window_func then
-      local ret = window_func(win, args)
-      if ret == 'passthrough' then
-        mouse_locked_window = nil
-        local below = Window.get_window_at_coordinate(gpos, win:get_z_index())
-        for _, next in ipairs(below) do
-          if next.id ~= win.id then
-            args.pos = gpos
-            args.win_id = next.id
-            route_mouse_events(event, args)
-            return
+      vv.api['window_send_' .. underscored_event](args)
+    else
+      local window_func = win['on_' .. underscored_event .. '_handler']
+      if window_func then
+        local ret = window_func(win, args)
+        if ret == 'passthrough' then
+          mouse_locked_window = nil
+          local below = Window.get_window_at_coordinate(gpos, win:get_z_index())
+          for _, next in ipairs(below) do
+            if next.id ~= win.id then
+              args.pos = gpos
+              args.win_id = next.id
+              route_mouse_events(event, args)
+              return
+            end
           end
         end
       end
     end
+
     -- only emit the mouse event if the window did not 'passthrough'.
     vv.events.emit(("window.%s"):format(event), args)
     if event == 'mouse.click' then
@@ -463,9 +469,9 @@ local function route_mouse_events(event, args)
   end
 end
 
-hooks.mouse_click = function(args) route_mouse_events('mouse.click', args) end
-hooks.mouse_move = function(args) route_mouse_events('mouse.move', args) end
-hooks.mouse_scroll = function(args) route_mouse_events('mouse.scroll', args) end
+hooks['mouse.click'] = function(args) route_mouse_events('mouse.click', args) end
+hooks['mouse.move'] = function(args) route_mouse_events('mouse.move', args) end
+hooks['mouse.scroll'] = function(args) route_mouse_events('mouse.scroll', args) end
 
 --- get window geometry
 --- @return velvet.api.rect
