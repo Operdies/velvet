@@ -100,43 +100,41 @@ local function exec_defer(co)
   end
 end
 
+local function get_co_print(co, wrapped_parent)
+  return function(stream, ...)
+    local parent_print = COROUTINE_PRINT[wrapped_parent[1]]
+    -- if the parent print is still set, use that.
+    if parent_print then
+      parent_print(stream, ...)
+    else
+      -- otherwise, unset the print function and print normally.
+      -- this happens if the parent process exits while child
+      -- coroutines are still running.
+      COROUTINE_PRINT[co] = nil
+      print(...)
+    end
+  end
+end
+
+local function co_run(f, ...)
+  local state = { defers = {}, deferring = false }
+  local co = coroutine.running()
+  co_state[co] = state
+  state.result = table.pack(xpcall(f, debug.traceback, ...))
+  exec_defer(co)
+end
+
 --- Execute |f| as a coroutine.
 --- @param f fun(...): ...
 --- @param ... any arguments passed to f
 --- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
 function M.run(f, ...)
   if type(f) ~= 'function' then error(string.format("Bad argument #1 (function expected, got %s)", type(f))) end
-  local args = { ... }
-  local parent = setmetatable({ coroutine.running() }, { __mode = 'v' })
-  local get_print = function()
-    if parent[1] then
-      return COROUTINE_PRINT[parent[1]]
-    end
+  local co = coroutine.create(co_run)
+  if COROUTINE_PRINT[coroutine.running()] then
+    COROUTINE_PRINT[co] = get_co_print(co, weakref(coroutine.running()))
   end
-
-  local co = coroutine.create(function()
-    local state = { defers = {}, deferring = false }
-    co_state[coroutine.running()] = state
-    if get_print() then
-      COROUTINE_PRINT[coroutine.running()] = function(stream, ...)
-        local parent_print = get_print()
-        if parent_print then
-          -- if the parent print is still set, use that.
-          parent_print(stream, ...)
-        else
-          -- otherwise, unset the print function and print normally.
-          -- this happens if the parent process exits while child
-          -- coroutines are still running.
-          COROUTINE_PRINT[coroutine.running()] = nil
-          -- discard stream
-          print(...)
-        end
-      end
-    end
-    state.result = { xpcall(f, debug.traceback, table.unpack(args)) }
-    exec_defer(coroutine.running())
-  end)
-  coroutine.resume(co)
+  coroutine.resume(co, f, ...)
   return co
 end
 
@@ -179,73 +177,80 @@ function M.defer(defer, ...)
   defer_on(coroutine.running(), defer, ...)
 end
 
-local function resolve(event, data)
-  -- capture the current sequence number and ensure we don't resolve anything higher.
-  -- Otherwise a waiter() invocation can trigger on the currently processing event.
-  local current_sequence = sequence
-  local function resolve_table(tbl)
-    for seq, regs in pairs(tbl) do
-      -- tbl is indexed both by integer keys and string keys.
-      -- In this loop we are only interested in integer keys since string keys refer to nested tables.
-      if type(seq) ~= 'number' or seq > current_sequence then goto next_waiter end
-      local waiter = sequence_callbacks[seq]
-      -- if waiter is not set, this event is stale, so we can remove it right away and move on.
-      if not waiter then
-        tbl[seq] = nil
-        goto next_waiter
-      end
-      for _, reg in ipairs(regs) do
-        local is_match = true
-        local wait_result = { event = event, data = data }
-        if reg.when then
-          local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
-          if not ok then
-            printerr(string.format("Unhandled error during when(%s): %s",
-              type(event) == 'string' and event or 'event_source', result))
-            is_match = false
-          else
-            is_match = result
-          end
-        end
-        if is_match then
-          waiter(reg, wait_result)
-          tbl[seq] = nil
-          break
-        end
-      end
-      ::next_waiter::
+--- @param wait_table velvet.async.waiter_registry
+--- @param current_sequence integer
+--- @param event string|velvet.async.event_source
+--- @param data velvet.async.wait.result
+local function resolve_table(wait_table, current_sequence, event, data)
+  for seq, registrations in pairs(wait_table) do
+    -- tbl is indexed both by integer keys and string keys.
+    -- In this loop we are only interested in integer keys since string keys refer to nested tables.
+    if type(seq) ~= 'number' or seq > current_sequence then goto next_waiter end
+    local waiter = sequence_callbacks[seq]
+    -- if waiter is not set, this event is stale, so we can remove it right away and move on.
+    if not waiter then
+      wait_table[seq] = nil
+      goto next_waiter
     end
+    for _, reg in ipairs(registrations) do
+      local is_match = true
+      local wait_result = { event = event, data = data }
+      if reg.when then
+        local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
+        if not ok then
+          printerr(string.format("Unhandled error during when(%s): %s",
+            type(event) == 'string' and event or 'event_source', result))
+          is_match = false
+        else
+          is_match = result
+        end
+      end
+      if is_match then
+        waiter(reg, wait_result)
+        wait_table[seq] = nil
+        break
+      end
+    end
+    ::next_waiter::
   end
+end
 
+--- @param current_sequence integer
+--- @param event string|velvet.async.event_source
+--- @param data velvet.async.wait.result
+--- @param wait_table velvet.async.waiter_registry
+--- @param word string
+--- @param ... string
+local function recursive_resolve(current_sequence, event, data, wait_table, word, ...)
+  local leaf = select('#', ...) == 0
+  local any = wait_table['**']
+  if any then resolve_table(any, current_sequence, event, data) end
+  local star = wait_table['*']
+  local match = wait_table[word]
+
+  if leaf then
+    if star then resolve_table(star, current_sequence, event, data) end
+    if match then resolve_table(match, current_sequence, event, data) end
+  else
+    if star then recursive_resolve(current_sequence, event, data, star, ...) end
+    if match then recursive_resolve(current_sequence, event, data, match, ...) end
+  end
+end
+
+--- @param event string|velvet.async.event_source
+--- @param data velvet.async.wait.result
+local function resolve(event, data)
   if type(event) == 'table' then
     local waiters = event_source_waiter_registry[event]
-    if waiters then resolve_table(waiters) end
-    return
-  end
-
-  if not known_events[event] then known_events[event] = true end
-  local segments = {}
-  for segment in event:gmatch('[^.]+') do
-    segments[#segments + 1] = segment
-  end
-
-  local function recursive_resolve(wait_table, word, ...)
-    local leaf = select('#', ...) == 0
-    local any = wait_table['**']
-    if any then resolve_table(any) end
-    local star = wait_table['*']
-    local match = wait_table[word]
-
-    if leaf then
-      if star then resolve_table(star) end
-      if match then resolve_table(match) end
-    else
-      if star then recursive_resolve(star, ...) end
-      if match then recursive_resolve(match, ...) end
+    if waiters then resolve_table(waiters, sequence, event, data) end
+  elseif type(event) == 'string' then
+    if not known_events[event] then known_events[event] = true end
+    local segments = {}
+    for segment in event:gmatch('[^.]+') do
+      segments[#segments + 1] = segment
     end
+    recursive_resolve(sequence, event, data, waiter_registry, table.unpack(segments))
   end
-
-  recursive_resolve(waiter_registry, table.unpack(segments))
 end
 
 local e = require('velvet.events').create_group('velvet.async', true)
@@ -313,7 +318,7 @@ end
 
 --- @class velvet.async.conditional_event
 --- @field event velvet.async.event|velvet.async.event_source|string event
---- @field when velvet.async.generic_when<any> predicate function
+--- @field when? velvet.async.generic_when<any> predicate function
 
 --- @alias velvet.async.event_registration
 --- | '*'
@@ -436,7 +441,7 @@ end
 --- @return any ...
 function M.wait_for_coroutine(co, timeout)
   local r, tbl = M.wait(co, timeout)
-  if r == co then return table.unpack(tbl) else return false, 'timeout' end
+  if r == co then return table.unpack(tbl, 1, tbl['n']) else return false, 'timeout' end
 end
 
 --- Wait for one of the events to fire, or |timeout|.
@@ -533,9 +538,9 @@ end
 --- @param ... velvet.async.event_registration|integer One or more events to stream. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return fun(): velvet.async.event_registration, velvet.async.wait.result Iterator which streams the input events
 function M.stream(...)
-  local args = { ... }
+  local args = table.pack(...)
   return function()
-    local registration, result = M.wait(table.unpack(args))
+    local registration, result = M.wait(table.unpack(args, 1, args.n))
     return registration or 'timeout', result
   end
 end
