@@ -177,11 +177,33 @@ function M.defer(defer, ...)
   defer_on(coroutine.running(), defer, ...)
 end
 
+--- @class velvet.async.table_lock
+--- @field num_entrants integer how many callers are currently using this table
+--- @field pending_deletions table<integer, boolean> sequence numbers are pending deletion
+
+--- @type table<velvet.async.waiter_registry, velvet.async.table_lock>
+local table_lock = make_weaktable('k')
+
+-- sentinel value for to-be-cleared entries
+local clear_sentinel = {}
+
 --- @param wait_table velvet.async.waiter_registry
 --- @param current_sequence integer
 --- @param event string|velvet.async.event_source
 --- @param data velvet.async.wait.result
 local function resolve_table(wait_table, current_sequence, event, data)
+  -- It is not safe to modify the wait table during iteration because the waiter()
+  -- invocation can invoke resolve_table on the same table. If the nested invocation
+  -- deletes a table entry, the outer pairs() iterator can become invalid.
+  -- Instead, we insert a sentinel value and track pending deletions.
+  local lock = table_lock[wait_table]
+  if lock then
+    lock.num_entrants = lock.num_entrants + 1
+  else
+    lock = { num_entrants = 1, pending_deletions = {} }
+    table_lock[wait_table] = lock
+  end
+
   for seq, registrations in pairs(wait_table) do
     -- tbl is indexed both by integer keys and string keys.
     -- In this loop we are only interested in integer keys since string keys refer to nested tables.
@@ -189,7 +211,8 @@ local function resolve_table(wait_table, current_sequence, event, data)
     local waiter = sequence_callbacks[seq]
     -- if waiter is not set, this event is stale, so we can remove it right away and move on.
     if not waiter then
-      wait_table[seq] = nil
+      lock.pending_deletions[seq] = true
+      wait_table[seq] = clear_sentinel
       goto next_waiter
     end
     for _, reg in ipairs(registrations) do
@@ -206,12 +229,21 @@ local function resolve_table(wait_table, current_sequence, event, data)
         end
       end
       if is_match then
+        lock.pending_deletions[seq] = true
+        wait_table[seq] = clear_sentinel
         waiter(reg, wait_result)
-        wait_table[seq] = nil
         break
       end
     end
     ::next_waiter::
+  end
+
+  lock.num_entrants = lock.num_entrants - 1
+  if lock.num_entrants == 0 then
+    for seq in pairs(lock.pending_deletions) do
+      wait_table[seq] = nil
+    end
+    table_lock[wait_table] = nil
   end
 end
 
