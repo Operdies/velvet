@@ -54,7 +54,7 @@ Window.__index = Window
 local api = vv.api
 
 
---- @type velvet.window[]
+--- @type table<integer, velvet.window>
 local win_registry = {}
 
 local function clamp(v, lo, hi)
