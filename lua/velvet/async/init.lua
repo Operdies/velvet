@@ -476,6 +476,14 @@ function M.wait_for_coroutine(co, timeout)
   if r == co then return table.unpack(tbl, 1, tbl['n']) else return false, 'timeout' end
 end
 
+--- Yield the current thread. This is useful for giving control back to the system during a heavy computation,
+--- or in certain scenarios where the thread might want to give control back to its parent.
+function M.yield()
+  -- A wait of 0ms will allow the lua context to return back to C where velvet can complete any pending tasks, such as process io.
+  -- This thread will be resumed immediately after there is no more work to do.
+  vv.async.wait(0)
+end
+
 --- Wait for one of the events to fire, or |timeout|.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
