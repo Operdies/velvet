@@ -490,6 +490,9 @@ end
 function M.wait(...)
   local co = coroutine.running()
   local state = co_state[co]
+  if not state then
+    error("Calling thread is not managed by vv.async")
+  end
   if state.deferring then error("Cannot wait() during defer.") end
   sequence = sequence + 1
   -- local capture to preserve the sequence number
@@ -498,7 +501,7 @@ function M.wait(...)
 
   local compatible_types = { number = true, string = true, table = true, thread = true }
   local raw_args = { ... }
-  if #raw_args == 0 then error("No events specified.") end
+  if #raw_args == 0 then error("No events specified") end
   local timeout_value = nil
   local args = {}
   for i, evt in ipairs(raw_args) do
@@ -509,7 +512,7 @@ function M.wait(...)
     if tp == 'thread' then
       -- if the coroutine completed, or is not running, return immediately.
       local evt_state = co_state[evt] or
-      error(string.format("bad argument %d (Provided coroutine is not managed by vv.async.)", i))
+      error(string.format("Bad argument %d (Provided coroutine is not managed by vv.async.)", i))
       if evt_state.result then return evt, evt_state.result end
     elseif tp == 'number' then
       if math.type(evt) ~= 'integer' then
@@ -567,7 +570,7 @@ function M.wait(...)
         wait_table[seq] = { evt }
       end
     else
-      error(('bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
+      error(('Bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))
     end
   end
 
