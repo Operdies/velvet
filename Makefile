@@ -50,9 +50,9 @@ SUBMODULE_INIT = deps/utf8proc/utf8proc.c
 
 BUILD_DEPS = $(UTF8PROC) $(LUA_LIBS)
 
-LUA_MODULES = velvet_api
+LUA_MODULES = 
 LUA_MODULE_DIR = lua_modules
-OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc dcs io velvet_scene velvet_input velvet_cmd velvet_lua velvet_alloc platform_unix velvet_process
+OBJECTS += velvet utils collections vte text csi csi_dispatch screen osc dcs io velvet_scene velvet_input velvet_cmd velvet_lua velvet_alloc platform_unix velvet_process velvet_api
 OBJECT_DIR = src
 DEBUG_LUA_MODULE_DIR = $(DEBUG_DIR)
 RELEASE_LUA_MODULE_DIR = $(RELEASE_DIR)
@@ -161,17 +161,17 @@ install: release
 	mkdir -p $(INSTALL_LUA) $(INSTALL_BIN) $(INSTALL_BIN2) $(INSTALL_MAN)/man1 $(INSTALL_MAN)/man3
 	mkdir -p $(INSTALL_BASH_COMPLETION) $(INSTALL_ZSH_COMPLETION)
 	install -m 755 $(RELEASE_DIR)/vv $(INSTALL_BIN2)/vv
-	install -m 755 $(RELEASE_DIR)/velvet_api.so $(INSTALL_BIN2)/velvet_api.so
 	ln -sf ../share/velvet/bin/vv $(INSTALL_BIN)/vv
 	install -m 644 doc/man1/velvet.1 $(INSTALL_MAN)/man1/
 	install -m 644 doc/man3/*.3 $(INSTALL_MAN)/man3/
 	install -m 644 shell-completion/bash/vv $(INSTALL_BASH_COMPLETION)/vv
 	install -m 644 shell-completion/zsh/_vv $(INSTALL_ZSH_COMPLETION)/_vv
 	cp -r lua/velvet $(INSTALL_LUA)/
+	@ # this file was installed in previous versions of vv. Delete it to avoid confusion.
+	rm -f $(INSTALL_BIN)/velvet_api.so
 
 uninstall:
 	rm -f $(INSTALL_BIN)/vv
-	rm -f $(INSTALL_BIN)/velvet_api.so
 	rm -f $(INSTALL_MAN)/man1/velvet.1
 	rm -f $(INSTALL_MAN)/man3/velvet*.3
 	rm -f $(INSTALL_BASH_COMPLETION)/vv
