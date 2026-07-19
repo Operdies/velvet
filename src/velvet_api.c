@@ -1499,7 +1499,6 @@ static lua_stackRetCount vv_api_window_get_cells(struct velvet *v, lua_Integer w
 }
 
 #include "velvet_lua_autogen.c"
-#define NUM_FUNCTIONS (LENGTH(velvet_lua_function_table))
 int luaopen_velvet_api(lua_State *L) {
   luaL_newlib(L, velvet_lua_function_table);
   return 1;

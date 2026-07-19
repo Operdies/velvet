@@ -57,8 +57,10 @@ local vv = {
 
   tbl_deep_extend = require('velvet.lib.deep_extend'),
 
+  -- |api| initialized during lua vm initialization
+
   --- @type velvet.api
-  api = require('velvet_api'),
+  api = {},
   --- @type velvet.options
   options = {},
   events = ev,

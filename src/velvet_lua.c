@@ -159,6 +159,16 @@ void velvet_source_config(struct velvet *v) {
   string_destroy(&scratch);
 }
 
+int luaopen_velvet_api(lua_State *L);
+static void velvet_lua_init_api(struct velvet *v) {
+  /* vv.api = luaopen_velvet_api() */
+  lua_State *L = v->L;
+  lua_getglobal(L, "vv"); /* vv */
+  luaopen_velvet_api(L); /* vv, api */
+  lua_setfield(L, -2, "api"); /* vv.api = api */
+  lua_pop(L, 1); /* pop vv */
+}
+
 void velvet_lua_init(struct velvet *v) {
   assert(!v->L);
   lua_State *L = lua_newstate(lua_allocator, NULL, 0);
@@ -183,6 +193,7 @@ void velvet_lua_init(struct velvet *v) {
     lua_die(L);
   }
 
+  velvet_lua_init_api(v);
   /* set args from command line */
   velvet_lua_init_arg(v);
   velvet_lua_init_coroutine_helper(v);
