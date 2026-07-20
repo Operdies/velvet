@@ -483,7 +483,7 @@ void *vec_nth(struct vec v, size_t i) {
   return vec_nth_unchecked(v, i);
 }
 
-void string_push_vformat_slow(struct string *s, char *fmt, va_list ap) {
+void string_push_vformat_slow(struct string *s, const char *fmt, va_list ap) {
   va_list copy;
   va_copy(copy, ap);
   size_t required = vsnprintf(NULL, 0, fmt, copy);
@@ -491,7 +491,7 @@ void string_push_vformat_slow(struct string *s, char *fmt, va_list ap) {
   s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
 }
 
-void string_push_format_slow(struct string *s, char *fmt, ...) {
+void string_push_format_slow(struct string *s, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   string_push_vformat_slow(s, fmt, ap);

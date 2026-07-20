@@ -87,10 +87,10 @@ static int l_coroutine_cleanup(lua_State *co) {
   coroutine_cleanup(co);
 
   if (ctx) {
-    bool ok = lua_toboolean(co, 1);
+    lua_Integer status = lua_tointeger(co, 1);
     /* indicate this coroutine is done and the socket can be closed after flushing */
     ctx->coroutine = NULL;
-    ctx->status = ok ? VELVET_COROUTINE_SUCCESS : VELVET_COROUTINE_ERROR;
+    ctx->status = status;
   }
 
   return 0;

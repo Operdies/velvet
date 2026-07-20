@@ -86,8 +86,8 @@ function M.execute(name, ...)
     complete(...)
   else
     local cmd = commands[name]
-    if not cmd then return ("Unknown command '%s'\n\n%s"):format(name, describe()) end
-    return cmd.action(name, ...)
+    if not cmd then return false, ("Unknown command '%s'\n\n%s"):format(name, describe()) end
+    return true, cmd.action(name, ...)
   end
 end
 

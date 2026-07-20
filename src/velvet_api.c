@@ -1086,7 +1086,7 @@ static bool needs_quote(const char *ch) {
   return false;
 }
 
-static void get_string_quote(const char *ch, char **left, char **right) {
+void string_get_lua_quote_pair(const char *ch, char **left, char **right) {
   const char *tmp = ch;
   bool has_dquot, has_squot;
   has_dquot = has_squot = false;
@@ -1105,6 +1105,12 @@ static void get_string_quote(const char *ch, char **left, char **right) {
     } else if (!strstr(ch, "]==]")) {
       *left = "[==[";
       *right = "]==]";
+    } else if (!strstr(ch, "]===]")) {
+      *left = "[===[";
+      *right = "]===]";
+    } else if (!strstr(ch, "]====]")) {
+      *left = "[====[";
+      *right = "]====]";
     } else {
       /* treat this as an adversarial example and emit nil. */
       *left = *right = NULL;
@@ -1223,7 +1229,7 @@ static bool emit_literal(lua_State *L, struct emit_context *ctx) {
   case LUA_TSTRING: {
     const char *value = lua_tostring(L, -1);
     char *lq, *rq;
-    get_string_quote(value, &lq, &rq);
+    string_get_lua_quote_pair(value, &lq, &rq);
     if (lq && rq) {
       string_push_cstr(&ctx->output, lq);
       string_push_cstr_escaped(&ctx->output, value);
