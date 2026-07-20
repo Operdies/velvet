@@ -9,16 +9,21 @@
 enum velvet_coroutine_exit_code {
   /* set when the chunk succesfully runs to completion */
   VELVET_COROUTINE_SUCCESS = 0,
+  /* exit code 1 is not used for coroutines, but is used as a generic
+   * failure code in the non-lua vv cli. To avoid confusion, skip 1 here. */
+  VELVET_COROUTINE_UNUSED_ERROR = 1,
   /* set when the lua chunk fails to compile */
-  VELVET_COROUTINE_SYNTAX_ERROR = 1,
+  VELVET_COROUTINE_SYNTAX_ERROR = 2,
   /* set when the provided chunk throws an error */
-  VELVET_COROUTINE_ERROR = 2,
+  VELVET_COROUTINE_ERROR = 3,
   /* set when the server kills the chunk */
-  VELVET_COROUTINE_KILLED_RELOAD = 3,
+  VELVET_COROUTINE_KILLED_RELOAD = 4,
   /* set when the server exits */
-  VELVET_COROUTINE_SERVER_EXITED = 4,
+  VELVET_COROUTINE_SERVER_EXITED = 5,
   /* An internal error has occurred if this happens. */
-  VELVET_COROUTINE_UNEXPECTED_WRITE = 5,
+  VELVET_COROUTINE_UNEXPECTED_WRITE = 6,
+  /* set when the specified cli action does not exist */
+  VELVET_COROUTINE_UNKNOWN_CLI_ACTION = 7,
 };
 
 enum velvet_input_state {

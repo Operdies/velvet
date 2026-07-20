@@ -87,10 +87,10 @@ static int l_coroutine_cleanup(lua_State *co) {
   coroutine_cleanup(co);
 
   if (ctx) {
-    bool ok = lua_toboolean(co, 1);
+    lua_Integer status = lua_tointeger(co, 1);
     /* indicate this coroutine is done and the socket can be closed after flushing */
     ctx->coroutine = NULL;
-    ctx->status = ok ? VELVET_COROUTINE_SUCCESS : VELVET_COROUTINE_ERROR;
+    ctx->status = status;
   }
 
   return 0;
@@ -179,9 +179,14 @@ void velvet_cmd(struct velvet *v, int source_socket, struct u8_slice cmd) {
 void velvet_coroutine_destroy(struct velvet *velvet, struct velvet_coroutine *co) {
   if (co->coroutine) coroutine_cleanup(co->coroutine);
   if (co->socket) {
-    /* ignore errors */
-    write(co->socket, &co->status, sizeof(co->status));
-    close(co->socket);
+    /* We can't do anything about it if write/close fails, but it's not fatal.
+     * Just log it and move on. */
+    if (-1 == write(co->socket, &co->status, sizeof(co->status))) {
+      ERROR("co socket write:");
+    }
+    if (-1 == close(co->socket)) {
+      ERROR("co socket close:");
+    }
   }
   if (co->out_fd) close(co->out_fd);
   if (co->err_fd) close(co->err_fd);

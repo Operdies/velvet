@@ -192,11 +192,11 @@ local real_print = function(stream, ...)
   end
 end
 
-print = function(...)
+_G.print = function(...)
   real_print(1, ...)
 end
 
-printerr = function(...)
+_G.printerr = function(...)
   real_print(2, ...)
 end
 
@@ -204,6 +204,7 @@ end
 --- we can make the _G.args global point to COROUTINE_ARGS[coroutine.running()]
 COROUTINE_ARGS = make_weaktable()
 COROUTINE_CWD = make_weaktable()
+COROUTINE_EXIT_CODE = make_weaktable()
 
 --- Returns the working directory of the current coroutine,
 --- the focused window's working directory, or the server's startup directory.

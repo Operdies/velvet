@@ -257,12 +257,24 @@ static bool daemonize(void) {
 }
 
 static int vv_send_cmd(struct velvet_args args) {
+  void string_get_lua_quote_pair(const char *ch, char **left, char **right);
   struct string lua_buf = {0};
-  string_push_format_slow(&lua_buf, "return vv.cli.execute([==[%s]==]", args.cmd);
+  char *quote_left, *quote_right;
+
+  string_get_lua_quote_pair(args.cmd, &quote_left, &quote_right);
+  string_push_format_slow(
+      &lua_buf, "local results = table.pack(vv.cli.execute(%s%s%s", quote_left, args.cmd, quote_right);
   for (char **cmd = args.positional; cmd && *cmd; cmd++) {
-    string_push_format_slow(&lua_buf, ", [==[%s]==]", *cmd);
+    string_get_lua_quote_pair(*cmd, &quote_left, &quote_right);
+    string_push_format_slow(&lua_buf, ", %s%s%s", quote_left, *cmd, quote_right);
   }
-  string_push_cstr(&lua_buf, ")\n");
+  string_push_cstr(&lua_buf,
+                   "))\n" /* function invocation over */
+                   "local success = results[1]\n"
+                   /* set exit code to 7, meaning the cli action does not exist */
+                   "if not success then COROUTINE_EXIT_CODE[coroutine.running()] = 7 end\n"
+                   /* if the action had multiple return values, wrap them in a table, skipping the status element */
+                   "return table.unpack(results, 2)");
 
   int success = vv_send_lua_payload(args, u8_slice_from_string(lua_buf));
   string_destroy(&lua_buf);
