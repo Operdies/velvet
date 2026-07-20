@@ -53,26 +53,34 @@ local events = {
       lookup_name = event_name:gsub('%.', '_')
       gsub_cache[event_name] = lookup_name
     end
+
+    -- event_groups could be modified during event dispatch,
+    -- so we extract the groups first and then dispatch them
+    local groups = {}
     for _, id in pairs(event_groups) do
       local group_func_table = event_handlers[id]
-      if group_func_table then
-        local handler = group_func_table['**']
-        local include_event_name = true
-        if not handler then
-          handler = group_func_table[event_name] or group_func_table[lookup_name]
-          include_event_name = false
-        end
-        if handler then
-          local d = vv.deepcopy(data)
-          -- include_event_name:
-          --   true  -> handler(event_name, data)
-          --   false -> handler(data, nil)
-          local arg1 = include_event_name and event_name or d
-          local arg2 = include_event_name and d or nil
-          vv.async.run(dispatch_event, event_name, handler, arg1, arg2)
-        end
+      if group_func_table then groups[#groups + 1] = group_func_table end
+    end
+
+    for i = 1, #groups do
+      local group = groups[i]
+      local handler = group['**']
+      local include_event_name = true
+      if not handler then
+        handler = group[event_name] or group[lookup_name]
+        include_event_name = false
+      end
+      if handler then
+        local d = vv.deepcopy(data)
+        -- include_event_name:
+        --   true  -> handler(event_name, data)
+        --   false -> handler(data, nil)
+        local arg1 = include_event_name and event_name or d
+        local arg2 = include_event_name and d or nil
+        vv.async.run(dispatch_event, event_name, handler, arg1, arg2)
       end
     end
+
     if event_name == 'pre_reload' then
       vv.events.emit('pre_reload.late', data)
     end
