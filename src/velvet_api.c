@@ -509,6 +509,11 @@ static struct velvet_api_mouse_settings vv_api_window_get_mouse_settings(struct 
   return s;
 }
 
+static int lua_debug_traceback_handler(lua_State *L) {
+  luaL_traceback(L, L, lua_tostring(L, 1), 1);
+  return 1;
+}
+
 static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_pushcfunction(L, lua_debug_traceback_handler);
   int msgh = lua_gettop(L);
