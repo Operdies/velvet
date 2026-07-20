@@ -20,7 +20,7 @@ local function make_weaktable(mode) return setmetatable({}, { __mode = mode }) e
 --- @generic T any
 --- @param obj T object to wrap
 --- @return [T] wrap array containing a weak reference to |obj|
-local function weakref(obj) return setmetatable({obj}, { __mode = 'v' }) end
+local function weakref(obj) return setmetatable({ obj }, { __mode = 'v' }) end
 
 --- @alias velvet.async.resolve fun(reg: velvet.async.event_registration, result: velvet.async.wait.result)
 --- @alias velvet.async.resolve_table table<integer, velvet.async.resolve>
@@ -57,7 +57,11 @@ local event_source_waiter_registry = make_weaktable('k')
 local currently_deferring_coroutine = make_weaktable('v')
 
 -- Monotonically increasing sequence number used to invalidate stale waiters
-local sequence = 1
+local sequence_counter = 0
+local function next_sequence()
+  sequence_counter = sequence_counter + 1
+  return sequence_counter
+end
 
 --- @return table<string, string|boolean> seen known events
 function M.get_observed_events()
@@ -177,95 +181,76 @@ function M.defer(defer, ...)
   defer_on(coroutine.running(), defer, ...)
 end
 
---- @class velvet.async.table_lock
---- @field num_entrants integer how many callers are currently using this table
---- @field pending_deletions table<integer, boolean> sequence numbers are pending deletion
-
---- @type table<velvet.async.waiter_registry, velvet.async.table_lock>
-local table_lock = make_weaktable('k')
-
--- sentinel value for to-be-cleared entries
-local clear_sentinel = {}
-
 --- @param wait_table velvet.async.waiter_registry
---- @param current_sequence integer
 --- @param event string|velvet.async.event_source
 --- @param data velvet.async.wait.result
-local function resolve_table(wait_table, current_sequence, event, data)
-  -- It is not safe to modify the wait table during iteration because the waiter()
-  -- invocation can invoke resolve_table on the same table. If the nested invocation
-  -- deletes a table entry, the outer pairs() iterator can become invalid.
-  -- Instead, we insert a sentinel value and track pending deletions.
-  local lock = table_lock[wait_table]
-  if lock then
-    lock.num_entrants = lock.num_entrants + 1
-  else
-    lock = { num_entrants = 1, pending_deletions = {} }
-    table_lock[wait_table] = lock
+local function resolve_table(wait_table, event, data)
+  -- Before resolving any events, record the current sequences in the wait table. This achieves 2 things:
+  -- 1. Guards against iteration errors due to the table being modified by the call to waiter().
+  -- This is a quite common because a listener will often call wait() again on the same event.
+  -- 2. Ensures we only resolve events which were registered before the event was emitted.
+  -- Otherwise new registrations could be resolved with an event which was emitted before it was created.
+  local sequences = {}
+  for sequence in pairs(wait_table) do
+    if type(sequence) == 'number' then
+      if sequence_callbacks[sequence] then
+        sequences[#sequences + 1] = sequence
+      else
+        -- if this sequence number does not have an associated callback,
+        -- the context has already been resolved or cancelled.
+        -- In that case, we can safely clear it from this table.
+        wait_table[sequence] = nil
+      end
+    end
   end
 
-  for seq, registrations in pairs(wait_table) do
-    -- tbl is indexed both by integer keys and string keys.
-    -- In this loop we are only interested in integer keys since string keys refer to nested tables.
-    if type(seq) ~= 'number' or seq > current_sequence then goto next_waiter end
-    local waiter = sequence_callbacks[seq]
-    -- if waiter is not set, this event is stale, so we can remove it right away and move on.
-    if not waiter then
-      lock.pending_deletions[seq] = true
-      wait_table[seq] = clear_sentinel
-      goto next_waiter
-    end
-    for _, reg in ipairs(registrations) do
-      local is_match = true
-      local wait_result = { event = event, data = data }
-      if reg.when then
-        local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
-        if not ok then
-          printerr(string.format("Unhandled error during when(%s): %s",
-            type(event) == 'string' and event or 'event_source', result))
-          is_match = false
-        else
-          is_match = result
+  for i = 1, #sequences do
+    local sequence = sequences[i]
+    local registrations = wait_table[sequence]
+    if registrations ~= nil then
+      local waiter = sequence_callbacks[sequence]
+      for j = 1, #registrations do
+        local reg = registrations[j]
+        local is_match = true
+        local wait_result = { event = event, data = data }
+        if reg.when then
+          local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
+          if not ok then
+            local event_name = type(event) == 'string' and event or 'event_source'
+            printerr(string.format("Unhandled error during when(%s): %s", event_name, result))
+            is_match = false
+          else
+            is_match = result
+          end
+        end
+        if is_match then
+          wait_table[sequence] = nil
+          waiter(reg, wait_result)
+          break
         end
       end
-      if is_match then
-        lock.pending_deletions[seq] = true
-        wait_table[seq] = clear_sentinel
-        waiter(reg, wait_result)
-        break
-      end
     end
-    ::next_waiter::
-  end
-
-  lock.num_entrants = lock.num_entrants - 1
-  if lock.num_entrants == 0 then
-    for seq in pairs(lock.pending_deletions) do
-      wait_table[seq] = nil
-    end
-    table_lock[wait_table] = nil
   end
 end
 
---- @param current_sequence integer
 --- @param event string|velvet.async.event_source
 --- @param data velvet.async.wait.result
 --- @param wait_table velvet.async.waiter_registry
 --- @param word string
 --- @param ... string
-local function recursive_resolve(current_sequence, event, data, wait_table, word, ...)
+local function recursive_resolve(event, data, wait_table, word, ...)
   local leaf = select('#', ...) == 0
   local any = wait_table['**']
-  if any then resolve_table(any, current_sequence, event, data) end
+  if any then resolve_table(any, event, data) end
   local star = wait_table['*']
   local match = wait_table[word]
 
   if leaf then
-    if star then resolve_table(star, current_sequence, event, data) end
-    if match then resolve_table(match, current_sequence, event, data) end
+    if star then resolve_table(star, event, data) end
+    if match then resolve_table(match, event, data) end
   else
-    if star then recursive_resolve(current_sequence, event, data, star, ...) end
-    if match then recursive_resolve(current_sequence, event, data, match, ...) end
+    if star then recursive_resolve(event, data, star, ...) end
+    if match then recursive_resolve(event, data, match, ...) end
   end
 end
 
@@ -274,14 +259,14 @@ end
 local function resolve(event, data)
   if type(event) == 'table' then
     local waiters = event_source_waiter_registry[event]
-    if waiters then resolve_table(waiters, sequence, event, data) end
+    if waiters then resolve_table(waiters, event, data) end
   elseif type(event) == 'string' then
     if not known_events[event] then known_events[event] = true end
     local segments = {}
     for segment in event:gmatch('[^.]+') do
       segments[#segments + 1] = segment
     end
-    recursive_resolve(sequence, event, data, waiter_registry, table.unpack(segments))
+    recursive_resolve(event, data, waiter_registry, table.unpack(segments))
   end
 end
 
@@ -366,41 +351,41 @@ end
 --- @field event velvet.async.event|string|velvet.async.event_source the raised event
 --- @field data any the event args
 
---- @param seq integer
+--- @param sequence integer
 --- @param co thread
 --- @param ... any
-local function co_resume(seq, co, ...)
+local function co_resume(sequence, co, ...)
   local state = co_state[co]
-  if state.sequence ~= seq then return end
+  if state.sequence ~= sequence then return end
   state.sequence = nil
   state_cancel_timeout(state)
-  sequence_callbacks[seq] = nil
+  sequence_callbacks[sequence] = nil
   coroutine.resume(co, ...)
 end
 
-local function timeout_callback(co, timeout, seq)
+local function timeout_callback(co, timeout, sequence)
   return vv.api.schedule_after(timeout, function()
-    co_resume(seq, co, nil, 'timeout')
+    co_resume(sequence, co, nil, 'timeout')
   end)
 end
 
 --- @param co thread the thread to resume when |trd| completes
 --- @param trd thread the thread which |co| should wait for
---- @param seq integer sequence number identifying the wait() invocation
-local function defer_callback(co, trd, seq)
+--- @param sequence integer sequence number identifying the wait() invocation
+local function defer_callback(co, trd, sequence)
   -- we must not capture |co| in this context.
   -- Otherwise this defer will pin |co| even if it is
   -- no longer possible to resume it.
   local wrap = weakref(co)
   defer_on(trd, function()
     local unwrap = wrap[1]
-    if unwrap then co_resume(seq, unwrap, trd, co_state[trd].result) end
+    if unwrap then co_resume(sequence, unwrap, trd, co_state[trd].result) end
   end)
 end
 
-local function resolve_callback(co, seq)
+local function resolve_callback(co, sequence)
   return function(registration, result)
-    co_resume(seq, co, registration, result)
+    co_resume(sequence, co, registration, result)
   end
 end
 
@@ -494,51 +479,57 @@ function M.wait(...)
     error("Calling thread is not managed by vv.async")
   end
   if state.deferring then error("Cannot wait() during defer.") end
-  sequence = sequence + 1
-  -- local capture to preserve the sequence number
-  local seq = sequence
-  state.sequence = seq
+  local sequence = next_sequence()
+  state.sequence = sequence
 
   local compatible_types = { number = true, string = true, table = true, thread = true }
-  local raw_args = { ... }
-  if #raw_args == 0 then error("No events specified") end
+  local raw_args = table.pack(...)
   local timeout_value = nil
   local args = {}
-  for i, evt in ipairs(raw_args) do
-    local tp = type(evt)
-    if not compatible_types[tp] then
-      error(("Bad argument #%d (number, string, coroutine, or table expected)"):format(i))
-    end
-    if tp == 'thread' then
-      -- if the coroutine completed, or is not running, return immediately.
-      local evt_state = co_state[evt] or
-      error(string.format("Bad argument %d (Provided coroutine is not managed by vv.async.)", i))
-      if evt_state.result then return evt, evt_state.result end
-    elseif tp == 'number' then
-      if math.type(evt) ~= 'integer' then
-        error(("Bad argument #%d (integer expected, got number)"):format(i))
+  -- for i, evt in ipairs(raw_args) do
+  for i = 1, raw_args.n do
+    local evt = raw_args[i]
+    if evt ~= nil then
+      local tp = type(evt)
+      if not compatible_types[tp] then
+        error(("Bad argument #%d (number, string, coroutine, or table expected)"):format(i))
       end
-      timeout_value = timeout_value and math.min(timeout_value, evt) or evt
-    end
-    if tp ~= 'number' then
-      args[#args + 1] = evt
+      if tp == 'thread' then
+        -- if the coroutine completed, or is not running, return immediately.
+        local evt_state = co_state[evt] or
+            error(string.format("Bad argument %d (Provided coroutine is not managed by vv.async.)", i))
+        if evt_state.result then return evt, evt_state.result end
+      elseif tp == 'number' then
+        if math.type(evt) ~= 'integer' then
+          error(("Bad argument #%d (integer expected, got number)"):format(i))
+        end
+        timeout_value = timeout_value and math.min(timeout_value, evt) or evt
+      end
+      if tp ~= 'number' then
+        args[#args + 1] = evt
+      end
     end
   end
 
   if timeout_value then
-    state.timeout = timeout_callback(co, timeout_value, seq)
+    state.timeout = timeout_callback(co, timeout_value, sequence)
   end
 
-  sequence_callbacks[seq] = resolve_callback(co, seq)
+  sequence_callbacks[sequence] = resolve_callback(co, sequence)
 
-  for idx, evt in ipairs(args) do
+  for idx = 1, #args do
+    local evt = args[idx]
     local typename = type(evt)
     if typename == 'thread' then
-      defer_callback(co, evt, seq)
+      defer_callback(co, evt, sequence)
     elseif is_event_source(evt) then
       local actual = listener_to_source[evt.event or evt] or evt.event or evt
-      local event_waiters = event_source_waiter_registry[actual]
-      event_waiters[seq] = { evt }
+      local wait_table = event_source_waiter_registry[actual]
+      if wait_table[sequence] then
+        table.insert(wait_table[sequence], evt)
+      else
+        wait_table[sequence] = { evt }
+      end
     elseif typename == 'string' or typename == 'table' then
       local event = evt
       if typename == 'table' then
@@ -560,14 +551,14 @@ function M.wait(...)
       if wait_table == waiter_registry then
         error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
       end
-      if wait_table[seq] then
+      if wait_table[sequence] then
         -- this event has multiple registrations on the same event.
         -- there is nothing wrong with this since the registrations can have
         -- different |when| triggers, but we need to handle this by chaining
         -- the registrations.
-        table.insert(wait_table[seq], evt)
+        table.insert(wait_table[sequence], evt)
       else
-        wait_table[seq] = { evt }
+        wait_table[sequence] = { evt }
       end
     else
       error(('Bad argument #%d (string|number expected, got %s)'):format(idx, type(evt)))

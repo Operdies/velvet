@@ -287,6 +287,41 @@ local function test_coroutine_weakrefs()
   end)
 end
 
+local function test_delivery()
+  local thread_counts = { 1, 2, 3, 5, 7 }
+  for _, num_threads in ipairs(thread_counts) do
+    for _, source in ipairs({ 'subject', vv.async.event_source() }) do
+      local counters = {}
+      local function dummy_listener(id)
+        local counter = 0
+        while true do
+          vv.async.wait(source)
+          counter = counter + 1
+          counters[id] = counter
+        end
+      end
+      for id = 1, num_threads do
+        counters[id] = 0
+        vv.async.run(dummy_listener, id)
+      end
+      local function emit()
+        if type(source) == 'string' then
+          vv.events.emit(source)
+        else
+          source:emit()
+        end
+      end
+      for i = 1, 100 do
+        emit()
+        for id = 1, num_threads do
+          assert(counters[id] == i, "thread " .. id .. " is behind at iteration " .. i)
+        end
+      end
+    end
+  end
+end
+
+
 return {
   test = function()
     test_when()
@@ -296,5 +331,6 @@ return {
     test_wait_all()
     test_event_source_wait_all()
     test_coroutine_weakrefs()
+    test_delivery()
   end
 }
