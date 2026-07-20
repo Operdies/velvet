@@ -1,8 +1,7 @@
 {
   "runtime.version": "Lua 5.5",
   "diagnostics": {
-    "enable": true,
-    "disable": ["lowercase-global"]
+    "enable": true
   }
 }
 
