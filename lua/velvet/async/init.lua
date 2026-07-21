@@ -206,30 +206,33 @@ local function resolve_table(wait_table, event, data)
 
   for i = 1, #sequences do
     local sequence = sequences[i]
+    -- although sequence_callbacks[sequence] was checked in the previous loop,
+    -- it can still have been nil'ed in a recursive event dispatch in the below call to waiter()
+    local callback = sequence_callbacks[sequence]
+    if not callback then goto next_sequence end
     local registrations = wait_table[sequence]
-    if registrations ~= nil then
-      local waiter = sequence_callbacks[sequence]
-      for j = 1, #registrations do
-        local reg = registrations[j]
-        local is_match = true
-        local wait_result = { event = event, data = data }
-        if reg.when then
-          local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
-          if not ok then
-            local event_name = type(event) == 'string' and event or 'event_source'
-            printerr(string.format("Unhandled error during when(%s): %s", event_name, result))
-            is_match = false
-          else
-            is_match = result
-          end
-        end
-        if is_match then
-          wait_table[sequence] = nil
-          waiter(reg, wait_result)
-          break
+    if not registrations then goto next_sequence end
+    for j = 1, #registrations do
+      local reg = registrations[j]
+      local is_match = true
+      local wait_result = { event = event, data = data }
+      if reg.when then
+        local ok, result = xpcall(reg.when, debug.traceback, reg, wait_result)
+        if not ok then
+          local event_name = type(event) == 'string' and event or 'event_source'
+          printerr(string.format("Unhandled error during when(%s): %s", event_name, result))
+          is_match = false
+        else
+          is_match = result
         end
       end
+      if is_match then
+        wait_table[sequence] = nil
+        callback(reg, wait_result)
+        break
+      end
     end
+    ::next_sequence::
   end
 end
 
