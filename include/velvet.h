@@ -96,7 +96,13 @@ struct velvet {
   struct io event_loop;
   struct vec /* struct velvet_client */ clients;
   struct vec /* struct velvet_coroutine */ coroutines;
+  /* list of processes managed by lua plugin code.
+   * the main event loop will dispatch events on these processes to user-defined callbacks. */
   struct vec /* struct velvet_process */ processes;
+  /* processes migrated from the `processes` field. We no longer dispatch events for these processes,
+   * but we still track them to ensure they are reaped, and send rude kill signals if they fail to respond
+   * to SIGCONT / SIGTERM / SIGHUP. */
+  struct vec /* struct velvet_process */ marked_for_death;
   /* this is modified by events such as receiving focus IN/OUT events, new clients attaching, etc */
   int focused_socket;
   int socket_cmd_sender;
@@ -148,5 +154,7 @@ bool window_visible(struct velvet *v, struct velvet_window *w);
 void velvet_lua_execute_chunk(struct velvet *v, struct u8_slice chunk, int source_socket, struct velvet_lua_context ctx);
 int velvet_next_id(void);
 void velvet_lua_restart_vm(void*);
+void velvet_init(struct velvet *v, int sock_fd, char *arg0, char **argv);
+void velvet_dispatch(struct velvet * velvet);
 
 #endif

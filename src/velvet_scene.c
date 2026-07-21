@@ -1171,26 +1171,32 @@ static void restore_signals(void) {
   for (int i = 0; i < LENGTH(restore); i++) sigaction(restore[i], &sa, NULL);
 }
 
-_Noreturn static void velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, char * const *arglist) {
-  static const char *home = NULL;
-  if (!home) home = getenv("HOME");
+_Noreturn static void
+velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, char *const *arglist) {
+  int exec_error;
   /* close read side in fork */
+  char *dir = NULL;
   if (velvet_window->cwd.len) {
     string_ensure_null_terminated(&velvet_window->cwd);
-    if (chdir((char *)velvet_window->cwd.content) == -1) {
-      ERROR("chdir:");
+    dir = (char *)velvet_window->cwd.content;
+  } else {
+    dir = getenv("HOME");
+  }
+  if (dir) {
+    if (chdir(dir) == -1) {
+      exec_error = errno;
+      write(error_pipe, &exec_error, sizeof(int));
+      exit(0);
     }
-  } else if (home) {
-    chdir(home);
   }
 
   char id[20];
   snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
   setenv("VELVET_WINID", id, true);
   execvp(arglist[0], arglist);
-  int exec_error = errno;
+  exec_error = errno;
   write(error_pipe, &exec_error, sizeof(int));
-  velvet_die("execvp:");
+  exit(0);
   /* write side automatically cleaned up in child */
 }
 

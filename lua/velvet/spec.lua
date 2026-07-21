@@ -231,22 +231,6 @@ return {
       },
     },
     {
-      name = "output_channel",
-      flags = false,
-      values = {
-        { name = "stdout", value = 1 },
-        { name = "stderr", value = 2 },
-      },
-    },
-    {
-      name = "process_stream_mode",
-      flags = false,
-      values = {
-        { name = "none", value = 1, doc = "This stream will be set to /dev/null" },
-        { name = "stream", value = 2, doc = "This stream will be writable, or produce output, depending on stream direction" },
-      },
-    },
-    {
       name = "color_kind",
       flags = false,
       packed = true,
@@ -256,10 +240,44 @@ return {
         { name = "table", value = 2, doc = "Indicates one of the 16 pre-defined ansi colors or an xterm-256color" },
       },
     },
+    {
+      name = "unix_signal",
+      doc = "Unix process signal.",
+      flags = false,
+      values = {
+        { name = "hup",  value = 0, doc = "Hangup." },
+        { name = "int",  value = 1, doc = "Interrupt." },
+        { name = "quit", value = 2, doc = "Quit and produce a core dump." },
+        { name = "kill", value = 3, doc = "Terminate immediately. This signal cannot be caught or ignored." },
+        { name = "usr1", value = 4, doc = "User-defined signal 1." },
+        { name = "usr2", value = 5, doc = "User-defined signal 2." },
+        { name = "alrm", value = 6, doc = "Alarm clock." },
+        { name = "term", value = 7, doc = "Request graceful termination." },
+        { name = "stop", value = 8, doc = "Suspend execution. This signal cannot be caught or ignored." },
+        { name = "cont", value = 9, doc = "Resume a suspended process." },
+      },
+    },
   },
 
   --- callbacks {{{1
-  callbacks = {},
+  callbacks = {
+    {
+      name = "on_data",
+      params = {
+        { name = "id",      type = "integer",           doc = "The id of the process which raised the output." },
+        { name = "data",    type = "string",            doc = "The output, or nil if the stream was closed.",  optional = true },
+        { name = "channel", type = "'stdout'|'stderr'", doc = "The stream which produced the output." },
+      },
+    },
+    {
+      name = "on_exit",
+      params = {
+        { name = "id",        type = "integer", doc = "The id of the process which exited." },
+        { name = "exit_code", type = "integer", doc = "The process exit code, or nil if it was terminated by a signal.", optional = true },
+        { name = "signal",    type = "string",  doc = "The terminating signal, or nil if the process exited normally.",  optional = true },
+      },
+    },
+  },
 
   --- types {{{1
   types = {
@@ -323,11 +341,12 @@ return {
     {
       name = "process.spawn_options",
       fields = {
-        { name = "working_directory", type = "string",              doc = "The initial working directory of the new process.",                  optional = true },
-        { name = "environment",       type = "table",               doc = "Optional table of environment variables to set in the new process.", optional = true },
-        { name = "stdin_mode",        type = "process_stream_mode", doc = "stdin mode",                                                         optional = true },
-        { name = "stdout_mode",       type = "process_stream_mode", doc = "stdout mode",                                                        optional = true },
-        { name = "stderr_mode",       type = "process_stream_mode", doc = "stderr mode",                                                        optional = true },
+        { name = "working_directory", type = "string",                doc = "The initial working directory of the new process.",                                                   optional = true },
+        { name = "environment",       type = "table<string, string>", doc = "Optional table of environment variables to set in the new process.",                                  optional = true },
+        { name = "input",             type = "string",                doc = "If set, |input| will be written to process stdin. Stdin will be automatically closed after writing.", optional = true },
+        { name = "on_stdout",         type = "on_data",               doc = "Callback invoked when the process produces output on stdout.",                                        optional = true },
+        { name = "on_stderr",         type = "on_data",               doc = "Callback invoked when the process produces output on stderr.",                                        optional = true },
+        { name = "on_exit",           type = "on_exit",               doc = "Callback invoked when the process exits.",                                                            optional = true },
       },
     },
     {
@@ -516,21 +535,6 @@ return {
         { name = "columns",                                 type = "int",  doc = "The number of columns." },
       },
     },
-    {
-      name = "process.output.event_args",
-      fields = {
-        { name = "id", type = "int", doc = "The id of the process which produced the output." },
-        { name = "output", type = "string", doc = "Raw output. Not stripped for newlines, null bytes, or escapes." },
-        { name = "channel", type = "output_channel", doc = "Did |output| arrive on stdout or stderr" },
-      },
-    },
-    {
-      name = "process.exit.event_args",
-      fields = {
-        { name = "id", type = "int", doc = "The id of the exited process." },
-        { name = "exit_code", type = "int", doc = "The exit code of the exited process." },
-      },
-    },
   },
 
   --- {{{1 events
@@ -548,8 +552,6 @@ return {
     { name = "mouse.move",           doc = "Raised when the mouse moves.",                 args = "mouse.move.event_args" },
     { name = "mouse.click",          doc = "Raised when the mouse is clicked.",            args = "mouse.click.event_args" },
     { name = "mouse.scroll",         doc = "Raised when the mouse scrolls.",               args = "mouse.scroll.event_args" },
-    { name = "process.output",       doc = "Raised when a process produces output.",       args = "process.output.event_args" },
-    { name = "process.exited",       doc = "Raised when a process exits.",                 args = "process.exit.event_args" },
     { name = "system_message",       doc = "Raised when the system logs an error message", args = "system_message.event_args", },
     {
       name = "pre_render",
@@ -848,7 +850,7 @@ return {
     {
       name = "window_create",
       doc =
-      "Create a naked window with no backing process. This window can be controlled through the lua API. Returns the window id.",
+      "Create a window with no backing process. This window can be controlled through the lua API. Returns the window id.",
       params = {
         { name = "options", type = "window.create_options", doc = "Options for the created window." },
       },
@@ -1023,10 +1025,13 @@ return {
     {
       name = "process_kill",
       doc = "Kill the process with id |id|.",
-      params = {{ name = "id", type = "int", doc = "The process to kill." }},
+      params = {
+        { name = "id",     type = "int",         doc = "The process to kill." },
+        { name = "signal", type = 'unix_signal', default_value = 'term',      doc = "The signal to send. Defaults to 'term' if omitted." },
+      },
     },
     {
-      name = "process_stdin_write",
+      name = "process_write_stdin",
       doc = "Write to stdin of process |id|.",
       params = {
         { name = "id", type = "int", doc = "The process to kill." },
@@ -1034,10 +1039,10 @@ return {
       },
     },
     {
-      name = "process_stdin_close",
+      name = "process_close_stdin",
       doc = "Close stdin of process |id|.",
       params = {
-        { name = "id", type = "int", doc = "The process to kill." },
+        { name = "id", type = "int", doc = "The id of the process to close stdin for." },
       },
     },
     {
@@ -1055,20 +1060,6 @@ return {
       doc = "Get the current environment variables of this process",
       returns = { type = "table<string, string>", doc = "The environment of this process." },
     },
-    -- {
-    --   name = "disk_store_value",
-    --   doc = "Store a named value on the disk. Values saved on the disk are shared between servers.",
-    --   params = {
-    --     { name = "name",  type = "string", doc = "The name of the stored value." },
-    --     { name = "value", type = "any",    doc = "The value to store." },
-    --   },
-    -- },
-    -- {
-    --   name = "disk_load_value",
-    --   doc = "Load a value from disk by name.",
-    --   params = { { name = "name", type = "string", doc = "The name of the disk value." } },
-    --   returns = { type = "any", doc = "The loaded value." },
-    -- },
   },
 }
 

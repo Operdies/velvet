@@ -18,47 +18,6 @@
 #include "velvet_alloc.h"
 #include "velvet_process.h"
 
-static int signal_write;
-static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
-  (void)siginfo, (void)context;
-  ssize_t written = write(signal_write, &sig, sizeof(sig));
-  if (written < (int)sizeof(sig)) velvet_die("signal write:");
-}
-
-static void signal_trap(int sig, siginfo_t *siginfo, void *context) {
-  (void)siginfo, (void)context, (void)sig;
-  __builtin_trap();
-}
-
-static void install_signal_handlers(int *pipes) {
-  if (pipe(pipes) < 0) velvet_die("pipe:");
-
-  set_cloexec(pipes[0]);
-  set_cloexec(pipes[1]);
-
-  struct sigaction sig_handle = {0};
-  sig_handle.sa_sigaction = &signal_handler;
-  sig_handle.sa_flags = SA_SIGINFO | SA_RESTART;
-
-  struct sigaction sig_trap = {0};
-  sig_trap.sa_sigaction = &signal_trap;
-  sig_trap.sa_flags = SA_SIGINFO;
-
-  if (sigaction(SIGTERM, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGQUIT, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGINT, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGCHLD, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGHUP, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGUSR1, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGUSR2, &sig_handle, NULL) == -1) velvet_die("sigaction:");
-  if (sigaction(SIGBUS, &sig_trap, NULL) == -1) velvet_die("sigaction:");
-
-  signal(SIGPIPE, SIG_IGN);
-  signal(SIGTTOU, SIG_IGN);
-  signal(SIGTTIN, SIG_IGN);
-  signal(SIGTSTP, SIG_IGN);
-}
-
 static bool file_exists(const char *path) {
   struct stat st;
   return stat(path, &st) == 0;
@@ -333,9 +292,6 @@ int main(int argc, char **argv) {
     printf("Server listening at %s\n", getenv("VELVET"));
   }
 
-  int signal_pipes[2];
-  install_signal_handlers(signal_pipes);
-  signal_write = signal_pipes[1];
   // detached child process of exited parent
 
   if (!args.foreground) {
@@ -349,24 +305,13 @@ int main(int argc, char **argv) {
     dup2(new_stdout, STDOUT_FILENO);
   }
 
-  char startup_directory[PATH_MAX];
-  getcwd(startup_directory, PATH_MAX - 1);
 
-  struct velvet velvet = {
-      .scene = velvet_scene_default,
-      .clients = vec(struct velvet_client),
-      .coroutines = vec(struct velvet_coroutine),
-      .processes = vec(struct velvet_process),
-      .stored_strings = vec(struct velvet_kvp),
-      .socket = sock_fd,
-      .event_loop = io_default,
-      .signal_read = signal_pipes[0],
-      .daemon = !args.foreground,
-      .startup_directory = startup_directory,
-      .positional_args = args.positional,
-      .arg0 = argv[0],
-      .clean = args.clean,
-  };
+  struct velvet velvet = {0};
+  velvet_init(&velvet, sock_fd, argv[0], args.positional);
+  velvet.daemon = !args.foreground;
+  // velvet.positional_args = args.positional;
+  // velvet.arg0 = argv[0];
+  velvet.clean = args.clean;
 
   velvet_loop(&velvet, initial_screen_size);
   velvet_fast_shutdown(&velvet);
@@ -410,10 +355,15 @@ _Noreturn static void velvet_fast_shutdown(struct velvet *velvet) {
     }
   }
 
+  struct velvet_process *p;
+  vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
+  vec_where(p, velvet->marked_for_death, p->pid && !p->killed) kill(p->pid, SIGKILL);
+
   // 4. Exit
   exit(0);
 }
 
+static int signal_write;
 static void attach_sighandler(int sig, siginfo_t *siginfo, void *context) {
   (void)siginfo, (void)context;
   ssize_t written = write(signal_write, &sig, sizeof(sig));

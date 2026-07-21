@@ -157,9 +157,8 @@ void terminal_light_reset(void) {
 
 void set_nonblocking(int fd) {
   int flags = fcntl(fd, F_GETFL);
-  if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    velvet_die("fcntl:");
-  }
+  if (flags == -1) velvet_die("flags:");
+  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) velvet_die("fcntl:");
 }
 
 void set_cloexec(int fd) {

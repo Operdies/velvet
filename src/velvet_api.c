@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <lua.h>
 #include <math.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -26,6 +27,11 @@ _Noreturn static void lua_bail(struct velvet *v, char *fmt, ...) {
   lua_error(v->current);
   /* lua_error longjumps back to lua call site */
   assert(!"Unreachable");
+}
+
+static int lua_debug_traceback_handler(lua_State *L) {
+  luaL_traceback(L, L, lua_tostring(L, 1), 1);
+  return 1;
 }
 
 static struct velvet_window *check_lua_window(struct velvet *v, int win) {
@@ -162,9 +168,43 @@ static lua_stackRetCount vv_api_get_processes(struct velvet *v) {
   return 1;
 }
 
-static void vv_api_process_kill(struct velvet *v, lua_Integer id) {
+static char *signal_name(int signal) {
+  /* the exact signal names used in spec.lua */
+  char *names[] = {
+      [SIGHUP] = "hup",
+      [SIGINT] = "int",
+      [SIGQUIT] = "quit",
+      [SIGKILL] = "kill",
+      [SIGUSR1] = "usr1",
+      [SIGUSR2] = "usr1",
+      [SIGALRM] = "alrm",
+      [SIGTERM] = "term",
+      [SIGSTOP] = "stop",
+      [SIGCONT] = "cont",
+  };
+
+  if (LENGTH(names) <= signal) return NULL;
+  return names[signal];
+}
+
+static void vv_api_process_kill(struct velvet *v, lua_Integer id, enum velvet_api_unix_signal signal) {
+  /* defined in the same order as the signal enum from spec.lua */
+  int signal_lookup[] = {
+      SIGHUP,
+      SIGINT,
+      SIGQUIT,
+      SIGKILL,
+      SIGUSR1,
+      SIGUSR2,
+      SIGALRM,
+      SIGTERM,
+      SIGSTOP,
+      SIGCONT,
+  };
+
+  assert(LENGTH(signal_lookup) > signal);
   struct velvet_process *p = check_process(v, id);
-  velvet_process_kill(v, p);
+  velvet_process_kill(v, p, signal_lookup[signal]);
 }
 
 static void split_and_push_string_array(lua_State *L) {
@@ -184,7 +224,99 @@ static void split_and_push_string_array(lua_State *L) {
   }
 }
 
-static lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
+/* fetch func_ref from the lua registry and invoke it with `nargs` parameters.
+ * nargs will be popped. */
+static void pcall_func_with_args(lua_State *L, int nargs) {
+  int argtop = lua_gettop(L) - nargs + 1;
+
+  /* insert msgh right before the function and args */
+  int msgh = argtop - 1;
+  lua_pushcfunction(L, lua_debug_traceback_handler);
+  lua_insert(L, msgh);
+
+  if (lua_pcall(L, nargs, 0, msgh) != LUA_OK) {
+    struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+    struct u8_slice err = luaL_checkslice(L, -1);
+    struct velvet_api_system_message_event_args event_args = {
+        .level = VELVET_API_SEVERITY_ERROR,
+        .message = err,
+    };
+    velvet_api_raise_system_message(v, event_args);
+  }
+  /* pop everything above and icluding msgh */
+  lua_settop(L, msgh - 1);
+}
+
+void velvet_process_on_exit(struct velvet *v, struct velvet_process *p) {
+  /* v->L is unset during reload */
+  if (!v->L) return;
+  struct u8_slice close = {0};
+  velvet_process_on_stdout(v, p, close);
+  velvet_process_on_stderr(v, p, close);
+
+  if (p->callbacks.on_exit == LUA_NOREF) return;
+
+  lua_State *L = v->L;
+  lua_rawgeti(L, LUA_REGISTRYINDEX, p->callbacks.on_exit);
+  luaL_unref(v->L, LUA_REGISTRYINDEX, p->callbacks.on_exit);
+  lua_pushinteger(L, p->id);
+
+  if (p->term_signal) {
+    /* if terminated by signal, call on_exit(id, nil, signal); */
+    lua_pushnil(L);
+    char *signame = signal_name(p->term_signal);
+    if (signame) {
+      lua_pushstring(L, signame);
+    } else {
+      lua_pushfstring(L, "%d", p->term_signal);
+    }
+  } else {
+    /* if terminated normally, call on_exit(id, exit_code, nil); */
+    lua_pushinteger(L, p->exit_code);
+    lua_pushnil(L);
+  }
+  pcall_func_with_args(L, 3);
+
+  p->callbacks.on_exit = LUA_NOREF;
+}
+
+static void lua_push_slice_or_nil(lua_State *L, struct u8_slice data) {
+  if (data.len == 0) lua_pushnil(L);
+  else lua_pushlstring(L, (char*)data.content, data.len);
+}
+
+void velvet_process_on_stdout(struct velvet *v, struct velvet_process *p, struct u8_slice data) {
+  if (!v->L) return;
+  if (p->callbacks.on_stdout == LUA_NOREF) return;
+  lua_rawgeti(v->L, LUA_REGISTRYINDEX, p->callbacks.on_stdout);
+  if (data.len == 0) {
+    /* stdout closed */
+    luaL_unref(v->L, LUA_REGISTRYINDEX, p->callbacks.on_stdout);
+    p->callbacks.on_stdout = LUA_NOREF;
+  }
+  lua_pushinteger(v->L, p->id);
+  lua_push_slice_or_nil(v->L, data);
+  lua_pushstring(v->L, "stdout");
+  pcall_func_with_args(v->L, 3);
+}
+
+void velvet_process_on_stderr(struct velvet *v, struct velvet_process *p, struct u8_slice data) {
+  if (!v->L) return;
+  if (p->callbacks.on_stderr == LUA_NOREF) return;
+  lua_rawgeti(v->L, LUA_REGISTRYINDEX, p->callbacks.on_stderr);
+  if (data.len == 0) {
+    /* stderr closed */
+    luaL_unref(v->L, LUA_REGISTRYINDEX, p->callbacks.on_stderr);
+    p->callbacks.on_stderr = LUA_NOREF;
+  }
+  lua_pushinteger(v->L, p->id);
+  lua_push_slice_or_nil(v->L, data);
+  lua_pushstring(v->L, "stderr");
+  pcall_func_with_args(v->L, 3);
+}
+
+static lua_stackRetCount
+vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
   vec_clear(&envlist);
   string_clear(&stringbuf);
 
@@ -195,96 +327,118 @@ static lua_stackRetCount vv_api_process_spawn(struct velvet *v, lua_stackIndex c
     split_and_push_string_array(L);
   }
 
-  if (lua_istable(L, -1)) {
-    int len = luaL_len(L, -1);
-    if (len == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
+  if (!lua_istable(L, -1)) lua_bail(v, "bad argument #1 to 'process_spawn'. string or string[] expected.");
 
-    char *prog;
-    char **arglist = velvet_calloc(len + 1, sizeof(char*));
-    arglist[len] = NULL;
-    for (int i = 1; i <= len; i++) {
-      lua_geti(L, -1, i);
-      if (!lua_isstring(L, -1)) {
-        free(arglist);
-        lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
-      }
-      arglist[i - 1] = (char*)luaL_checkstring(L, -1);
-      lua_pop(L, 1);
+  int len = luaL_len(L, -1);
+  if (len == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
+
+  char *prog;
+  char **arglist = velvet_calloc(len + 1, sizeof(char *));
+  arglist[len] = NULL;
+  for (int i = 1; i <= len; i++) {
+    lua_geti(L, -1, i);
+    if (!lua_isstring(L, -1)) {
+      free(arglist);
+      lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
     }
-
-    if (options.environment.set) {
-      /* push env table to top of stack.
-       * In a perfect world, my emitter would expose
-       * this through options.environment.value,
-       * but the recursive marshalling makes it difficult
-       * to provide a stable index. Instead we extract
-       * it the old fashioned way from lua_State */
-      // lua_pushvalue(L, options.environment.value);
-      lua_pushvalue(L, 2);
-      lua_getfield(L, -1, "environment");
-      luaL_checktable(L, -1);
-      struct u8_slice key, value;
-
-      /* split validation and writing to two passes.
-       * This simplifies the cleanup path. */
-
-      /* first pass: verify the table only contains string->string values */
-      lua_pushnil(L);
-      int capacity = 0;
-      while (lua_next(L, -2) != 0) {
-        key = luaL_checkslice(L, -2);
-        value = luaL_checkslice(L, -1);
-        capacity += key.len + value.len + 2; /* additional space for '=' and '\0' */
-        lua_pop(L, 1);
-      }
-
-      /* ensure the string does not get resized while pushing.
-       * this would invalidate all the pointers in envlist */
-      string_ensure_capacity(&stringbuf, capacity * 2);
-
-      /* second pass: write the values to envlist/stringbuf */
-      lua_pushnil(L);
-      while (lua_next(L, -2) != 0) {
-        key = luaL_checkslice(L, -2);
-        value = luaL_checkslice(L, -1);
-        char *entry = (char*)stringbuf.content + stringbuf.len;
-        string_push_slice(&stringbuf, key);
-        string_push_char(&stringbuf, '=');
-        string_push_slice(&stringbuf, value);
-        string_push_char(&stringbuf, 0);
-        vec_push(&envlist, &entry);
-        lua_pop(L, 1);
-      }
-      char *sentinel = NULL;
-      vec_push(&envlist, &sentinel);
-    }
-
-    char *wd = options.working_directory.set ? (char*)options.working_directory.value.content : NULL;
-    char **envp = envlist.length > 0 ? (char**)envlist.content : NULL;
-    struct velvet_process_stream_options streams = {
-        .in = options.stdin_mode.value == VELVET_API_PROCESS_STREAM_MODE_STREAM,
-        .out = options.stdout_mode.value == VELVET_API_PROCESS_STREAM_MODE_STREAM,
-        .err = options.stderr_mode.value == VELVET_API_PROCESS_STREAM_MODE_STREAM,
-    };
-    lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
-    prog = arglist[0];
-    free(arglist);
-    if (proc_id < 0) { 
-      lua_bail(v, "Error starting %s: %s", prog, strerror(-proc_id));
-    }
-    lua_pushinteger(L, proc_id);
-    return 1;
+    arglist[i - 1] = (char *)luaL_checkstring(L, -1);
+    lua_pop(L, 1);
   }
 
+  if (options.environment.set) {
+    lua_pushvalue(L, options.environment.value);
+    luaL_checktable(L, -1);
+    struct u8_slice key, value;
+
+    /* perfrom validation and writing in two passes.
+     * This simplifies the cleanup path. */
+
+    /* first pass: verify the table only contains string->string values */
+    lua_pushnil(L);
+    int capacity = 0;
+    while (lua_next(L, -2) != 0) {
+      if (!lua_isstring(L, -2)) lua_bail(v, "environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
+      key = luaL_checkslice(L, -2);
+      if (!lua_isstring(L, -1)) lua_bail(v, "environment['%s']: expected string, got %s", key.content, lua_typename(L, lua_type(L, -1)));
+      value = luaL_checkslice(L, -1);
+      capacity += key.len + value.len + 2; /* additional space for '=' and '\0' */
+      lua_pop(L, 1); /* pop value, keep key for next() */
+    }
+
+    /* ensure the string does not get resized while pushing.
+     * this would invalidate all the pointers in envlist */
+    string_ensure_capacity(&stringbuf, capacity * 2);
+
+    /* second pass: write the values to envlist/stringbuf */
+    lua_pushnil(L);
+    while (lua_next(L, -2) != 0) {
+      key = luaL_checkslice(L, -2);
+      value = luaL_checkslice(L, -1);
+      char *entry = (char *)stringbuf.content + stringbuf.len;
+      string_push_slice(&stringbuf, key);
+      string_push_char(&stringbuf, '=');
+      string_push_slice(&stringbuf, value);
+      string_push_char(&stringbuf, 0);
+      vec_push(&envlist, &entry);
+      lua_pop(L, 1);
+    }
+    char *sentinel = NULL;
+    vec_push(&envlist, &sentinel);
+  }
+
+  char *wd = options.working_directory.set ? (char *)options.working_directory.value.content : NULL;
+  char **envp = envlist.length > 0 ? (char **)envlist.content : NULL;
+  struct velvet_process_stream_options streams = {
+      .out = options.on_stdout.set,
+      .err = options.on_stderr.set,
+      .in = options.input.set == false || options.input.value.len > 0,
+  };
+  lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
+  prog = arglist[0];
+  free(arglist);
+  if (proc_id < 0) {
+    lua_bail(v, "Error starting %s: %s", prog, strerror(-proc_id));
+  }
+
+  /* why do a scan when we know the index */
+  struct velvet_process *proc = vec_nth(v->processes, v->processes.length - 1);
+  assert(proc->id == proc_id);
+
+  if (options.on_exit.set) {
+    lua_pushvalue(L, options.on_exit.value);
+    proc->callbacks.on_exit = luaL_ref(L, LUA_REGISTRYINDEX);
+  } else {
+    proc->callbacks.on_exit = LUA_NOREF;
+  }
+  if (options.on_stdout.set) {
+    lua_pushvalue(L, options.on_stdout.value);
+    proc->callbacks.on_stdout = luaL_ref(L, LUA_REGISTRYINDEX);
+  } else {
+    proc->callbacks.on_stdout = LUA_NOREF;
+  }
+  if (options.on_stderr.set) {
+    lua_pushvalue(L, options.on_stderr.value);
+    proc->callbacks.on_stderr = luaL_ref(L, LUA_REGISTRYINDEX);
+  } else {
+    proc->callbacks.on_stderr = LUA_NOREF;
+  }
+
+  if (options.input.set) {
+    velvet_process_write_stdin(v, proc, options.input.value);
+    velvet_process_close_stdin(v, proc);
+  }
+
+  lua_pushinteger(L, proc_id);
   return 1;
 }
 
-static void vv_api_process_stdin_write(struct velvet *v, lua_Integer id, struct u8_slice text) {
+static void vv_api_process_write_stdin(struct velvet *v, lua_Integer id, struct u8_slice text) {
   struct velvet_process *p = check_process(v, id);
+  if (p->stdin_closed) lua_bail(v, "Cannot write to process %I: stdin is closed", id);
   velvet_process_write_stdin(v, p, text);
 }
 
-static void vv_api_process_stdin_close(struct velvet *v, lua_Integer id) {
+static void vv_api_process_close_stdin(struct velvet *v, lua_Integer id) {
   struct velvet_process *p = check_process(v, id);
   velvet_process_close_stdin(v, p);
 }
@@ -507,11 +661,6 @@ static struct velvet_api_mouse_settings vv_api_window_get_mouse_settings(struct 
       .reporting = (enum velvet_api_mouse_reporting)w->emulator.options.mouse.tracking,
   };
   return s;
-}
-
-static int lua_debug_traceback_handler(lua_State *L) {
-  luaL_traceback(L, L, lua_tostring(L, 1), 1);
-  return 1;
 }
 
 static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {

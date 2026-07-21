@@ -2,6 +2,8 @@
 #include "csi.h"
 #include "platform.h"
 #include "utils.h"
+#include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +12,7 @@
 #include "velvet_alloc.h"
 #include "velvet_lua.h"
 #include "velvet_scene.h"
+#include "velvet_process.h"
 
 /* the SYM macro is not useful. It exists because of a treesitter parser bug which messes up indentation otherwise */
 #define SYM(X) #X
@@ -1331,8 +1334,22 @@ static void lua_assert(lua_State *L, char *cmd) {
   lua_pop(L, lua_gettop(L));
 }
 
+/* initialize a testing velvet struct with the bare minimum for asserts to succeed */
+static struct velvet get_dumb_velvet(void) {
+  struct velvet v = {
+      .scene = velvet_scene_default,
+      .clients = vec(struct velvet_client),
+      .coroutines = vec(struct velvet_coroutine),
+      .processes = vec(struct velvet_process),
+      .marked_for_death = vec(struct velvet_process),
+      .stored_strings = vec(struct velvet_kvp),
+      .event_loop = io_default,
+  };
+  return v;
+}
+
 void test_lua(void) {
-  struct velvet v = {.event_loop = io_default};
+  struct velvet v = get_dumb_velvet();
   char *binpath = platform_get_exe_path();
   if (!binpath) velvet_die("Unable to locate library");
   char *lastslash = strrchr(binpath, '/');
@@ -1365,7 +1382,11 @@ void test_lua(void) {
 }
 
 void test_lua_modules(void) {
-  struct velvet v = {.event_loop = io_default, .stored_strings = vec(struct velvet_kvp)};
+  struct velvet v = {0};
+  char *argv[] = { "-S", "test", NULL };
+  int noop_fd[2];
+  pipe(noop_fd);
+  velvet_init(&v, noop_fd[0], "vv", argv);
   velvet_lua_init(&v);
   lua_State *L = v.L;
 
@@ -1376,18 +1397,27 @@ void test_lua_modules(void) {
 
   lua_assert(L, "require('velvet.test').run()");
 
+  /* value needed by lua test */
+  lua_pushinteger(L, SIGTERM);
+  lua_setglobal(L, "SIGTERM");
+
   bool success = false;
-  for (int i = 0; i < 1000; i++) {
+  /* lua does not have a way to set environment variables
+   * in the scope of the running process, so we help it a bit here. */
+  setenv("LUA_TEST_ENV", "123", true);
+  for (int i = 0; i < 100000; i++) {
     lua_getglobal(L, "TEST_STATUS");
     if (!lua_isnoneornil(L, -1)) {
       success = lua_toboolean(L, -1);
       break;
     }
-    /* io_dispatch will wait for and invoke any pending schedules */
-    assert(v.event_loop.scheduled_actions.length > 0);
-    io_dispatch(&v.event_loop);
     lua_pop(L, 1);
+    /* io_dispatch will wait for and invoke any pending schedules */
+    velvet_dispatch(&v);
   }
+  struct velvet_process *p;
+  vec_where(p, v.processes, p->pid) kill(p->pid, SIGKILL);
+  vec_where(p, v.marked_for_death, p->pid) kill(p->pid, SIGKILL);
   assert(success);
   velvet_destroy(&v);
 }

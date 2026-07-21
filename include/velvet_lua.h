@@ -7,6 +7,8 @@ void velvet_lua_source(struct velvet *v, char *path);
 void velvet_source_config(struct velvet *v);
 struct u8_slice luaL_checkslice(lua_State *L, lua_stackIndex idx);
 void lua_pushslice(lua_State *L, struct u8_slice s);
+lua_Integer luaL_checkfunction_and_shift(lua_State *L, lua_stackIndex idx, lua_stackIndex argtop);
+lua_Integer luaL_checktable_and_shift(lua_State *L, lua_stackIndex idx, lua_stackIndex argtop);
 lua_Integer luaL_checkfunction(lua_State *L, lua_stackIndex idx);
 lua_Integer luaL_checktable(lua_State *L, lua_stackIndex idx);
 bool luaL_checkboolean(lua_State *L, lua_stackIndex idx);

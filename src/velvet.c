@@ -21,6 +21,78 @@ static void velvet_client_render(struct u8_slice str, void *context) {
   string_push_slice(&s->pending_output, str);
 }
 
+static int signal_write;
+static void signal_handler(int sig, siginfo_t *siginfo, void *context) {
+  (void)siginfo, (void)context;
+  ssize_t written = write(signal_write, &sig, sizeof(sig));
+  if (written < (int)sizeof(sig)) velvet_die("signal write:");
+}
+
+static void signal_trap(int sig, siginfo_t *siginfo, void *context) {
+  (void)siginfo, (void)context, (void)sig;
+  __builtin_trap();
+}
+
+static void install_signal_handlers(int *pipes) {
+  if (pipe(pipes) < 0) velvet_die("pipe:");
+
+  set_cloexec(pipes[0]);
+  set_cloexec(pipes[1]);
+
+  struct sigaction sig_handle = {0};
+  sig_handle.sa_sigaction = &signal_handler;
+  sig_handle.sa_flags = SA_SIGINFO | SA_RESTART;
+
+  struct sigaction sig_trap = {0};
+  sig_trap.sa_sigaction = &signal_trap;
+  sig_trap.sa_flags = SA_SIGINFO;
+
+  int handle[] = {SIGTERM, SIGQUIT, SIGINT, SIGCHLD, SIGHUP, SIGUSR1, SIGUSR2};
+  int trap[] = {SIGBUS};
+  int ignore[] = {SIGPIPE, SIGTTOU, SIGTTIN, SIGTSTP};
+
+  for (int i = 0; i < LENGTH(handle); i++) {
+    if (sigaction(handle[i], &sig_handle, NULL) == -1) {
+      velvet_die("sigaction:");
+    }
+  }
+  for (int i = 0; i < LENGTH(trap); i++) {
+    if (sigaction(trap[i], &sig_trap, NULL) == -1) {
+      velvet_die("sigaction:");
+    }
+  }
+  for (int i = 0; i < LENGTH(ignore); i++) {
+    signal(ignore[i], SIG_IGN);
+  }
+}
+
+static char startup_directory[PATH_MAX] = {0};
+void velvet_init(struct velvet *v, int sock_fd, char *arg0, char **argv) {
+  assert(!signal_write);
+  int signal_pipes[2];
+
+  install_signal_handlers(signal_pipes);
+  signal_write = signal_pipes[1];
+  getcwd(startup_directory, PATH_MAX - 1);
+
+
+  struct velvet stock = {
+      .scene = velvet_scene_default,
+      .clients = vec(struct velvet_client),
+      .coroutines = vec(struct velvet_coroutine),
+      .processes = vec(struct velvet_process),
+      .marked_for_death = vec(struct velvet_process),
+      .stored_strings = vec(struct velvet_kvp),
+      .socket = sock_fd,
+      .event_loop = io_default,
+      .signal_read = signal_pipes[0],
+      .startup_directory = startup_directory,
+      .positional_args = argv,
+      .arg0 = arg0,
+  };
+  *v = stock;
+}
+
 void velvet_client_destroy(struct velvet *velvet, struct velvet_client *s) {
   if (s->input) close(s->input);
   if (s->output) close(s->output);
@@ -219,28 +291,44 @@ static void socket_accept(struct io_source *src) {
   vec_push(&velvet->clients, &c);
 }
 
+static void velvet_reap(struct velvet *v, int pid, int status) {
+  struct velvet_scene *m = &v->scene;
+  struct velvet_process *p;
+  struct velvet_window *h;
+  struct velvet_process *d;
+
+  vec_find(h, m->windows, h->pid == pid);
+  if (h) {
+    h->pid = 0;
+    h->exited_at = get_ms_since_startup();
+    velvet_scene_close_and_remove_window(&v->scene, h);
+    return;
+  }
+
+  vec_find(p, v->processes, p->pid == pid);
+  if (p) {
+    /* defer destroying this process to ensure pending output / error is propagated. */
+    p->pid = 0;
+    if (WIFEXITED(status)) {
+      p->exit_code = WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)) {
+      p->term_signal = WTERMSIG(status);
+    }
+    return;
+  }
+
+  vec_find(d, v->marked_for_death, d->pid == pid);
+  if (d) {
+    velvet_process_destroy(d);
+    vec_remove(&v->marked_for_death, d);
+  }
+}
+
 void velvet_reap_exited_processes(struct velvet *v) {
   int status;
   pid_t pid = 0;
-  struct velvet_scene *m = &v->scene;
-
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    struct velvet_process *p;
-    struct velvet_window *h;
-    vec_find(h, m->windows, h->pid == pid);
-    if (h) {
-      h->pid = 0;
-      h->exited_at = get_ms_since_startup();
-      velvet_scene_close_and_remove_window(&v->scene, h);
-    } else {
-      vec_find(p, v->processes, p->pid == pid);
-      if (p) {
-        /* defer destroying this process to ensure pending output / error is propagated. */
-        p->pid = 0;
-        p->exit_code = WEXITSTATUS(status);
-        p->destroy_pending = true;
-      }
-    }
+    velvet_reap(v, pid, status);
   }
 }
 
@@ -385,21 +473,23 @@ static void on_process_output(struct io_source *src, struct u8_slice output) {
   struct velvet *velvet = src->data;
   struct velvet_process *proc;
   vec_find(proc, velvet->processes, proc->out == src->fd || proc->err == src->fd);
-  if (proc && output.len > 0) {
-    struct velvet_api_process_output_event_args args = {0};
-    args.output = output;
-    args.id = proc->id;
-    args.channel = proc->out == src->fd ? VELVET_API_OUTPUT_CHANNEL_STDOUT
-                                        : VELVET_API_OUTPUT_CHANNEL_STDERR;
-    velvet_api_raise_process_output(velvet, args);
-  }
-  if (output.len == 0) {
-    if (proc) {
-      if (proc->out == src->fd) { close(proc->out); proc->out = 0; }
-      if (proc->err == src->fd) { close(proc->err); proc->err = 0; }
+  if (proc) {
+    if (proc->out == src->fd)
+      velvet_process_on_stdout(velvet, proc, output);
+    else if (proc->err == src->fd)
+      velvet_process_on_stderr(velvet, proc, output);
+    if (output.len == 0) {
+      /* the proc pointer may have been invalidated during the lua callback */
+      vec_find(proc, velvet->processes, proc->out == src->fd || proc->err == src->fd);
+      if (proc) {
+        if (proc->out == src->fd) { close(proc->out); proc->out = 0; }
+        if (proc->err == src->fd) { close(proc->err); proc->err = 0; }
+      }
     }
-    velvet_reap_exited_processes(velvet);
   }
+
+  if (output.len == 0)
+    velvet_reap_exited_processes(velvet);
 }
 
 static void on_process_writable(struct io_source *src) {
@@ -556,7 +646,40 @@ int velvet_next_id(void) {
   return id++;
 }
 
-static void velvet_dispatch(struct velvet *velvet) {
+/* 1. rudely kill processes which failed to exit in a reasonable time
+ * 2. clean up normally exited processes
+ * 3. dispatch on_exit events
+ */
+static void velvet_sweep_processes(struct velvet *velvet) {
+  uint64_t now = get_ms_since_startup();
+  struct velvet_process *proc;
+
+  /* procs in marked_for_death are removed from the list during reap. */
+  vec_rwhere(proc, velvet->marked_for_death, !proc->killed && proc->termination_deadline < now) {
+    kill(proc->pid, SIGKILL);
+    proc->killed = true;
+  }
+
+  /* note that the vec_rforeach macro is not being used here because
+   * it iterates the actual pointer. This is unsafe here because velvet_process_destroy
+   * can trigger a lua callback which can cause the base pointer to be realloc'ed.
+   * By using an indexed iteration we avoid this problem.
+   * The lua API can only start new processes, so any processes added to the list
+   * via the callback are going to be greater than `i`. */
+  for (int i = velvet->processes.length - 1; i >= 0; i--) {
+    proc = vec_nth_unchecked(velvet->processes, i);
+    /* if proc->pid is 0, this process has been reaped and can safely be destroyed. */
+    /* if proc has an expired termination deadline, kill it dead */
+    if (proc->pid == 0) {
+      struct velvet_process copy = *proc;
+      velvet_process_destroy(proc);
+      vec_remove_at(&velvet->processes, i);
+      velvet_process_on_exit(velvet, &copy);
+    }
+  }
+}
+
+void velvet_dispatch(struct velvet *velvet) {
   if (velvet->reloading) velvet_lua_restart_vm(velvet);
   struct io *const loop = &velvet->event_loop;
   struct velvet_client *focus = velvet_get_focused_client(velvet);
@@ -603,10 +726,9 @@ static void velvet_dispatch(struct velvet *velvet) {
     }
   }
 
+  velvet_sweep_processes(velvet);
+
   struct velvet_process *proc;
-  vec_rwhere(proc, velvet->processes, proc->destroy_pending) {
-    velvet_process_destroy(velvet, proc);
-  }
   vec_foreach(proc, velvet->processes) {
     struct io_source out = {
         .fd = proc->out,
@@ -716,6 +838,10 @@ void velvet_destroy(struct velvet *velvet) {
     string_destroy(&kvp->value);
   }
   vec_destroy(&velvet->stored_strings);
+  velvet_process_kill_and_destroy_all(velvet);
+  struct velvet_process *p;
+  vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
+  vec_where(p, velvet->marked_for_death, p->pid) kill(p->pid, SIGKILL);
   if (velvet->L) lua_close(velvet->L);
 }
 

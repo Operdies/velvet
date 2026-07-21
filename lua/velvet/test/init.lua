@@ -1,4 +1,8 @@
+-- value overriden by the test harness
+SIGTERM = 0
+
 local tests = {
+  'velvet.test.test_process',
   'velvet.test.test_deep_extend',
   'velvet.test.test_runtime_storage',
   'velvet.test.test_async'
@@ -13,6 +17,14 @@ function print(...)
   local str = table.concat({ ... }, "\t")
   io.write(str .. "\n")
 end
+
+function WARN(...)
+  local yellow = '\x1b[33m'
+  local reset = '\x1b[m'
+  local str = table.concat({ ... }, "\t")
+  io.stderr:write(yellow .. str .. reset .. "\n")
+end
+
 
 local function run()
   local failed = 0

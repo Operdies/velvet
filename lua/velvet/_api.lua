@@ -77,18 +77,22 @@ local api = {}
 ---| 'mouse_down' 
 ---| 'mouse_up' 
 
----@alias velvet.api.output_channel string 
----| 'stdout' 
----| 'stderr' 
-
----@alias velvet.api.process_stream_mode string 
----| 'none' This stream will be set to /dev/null
----| 'stream' This stream will be writable, or produce output, depending on stream direction
-
 ---@alias velvet.api.color_kind string 
 ---| 'reset' No color. Falls back to default background/foreground color. This also affects pseudotransparency behavior. If any background color is set except |reset|, a surface is considered opaque by the compositor.
 ---| 'rgb' Indicates a full rgb color
 ---| 'table' Indicates one of the 16 pre-defined ansi colors or an xterm-256color
+
+---@alias velvet.api.unix_signal string Unix process signal.
+---| 'hup' Hangup.
+---| 'int' Interrupt.
+---| 'quit' Quit and produce a core dump.
+---| 'kill' Terminate immediately. This signal cannot be caught or ignored.
+---| 'usr1' User-defined signal 1.
+---| 'usr2' User-defined signal 2.
+---| 'alrm' Alarm clock.
+---| 'term' Request graceful termination.
+---| 'stop' Suspend execution. This signal cannot be caught or ignored.
+---| 'cont' Resume a suspended process.
 
 
 --- @class velvet.api.mouse_settings
@@ -130,10 +134,11 @@ local api = {}
 
 --- @class velvet.api.process.spawn_options
 --- @field working_directory? string The initial working directory of the new process.
---- @field environment? table Optional table of environment variables to set in the new process.
---- @field stdin_mode? velvet.api.process_stream_mode stdin mode
---- @field stdout_mode? velvet.api.process_stream_mode stdout mode
---- @field stderr_mode? velvet.api.process_stream_mode stderr mode
+--- @field environment? table<string, string> Optional table of environment variables to set in the new process.
+--- @field input? string If set, |input| will be written to process stdin. Stdin will be automatically closed after writing.
+--- @field on_stdout? fun(id: integer, data: string|nil, channel: 'stdout'|'stderr'): nil Callback invoked when the process produces output on stdout.
+--- @field on_stderr? fun(id: integer, data: string|nil, channel: 'stdout'|'stderr'): nil Callback invoked when the process produces output on stderr.
+--- @field on_exit? fun(id: integer, exit_code: integer|nil, signal: string|nil): nil Callback invoked when the process exits.
 
 --- @class velvet.api.window.create_options
 --- @field working_directory? string The initial working directory of the new window.
@@ -247,15 +252,6 @@ local api = {}
 --- @field y_pixel integer The number of vertical pixels.
 --- @field lines integer The number of lines.
 --- @field columns integer The number of columns.
-
---- @class velvet.api.process.output.event_args
---- @field id integer The id of the process which produced the output.
---- @field output string Raw output. Not stripped for newlines, null bytes, or escapes.
---- @field channel velvet.api.output_channel Did |output| arrive on stdout or stderr
-
---- @class velvet.api.process.exit.event_args
---- @field id integer The id of the exited process.
---- @field exit_code integer The exit code of the exited process.
 
 --- Get the size of the screen.
 --- @return velvet.api.screen.geometry ret The geometry of the screen window.
@@ -467,7 +463,7 @@ function api.window_send_mouse_click(mouse_click) end
 --- @return nil ret 
 function api.window_send_mouse_scroll(mouse_scroll) end
 
---- Create a naked window with no backing process. This window can be controlled through the lua API. Returns the window id.
+--- Create a window with no backing process. This window can be controlled through the lua API. Returns the window id.
 --- @param options? velvet.api.window.create_options Options for the created window.
 --- @return integer ret The id of the new window
 function api.window_create(options) end
@@ -599,19 +595,20 @@ function api.get_processes() end
 
 --- Kill the process with id |id|.
 --- @param id integer The process to kill.
+--- @param signal? velvet.api.unix_signal The signal to send. Defaults to 'term' if omitted.
 --- @return nil ret 
-function api.process_kill(id) end
+function api.process_kill(id, signal) end
 
 --- Write to stdin of process |id|.
 --- @param id integer The process to kill.
 --- @param text string The content sent to stdin of process |id|.
 --- @return nil ret 
-function api.process_stdin_write(id, text) end
+function api.process_write_stdin(id, text) end
 
 --- Close stdin of process |id|.
---- @param id integer The process to kill.
+--- @param id integer The id of the process to close stdin for.
 --- @return nil ret 
-function api.process_stdin_close(id) end
+function api.process_close_stdin(id) end
 
 --- Create a new process running |cmd|. Returns the process id.
 --- @param cmd string|string[] The process to spawn.
@@ -668,8 +665,6 @@ function api.set_fps_target(new_value) end
 --- @field mouse_move? fun(event_args: velvet.api.mouse.move.event_args): nil Raised when the mouse moves.
 --- @field mouse_click? fun(event_args: velvet.api.mouse.click.event_args): nil Raised when the mouse is clicked.
 --- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
---- @field process_output? fun(event_args: velvet.api.process.output.event_args): nil Raised when a process produces output.
---- @field process_exited? fun(event_args: velvet.api.process.exit.event_args): nil Raised when a process exits.
 --- @field system_message? fun(event_args: velvet.api.system_message.event_args): nil Raised when the system logs an error message
 --- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
 --- @field pre_reload? fun(event_args: velvet.api.pre_reload.event_args): nil Raised before reloading. This event can be used to store state.

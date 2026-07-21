@@ -148,7 +148,7 @@ bool u8_match(struct u8_slice s, char *opt);
 #define vec_rwhere(item, vec, cond) vec_rforeach(item, vec) if ((cond))
 
 #define vec_foreach(item, vec)                                                                                         \
-  assert((vec).length == 0 || sizeof(*(item)) == (vec).element_size);                                                  \
+  assert(sizeof(*(item)) == (vec).element_size);                                                  \
   for ((item) = (vec).content; (((char *)(item)) < ((char *)(vec).content + (vec).length * (vec).element_size));       \
        (item)++)
 

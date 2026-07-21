@@ -71,6 +71,7 @@ void io_dispatch(struct io *io) {
     }
   }
 
+  assert(io->pollfds.length > 0 || timeout >= 0);
   int polled = poll(io->pollfds.content, io->pollfds.length, timeout);
   if (polled == -1) {
     // EAGAIN / EINTR are expected. In this case we should just return.
