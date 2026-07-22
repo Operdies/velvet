@@ -207,8 +207,9 @@ function pick.select(items, opts)
   draw()
 end
 
+--- @return velvet.window|nil
 function pick.get_active_picker()
-  return picker and picker:valid() and picker:get_visibility() and picker
+  return picker and picker:valid() and picker:get_visibility() and picker or nil
 end
 
 return pick
