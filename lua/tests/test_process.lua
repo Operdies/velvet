@@ -11,6 +11,12 @@ local function expect(x, y)
   assert(x == y, string.format("'%s' expected, was '%s'", x, y))
 end
 
+local function expect_error(err, fn, ...)
+  local ok, result = xpcall(fn, function(e) return e end, ...)
+  assert(not ok)
+  if err and not result:match(err) then expect(err, result) end
+end
+
 local function test_basic_functionality()
   local co = coroutine.running()
   local payload = [[
@@ -36,16 +42,15 @@ local function test_basic_functionality()
   })
 
   local exit_code = coroutine.yield()
-  assert(exit_code ~= nil, "Process did not exit!")
-  assert(exit_code == 0, "Process did not succeed!")
-  assert(#outputs.stdout == 2)
-  assert(#outputs.stderr == 2)
-  assert(outputs.stdout[1] == "hello output", "Process had no stdout")
-  assert(outputs.stderr[1] == "hello error", "Process had no stderr")
-  assert(outputs.stdout[2] == "nil")
-  assert(outputs.stderr[2] == "nil")
-  assert(#ids == 5) -- twice for output, twice for closing the stream, once for exiting
-  for _, id in ipairs(ids) do assert(id == proc_id, "Process id mismatch") end
+  expect(0, exit_code)
+  expect(2, #outputs.stdout)
+  expect(2, #outputs.stderr)
+  expect("hello output", outputs.stdout[1])
+  expect("hello error", outputs.stderr[1])
+  expect("nil", outputs.stdout[2])
+  expect("nil", outputs.stderr[2])
+  expect(5, #ids) -- twice for output, twice for closing the stream, once for exiting
+  for _, id in ipairs(ids) do expect(id, proc_id) end
 end
 
 local function test_stdin()
@@ -334,20 +339,114 @@ local function test_stdout_reap_race()
     local output = shell_oneline('printf hello' .. i)
     expect('hello' .. i, output)
   end
+
+  -- concurrent now
+  local tasks = {}
+  for i = 1, 100 do
+    tasks[i] = vv.async.run(shell_oneline, 'printf hello' .. i)
+  end
+  local results = vv.async.wait_all(tasks)
+  for i = 1, 100 do
+    expect(true, results[i].data[1])
+    expect('hello' .. i, results[i].data[2])
+  end
+end
+
+local function test_process_wrapper()
+  -- vv.async.run(function()
+  local process = require('velvet.process')
+  local p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; sleep 0.1 ; printf le;' }, { stderr = false })
+  expect_error('cannot read from closed stream', p.line, p, 'stderr')
+  expect('hello', p:line())
+  expect('worldle', p:line())
+  expect(nil, p:line())
+  expect(nil, p:line())
+  expect(nil, p:lines()())
+  expect(0, p:wait_for_exit())
+
+  p = process.spawn({ 'sh', '-c', 'printf "hello\nworld\n"' })
+  local lines = {}
+  for line in p:lines() do lines[#lines+1] = line end
+  assert(2, #lines)
+  expect('hello', lines[1])
+  expect('world', lines[2])
+  expect(0, p:wait_for_exit())
+
+  local payload = [[
+i=1
+while [ "$i" -le 100 ]; do
+  echo "$i"
+  i=$((i+1))
+done
+]]
+  p = process.spawn({ 'sh', '-c', payload }, { stdin = false, stderr = false })
+  for i = 1, 100 do
+    expect(tostring(i), p:line('stdout'))
+  end
+  expect(nil, p:line('stdout'))
+
+  payload = [[
+while read MY_ARG; do
+  echo "$MY_ARG"
+done
+]]
+  p = process.spawn({ 'sh', '-c', payload }, { stdin = true, stderr = false })
+  local items = { "this", "is", "my", "list", "of", "awesome and cool", "strings" }
+  for _, v in ipairs(items) do
+    p:write_stdin(v .. '\n')
+    expect(v, p:line('stdout'))
+  end
+  local large_string = string.rep('what a strange string this is', 1000)
+  for _ = 1, 10 do
+    p:write_stdin(large_string .. '\n')
+    expect(large_string, p:line('stdout'))
+  end
+  p:write_stdin(large_string .. '\n')
+  p:close_stdin()
+  expect(large_string .. '\n', p:read_all('stdout'))
+  expect(nil, p:line('stdout'))
+
+  p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le";' }, { stderr = false })
+  expect('hello\nworldle', p:read_all())
+  expect(nil, p:read_all())
+  expect(0, p:wait_for_exit())
+
+  p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le\n";' }, { stderr = false })
+  expect('hello\nworldle\n', p:read_all())
+  expect(nil, p:read_all())
+  expect(0, p:wait_for_exit())
 end
 
 return {
   test = function()
-    test_basic_functionality()
-    test_stdin()
-    test_exitcodes()
-    test_working_directory()
-    test_process_kill()
     test_environment()
-    test_environment()
-    test_spawn_errors()
+    -- it is kind of necessary to insert sleeps in some process related
+    -- tests because buffering behavior is timing sensitive by nature.
+    -- we run these tests in parallel to save a bit of time.
+    -- Parallel processes is closer to a real world scenario anyway.
+    local tests = {
+      test_basic_functionality,
+      test_environment,
+      test_exitcodes,
+      test_process_kill,
+      test_process_wrapper,
+      test_signal_delivery,
+      test_spawn_errors,
+      test_stdin,
+      test_stdout_reap_race,
+      test_working_directory,
+    }
+
+    local tasks = {}
+    for i, v in ipairs(tests) do
+      tasks[i] = vv.async.run(v)
+    end
+    local result = vv.async.wait_all(tasks)
+    for _, v in ipairs(result) do
+      local ret = v.data
+      assert(ret[1], ret[2])
+    end
+    -- we can't run this alongside the other tests because it is designed to cause errors
     test_filedescriptor_leaks()
-    test_stdout_reap_race()
-    test_signal_delivery()
   end
 }

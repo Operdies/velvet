@@ -323,6 +323,8 @@ function EventSource:wait(timeout, when)
       when = function(_, event) return when(event.data) end
     }
   end
+  assert(type(timeout) == 'nil' or math.type(timeout) == 'integer',
+    string.format("Bad argument #2 (integer expected, got %s)", type(timeout)))
   local _, result = M.wait(registration, timeout)
   return result.data
 end

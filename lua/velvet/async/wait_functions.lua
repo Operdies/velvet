@@ -10,10 +10,16 @@ local function when_impl(reg, event)
 end
 
 local function wait_impl(event, timeout, when)
+  assert(type(when) == 'nil' or type(when) == 'function',
+    string.format("Bad argument #2 (function expected, got %s)", type(when)))
+  assert(type(timeout) == 'nil' or math.type(timeout) == 'integer',
+    string.format("Bad argument #1 (integer expected, got %s)", type(timeout)))
+
   local registration = event
   if when then
     registration = { event = event, inner_when = when, when = when_impl }
   end
+
   local _, result = M.wait(registration, timeout)
   return result.data
 end
