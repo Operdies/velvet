@@ -292,7 +292,7 @@ static ssize_t client_write_pending(struct velvet_client *sesh) {
   return -1;
 }
 
-static void velvet_render(struct u8_slice str, void *context) {
+static void velvet_write_render_to_clients(struct u8_slice str, void *context) {
   struct velvet *a = context;
   struct velvet_client *s;
   if (str.len == 0) return;
@@ -524,7 +524,7 @@ static void velvet_dispatch_frame(void *data) {
     };
     velvet_api_raise_pre_render(v, event_args);
     velvet_raise_window_events(v);
-    velvet_scene_render_damage(&v->scene, velvet_render, v);
+    velvet_scene_render_damage(&v->scene, velvet_write_render_to_clients, v);
   }
 
   v->_render_invalidated = false;
