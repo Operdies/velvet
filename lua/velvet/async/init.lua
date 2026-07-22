@@ -434,7 +434,16 @@ function M.wait_all(events, timeout)
       -- completions in an event source for the resolve handler to function.
       -- This is not so bad because event sources are very lightweight.
       event = M.event_source()
-      defer_on(reg, emit_coroutine_result, event)
+      local state = co_state[reg]
+      if not state.deferring then
+        defer_on(reg, emit_coroutine_result, event)
+      else
+        -- it is not legal to schedule defers on an already deferring coroutine,
+        -- so instead we schedule emitting the coroutine result immediately
+        vv.api.schedule_after(0, function()
+          event:emit(state.result)
+        end)
+      end
     end
 
     local when = function(_, evt)
