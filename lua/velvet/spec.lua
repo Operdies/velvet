@@ -42,6 +42,8 @@
 --- @field name string
 --- @field type string
 --- @field doc spec_doc
+--- @field optional? boolean
+--- @field default_value? string|number
 
 --- @class spec_return
 --- @field type string
@@ -50,6 +52,11 @@
 --- @class spec_function
 --- @field name string function name
 --- @field doc spec_doc
+--- @field params? spec_parameter[]
+--- @field returns? spec_return
+
+--- @class spec_callback
+--- @field name string callback name
 --- @field params? spec_parameter[]
 --- @field returns? spec_return
 
@@ -63,6 +70,7 @@
 --- @field types spec_type[]
 --- @field enums spec_enum[]
 --- @field api spec_function[]
+--- @field callbacks spec_callback[]
 --- @field events spec_event[]
 
 --- @type spec
@@ -249,6 +257,9 @@ return {
       },
     },
   },
+
+  --- callbacks {{{1
+  callbacks = {},
 
   --- types {{{1
   types = {
@@ -503,8 +514,6 @@ return {
         { name = "y_pixel",                                 type = "int",  doc = "The number of vertical pixels." },
         { name = "lines",                                   type = "int",  doc = "The number of lines." },
         { name = "columns",                                 type = "int",  doc = "The number of columns." },
-        { name = "supports_repeating_characters",           type = "bool", doc = "Some terminals do not support CSI REP at all.", optional = true },
-        { name = "supports_repeating_multibyte_characters", type = "bool", doc = "Some terminals do not support CSI REP for multibyte characters.", optional = true },
       },
     },
     {

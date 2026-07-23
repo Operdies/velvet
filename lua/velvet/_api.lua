@@ -92,14 +92,14 @@ local api = {}
 
 
 --- @class velvet.api.mouse_settings
---- @field reporting velvet.api.mouse_reporting nil
---- @field protocol velvet.api.mouse_protocol nil
+--- @field reporting velvet.api.mouse_reporting 
+--- @field protocol velvet.api.mouse_protocol 
 
 --- @class velvet.api.rgb_color
---- @field red number nil
---- @field green number nil
---- @field blue number nil
---- @field alpha? number nil
+--- @field red number 
+--- @field green number 
+--- @field blue number 
+--- @field alpha? number 
 
 --- @class velvet.api.cell_color
 --- @field rgb? velvet.api.rgb_color|string RGB color
@@ -247,8 +247,6 @@ local api = {}
 --- @field y_pixel integer The number of vertical pixels.
 --- @field lines integer The number of lines.
 --- @field columns integer The number of columns.
---- @field supports_repeating_characters? boolean Some terminals do not support CSI REP at all.
---- @field supports_repeating_multibyte_characters? boolean Some terminals do not support CSI REP for multibyte characters.
 
 --- @class velvet.api.process.output.event_args
 --- @field id integer The id of the process which produced the output.
