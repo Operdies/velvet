@@ -621,6 +621,10 @@ function api.process_stdin_close(id) end
 --- @return integer ret The id of the spawned process.
 function api.process_spawn(cmd, options) end
 
+--- Get the current environment variables of this process
+--- @return table<string, string> ret The environment of this process.
+function api.get_environment() end
+
 --- Get scrollback_scroll_multiplier
 --- @return integer ret The current value
 function api.get_scrollback_scroll_multiplier() end

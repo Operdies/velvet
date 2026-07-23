@@ -150,6 +150,7 @@ local function is_manual(name)
     ["line[]"] = true,
     ["string|string[]"] = true,
     ["table"] = true,
+    ["table<string, string>"] = true,
   }
   return manual_types[name]
 end

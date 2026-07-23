@@ -1509,6 +1509,26 @@ static lua_stackRetCount vv_api_window_get_cells(struct velvet *v, lua_Integer w
   return 1;
 }
 
+static lua_Integer vv_api_get_environment(struct velvet *v) {
+  extern char **environ;
+  lua_State *L = v->current;
+  lua_newtable(L);
+
+  for (char **env = environ; *env != NULL; env++) {
+    char *entry = *env;
+    char *eq = strchr(entry, '=');
+
+    /* Skip malformed entries. */
+    if (eq == NULL || eq == entry) continue;
+
+    lua_pushlstring(L, entry, eq - entry);
+    lua_pushstring(L, eq + 1);
+    lua_settable(L, -3);
+  }
+
+  return 1;
+}
+
 #include "velvet_lua_autogen.c"
 int luaopen_velvet_api(lua_State *L) {
   luaL_newlib(L, velvet_lua_function_table);

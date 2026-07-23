@@ -1041,6 +1041,11 @@ return {
       },
       returns = { type = "int", doc = "The id of the spawned process." }
     },
+    {
+      name = "get_environment",
+      doc = "Get the current environment variables of this process",
+      returns = { type = "table<string, string>", doc = "The environment of this process." },
+    },
     -- {
     --   name = "disk_store_value",
     --   doc = "Store a named value on the disk. Values saved on the disk are shared between servers.",
