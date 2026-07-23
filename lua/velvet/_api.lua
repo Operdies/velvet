@@ -254,399 +254,399 @@ local api = {}
 --- @field columns integer The number of columns.
 
 --- Get the size of the screen.
---- @return velvet.api.screen.geometry ret The geometry of the screen window.
+--- @return velvet.api.screen.geometry geometry the size of the terminal.
 function api.get_screen_geometry() end
 
 --- Cancel the schedule with id |cancellation_id|.
 --- @param cancellation_id integer Schedule cancellation token returned by |schedule_after|.
---- @return boolean ret Boolean value indicating if a schedule was cancelled.
+--- @return boolean success true if a schedule was cancelled.
 function api.schedule_cancel(cancellation_id) end
 
---- Schedule oneshot |function| to run after at least |delay| ms. Returns a token which can be passed to schedule_cancel.
+--- Schedule |function| after at least |delay| ms. Cancel with |schedule_cancel(token)|.
 --- @param delay integer delay in milliseconds
---- @param func fun(): nil function to run
---- @return integer ret Schedule cancellation token. Pass to |schedule_cancel| to cancel this schedule.
+--- @param func fun(): nil function to schedule
+--- @return integer token schedule cancellation token.
 function api.schedule_after(delay, func) end
 
 --- Get the number of milliseconds elapsed since startup
---- @return integer ret milliseconds elapsed since startup
+--- @return integer tick total milliseconds elapsed since startup
 function api.get_current_tick() end
 
 --- Get the IDs of all clients.
---- @return integer[] ret List of client IDs
+--- @return integer[] clients list of client IDs
 function api.get_clients() end
 
 --- Set the active client to the client with id |client_id|
 --- @param client_id integer client id
---- @return nil ret 
+--- @return nil  
 function api.set_active_client(client_id) end
 
 --- Get the id of the active client
---- @return integer ret client id
+--- @return integer client_id the id of the active client
 function api.get_active_client() end
 
 --- Detach client |id| from the server.
 --- @param id integer client id
---- @return nil ret 
+--- @return nil  
 function api.client_detach(id) end
 
 --- Detach client |id| from the server and attach it to |server|.
 --- @param id integer client id
 --- @param server string Server to reattach to.
---- @return nil ret 
+--- @return nil  
 function api.client_reattach(id, server) end
 
 --- Update client options for the client id id |client_id|
 --- @param client_id integer client id
 --- @param options velvet.api.client_options The new client options.
---- @return nil ret 
+--- @return nil  
 function api.client_set_options(client_id, options) end
 
 --- Quit velvet with no warning
---- @return nil ret 
+--- @return nil  
 function api.quit() end
 
 --- Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then reload user configs. After calling reload, vv.api functions are no longer available.
---- @return nil ret 
+--- @return nil  
 function api.reload() end
 
 --- Get the directory whcih velvet was started in.
---- @return string ret startup directory
+--- @return string startup_directory startup directory
 function api.get_startup_directory() end
 
 --- Get the last recorded mouse position
---- @return velvet.api.coordinate ret The last recorded mouse position
+--- @return velvet.api.coordinate position The last recorded mouse position
 function api.get_mouse_position() end
 
 --- Get the IDs of all windows.
---- @return integer[] ret List of window IDs
+--- @return integer[] windows list of window IDs
 function api.get_windows() end
 
 --- Set the z index of |win| to |z|
 --- @param win_id integer Window id
 --- @param z integer New z index of |win|
---- @return nil ret 
+--- @return nil  
 function api.window_set_z_index(win_id, z) end
 
 --- Get the z index of |win|
 --- @param win_id integer Window id
---- @return integer ret The z index of |win|
+--- @return integer z_index the z index of |win|
 function api.window_get_z_index(win_id) end
 
 --- Set window hidden flag. A hidden window will not be rendered.
 --- @param win_id integer Window id
 --- @param hidden boolean New hidden state of |win_id|
---- @return nil ret 
+--- @return nil  
 function api.window_set_hidden(win_id, hidden) end
 
 --- Get window hidden flag. A hidden window will not be rendered.
 --- @param win_id integer Window id
---- @return boolean ret Bool indicating if the window is hidden.
+--- @return boolean hidden true if window is hidden.
 function api.window_get_hidden(win_id) end
 
 --- Get window alpha
 --- @param win_id integer Window id
---- @return number ret The new window alpha.
+--- @return number alpha alpha value of |win_id|.
 function api.window_get_alpha(win_id) end
 
 --- Get window text contained in |region|. 1-indexed.
 --- @param win_id integer Window id
 --- @param region velvet.api.rect The region to get text from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on.
---- @return velvet.api.line[] ret The text in the specified region.
+--- @return velvet.api.line[] lines the text in the specified region.
 function api.window_get_text(win_id, region) end
 
 --- Get window cells contained in |region|. 1-indexed.
 --- @param win_id integer Window id
 --- @param region velvet.api.rect The region to get cells from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on.
---- @return velvet.api.cell_line[] ret The lines in the specified region.
+--- @return velvet.api.cell_line[] lines the lines in the specified region.
 function api.window_get_cells(win_id, region) end
 
 --- Get the mouse settings of |win_id|
 --- @param win_id integer Window id
---- @return velvet.api.mouse_settings ret The mouse settings of |win_id|.
+--- @return velvet.api.mouse_settings settings the mouse settings of |win_id|.
 function api.window_get_mouse_settings(win_id) end
 
 --- Set window alpha. The effect of this depends on the value of |window_get_transparency_mode|
 --- @param win_id integer Window id
 --- @param alpha number The new window alpha.
---- @return nil ret 
+--- @return nil  
 function api.window_set_alpha(win_id, alpha) end
 
 --- Get window transparency mode.
 --- @param win_id integer Window id
---- @return velvet.api.transparency_mode ret Set transparency mode.
+--- @return velvet.api.transparency_mode mode transparency mode of |win_id|
 function api.window_get_transparency_mode(win_id) end
 
 --- Set window transparency mode.
 --- @param win_id integer Window id
 --- @param mode velvet.api.transparency_mode Set transparency mode.
---- @return nil ret 
+--- @return nil  
 function api.window_set_transparency_mode(win_id, mode) end
 
 --- Get the current dim factor for |win|
 --- @param win_id integer Window id
---- @return number ret Dim factor between 0.0 and 1.0
+--- @return number factor dim factor between 0.0 and 1.0
 function api.window_get_dim_factor(win_id) end
 
 --- Dim the window content of |win| by a constant factor. A larger value means more dimming (0.0 - 1.0)
 --- @param win_id integer Window id
 --- @param factor number Dim factor between 0.0 and 1.0
---- @return nil ret 
+--- @return nil  
 function api.window_set_dim_factor(win_id, factor) end
 
 --- Get the id of the currently focused window.
---- @return integer ret The id of the focused window.
+--- @return integer id id of the focused window.
 function api.get_focused_window() end
 
 --- Focus the window with id |win_id|
 --- @param win_id integer Window id
---- @return nil ret 
+--- @return nil  
 function api.set_focused_window(win_id) end
 
 --- Get the geometry of the specified window.
 --- @param win_id integer Window id
---- @return velvet.api.rect ret The geometry of the window with id |win_id|
+--- @return velvet.api.rect geometry geometry of |win_id|
 function api.window_get_geometry(win_id) end
 
 --- Set the geometry of the specified window.
 --- @param win_id integer Window id
 --- @param geometry velvet.api.rect rect
---- @return nil ret 
+--- @return nil  
 function api.window_set_geometry(win_id, geometry) end
 
 --- Close the specified window, killing the associated process.
 --- @param win_id integer The window to close
---- @return nil ret 
+--- @return nil  
 function api.window_close(win_id) end
 
 --- Get the title of the window with id |win_id|
 --- @param win_id integer Window id
---- @return string ret Window title
+--- @return string title title of |win_id|
 function api.window_get_title(win_id) end
 
 --- Set the title of the window with id |win_id|
 --- @param win_id integer Window id
 --- @param title string New title
---- @return nil ret 
+--- @return nil  
 function api.window_set_title(win_id, title) end
 
 --- Send |key| to the window with id |win_id|.
 --- @param win_id integer The window receiving the keys
 --- @param key velvet.api.window.key_event Low level key event
---- @return nil ret 
+--- @return nil  
 function api.window_send_raw_key(win_id, key) end
 
 --- Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .
 --- @param win_id integer The window receiving the keys
 --- @param keys string The keys to send
---- @return nil ret 
+--- @return nil  
 function api.window_send_keys(win_id, keys) end
 
 --- Send |text| to the window with id |win_id|. If the recipeint has bracketed paste enabled (mode ?2004), the text will be escaped accordingly.
 --- @param win_id integer The window receiving the text
 --- @param text string The text to send
---- @return nil ret 
+--- @return nil  
 function api.window_paste_text(win_id, text) end
 
 --- Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
 --- @param mouse_move velvet.api.mouse.move.event_args Mouse move event args
---- @return nil ret 
+--- @return nil  
 function api.window_send_mouse_move(mouse_move) end
 
 --- Send mouse click event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
 --- @param mouse_click velvet.api.mouse.click.event_args Mouse click event args
---- @return nil ret 
+--- @return nil  
 function api.window_send_mouse_click(mouse_click) end
 
 --- Send mouse scroll event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable. If the window does not handle scrolling, and it has content in its scrollback buffer, this scrolls the window content.
 --- @param mouse_scroll velvet.api.mouse.scroll.event_args Mouse scroll event args
---- @return nil ret 
+--- @return nil  
 function api.window_send_mouse_scroll(mouse_scroll) end
 
---- Create a window with no backing process. This window can be controlled through the lua API. Returns the window id.
+--- Create a window with no backing process. This window can be controlled through the lua API.
 --- @param options? velvet.api.window.create_options Options for the created window.
---- @return integer ret The id of the new window
+--- @return integer id id of the new window
 function api.window_create(options) end
 
---- Create a new window with the process |cmd|. Returns the window id.
+--- Create a new window with the process |cmd|.
 --- @param cmd string|string[] The process to spawn.
 --- @param options? velvet.api.window.create_options Options for the created window.
---- @return integer ret The id of the new window
+--- @return integer id id of the new window
 function api.window_create_process(cmd, options) end
 
 --- Get the current working directory of |win_id|. If |win_id| is hosting a process, the process may update the working directory.
 --- @param win_id integer Window id
---- @return string ret The current working directory of the window
+--- @return string cwd current working directory of |win_id|
 function api.window_get_working_directory(win_id) end
 
 --- Get the name of the foreground_process of |win_id|. Does not apply to lua windows.
 --- @param win_id integer Window id
---- @return string ret The name of the foreground_process
+--- @return string process_name name of the foreground_process of |win_id|
 function api.window_get_foreground_process_name(win_id) end
 
---- Returns the id of the parent of |win_id| or 0 if the window does not have a parent.
+--- Get the the parent of |win_id| or 0 if the window does not have a parent.
 --- @param win_id integer Window id
---- @return integer ret The window id of the parent window.
+--- @return integer parent_id id of the parent of |win_id|
 function api.window_get_parent(win_id) end
 
 --- Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to 0.
 --- @param win_id integer Window id
 --- @param parent integer The window id of the new parent window.
---- @return nil ret 
+--- @return nil  
 function api.window_set_parent(win_id, parent) end
 
---- Returns true if |win_id| exists and is a lua window.
+--- True if |win_id| refers to an existing window, and is a lua window (not hosting a pty process).
 --- @param win_id integer Window id
---- @return boolean ret Bool indicating if |win_id| is naked.
+--- @return boolean is_lua true if |win_id| is a lua window.
 function api.window_is_lua(win_id) end
 
---- Returns true if a window exists with id |win_id|.
+--- Check if |win_id| refers to an existing window.
 --- @param win_id integer Window id
---- @return boolean ret Bool indicating whether the window id is valid.
+--- @return boolean is_valid true if |win_id| is valid.
 function api.window_is_valid(win_id) end
 
 --- Get the number of lines in the scrollback of the window with id |win_id|.
 --- @param win_id integer Window id
---- @return integer ret The number of lines in scrollback, not counting the current screen buffer.
+--- @return integer scrollback_line_count number of lines in scrollback, not counting the current screen buffer.
 function api.window_get_scrollback_size(win_id) end
 
 --- Get the scroll offset of the window with id |win_id|
 --- @param win_id integer Window id
---- @return integer ret The number of lines below the bottom line of the window.
+--- @return integer scroll_offset number of lines below the bottom line of the window.
 function api.window_get_scroll_offset(win_id) end
 
 --- Set the scroll offset of the window with id |win_id|
 --- @param win_id integer Window id
 --- @param scroll_offset integer The number of lines below the bottom line of the window.
---- @return nil ret 
+--- @return nil  
 function api.window_set_scroll_offset(win_id, scroll_offset) end
 
 --- Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \r, \n, color escapes, cursor movement, etc.
 --- @param win_id integer Window id
 --- @param text string String which can embed any VT compatible ansi escape.
---- @return nil ret 
+--- @return nil  
 function api.window_write(win_id, text) end
 
 --- Set the drawing color of |win_id|. This is equivalent to setting an rgb color with SGR 38/48, but is much faster because it skips formatting and parsing. Useful for tight render loops.
 --- @param win_id integer Window id
 --- @param brush velvet.api.brush Foreground or background brush
 --- @param color velvet.api.rgb_color|string The new color
---- @return nil ret 
+--- @return nil  
 function api.window_set_drawing_color(win_id, brush, color) end
 
 --- Get the position of the cursor local to |win_id|.
 --- @param win_id integer Window id
---- @return velvet.api.coordinate ret The current cursor position
+--- @return velvet.api.coordinate position current cursor position
 function api.window_get_cursor_position(win_id) end
 
 --- Set the cursor position of |win_id|. This is equivalent to moving the cursor with CUP, but is much faster because it skips formatting and parsing. Useful for tight render loops.
 --- @param win_id integer Window id
 --- @param pos velvet.api.coordinate The new cursor position
---- @return nil ret 
+--- @return nil  
 function api.window_set_cursor_position(win_id, pos) end
 
 --- Copy text to the system clipboard.
 --- @param text string The text to copy.
---- @return nil ret 
+--- @return nil  
 function api.clipboard_set(text) end
 
---- Get the display width of a string, taking into account multi-width and 0-width characters.
+--- Get the display width of |string|, accounting for utf8, double-width, and 0-width characters.
 --- @param string string Input string.
---- @return integer ret The display width of |string|
+--- @return integer width display width of |string|
 function api.string_display_width(string) end
 
---- Get a copy of |string| converted to lower case. Unlike |string.lower|, this function correctly maps the entire unicode range.
+--- convert |string| to lower case. Unlike |string.lower|, this function maps the whole unicode range.
 --- @param string string Input string.
---- @return string ret Lower case string.
+--- @return string lower lower case string.
 function api.string_lower(string) end
 
---- Get a copy of |string| converted to upper case. Unlike |string.upper|, this function correctly maps the entire unicode range.
+--- convert |string| to upper case. Unlike |string.upper|, this function maps the whole unicode range.
 --- @param string string Input string.
---- @return string ret Upper case string.
+--- @return string upper upper case string.
 function api.string_upper(string) end
 
 --- Store a named value in the current runtime. Runtime values are preserved after reloading, but lost when the server exits.
 --- @param name string The name of the stored value.
 --- @param value any The value to store.
---- @return nil ret 
+--- @return nil  
 function api.runtime_store_value(name, value) end
 
 --- Load a value from the current runtime by name.
 --- @param name string The name of the runtime value.
---- @return any ret The loaded value.
+--- @return any value loaded value.
 function api.runtime_load_value(name) end
 
 --- Enable damage tracking when the screen is updated. (debugging feature)
 --- @param mode boolean Damage display mode
---- @return nil ret 
+--- @return nil  
 function api.debug_set_display_damage(mode) end
 
 --- Get the names of all running velvet servers.
---- @return string[] ret List of server names.
+--- @return string[] names list of server names.
 function api.get_servernames() end
 
 --- Get the name of this server.
---- @return string ret The name of this server.
+--- @return string name name of this server.
 function api.get_servername() end
 
---- Get the IDs of all processes.
---- @return integer[] ret List of process IDs
+--- Get the IDs of all processes. Note that these are internal handles, and do not correspond to system PIDs.
+--- @return integer[] ids list of process IDs
 function api.get_processes() end
 
 --- Kill the process with id |id|.
 --- @param id integer The process to kill.
 --- @param signal? velvet.api.unix_signal The signal to send. Defaults to 'term' if omitted.
---- @return nil ret 
+--- @return nil  
 function api.process_kill(id, signal) end
 
 --- Write to stdin of process |id|.
 --- @param id integer The process to kill.
 --- @param text string The content sent to stdin of process |id|.
---- @return nil ret 
+--- @return nil  
 function api.process_write_stdin(id, text) end
 
 --- Close stdin of process |id|.
 --- @param id integer The id of the process to close stdin for.
---- @return nil ret 
+--- @return nil  
 function api.process_close_stdin(id) end
 
---- Create a new process running |cmd|. Returns the process id.
+--- Spawn a new process running |cmd|.
 --- @param cmd string|string[] The process to spawn.
 --- @param options? velvet.api.process.spawn_options Options for the new process.
---- @return integer ret The id of the spawned process.
+--- @return integer id id of the spawned process.
 function api.process_spawn(cmd, options) end
 
 --- Get the current environment variables of this process
---- @return table<string, string> ret The environment of this process.
+--- @return table<string, string> env current environment of this process.
 function api.get_environment() end
 
 --- Get scrollback_scroll_multiplier
---- @return integer ret The current value
+--- @return integer scrollback_scroll_multiplier current scrollback scroll multiplier
 function api.get_scrollback_scroll_multiplier() end
 
 --- Set scrollback_scroll_multiplier. Returns the new value.
 --- @param new_value integer The number of lines scrolled per scroll wheel tick.
---- @return integer ret The value after the update
+--- @return integer scrollback_scroll_multiplier new scrollback scroll multiplier
 function api.set_scrollback_scroll_multiplier(new_value) end
 
 --- Get theme
---- @return velvet.api.theme ret The current value
+--- @return velvet.api.theme theme current theme
 function api.get_theme() end
 
 --- Set theme. Returns the new value.
 --- @param new_value velvet.api.theme The 16 numbered terminal colors.
---- @return velvet.api.theme ret The value after the update
+--- @return velvet.api.theme theme new theme
 function api.set_theme(new_value) end
 
 --- Get fps_target
---- @return integer ret The current value
+--- @return integer fps_target current fps target
 function api.get_fps_target() end
 
 --- Set fps_target. Returns the new value.
 --- @param new_value integer Set the rendering fps target. Under load, velvet dispatches frames on a timer.
 --- Note that this only affects frame scheduling behavior. When the system is not under load
 --- velvet will attempt to dispatch dirty frames regardless of fps target immediately after flushing all pending IO.
---- @return integer ret The value after the update
+--- @return integer fps_target new fps target
 function api.set_fps_target(new_value) end
 
 --- @class velvet.api.event_handler

@@ -68,13 +68,13 @@ for _, fn in ipairs(spec.options) do
     name = "get_" .. fn.name,
     doc = ("Get %s"):format(fn.name),
     params = {},
-    returns = { type = fn.type, doc = "The current value" }
+    returns = { type = fn.type, doc = "current " .. fn.name:gsub('_', ' '), name = fn.name }
   }
   local setter = {
     name = "set_" .. fn.name,
     doc = ("Set %s. Returns the new value."):format(fn.name),
     params = { { name = "new_value", type = fn.type, doc = fn.doc } },
-    returns = { type = fn.type, doc = "The value after the update" }
+    returns = { type = fn.type, doc = "new " .. fn.name:gsub('_', ' '), name = fn.name }
   }
   table.insert(spec.api, getter)
   table.insert(spec.api, setter)
@@ -82,7 +82,7 @@ end
 
 for _, fn in ipairs(spec.api) do
   fn.params = fn.params or {}
-  fn.returns = fn.returns or { type = "void" }
+  fn.returns = fn.returns or { type = "void", name = '' }
 
   for _, p in ipairs(fn.params) do
     p.doc = string_lines(p.doc)
@@ -217,7 +217,7 @@ for _, cb in ipairs(spec.callbacks) do
     local template = { name = arg.name, type = arg.type .. (arg.optional and '|nil' or '') }
     args[#args + 1] = string_replace("<name>: <type>", template)
   end
-  local template = { args = table.concat(args, ", "), ret = cb.returns and cb.returns.type or 'nil'}
+  local template = { args = table.concat(args, ", "), ret = cb.returns and cb.returns.type or 'nil' }
   local signature = string_replace("fun(<args>): <ret>", template)
   local entry = { c_type = "lua_Integer", lua_type = signature, check_shift = check_function_and_shift }
   type_lookup[cb.name] = entry
@@ -775,16 +775,12 @@ end
 -- Generate api function spec {{{3
 
 for _, fn in ipairs(spec.api) do
-  table_insert_template(api_meta, [[
-
---- <doc>
-]], { doc = string_concatenate(fn.doc, "\n--- ") })
+  table_insert_template(api_meta, '\n--- <doc>\n', { doc = string_concatenate(fn.doc, "\n--- ") })
   for _, p in ipairs(fn.params or {}) do
     local t = type_lookup[p.type]
     local optional = p.optional == true or t.optional == true or p.default_value ~= nil
-    table_insert_template(api_meta, [[
---- @param <name> <type> <doc>
-]], { name = p.name .. (optional and '?' or ''), doc = string_concatenate(p.doc, "\n--- "), type = lua_type(p.type) })
+    table_insert_template(api_meta, '--- @param <name> <type> <doc>\n',
+      { name = p.name .. (optional and '?' or ''), doc = string_concatenate(p.doc, "\n--- "), type = lua_type(p.type) })
   end
 
   local params = {}
@@ -792,8 +788,8 @@ for _, fn in ipairs(spec.api) do
     table.insert(params, p.name)
   end
   table_insert_template(api_meta, [[
---- @return <type> ret <doc>
-]], { type = lua_type(fn.returns.type), doc = string_concatenate(fn.returns.doc, "\n--- ") })
+--- @return <type> <ret> <doc>
+]], { ret = fn.returns.name, type = lua_type(fn.returns.type), doc = string_concatenate(fn.returns.doc, "\n--- ") })
 
   table_insert_template(api_meta, "function api.<name>(<params>) end\n",
     { name = fn.name, params = table.concat(params, ", ") })
@@ -808,9 +804,8 @@ table_insert_template(api_meta, [[
 --- @field id integer The id of the handler
 ]])
 for _, evt in ipairs(spec.events) do
-  table_insert_template(api_meta, [[
---- @field <field>? fun(event_args: velvet.api.<args>): nil <doc>
-]], { field = evt.name:gsub('%.', '_'), args = evt.args, doc = evt.doc })
+  local template = { field = evt.name:gsub('%.', '_'), args = evt.args, doc = evt.doc }
+  table_insert_template(api_meta, '--- @field <field>? fun(event_args: velvet.api.<args>): nil <doc>\n', template)
 end
 
 -- Write _api.lua {{{3
@@ -829,13 +824,19 @@ local options = {}
 ]])
 
 for _, fn in ipairs(spec.options) do
-  local luatype = lua_type(fn.type)
+  local template = {
+    doc = string_concatenate(fn.doc, "\n--- "),
+    type = lua_type(fn.type),
+    name = fn.name,
+    default_value =
+        inspect(fn.default)
+  }
   table_insert_template(options, [[
 --- <doc>
 --- @type <type>
 options.<name> = <default_value>
 
-]], { doc = string_concatenate(fn.doc, "\n--- "), type = luatype, name = fn.name, default_value = inspect(fn.default) })
+]], template)
 end
 
 table_insert_template(options, "return options\n")
@@ -855,9 +856,8 @@ table_insert_template(default_options, [[
 --- Set default options {{{3
 
 for _, fn in ipairs(spec.options) do
-  table_insert_template(default_options, [[
-vv.options.<name> = <default_value>
-]], { name = fn.name, default_value = inspect(fn.default) })
+  local template = { name = fn.name, default_value = inspect(fn.default) }
+  table_insert_template(default_options, 'vv.options.<name> = <default_value>\n', template)
 end
 
 

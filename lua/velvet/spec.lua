@@ -46,6 +46,7 @@
 --- @field default_value? string|number
 
 --- @class spec_return
+--- @field name string
 --- @field type string
 --- @field doc spec_doc
 
@@ -88,26 +89,26 @@ return {
       type = 'theme',
       doc = 'The 16 numbered terminal colors.',
       default = {
-        black             = "#45475a",
-        red               = "#f38ba8",
-        green             = "#a6e3a1",
-        yellow            = "#f9e2af",
-        blue              = "#89b4fa",
-        magenta           = "#f5c2e7",
-        cyan              = "#94e2d5",
-        white             = "#bac2de",
-        bright_black      = "#585b70",
-        bright_red        = "#f38ba8",
-        bright_green      = "#a6e3a1",
-        bright_yellow     = "#f9e2af",
-        bright_blue       = "#89b4fa",
-        bright_magenta    = "#f5c2e7",
-        bright_cyan       = "#94e2d5",
-        bright_white      = "#a6adc8",
-        foreground        = "#cdd6f4",
-        background        = "#1e1e2e",
-        cursor_foreground = "#1e1e2e",
-        cursor_background = "#f5e0dc",
+        black              = "#45475a",
+        red                = "#f38ba8",
+        green              = "#a6e3a1",
+        yellow             = "#f9e2af",
+        blue               = "#89b4fa",
+        magenta            = "#f5c2e7",
+        cyan               = "#94e2d5",
+        white              = "#bac2de",
+        bright_black       = "#585b70",
+        bright_red         = "#f38ba8",
+        bright_green       = "#a6e3a1",
+        bright_yellow      = "#f9e2af",
+        bright_blue        = "#89b4fa",
+        bright_magenta     = "#f5c2e7",
+        bright_cyan        = "#94e2d5",
+        bright_white       = "#a6adc8",
+        foreground         = "#cdd6f4",
+        background         = "#1e1e2e",
+        cursor_foreground  = "#1e1e2e",
+        cursor_background  = "#f5e0dc",
         bold_bright_colors = true,
       },
     },
@@ -236,7 +237,7 @@ return {
       packed = true,
       values = {
         { name = "reset", value = 0, doc = "No color. Falls back to default background/foreground color. This also affects pseudotransparency behavior. If any background color is set except |reset|, a surface is considered opaque by the compositor." },
-        { name = "rgb", value = 1, doc = "Indicates a full rgb color" },
+        { name = "rgb",   value = 1, doc = "Indicates a full rgb color" },
         { name = "table", value = 2, doc = "Indicates one of the 16 pre-defined ansi colors or an xterm-256color" },
       },
     },
@@ -311,23 +312,23 @@ return {
       name = "theme",
       fields = {
         -- 30-37 / 40-47
-        { name = "black",             type = "rgb_color", doc = "Palette color 0" },
-        { name = "red",               type = "rgb_color", doc = "Palette color 1" },
-        { name = "green",             type = "rgb_color", doc = "Palette color 2" },
-        { name = "yellow",            type = "rgb_color", doc = "Palette color 3" },
-        { name = "blue",              type = "rgb_color", doc = "Palette color 4" },
-        { name = "magenta",           type = "rgb_color", doc = "Palette color 5" },
-        { name = "cyan",              type = "rgb_color", doc = "Palette color 6" },
-        { name = "white",             type = "rgb_color", doc = "Palette color 7" },
+        { name = "black",              type = "rgb_color", doc = "Palette color 0" },
+        { name = "red",                type = "rgb_color", doc = "Palette color 1" },
+        { name = "green",              type = "rgb_color", doc = "Palette color 2" },
+        { name = "yellow",             type = "rgb_color", doc = "Palette color 3" },
+        { name = "blue",               type = "rgb_color", doc = "Palette color 4" },
+        { name = "magenta",            type = "rgb_color", doc = "Palette color 5" },
+        { name = "cyan",               type = "rgb_color", doc = "Palette color 6" },
+        { name = "white",              type = "rgb_color", doc = "Palette color 7" },
         --  90-97 / 100-107
-        { name = "bright_black",      type = "rgb_color", doc = "Palette color 8" },
-        { name = "bright_red",        type = "rgb_color", doc = "Palette color 9" },
-        { name = "bright_green",      type = "rgb_color", doc = "Palette color 10" },
-        { name = "bright_yellow",     type = "rgb_color", doc = "Palette color 11" },
-        { name = "bright_blue",       type = "rgb_color", doc = "Palette color 12" },
-        { name = "bright_magenta",    type = "rgb_color", doc = "Palette color 13" },
-        { name = "bright_cyan",       type = "rgb_color", doc = "Palette color 14" },
-        { name = "bright_white",      type = "rgb_color", doc = "Palette color 15" },
+        { name = "bright_black",       type = "rgb_color", doc = "Palette color 8" },
+        { name = "bright_red",         type = "rgb_color", doc = "Palette color 9" },
+        { name = "bright_green",       type = "rgb_color", doc = "Palette color 10" },
+        { name = "bright_yellow",      type = "rgb_color", doc = "Palette color 11" },
+        { name = "bright_blue",        type = "rgb_color", doc = "Palette color 12" },
+        { name = "bright_magenta",     type = "rgb_color", doc = "Palette color 13" },
+        { name = "bright_cyan",        type = "rgb_color", doc = "Palette color 14" },
+        { name = "bright_white",       type = "rgb_color", doc = "Palette color 15" },
 
         -- Additional named colors
         { name = "foreground",         type = "rgb_color", doc = "The default text color" },
@@ -352,7 +353,7 @@ return {
     {
       name = "window.create_options",
       fields = {
-        { name = "working_directory", type = "string", doc = "The initial working directory of the new window.", optional = true },
+        { name = "working_directory", type = "string", doc = "The initial working directory of the new window.",                                  optional = true },
         { name = "parent_window",     type = "int",    doc = "The parent window of this window. If set, this window will close with the parent.", optional = true },
       },
     },
@@ -391,7 +392,7 @@ return {
     {
       name = "window.moved.event_args",
       fields = {
-        { name = "win_id",   type = "int",             doc = "The id of the resized window." },
+        { name = "win_id",   type = "int",  doc = "The id of the resized window." },
         { name = "old_size", type = "rect", doc = "The old geometry of |id|." },
         { name = "new_size", type = "rect", doc = "The new geometry of |id|." },
       }
@@ -399,7 +400,7 @@ return {
     {
       name = "window.resized.event_args",
       fields = {
-        { name = "win_id",   type = "int",             doc = "The id of the resized window." },
+        { name = "win_id",   type = "int",  doc = "The id of the resized window." },
         { name = "old_size", type = "rect", doc = "The old geometry of |id|." },
         { name = "new_size", type = "rect", doc = "The new geometry of |id|." },
       }
@@ -439,9 +440,9 @@ return {
       name = "line",
       doc = "A line of text extracted from a window",
       fields = {
-        { name = "text", type = "string", doc = "Text content" },
-        { name = "wraps", type = "bool", doc = "Set if the line continues on the next row" },
-        { name = "truncated", type = "bool", doc = "Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space." },
+        { name = "text",      type = "string", doc = "Text content" },
+        { name = "wraps",     type = "bool",   doc = "Set if the line continues on the next row" },
+        { name = "truncated", type = "bool",   doc = "Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space." },
       },
     },
     {
@@ -474,7 +475,7 @@ return {
     {
       name = "on_key.event_args",
       fields = {
-        { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
+        { name = "key", type = "window.key_event", doc = "The key which generated the event." },
       },
     },
     {
@@ -529,10 +530,10 @@ return {
       name = "client_options",
       doc = "client specific options of an attached client.",
       fields = {
-        { name = "x_pixel",                                 type = "int",  doc = "The number of horizontal pixels." },
-        { name = "y_pixel",                                 type = "int",  doc = "The number of vertical pixels." },
-        { name = "lines",                                   type = "int",  doc = "The number of lines." },
-        { name = "columns",                                 type = "int",  doc = "The number of columns." },
+        { name = "x_pixel", type = "int", doc = "The number of horizontal pixels." },
+        { name = "y_pixel", type = "int", doc = "The number of vertical pixels." },
+        { name = "lines",   type = "int", doc = "The number of lines." },
+        { name = "columns", type = "int", doc = "The number of columns." },
       },
     },
   },
@@ -571,7 +572,7 @@ return {
     {
       name = "get_screen_geometry",
       doc = "Get the size of the screen.",
-      returns = { name = "geometry", type = "screen.geometry", doc = "The geometry of the screen window." },
+      returns = { name = "geometry", type = "screen.geometry", doc = "the size of the terminal." },
     },
     --- timing {{{2
     {
@@ -579,28 +580,28 @@ return {
       params = {
         { name = "cancellation_id", type = "int", doc = "Schedule cancellation token returned by |schedule_after|." },
       },
-      returns = { type = "bool", doc = "Boolean value indicating if a schedule was cancelled." },
+      returns = { name = 'success', type = "bool", doc = "true if a schedule was cancelled." },
       doc = "Cancel the schedule with id |cancellation_id|.",
     },
     {
       name = "schedule_after",
       params = {
         { name = "delay", type = "int",      doc = "delay in milliseconds" },
-        { name = "func",  type = "function", doc = "function to run" },
+        { name = "func",  type = "function", doc = "function to schedule" },
       },
-      returns = { type = "int", doc = "Schedule cancellation token. Pass to |schedule_cancel| to cancel this schedule." },
-      doc = "Schedule oneshot |function| to run after at least |delay| ms. Returns a token which can be passed to schedule_cancel.",
+      returns = { type = "int", doc = "schedule cancellation token.", name = 'token' },
+      doc = "Schedule |function| after at least |delay| ms. Cancel with |schedule_cancel(token)|.",
     },
     {
       name = "get_current_tick",
       doc = "Get the number of milliseconds elapsed since startup",
-      returns = { type = "int", doc = "milliseconds elapsed since startup" }
+      returns = { type = "int", doc = "total milliseconds elapsed since startup", name = 'tick' }
     },
     --- system {{{2
     {
       name = "get_clients",
       doc = "Get the IDs of all clients.",
-      returns = { type = "int[]", doc = "List of client IDs" }
+      returns = { type = "int[]", doc = "list of client IDs", name = 'clients' }
     },
     {
       name = "set_active_client",
@@ -610,7 +611,7 @@ return {
     {
       name = "get_active_client",
       doc = "Get the id of the active client",
-      returns = { name = "client_id", type = "int", doc = "client id" },
+      returns = { name = "client_id", type = "int", doc = "the id of the active client" },
     },
     {
       name = "client_detach",
@@ -629,8 +630,8 @@ return {
       name = "client_set_options",
       doc = "Update client options for the client id id |client_id|",
       params = {
-        { name = "client_id", type = "int",             doc = "client id" },
-        { name = "options",    type = "client_options", doc = "The new client options." },
+        { name = "client_id", type = "int",            doc = "client id" },
+        { name = "options",   type = "client_options", doc = "The new client options." },
       },
     },
     {
@@ -639,23 +640,24 @@ return {
     },
     {
       name = "reload",
-      doc = "Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then reload user configs. After calling reload, vv.api functions are no longer available.",
+      doc =
+      "Reload configuration. This will close all lua windows, remove all keybinds, cancel any schedules, and then reload user configs. After calling reload, vv.api functions are no longer available.",
     },
     {
       name = "get_startup_directory",
       doc = "Get the directory whcih velvet was started in.",
-      returns = { type = "string", doc = "startup directory" },
+      returns = { type = "string", doc = "startup directory", name = 'startup_directory' },
     },
     {
       name = "get_mouse_position",
       doc = "Get the last recorded mouse position",
-      returns = { type = "coordinate", doc = "The last recorded mouse position" },
+      returns = { type = "coordinate", doc = "The last recorded mouse position", name = 'position' },
     },
     --- Windows {{{2
     {
       name = "get_windows",
       doc = "Get the IDs of all windows.",
-      returns = { type = "int[]", doc = "List of window IDs" }
+      returns = { type = "int[]", doc = "list of window IDs", name = 'windows' }
     },
     {
       name = "window_set_z_index",
@@ -669,7 +671,7 @@ return {
       name = "window_get_z_index",
       doc = "Get the z index of |win|",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "int", doc = "The z index of |win|" }
+      returns = { type = "int", doc = "the z index of |win|", name = 'z_index' }
     },
     {
       name = "window_set_hidden",
@@ -683,22 +685,22 @@ return {
       name = "window_get_hidden",
       doc = "Get window hidden flag. A hidden window will not be rendered.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "bool", doc = "Bool indicating if the window is hidden." }
+      returns = { type = "bool", doc = "true if window is hidden.", name = 'hidden' }
     },
     {
       name = "window_get_alpha",
       doc = "Get window alpha",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "float", doc = "The new window alpha." },
+      returns = { type = "float", doc = "alpha value of |win_id|.", name = 'alpha' },
     },
     {
       name = "window_get_text",
       doc = "Get window text contained in |region|. 1-indexed.",
       params = {
-        { name = "win_id",  type = "int",   doc = "Window id" },
+        { name = "win_id", type = "int",  doc = "Window id" },
         { name = "region", type = "rect", doc = "The region to get text from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on." },
       },
-      returns = { type = "line[]", doc = "The text in the specified region." },
+      returns = { type = "line[]", doc = "the text in the specified region.", name = 'lines' },
     },
     {
       name = "window_get_cells",
@@ -707,29 +709,29 @@ return {
         { name = "win_id", type = "int",  doc = "Window id" },
         { name = "region", type = "rect", doc = "The region to get cells from. Coordinates are 1-indexed and refer to cells in the window. Rows in the scrollback buffer can be referenced with a row index less than 1. Row 0 refers to the line right above line 1, and so on." },
       },
-      returns = { type = "cell_line[]", doc = "The lines in the specified region." },
+      returns = { type = "cell_line[]", doc = "the lines in the specified region.", name = 'lines' },
     },
     {
       name = "window_get_mouse_settings",
       doc = "Get the mouse settings of |win_id|",
       params = {
-        { name = "win_id",  type = "int",   doc = "Window id" },
+        { name = "win_id", type = "int", doc = "Window id" },
       },
-      returns = { type = "mouse_settings", doc = "The mouse settings of |win_id|." },
+      returns = { type = "mouse_settings", doc = "the mouse settings of |win_id|.", name = 'settings' },
     },
     {
       name = "window_set_alpha",
       doc = "Set window alpha. The effect of this depends on the value of |window_get_transparency_mode|",
       params = {
-        { name = "win_id",  type = "int",   doc = "Window id" },
-        { name = "alpha", type = "float", doc = "The new window alpha." },
+        { name = "win_id", type = "int",   doc = "Window id" },
+        { name = "alpha",  type = "float", doc = "The new window alpha." },
       },
     },
     {
       name = "window_get_transparency_mode",
       doc = "Get window transparency mode.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "transparency_mode", doc = "Set transparency mode." },
+      returns = { type = "transparency_mode", doc = "transparency mode of |win_id|", name = 'mode' },
     },
     {
       name = "window_set_transparency_mode",
@@ -746,7 +748,7 @@ return {
       params = {
         { name = "win_id", type = "int", doc = "Window id" },
       },
-      returns = { name = "factor", type = "float", doc = "Dim factor between 0.0 and 1.0" },
+      returns = { name = "factor", type = "float", doc = "dim factor between 0.0 and 1.0" },
 
     },
     {
@@ -760,7 +762,7 @@ return {
     {
       name = "get_focused_window",
       doc = "Get the id of the currently focused window.",
-      returns = { type = "int", doc = "The id of the focused window." }
+      returns = { type = "int", doc = "id of the focused window.", name = 'id' }
     },
     {
       name = "set_focused_window",
@@ -771,13 +773,13 @@ return {
       name = "window_get_geometry",
       doc = "Get the geometry of the specified window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { name = "geometry", type = "rect", doc = "The geometry of the window with id |win_id|" },
+      returns = { name = "geometry", type = "rect", doc = "geometry of |win_id|" },
     },
     {
       name = "window_set_geometry",
       doc = "Set the geometry of the specified window.",
       params = {
-        { name = "win_id",   type = "int",             doc = "Window id" },
+        { name = "win_id",   type = "int",  doc = "Window id" },
         { name = "geometry", type = "rect", doc = "rect" },
       },
     },
@@ -794,7 +796,7 @@ return {
       params = {
         { name = "win_id", type = "int", doc = "Window id" },
       },
-      returns = { name = "title", type = "string", doc = "Window title" }
+      returns = { name = "title", type = "string", doc = "title of |win_id|" }
     },
     {
       name = "window_set_title",
@@ -815,7 +817,8 @@ return {
     },
     {
       name = "window_send_keys",
-      doc = "Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .",
+      doc =
+      "Send |keys| to the window with id |win_id|. Unlike |window_paste_text|, keys such as <C-x> will be encoded .",
       params = {
         { name = "win_id", type = "int",    doc = "The window receiving the keys" },
         { name = "keys",   type = "string", doc = "The keys to send" },
@@ -823,7 +826,8 @@ return {
     },
     {
       name = "window_paste_text",
-      doc = "Send |text| to the window with id |win_id|. If the recipeint has bracketed paste enabled (mode ?2004), the text will be escaped accordingly.",
+      doc =
+      "Send |text| to the window with id |win_id|. If the recipeint has bracketed paste enabled (mode ?2004), the text will be escaped accordingly.",
       params = {
         { name = "win_id", type = "int",    doc = "The window receiving the text" },
         { name = "text",   type = "string", doc = "The text to send" },
@@ -850,39 +854,40 @@ return {
     {
       name = "window_create",
       doc =
-      "Create a window with no backing process. This window can be controlled through the lua API. Returns the window id.",
+      "Create a window with no backing process. This window can be controlled through the lua API.",
       params = {
         { name = "options", type = "window.create_options", doc = "Options for the created window." },
       },
-      returns = { type = "int", doc = "The id of the new window" }
+      returns = { type = "int", doc = "id of the new window", name = 'id' }
     },
     {
       name = "window_create_process",
       doc =
-      "Create a new window with the process |cmd|. Returns the window id.",
+      "Create a new window with the process |cmd|.",
       params = {
         { name = "cmd",     type = "string|string[]",       doc = "The process to spawn." },
         { name = "options", type = "window.create_options", doc = "Options for the created window." },
       },
-      returns = { type = "int", doc = "The id of the new window" }
+      returns = { type = "int", doc = "id of the new window", name = 'id' }
     },
     {
       name = "window_get_working_directory",
-      doc = "Get the current working directory of |win_id|. If |win_id| is hosting a process, the process may update the working directory.",
+      doc =
+      "Get the current working directory of |win_id|. If |win_id| is hosting a process, the process may update the working directory.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "string", doc = "The current working directory of the window" }
+      returns = { type = "string", doc = "current working directory of |win_id|", name = 'cwd' }
     },
     {
       name = "window_get_foreground_process_name",
       doc = "Get the name of the foreground_process of |win_id|. Does not apply to lua windows.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "string", doc = "The name of the foreground_process" }
+      returns = { type = "string", doc = "name of the foreground_process of |win_id|", name = 'process_name' }
     },
     {
       name = "window_get_parent",
-      doc = "Returns the id of the parent of |win_id| or 0 if the window does not have a parent.",
+      doc = "Get the the parent of |win_id| or 0 if the window does not have a parent.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "int", doc = "The window id of the parent window." }
+      returns = { type = "int", doc = "id of the parent of |win_id|", name = 'parent_id' }
     },
     {
       name = "window_set_parent",
@@ -894,33 +899,33 @@ return {
     },
     {
       name = "window_is_lua",
-      doc = "Returns true if |win_id| exists and is a lua window.",
+      doc = "True if |win_id| refers to an existing window, and is a lua window (not hosting a pty process).",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "bool", doc = "Bool indicating if |win_id| is naked." }
+      returns = { type = "bool", doc = "true if |win_id| is a lua window.", name = 'is_lua' }
     },
     {
       name = "window_is_valid",
-      doc = "Returns true if a window exists with id |win_id|.",
+      doc = "Check if |win_id| refers to an existing window.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "bool", doc = "Bool indicating whether the window id is valid." }
+      returns = { type = "bool", doc = "true if |win_id| is valid.", name = 'is_valid' }
     },
     {
       name = "window_get_scrollback_size",
       doc = "Get the number of lines in the scrollback of the window with id |win_id|.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "int", doc = "The number of lines in scrollback, not counting the current screen buffer." }
+      returns = { type = "int", doc = "number of lines in scrollback, not counting the current screen buffer.", name = 'scrollback_line_count' }
     },
     {
       name = "window_get_scroll_offset",
       doc = "Get the scroll offset of the window with id |win_id|",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "int", doc = "The number of lines below the bottom line of the window." }
+      returns = { type = "int", doc = "number of lines below the bottom line of the window.", name = 'scroll_offset' }
     },
     {
       name = "window_set_scroll_offset",
       doc = "Set the scroll offset of the window with id |win_id|",
-      params = { 
-        { name = "win_id", type = "int", doc = "Window id" },
+      params = {
+        { name = "win_id",        type = "int", doc = "Window id" },
         { name = "scroll_offset", type = "int", doc = "The number of lines below the bottom line of the window." }
       },
     },
@@ -948,9 +953,9 @@ return {
       name = "window_get_cursor_position",
       doc = "Get the position of the cursor local to |win_id|.",
       params = {
-        { name = "win_id", type = "int",        doc = "Window id" },
+        { name = "win_id", type = "int", doc = "Window id" },
       },
-      returns = { type = "coordinate", doc = "The current cursor position" },
+      returns = { type = "coordinate", doc = "current cursor position", name = 'position' },
     },
     {
       name = "window_set_cursor_position",
@@ -970,21 +975,23 @@ return {
     --- unicode {{{1
     {
       name = "string_display_width",
-      doc = "Get the display width of a string, taking into account multi-width and 0-width characters.",
+      doc = "Get the display width of |string|, accounting for utf8, double-width, and 0-width characters.",
       params = { { name = "string", type = "string", doc = "Input string." } },
-      returns = { type = "int", doc = "The display width of |string|" },
+      returns = { type = "int", doc = "display width of |string|", name = 'width' },
     },
     {
       name = "string_lower",
-      doc = "Get a copy of |string| converted to lower case. Unlike |string.lower|, this function correctly maps the entire unicode range.",
+      doc =
+      "convert |string| to lower case. Unlike |string.lower|, this function maps the whole unicode range.",
       params = { { name = "string", type = "string", doc = "Input string." } },
-      returns = { type = "string", doc = "Lower case string." },
+      returns = { type = "string", doc = "lower case string.", name = 'lower' },
     },
     {
       name = "string_upper",
-      doc = "Get a copy of |string| converted to upper case. Unlike |string.upper|, this function correctly maps the entire unicode range.",
+      doc =
+      "convert |string| to upper case. Unlike |string.upper|, this function maps the whole unicode range.",
       params = { { name = "string", type = "string", doc = "Input string." } },
-      returns = { type = "string", doc = "Upper case string." },
+      returns = { type = "string", doc = "upper case string.", name = 'upper' },
     },
     {
       name = "runtime_store_value",
@@ -999,7 +1006,7 @@ return {
       name = "runtime_load_value",
       doc = "Load a value from the current runtime by name.",
       params = { { name = "name", type = "string", doc = "The name of the runtime value." } },
-      returns = { type = "any", doc = "The loaded value." },
+      returns = { type = "any", doc = "loaded value.", name = 'value' },
     },
     {
       name = "debug_set_display_damage",
@@ -1010,17 +1017,17 @@ return {
     {
       name = "get_servernames",
       doc = "Get the names of all running velvet servers.",
-      returns = { type = "string[]", doc = "List of server names." },
+      returns = { type = "string[]", doc = "list of server names.", name = 'names' },
     },
     {
       name = "get_servername",
       doc = "Get the name of this server.",
-      returns = { type = "string", doc = "The name of this server." },
+      returns = { type = "string", doc = "name of this server.", name = 'name' },
     },
     {
       name = "get_processes",
-      doc = "Get the IDs of all processes.",
-      returns = { type = "int[]", doc = "List of process IDs" }
+      doc = "Get the IDs of all processes. Note that these are internal handles, and do not correspond to system PIDs.",
+      returns = { type = "int[]", doc = "list of process IDs", name = 'ids' }
     },
     {
       name = "process_kill",
@@ -1034,7 +1041,7 @@ return {
       name = "process_write_stdin",
       doc = "Write to stdin of process |id|.",
       params = {
-        { name = "id", type = "int", doc = "The process to kill." },
+        { name = "id",   type = "int",    doc = "The process to kill." },
         { name = "text", type = "string", doc = "The content sent to stdin of process |id|." },
       },
     },
@@ -1047,18 +1054,17 @@ return {
     },
     {
       name = "process_spawn",
-      doc =
-      "Create a new process running |cmd|. Returns the process id.",
+      doc = "Spawn a new process running |cmd|.",
       params = {
         { name = "cmd",     type = "string|string[]",       doc = "The process to spawn." },
         { name = "options", type = "process.spawn_options", doc = "Options for the new process." },
       },
-      returns = { type = "int", doc = "The id of the spawned process." }
+      returns = { type = "int", doc = "id of the spawned process.", name = 'id' }
     },
     {
       name = "get_environment",
       doc = "Get the current environment variables of this process",
-      returns = { type = "table<string, string>", doc = "The environment of this process." },
+      returns = { type = "table<string, string>", doc = "current environment of this process.", name = 'env' },
     },
   },
 }
