@@ -26,5 +26,4 @@ vv.options.theme = {
   white = "#bac2de",
   yellow = "#f9e2af"
 }
-vv.options.fps_target = "60"
-
+vv.options.fps_target = 60

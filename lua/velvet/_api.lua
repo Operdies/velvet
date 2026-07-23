@@ -8,6 +8,7 @@ error("Cannot require meta file")
 --- @meta
 --- @class velvet.api
 local api = {}
+
 ---@alias velvet.api.severity string The severity level of a message
 ---| 'debug' 
 ---| 'info' 
@@ -93,7 +94,6 @@ local api = {}
 ---| 'term' Request graceful termination.
 ---| 'stop' Suspend execution. This signal cannot be caught or ignored.
 ---| 'cont' Resume a suspended process.
-
 
 --- @class velvet.api.mouse_settings
 --- @field reporting velvet.api.mouse_reporting 
@@ -668,4 +668,3 @@ function api.set_fps_target(new_value) end
 --- @field system_message? fun(event_args: velvet.api.system_message.event_args): nil Raised when the system logs an error message
 --- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
 --- @field pre_reload? fun(event_args: velvet.api.pre_reload.event_args): nil Raised before reloading. This event can be used to store state.
-

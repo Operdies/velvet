@@ -43,13 +43,11 @@ end
 
 
 local function string_replace(template_string, template_args)
-  local count = nil
   for k, v in pairs(template_args or {}) do
     local pat = '<' .. k .. '>'
-    template_string, count = template_string:gsub(pat, v)
-    if count == 0 then error("Template argument " .. k .. " had no matches.") end
+    template_string = template_string:gsub(pat, v)
   end
-  local unresolved = template_string:match("<%w+>")
+  local unresolved = template_string:match("<[%w_]+>")
   if unresolved then error("Template string has unresolved patterns: " .. unresolved) end
   return template_string
 end
@@ -60,6 +58,29 @@ end
 local function table_insert_template(table, template_string, template_args)
   local string = string_replace(template_string, template_args)
   table[#table + 1] = string
+end
+
+--- @class builder
+--- @field indent integer
+--- @field [integer] string
+local builder = {}
+builder.__index = builder
+
+function builder:push(template, args)
+  local indent = string.rep(' ', self.indent)
+  template = (indent .. template):gsub("(\n)([^\n])", "%1" .. indent .. "%2")
+  table_insert_template(self, template, args)
+end
+
+function builder:tostring()
+  for i, v in ipairs(self) do
+    if v:match('^%s*$') then self[i] = '' end
+  end
+  return table.concat(self, '\n')
+end
+
+function builder.create()
+  return setmetatable({ indent = 0 }, builder)
 end
 
 for _, fn in ipairs(spec.options) do
@@ -259,104 +280,121 @@ local function lua_push(t, var)
   return type_lookup[t].push(var)
 end
 
--- recursively marshal a C struct into a lua table
--- The marshalling code is written as a string to tbl
---- @param tbl table
+local push = {}
+
+--- @param tbl builder
 --- @param type string
 --- @param path string
-local function push_field(tbl, type, path)
+function push.composite(tbl, type, path)
   local tp = type_lookup[type]
-  if tp.composite then
-    table_insert_template(tbl, [[
-  lua_newtable(L); /* <path> = new <name> */
-]], { path = path, name = tp.composite.name })
-    for _, mem in ipairs(tp.composite.fields) do
-      local mem_path = path .. "." .. mem.name
-      if mem.optional then mem_path = mem_path .. '.value' end
-      push_field(tbl, mem.type, mem_path)
-      table_insert_template(tbl, [[
-  lua_setfield(L, -2, "<name>"); /* <path> = <name> */
-]], { name = mem.name, path = mem_path })
-    end
-  elseif tp.enumeration then
-    if tp.enumeration.flags then
-      table_insert_template(tbl, [[
-  lua_newtable(L); /* <path> = <flag> flags */
-]], { path = path, flag = tp.enumeration.name })
-      local enum_name = get_cname(type)
-
-      for _, flag in ipairs(tp.enumeration.values) do
-        local flag_name = enum_value_c_name(enum_name, flag.name)
-        table_insert_template(tbl, ([[
-  if (<value> & <flag>) {
-    lua_pushslice(L, <type>_to_slice(<flag>));
-    lua_pushboolean(L, true);
-    lua_settable(L, -3);
-  }
-]]), { value = path, flag = flag_name, type = type })
-      end
-    else
-      table_insert_template(tbl, [[
-  lua_pushslice(L, <name>_to_slice(<value>)); /* <3 */
-]], { name = tp.enumeration.name, value = path })
-    end
-  else
-    table_insert_template(tbl, [[
-  <push>;
-]], { push = lua_push(type, path) })
+  local template = { path = path, name = tp.composite.name }
+  tbl:push('lua_newtable(L); /* <path> = new <name> */', template)
+  for _, mem in ipairs(tp.composite.fields) do
+    local mem_path = path .. "." .. mem.name
+    if mem.optional then mem_path = mem_path .. '.value' end
+    push.field(tbl, mem.type, mem_path)
+    tbl:push('lua_setfield(L, -2, "<name>"); /* <path> = <name> */', { name = mem.name, path = mem_path })
   end
 end
 
---- @param tbl table
+--- @param tbl builder
+--- @param type string
+--- @param path string
+function push.enumeration_flags(tbl, type, path)
+  local tp = type_lookup[type]
+  local template = { path = path, flag = tp.enumeration.name }
+  tbl:push('lua_newtable(L); /* <path> = <flag> flags */', template)
+  local enum_name = get_cname(type)
+
+  template = { value = path, type = type }
+  for _, flag in ipairs(tp.enumeration.values) do
+    template.flag = enum_value_c_name(enum_name, flag.name)
+    tbl:push([[
+if (<value> & <flag>) {
+  lua_pushslice(L, <type>_to_slice(<flag>));
+  lua_pushboolean(L, true);
+  lua_settable(L, -3);
+}
+]], template)
+  end
+end
+
+--- @param tbl builder
+--- @param type string
+--- @param path string
+function push.enumeration(tbl, type, path)
+  local tp = type_lookup[type]
+  if tp.enumeration.flags then
+    push.enumeration_flags(tbl, type, path)
+    return
+  end
+  local template = { name = tp.enumeration.name, value = path }
+  tbl:push('lua_pushslice(L, <name>_to_slice(<value>));', template)
+end
+
+-- recursively marshal a C struct into a lua table
+-- The marshalling code is written as a string to tbl
+--- @param tbl builder
+--- @param type string
+--- @param path string
+function push.field(tbl, type, path)
+  local tp = type_lookup[type]
+  if tp.composite then
+    push.composite(tbl, type, path)
+  elseif tp.enumeration then
+    push.enumeration(tbl, type, path)
+  else
+    tbl:push('<push>;', { push = lua_push(type, path) })
+  end
+end
+
+local check = {}
+
 --- @param type_name string
 --- @param path string
---- @param indent integer
-local function check_field(tbl, type_name, path, indent)
-  local result = {}
-  indent = indent or 2
+function check.composite(type_name, path)
+  local result = builder.create()
   local type = type_lookup[type_name]
-  if type and type.composite then
-    if not type.optional then
-      table_insert_template(result, [[
-luaL_checktype(L, -1, LUA_TTABLE);
-]], {})
+  if not type.optional then
+    result:push('luaL_checktype(L, -1, LUA_TTABLE);')
+  end
+  for _, mem in ipairs(type.composite.fields) do
+    local mem_path = path .. "." .. mem.name
+    result:push('lua_getfield(L, -1, "<name>"); /* get <path> */', { name = mem.name, path = mem_path })
+    if mem.optional then
+      result:push('\nif (!lua_isnoneornil(L, -1)) {')
+      result.indent = result.indent + 2
+      result:push('<path>.set = true;', { path = mem_path })
+      check.field(result, mem.type, mem_path .. '.value')
+      result.indent = result.indent - 2
+      result:push('}\n')
+    else
+      check.field(result, mem.type, mem_path)
     end
-    for _, mem in ipairs(type.composite.fields) do
-      local mem_path = path .. "." .. mem.name
-      table_insert_template(result, [[
-lua_getfield(L, -1, "<name>"); /* get <path> */
-]], { name = mem.name, path = mem_path })
-      if mem.optional then
-        table_insert_template(result, [[
-if (!lua_isnoneornil(L, -1)) {
-  <path>.set = true;
-]], { path = mem_path })
-        check_field(result, mem.type, mem_path .. '.value', 2)
-        table_insert_template(result, '}\n')
-      else
-        check_field(result, mem.type, mem_path, 0)
-      end
-      table_insert_template(result, [[
-lua_pop(L, 1); /* pop <path> */
-]], { path = mem_path })
-    end
-  elseif type and type.enumeration then
-    if type.enumeration.flags then
-      local enum_name = get_cname(type.enumeration.name)
-      table_insert_template(result, [[
-luaL_checktype(L, -1, LUA_TTABLE);
-]])
-      for _, flag in ipairs(type.enumeration.values) do
-        local c_name = enum_value_c_name(enum_name, flag.name)
-        table_insert_template(result, [[
+    result:push('lua_pop(L, 1); /* pop <path> */', { path = mem_path })
+  end
+  return result:tostring()
+end
+
+--- @param type_name string
+--- @param path string
+function check.enumeration(type_name, path)
+  local result = builder.create()
+  local type = type_lookup[type_name]
+  if type.enumeration.flags then
+    local enum_name = get_cname(type.enumeration.name)
+    result:push('luaL_checktype(L, -1, LUA_TTABLE);')
+    for _, flag in ipairs(type.enumeration.values) do
+      local c_name = enum_value_c_name(enum_name, flag.name)
+      result:push([[
 lua_getfield(L, -1, "<flag_name>");
 if (!lua_isnoneornil(L, -1) && luaL_checkboolean(L, -1))
   <path> |= <c_name>;
 lua_pop(L, 1);
 ]], { c_name = c_name, flag_name = flag.name, path = path })
-      end
-    else
-      table_insert_template(result, [[
+    end
+  else
+    result:push([[
 struct u8_slice <name> = luaL_checkslice(L, -1);
 int <type>_conv = <type>_slice_to_enum(<name>);
 if (<type>_conv == ~0) {
@@ -364,27 +402,39 @@ if (<type>_conv == ~0) {
   lua_concat(L, 2);
   lua_error(L);
 }
-<path> = <type>_conv;
-]], { name = path:gsub('%.', '_') .. '_str', type = type_name, path = path })
-    end
+<path> = <type>_conv;]], { name = path:gsub('%.', '_') .. '_str', type = type_name, path = path })
+  end
+
+  return result:tostring()
+end
+
+--- @param type_name string
+--- @param path string
+function check.primitive(type_name, path)
+  return string_replace('<path> = <check>;', { path = path, check = lua_check(type_name, -1, "++argtop") })
+end
+
+--- @param tbl builder
+--- @param type_name string
+--- @param path string
+function check.field(tbl, type_name, path)
+  local type = type_lookup[type_name]
+  local checked = nil
+  if type and type.composite then
+    checked = check.composite(type_name, path)
+  elseif type and type.enumeration then
+    checked = check.enumeration(type_name, path)
   else
-    table_insert_template(result, [[
-<path> = <check>;
-]], { path = path, check = lua_check(type_name, -1, "++argtop") })
+    checked = check.primitive(type_name, path)
   end
-  local ident = string.rep(' ', indent)
-  for _, str in ipairs(result) do
-    for line in str:gmatch("[^\r\n]+") do
-      table.insert(tbl, ident .. line .. '\n')
-    end
-  end
+  tbl:push(checked)
 end
 
 -- C Emitters {{{1
 
 -- C Header {{{2
-local api_header = {}
-table_insert_template(api_header, [[
+local api_header = builder.create()
+api_header:push([[
 /***************************************************
 ************ DO NOT EDIT THIS BY HAND **************
 *** This file was auto generated by api_gen.lua ****
@@ -399,25 +449,19 @@ table_insert_template(api_header, [[
 
 typedef lua_Integer lua_stackIndex;
 typedef lua_Integer lua_stackRetCount;
-struct velvet;
-
-]])
+struct velvet;]])
 
 --- C enums {{{3
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
-  if enum.doc then table_insert_template(api_header, "/* <doc> */\n", { doc = enum.doc }) end
-  table_insert_template(api_header, [[
-enum <packed><name> {
-]], { packed = enum.packed and "__attribute__((packed)) " or "", name = cname })
+  if enum.doc then api_header:push("/* <doc> */", { doc = enum.doc }) end
+  api_header:push('enum <packed><name> {', { packed = enum.packed and "__attribute__((packed)) " or "", name = cname })
   for _, v in ipairs(enum.values) do
-    if v.doc then table_insert_template(api_header, "  /* <doc> */\n", { doc = v.doc }) end
+    if v.doc then api_header:push("  /* <doc> */", { doc = v.doc }) end
     local field_name = ("%s_%s"):format(cname, v.name):upper()
-    table_insert_template(api_header, [[
-  <name> = <value>,
-]], { name = field_name, value = v.value })
+    api_header:push('  <name> = <value>,', { name = field_name, value = v.value })
   end
-  table_insert_template(api_header, '\n};\n\n')
+  api_header:push('};\n')
 end
 
 --- C structs {{{3
@@ -427,96 +471,80 @@ for _, type in ipairs(spec.types) do
   if is_manual(type.name) then
     goto continue
   end
-  if type.doc then table_insert_template(api_header, "/* <doc> */\n", { doc = type.doc }) end
+  if type.doc then api_header:push("/* <doc> */", { doc = type.doc }) end
   local cname = get_cname(type.name)
-  table_insert_template(api_header, [[
-struct <name> {
-]], { name = cname })
+  api_header:push('struct <name> {', { name = cname })
   for _, fld in ipairs(type.fields) do
-    if fld.doc then table_insert_template(api_header, "  /* <doc> */\n", { doc = fld.doc }) end
+    if fld.doc then api_header:push("  /* <doc> */", { doc = fld.doc }) end
     if fld.optional then
-      table_insert_template(api_header, [[
+      api_header:push([[
   struct {
     <field_name> value;
     bool set;
-  } <name>;
-]], { field_name = c_type(fld.type), name = fld.name })
+  } <name>;]], { field_name = c_type(fld.type), name = fld.name })
     else
-      table_insert_template(api_header, [[
-  <type> <name>;
-]], { type = c_type(fld.type), name = fld.name })
+      api_header:push('  <type> <name>;', { type = c_type(fld.type), name = fld.name })
     end
   end
-  table_insert_template(api_header, '\n};\n\n')
+  api_header:push('};\n')
   ::continue::
 end
 
 for _, evt in ipairs(spec.events) do
   local event_name = evt.name:gsub("%.", "_")
   local event_arg_name = get_cname(evt.args)
-  table_insert_template(api_header, [[
-/* <doc> */
-void velvet_api_raise_<event>(struct velvet *v, __attribute__((unused)) struct <arg_type> args);
-]], { doc = evt.doc, event = event_name, arg_type = event_arg_name })
+  api_header:push('/* <doc> */', { doc = evt.doc })
+  api_header:push('void velvet_api_raise_<event>(struct velvet *v, __attribute__((unused)) struct <arg_type> args);',
+    { event = event_name, arg_type = event_arg_name })
 end
 
-table_insert_template(api_header, "#endif /* VELVET_API_H */\n")
+api_header:push("\n#endif /* VELVET_API_H */\n")
 
-write_file(out_dir .. "/velvet_api.h", table.concat(api_header))
+write_file(out_dir .. "/velvet_api.h", api_header:tostring())
 
 -- C Lua Marshalling {{{2
 
 -- Shared C helpers {{{3
 
-local c_helpers = {}
-table_insert_template(c_helpers, [[
+local c_helpers = builder.create()
+c_helpers:push([[
 /***************************************************
 ************ DO NOT EDIT THIS BY HAND **************
 *** This file was auto generated by api_gen.lua ****
 ***************************************************/
-
-#include "velvet_api.h"
-
-]])
+#include "velvet_api.h"]])
 
 for _, enum in ipairs(spec.enums) do
   local cname = get_cname(enum.name)
   -- String to integer value {{{4
-  table_insert_template(c_helpers, [=[
-__attribute__((unused)) static int <enum>_slice_to_enum(struct u8_slice str) {
-]=], { enum = enum.name })
+  c_helpers:push('\n__attribute__((unused)) static int <enum>_slice_to_enum(struct u8_slice str) {', { enum = enum.name })
   for _, option in ipairs(enum.values) do
-    table_insert_template(c_helpers, [[
-  if (u8_slice_equals(str, (struct u8_slice){.content = (const uint8_t *)"<option>", .len = <len>})) return <value>;
-]], { option = option.name, len = #option.name, value = enum_value_c_name(cname, option.name) })
+    local template = { option = option.name, len = #option.name, value = enum_value_c_name(cname, option.name) }
+    c_helpers:push('  struct u8_slice <option>_str = {.content = (const uint8_t *)"<option>", .len = <len>};', template)
+    c_helpers:push('  if (u8_slice_equals(str, <option>_str))\n    return <value>;\n', template)
   end
-  table_insert_template(c_helpers, '  return ~0;\n}\n\n')
+  c_helpers:push('  return ~0;\n}')
 
   -- Integer value to string {{{4
-  table_insert_template(c_helpers, [=[
-__attribute__((unused)) static struct u8_slice <name>_to_slice(<type> value) {
-]=], { name = enum.name, type = c_type(enum.name) })
-  table_insert_template(c_helpers, [[
-  switch (value) {
-]])
+  c_helpers:push('\n__attribute__((unused)) static struct u8_slice <name>_to_slice(<type> value) {',
+    { name = enum.name, type = c_type(enum.name) })
+  c_helpers:push('  switch (value) {')
   for _, option in ipairs(enum.values) do
-    local enum_value = ("%s_%s"):format(cname, option.name):upper()
-    table_insert_template(c_helpers, [[
-  case <value>: return (struct u8_slice){.content = (const uint8_t *)"<option>", .len = <len>};
-]], { value = enum_value, option = option.name, len = #option.name })
+    local enum_value = (cname .. '_' .. option.name):upper()
+    c_helpers:push(
+      '  case <value>:\n    return (struct u8_slice){.content = (const uint8_t *)"<option>", .len = <len>};',
+      { value = enum_value, option = option.name, len = #option.name })
   end
-  table_insert_template(c_helpers, [[
-  default: assert(!"<name> value out of range");
-]], { name = enum.name });
-  table_insert_template(c_helpers, '  };\n}\n\n')
+  c_helpers:push('  default: assert(!"<name> value out of range");', { name = enum.name });
+  c_helpers:push('  };\n}')
 end
 
-write_file(out_dir .. "/velvet_autogen_helpers.c", table.concat(c_helpers))
+write_file(out_dir .. "/velvet_autogen_helpers.c", c_helpers:tostring())
 
 -- C Lua Functions {{{3
 
-local c_marshal = {}
-table_insert_template(c_marshal, [[
+local c_marshal = builder.create()
+c_marshal:push([[
 /***************************************************
 ************ DO NOT EDIT THIS BY HAND **************
 *** This file was auto generated by api_gen.lua ****
@@ -528,7 +556,6 @@ table_insert_template(c_marshal, [[
 #include "velvet_lua.h"
 #include "velvet.h"
 #include "velvet_autogen_helpers.c"
-
 ]])
 
 -- C API function marshalling {{{3
@@ -544,18 +571,19 @@ for _, fn in ipairs(spec.api) do
     end
   end
 
-  table_insert_template(c_marshal, [[
-
-static int l_vv_api_<name>(lua_State *L) {
-  lua_Integer argtop = <argc>;
-  (void)argtop;
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
-  if (v->reloading) {
-    lua_pushstring(L, "vv.api cannot be used after calling reload.");
-    lua_error(L);
-  }
-  v->current = L;
-]], { name = fn.name, argc = #fn.params })
+  c_marshal.indent = 0
+  c_marshal:push('static int l_vv_api_<name>(lua_State *L) {', { name = fn.name })
+  c_marshal.indent = 2
+  c_marshal:push([[
+lua_Integer argtop = <argc>;
+(void)argtop;
+struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+if (v->reloading) {
+  lua_pushstring(L, "vv.api cannot be used after calling reload.");
+  lua_error(L);
+}
+v->current = L;
+]], { argc = #fn.params })
 
   local args = {}
   for idx, p in ipairs(fn.params or {}) do
@@ -563,25 +591,22 @@ static int l_vv_api_<name>(lua_State *L) {
     local t = type_lookup[p.type]
     if is_manual(p.type) then
       -- pass the stack index; the implementation reads it from L
-      table_insert_template(c_marshal, "  lua_Integer <name> = <idx>;\n", { name = p.name, idx = idx })
+      c_marshal:push("lua_Integer <name> = <idx>;", { name = p.name, idx = idx })
     elseif t.composite then
       if not t.optional then
-        table_insert_template(c_marshal, [[
-  luaL_checktype(L, <idx>, LUA_TTABLE);
-]], { idx = idx })
+        c_marshal:push('luaL_checktype(L, <idx>, LUA_TTABLE);', { idx = idx })
       end
-      table_insert_template(c_marshal, [[
-  <type> <name> = {0};
-  if (!lua_isnoneornil(L, <idx>)) {
-    luaL_checktype(L, <idx>, LUA_TTABLE);
-    lua_pushvalue(L, <idx>); /* push table to the top of the stack */
+      c_marshal:push([[
+<type> <name> = {0};
+if (!lua_isnoneornil(L, <idx>)) {
+  luaL_checktype(L, <idx>, LUA_TTABLE);
+  lua_pushvalue(L, <idx>); /* push table to the top of the stack */
 ]], { type = c_type(p.type), name = p.name, idx = idx })
-
-      check_field(c_marshal, p.type, p.name, 4)
-      table_insert_template(c_marshal, [[
-    lua_pop(L, 1); /* pop pushed table */
-  }
-]])
+      c_marshal.indent = c_marshal.indent + 2
+      check.field(c_marshal, p.type, p.name)
+      c_marshal:push('lua_pop(L, 1); /* pop pushed table */')
+      c_marshal.indent = c_marshal.indent - 2
+      c_marshal:push('}')
     elseif t and t.enumeration then
       local template = {
         slice = p.name .. '_str',
@@ -591,81 +616,69 @@ static int l_vv_api_<name>(lua_State *L) {
         type = p.type,
       }
       if p.default_value == nil then
-        table_insert_template(c_marshal, [[
-  struct u8_slice <slice> = <check>;
-  <struct> <name> = <type>_slice_to_enum(<slice>);
-]], template)
+        c_marshal:push([[
+struct u8_slice <slice> = <check>;
+<struct> <name> = <type>_slice_to_enum(<slice>);]], template)
       else
         template.idx = idx
         template.default_value = p.default_value
-        table_insert_template(c_marshal, [[
-  struct u8_slice <slice>;
-  if (lua_isstring(L, <idx>)) {
-    <slice> = <check>;
-  } else {
-    <slice> = u8_slice_from_cstr("<default_value>");
-  }
-  <struct> <name> = <type>_slice_to_enum(<slice>);
-]], template)
+        c_marshal:push([[
+struct u8_slice <slice>;
+if (lua_isstring(L, <idx>)) {
+  <slice> = <check>;
+} else {
+  <slice> = u8_slice_from_cstr("<default_value>");
+}
+<struct> <name> = <type>_slice_to_enum(<slice>);]], template)
       end
     else
       local template = { struct = c_type(p.type), name = p.name, check = lua_check(p.type, idx) }
-      table_insert_template(c_marshal, "  <struct> <name> = <check>;\n", template)
+      c_marshal:push("<struct> <name> = <check>;", template)
     end
   end
 
   local argsstring = #args > 0 and ", " .. table.concat(args, ", ") or ""
   if has_manual_param or manual_return then
-    table_insert_template(c_marshal, [[
-  return vv_api_<name>(v<args>);
-}
-]], { name = fn.name, args = argsstring })
+    c_marshal:push('return vv_api_<name>(v<args>);', { name = fn.name, args = argsstring })
   elseif fn.returns.type == 'void' then
-    table_insert_template(c_marshal, [[
-  vv_api_<name>(v<args>);
-  return 0;
-}
-]], { name = fn.name, args = argsstring })
+    c_marshal:push('vv_api_<name>(v<args>);', { name = fn.name, args = argsstring })
+    c_marshal:push('return 0;')
   else
-    table_insert_template(c_marshal, [[
-  <struct> ret = vv_api_<name>(v<args>);
-]], { struct = c_type(fn.returns.type), name = fn.name, args = argsstring })
-    push_field(c_marshal, fn.returns.type, "ret")
-    table_insert_template(c_marshal, '\n   return 1;\n}\n')
+    c_marshal:push('<struct> ret = vv_api_<name>(v<args>);',
+      { struct = c_type(fn.returns.type), name = fn.name, args = argsstring })
+    push.field(c_marshal, fn.returns.type, "ret")
+    c_marshal:push('return 1;')
   end
+  c_marshal.indent = 0
+  c_marshal:push('}')
 end
 
 -- Generate lua function table {{{3
 
-table_insert_template(c_marshal, [=[
+c_marshal:push([=[
 __attribute__((unused)) static const struct luaL_Reg velvet_lua_function_table[] = {
 ]=])
 
 for _, fn in ipairs(spec.options) do
-  table_insert_template(c_marshal, [[
-  { "get_<name>", l_vv_api_get_<name> },
-  { "set_<name>", l_vv_api_set_<name> },
-]], { name = fn.name })
+  c_marshal:push('  { "get_<name>", l_vv_api_get_<name> },', { name = fn.name })
+  c_marshal:push('  { "set_<name>", l_vv_api_set_<name> },', { name = fn.name })
 end
 
 for _, fn in ipairs(spec.api) do
-  local name = fn.name
-  table_insert_template(c_marshal, [[
-  { "<name>", l_vv_api_<name> },
-]], { name = fn.name })
+  c_marshal:push('  { "<name>", l_vv_api_<name> },', { name = fn.name })
 end
 
 
-table_insert_template(c_marshal, '  {0} /* sentinel */\n};\n')
+c_marshal:push('  {0} /* sentinel */\n};\n')
 -- Write lua_autogen.c {{{3
 
-write_file(out_dir .. "/velvet_lua_autogen.c", table.concat(c_marshal))
+write_file(out_dir .. "/velvet_lua_autogen.c", c_marshal:tostring())
 
 
 -- Event marshalling {{{3
 
-local event_emitters = {}
-table_insert_template(event_emitters, [[
+local event_emitters = builder.create()
+event_emitters:push([[
 /***************************************************
 ************ DO NOT EDIT THIS BY HAND **************
 *** This file was auto generated by api_gen.lua ****
@@ -680,22 +693,21 @@ table_insert_template(event_emitters, [[
 ]])
 
 for _, evt in ipairs(spec.events) do
-  local event_name = evt.name:gsub("%.", "_")
-  local event_arg_name = get_cname(evt.args)
-  table_insert_template(event_emitters, [=[
-
-void velvet_api_raise_<event>(struct velvet *v, __attribute__((unused)) struct <arg> args) {
+  local template = { event = evt.name:gsub("%.", "_"), arg = get_cname(evt.args), value = evt.name, len = #evt.name }
+  event_emitters:push('void velvet_api_raise_<event>(struct velvet *v, __attribute__((unused)) struct <arg> args) {',
+    template)
+  event_emitters:push([=[
   lua_State *L = v->L;
   if (!L) return;
   lua_getglobal(L, "vv");
   lua_getfield(L, -1, "events");
   lua_getfield(L, -1, "emit");
   lua_pushlstring(L, "<value>", <len>); /* event name */
-]=], { event = event_name, arg = event_arg_name, value = evt.name, len = #evt.name })
-
-  push_field(event_emitters, evt.args, "args")
-
-  table_insert_template(event_emitters, [[
+  ]=], template)
+  event_emitters.indent = 2
+  push.field(event_emitters, evt.args, "args")
+  event_emitters.indent = 0
+  event_emitters:push([[
   /* vv.events.emit(args) */
   if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
     const char *err = lua_tostring(L, -1);
@@ -703,18 +715,18 @@ void velvet_api_raise_<event>(struct velvet *v, __attribute__((unused)) struct <
     lua_pop(L, 1);
   }
   lua_pop(L, 2);
-}
-]])
+}]])
 end
-write_file(out_dir .. "/velvet_lua_event_emitters.c", table.concat(event_emitters))
+event_emitters:push('')
+write_file(out_dir .. "/velvet_lua_event_emitters.c", event_emitters:tostring())
 
 
 -- LUA emitters {{{1
 
 -- _api.lua {{{2
-local api_meta = {}
+local api_meta = builder.create()
 
-table_insert_template(api_meta, [=[
+api_meta:push([=[
 --[[
 DO NOT EDIT THIS BY HAND
 This file was auto generated by api_gen.lua
@@ -724,62 +736,47 @@ error("Cannot require meta file")
 
 --- @meta
 --- @class velvet.api
-local api = {}
-]=])
+local api = {}]=])
 
 -- Generate enum specs {{{3
 
 for _, enum in ipairs(spec.enums) do
   local lua_name = get_luaname(enum.name)
-  table_insert_template(api_meta, [[
----@alias <name> string <doc>
-]], { name = lua_name, doc = enum.doc or "" })
+  api_meta:push('\n---@alias <name> string <doc>', { name = lua_name, doc = enum.doc or "" })
   for _, v in ipairs(enum.values) do
-    table_insert_template(api_meta, [[
----| '<name>' <doc>
-]], { name = v.name, doc = v.doc or "" })
+    api_meta:push("---| '<name>' <doc>", { name = v.name, doc = v.doc or "" })
   end
   if enum.flags then
-    table_insert_template(api_meta, [[
-
---- @class <name>s Flags for <name>
-]], { name = lua_name })
+    api_meta:push('\n--- @class <name>s Flags for <name>', { name = lua_name })
     for _, value in ipairs(enum.values) do
-      table_insert_template(api_meta, [[
---- @field <field>? boolean <doc>
-]], { field = value.name, doc = value.doc or "" })
+      api_meta:push('--- @field <field>? boolean <doc>', { field = value.name, doc = value.doc or "" })
     end
   end
-  table_insert_template(api_meta, '\n')
 end
 
 -- Generate type definitions for composite types {{{3
 
 for _, type in ipairs(spec.types) do
-  table_insert_template(api_meta, [[
-
---- @class <name>
-]], { name = get_luaname(type.name) })
+  api_meta:push('\n--- @class <name>', { name = get_luaname(type.name) })
   for _, fld in ipairs(type.fields) do
-    local lt = lua_type(fld.type) .. (fld.alias and ('|velvet.api.' .. fld.alias) or '')
+    local typename = lua_type(fld.type) .. (fld.alias and ('|velvet.api.' .. fld.alias) or '')
     local t = type_lookup[fld.type]
     if t.enumeration and t.enumeration.flags then
-      lt = ('%ss'):format(lt)
+      typename = typename .. 's'
     end
-    table_insert_template(api_meta, [[
---- @field <field> <type> <doc>
-]], { field = fld.name .. (fld.optional and '?' or ''), type = lt, doc = fld.doc or "" })
+    api_meta:push('--- @field <field> <type> <doc>',
+      { field = fld.name .. (fld.optional and '?' or ''), type = typename, doc = fld.doc or "" })
   end
 end
 
 -- Generate api function spec {{{3
 
 for _, fn in ipairs(spec.api) do
-  table_insert_template(api_meta, '\n--- <doc>\n', { doc = string_concatenate(fn.doc, "\n--- ") })
+  api_meta:push('\n--- <doc>', { doc = string_concatenate(fn.doc, "\n--- ") })
   for _, p in ipairs(fn.params or {}) do
     local t = type_lookup[p.type]
     local optional = p.optional == true or t.optional == true or p.default_value ~= nil
-    table_insert_template(api_meta, '--- @param <name> <type> <doc>\n',
+    api_meta:push('--- @param <name> <type> <doc>',
       { name = p.name .. (optional and '?' or ''), doc = string_concatenate(p.doc, "\n--- "), type = lua_type(p.type) })
   end
 
@@ -787,88 +784,81 @@ for _, fn in ipairs(spec.api) do
   for _, p in ipairs(fn.params or {}) do
     table.insert(params, p.name)
   end
-  table_insert_template(api_meta, [[
---- @return <type> <ret> <doc>
-]], { ret = fn.returns.name, type = lua_type(fn.returns.type), doc = string_concatenate(fn.returns.doc, "\n--- ") })
+  api_meta:push('--- @return <type> <ret> <doc>',
+    { ret = fn.returns.name, type = lua_type(fn.returns.type), doc = string_concatenate(fn.returns.doc, "\n--- ") })
 
-  table_insert_template(api_meta, "function api.<name>(<params>) end\n",
+  api_meta:push("function api.<name>(<params>) end",
     { name = fn.name, params = table.concat(params, ", ") })
 end
 
 -- Stub out event handlers {{{3
 
-table_insert_template(api_meta, [[
+api_meta:push([[
 
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler
---- @field id integer The id of the handler
-]])
+--- @field id integer The id of the handler]])
 for _, evt in ipairs(spec.events) do
   local template = { field = evt.name:gsub('%.', '_'), args = evt.args, doc = evt.doc }
-  table_insert_template(api_meta, '--- @field <field>? fun(event_args: velvet.api.<args>): nil <doc>\n', template)
+  api_meta:push('--- @field <field>? fun(event_args: velvet.api.<args>): nil <doc>', template)
 end
 
 -- Write _api.lua {{{3
 
-table_insert_template(api_meta, "\n")
-write_file("lua/velvet/_api.lua", table.concat(api_meta))
+write_file("lua/velvet/_api.lua", api_meta:tostring())
 
 -- _options.lua {{{2
 
-local options = {}
-table_insert_template(options, [[
+local options = builder.create()
+options:push([[
 error("Cannot require meta file")
 --- @meta
 --- @class velvet.options
-local options = {}
-]])
+local options = {}]])
 
 for _, fn in ipairs(spec.options) do
   local template = {
     doc = string_concatenate(fn.doc, "\n--- "),
     type = lua_type(fn.type),
     name = fn.name,
-    default_value =
-        inspect(fn.default)
+    default_value = type(fn.default) == 'table' and inspect(fn.default) or fn.default
   }
-  table_insert_template(options, [[
+  options:push([[
 --- <doc>
 --- @type <type>
 options.<name> = <default_value>
-
 ]], template)
 end
 
-table_insert_template(options, "return options\n")
-write_file("lua/velvet/_options.lua", table.concat(options))
+options:push("return options\n")
+write_file("lua/velvet/_options.lua", options:tostring())
 
 -- generate options.lua {{{2
 
-local default_options = {}
+local default_options = builder.create()
 
-table_insert_template(default_options, [[
+default_options:push([[
 --- DO NOT EDIT THIS BY HAND
 --- This file was auto generated by api_gen.lua
 --- It sets all options to their default values.
-
 ]])
 
 --- Set default options {{{3
 
 for _, fn in ipairs(spec.options) do
-  local template = { name = fn.name, default_value = inspect(fn.default) }
-  table_insert_template(default_options, 'vv.options.<name> = <default_value>\n', template)
+  local template = { name = fn.name, default_value = type(fn.default) == 'table' and inspect(fn.default) or fn.default }
+  default_options:push('vv.options.<name> = <default_value>', template)
 end
 
 
 --- write file {{{3
 
-table_insert_template(default_options, "\n")
-write_file("lua/velvet/default_options.lua", table.concat(default_options))
+default_options:push("\n")
+write_file("lua/velvet/default_options.lua", default_options:tostring())
 
 --- generate async.lua {{{2
-local async = {}
-table_insert_template(async, [==[
+local async = builder.create()
+async:push([==[
 --[[
 DO NOT EDIT THIS BY HAND
 This file was auto generated by api_gen.lua
@@ -890,27 +880,25 @@ local function wait_impl(event, timeout, when)
 end
 
 --- @type table<string, string|boolean>
-local known_events = {
-]==])
+local known_events = {]==])
 
 --- Description of known events {{{3
 for _, evt in ipairs(spec.events) do
-  table_insert_template(async, "  [ [[<name>]] ] = [[<doc>]],\n", { name = evt.name, doc = evt.doc })
+  async:push("  [ [[<name>]] ] = [[<doc>]],", { name = evt.name, doc = evt.doc })
 end
 
 --- Event name type alias {{{3
-table_insert_template(async, [[
+async:push([[
 }
 
---- @alias velvet.async.event
-]])
+--- @alias velvet.async.event]])
 for _, evt in ipairs(spec.events) do
-  table_insert_template(async, "---| '<name>' <doc>\n", { name = evt.name, doc = evt.doc })
+  async:push("---| '<name>' <doc>", { name = evt.name, doc = evt.doc })
 end
 
 --- Generate user-facing API {{{3
 for _, evt in ipairs(spec.events) do
-  table_insert_template(async, [[
+  async:push([[
 
 --- Wait for <name>
 --- @param timeout? integer Optional timeout.
@@ -918,15 +906,13 @@ for _, evt in ipairs(spec.events) do
 --- @return velvet.api.<return_type> ret Result, or nil on timeout.
 function M.wait_for_<event>(timeout, when)
   return wait_impl('<name>', timeout, when)
-end
-]], { name = evt.name, return_type = evt.args, event = evt.name:gsub('%.', '_') })
+end]], { name = evt.name, return_type = evt.args, event = evt.name:gsub('%.', '_') })
 end
 
-table_insert_template(async, "\nreturn { known_events, M }")
+async:push("\nreturn { known_events, M }\n")
 
 --- write file {{{3
-table_insert_template(async, "\n")
-write_file("lua/velvet/async/autogen.lua", table.concat(async))
+write_file("lua/velvet/async/autogen.lua", async:tostring())
 
 -- Modeline {{{1
 -- vim: fdm=marker shiftwidth=2
