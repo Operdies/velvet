@@ -191,8 +191,6 @@ struct velvet_args velvet_parse_args(int argc, char **argv) {
   return a;
 }
 
-_Noreturn static void velvet_fast_shutdown(struct velvet *velvet);
-
 /* daemonize by double forking, detaching from the process group, and then exiting the sandwiched parent. */
 static bool daemonize(void) {
   int pid = fork();
@@ -315,52 +313,6 @@ int main(int argc, char **argv) {
 
   velvet_loop(&velvet, initial_screen_size);
   velvet_fast_shutdown(&velvet);
-}
-
-_Noreturn static void velvet_fast_shutdown(struct velvet *velvet) {
-  // 1. Notify all attached clients to detach
-  if (velvet->socket) {
-    struct velvet_client *client;
-    vec_foreach(client, velvet->clients) {
-      if (client->socket) {
-        uint8_t quit = 'Q';
-        write(client->socket, &quit, 1);
-      }
-    }
-
-    close(velvet->socket);
-  }
-
-  // 2. Remove socket file from filesystem
-  char *sockpath = getenv("VELVET");
-  if (sockpath) {
-    struct string pathbuf = {0};
-    string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", sockpath);
-    string_ensure_null_terminated(&pathbuf);
-    unlink((char*)pathbuf.content);
-  }
-
-  // 3. Notify child processes
-  struct velvet_window *h;
-  vec_foreach(h, velvet->scene.windows) {
-    if (h->pty > 0) {
-      pid_t pgid = tcgetpgrp(h->pty);
-      if (pgid > 0) {
-        kill(-pgid, SIGCONT);
-        kill(-pgid, SIGHUP);
-      } else if (h->pid > 0) {
-        kill(h->pid, SIGCONT);
-        kill(h->pid, SIGHUP);
-      }
-    }
-  }
-
-  struct velvet_process *p;
-  vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
-  vec_where(p, velvet->marked_for_death, p->pid && !p->killed) kill(p->pid, SIGKILL);
-
-  // 4. Exit
-  exit(0);
 }
 
 static int signal_write;

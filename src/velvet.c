@@ -325,7 +325,7 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
     int signal = signals.content[i];
     switch (signal) {
     case SIGTERM: {
-      velvet->quit = true;
+      velvet_fast_shutdown(velvet);
     } break;
     case SIGHUP: {
       /* ignore */
@@ -335,12 +335,10 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
     } break;
     case SIGINT: {
       if (!velvet->daemon) {
-        velvet_log("^C received; exiting");
-        velvet->quit = true;
+        velvet_fast_shutdown(velvet);
       }
     } break;
     default:
-      velvet->quit = true;
       velvet_die("Unhandled signal: %d", signal);
       break;
     }
@@ -853,4 +851,50 @@ void velvet_destroy(struct velvet *velvet) {
   vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
   vec_where(p, velvet->marked_for_death, p->pid) kill(p->pid, SIGKILL);
   if (velvet->L) lua_close(velvet->L);
+}
+
+_Noreturn void velvet_fast_shutdown(struct velvet *velvet) {
+  uint8_t buf[PATH_MAX];
+  // 1. Notify all attached clients to detach
+  if (velvet->socket) {
+    struct velvet_client *client;
+    vec_foreach(client, velvet->clients) {
+      if (client->socket) {
+        uint8_t quit = 'Q';
+        write(client->socket, &quit, 1);
+      }
+    }
+  }
+
+  // 2. Remove socket file from filesystem
+  char *sockpath = getenv("VELVET");
+  if (sockpath) {
+    /* this may be called from a signal handler, so to avoid allocating we use a stack string buffer */
+    struct string pathbuf = {.content = buf, .len = 0, .cap = PATH_MAX};
+    string_joinpath(&pathbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", sockpath);
+    string_ensure_null_terminated(&pathbuf);
+    unlink((char*)pathbuf.content);
+  }
+
+  // 3. Notify child processes
+  struct velvet_window *h;
+  vec_foreach(h, velvet->scene.windows) {
+    if (h->pty > 0) {
+      pid_t pgid = tcgetpgrp(h->pty);
+      if (pgid > 0) {
+        kill(-pgid, SIGCONT);
+        kill(-pgid, SIGHUP);
+      } else if (h->pid > 0) {
+        kill(h->pid, SIGCONT);
+        kill(h->pid, SIGHUP);
+      }
+    }
+  }
+
+  struct velvet_process *p;
+  vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
+  vec_where(p, velvet->marked_for_death, p->pid && !p->killed) kill(p->pid, SIGKILL);
+
+  // 4. _exit to avoid any stdio or atexit() handlers without calling 
+  _exit(0);
 }
