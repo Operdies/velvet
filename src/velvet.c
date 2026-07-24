@@ -75,7 +75,6 @@ void velvet_init(struct velvet *v, int sock_fd, char *arg0, char **argv) {
   signal_write = signal_pipes[1];
   getcwd(startup_directory, PATH_MAX - 1);
 
-
   struct velvet stock = {
       .scene = velvet_scene_default,
       .clients = vec(struct velvet_client),
@@ -291,51 +290,36 @@ static void socket_accept(struct io_source *src) {
   vec_push(&velvet->clients, &c);
 }
 
-static void velvet_reap(struct velvet *v, int pid, int status) {
-  struct velvet_scene *m = &v->scene;
-  struct velvet_process *p;
-  struct velvet_window *h;
-  struct velvet_process *d;
+static void velvet_process_cleanup(struct velvet *v, struct velvet_process proc, int status) {
+  uint8_t buf[4096];
+  struct u8_slice data = {.content = buf};
 
-  vec_find(h, m->windows, h->pid == pid);
-  if (h) {
-    h->pid = 0;
-    h->exited_at = get_ms_since_startup();
-    velvet_scene_close_and_remove_window(&v->scene, h);
-    return;
+  if (WIFEXITED(status)) {
+    proc.exit_code = WEXITSTATUS(status);
+  } else if (WIFSIGNALED(status)) {
+    proc.term_signal = WTERMSIG(status);
   }
 
-  vec_find(p, v->processes, p->pid == pid);
-  if (p) {
-    /* defer destroying this process to ensure pending output / error is propagated. */
-    p->pid = 0;
-    if (WIFEXITED(status)) {
-      p->exit_code = WEXITSTATUS(status);
-    } else if (WIFSIGNALED(status)) {
-      p->term_signal = WTERMSIG(status);
-    }
-    return;
-  }
+  /* since the reap procedure calls waitpid(-1) it is possible to
+   * reap a process with unread output. Since the process has already exited
+   * at this point, all pending data must necessarily be ready in its pipe. */
+  while (proc.out && (data.len = read(proc.out, buf, sizeof(buf))) > 0)
+    velvet_process_on_stdout(v, &proc, data);
+  while (proc.err && (data.len = read(proc.err, buf, sizeof(buf))) > 0)
+    velvet_process_on_stderr(v, &proc, data);
 
-  vec_find(d, v->marked_for_death, d->pid == pid);
-  if (d) {
-    velvet_process_destroy(d);
-    vec_remove(&v->marked_for_death, d);
-  }
+  proc.pid = 0;
+  velvet_process_destroy(&proc);
+  velvet_process_on_exit(v, &proc);
 }
 
-void velvet_reap_exited_processes(struct velvet *v) {
-  int status;
-  pid_t pid = 0;
-  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-    velvet_reap(v, pid, status);
-  }
+void velvet_schedule_reap(struct velvet *v) {
+  v->reap = true;
 }
 
 static void on_signal(struct io_source *src, struct u8_slice str) {
   struct velvet *velvet = src->data;
   // 1. Dispatch any pending signals
-  bool did_sigchld = false;
   struct int_slice signals = {.content = (int *)str.content, .n = str.len / 4};
   for (size_t i = 0; i < signals.n; i++) {
     int signal = signals.content[i];
@@ -344,10 +328,10 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
       velvet->quit = true;
     } break;
     case SIGHUP: {
-      velvet_log("Ignoring SIGHUP");
+      /* ignore */
     } break;
     case SIGCHLD: {
-      did_sigchld = true;
+      velvet_schedule_reap(velvet);
     } break;
     case SIGINT: {
       if (!velvet->daemon) {
@@ -360,10 +344,6 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
       velvet_die("Unhandled signal: %d", signal);
       break;
     }
-  }
-
-  if (did_sigchld) {
-    velvet_reap_exited_processes(velvet);
   }
 }
 
@@ -432,7 +412,7 @@ static void co_write(struct velvet *v, struct velvet_coroutine *co, int fd, stru
     ssize_t written = io_write(fd, string_as_u8_slice(*buf));
     if (written > 0) {
       string_shift_left(buf, written);
-    } else if (written == -1 && errno == EPIPE ) {
+    } else if (written == -1 && errno == EPIPE) {
       velvet_coroutine_destroy(v, co);
       return;
     } else if (written == 0) {
@@ -474,22 +454,22 @@ static void on_process_output(struct io_source *src, struct u8_slice output) {
   struct velvet_process *proc;
   vec_find(proc, velvet->processes, proc->out == src->fd || proc->err == src->fd);
   if (proc) {
-    if (proc->out == src->fd)
-      velvet_process_on_stdout(velvet, proc, output);
-    else if (proc->err == src->fd)
-      velvet_process_on_stderr(velvet, proc, output);
+    bool is_out = proc->out == src->fd;
     if (output.len == 0) {
-      /* the proc pointer may have been invalidated during the lua callback */
-      vec_find(proc, velvet->processes, proc->out == src->fd || proc->err == src->fd);
-      if (proc) {
-        if (proc->out == src->fd) { close(proc->out); proc->out = 0; }
-        if (proc->err == src->fd) { close(proc->err); proc->err = 0; }
+      close(src->fd);
+      if (is_out) {
+        proc->out = 0;
+      } else {
+        proc->err = 0;
       }
     }
+    if (is_out)
+      velvet_process_on_stdout(velvet, proc, output);
+    else
+      velvet_process_on_stderr(velvet, proc, output);
   }
 
-  if (output.len == 0)
-    velvet_reap_exited_processes(velvet);
+  if (output.len == 0) velvet_schedule_reap(velvet);
 }
 
 static void on_process_writable(struct io_source *src) {
@@ -501,7 +481,7 @@ static void on_process_writable(struct io_source *src) {
     if (written > 0) {
       string_shift_left(&proc->pending_input, written);
     } else if (written == 0) {
-      velvet_reap_exited_processes(velvet);
+      velvet_schedule_reap(velvet);
     }
     if (proc->in && proc->stdin_closed && proc->pending_input.len == 0) {
       close(proc->in);
@@ -517,11 +497,13 @@ static void on_window_writable(struct io_source *src) {
   assert(win);
   if (win->emulator.pending_input.len) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(win->emulator.pending_input));
-    if (written > 0) string_shift_left(&win->emulator.pending_input, (size_t)written);
-    else if (written == 0) velvet_reap_exited_processes(v);
+    if (written > 0) {
+      string_shift_left(&win->emulator.pending_input, (size_t)written);
+    } else if (written == 0) {
+      velvet_schedule_reap(v);
+    }
   }
-  if (win->emulator.pending_input.len == 0) 
-    src->events &= ~IO_SOURCE_POLLOUT;
+  if (win->emulator.pending_input.len == 0) src->events &= ~IO_SOURCE_POLLOUT;
 }
 
 static bool rects_intersect(struct rect a, struct rect b) {
@@ -535,44 +517,38 @@ bool window_visible(struct velvet *v, struct velvet_window *w) {
 
 static void on_window_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
-  if (str.len) {
-    struct velvet_window *vte;
-    vec_find(vte, v->scene.windows, vte->pty == src->fd);
-    assert(vte);
-    velvet_window_process_output(vte, str);
+  if (str.len == 0) {
+    velvet_schedule_reap(v);
+    return;
+  }
 
-    if (vte->emulator_output_buffer.len) {
-      struct velvet_client *client;
-      /* multicast output to all clients. In practice, there will only be one client connected,
-       * but since there is no good way to determine if a client supports OSC 8, just send it to every
-       * client with an output pipe. The worst case is something like the system clipboard being set multiple times
-       * which is harmless. */
-      vec_where(client, v->clients, client->output) {
-        string_push_string(&client->pending_output, vte->emulator_output_buffer);
-      }
+  struct velvet_window *vte;
+  vec_find(vte, v->scene.windows, vte->pty == src->fd);
+  assert(vte);
+  velvet_window_process_output(vte, str);
 
-      /* Consider the output handled even if it was not transmitted to any client.
-       * We really don't want the buffer to accumulate when no clients are connected,
-       * and allowing a process to e.g. set the clipboard when no client is connected
-       * is kind of an anti-feature anyway,
-       */
-      string_clear(&vte->emulator_output_buffer);
+  if (vte->emulator_output_buffer.len) {
+    struct velvet_client *client;
+    /* multicast output to all clients. In practice, there will only be one client connected,
+     * but since there is no good way to determine if a client supports OSC 8, just send it to every
+     * client with an output pipe. The worst case is something like the system clipboard being set multiple times
+     * which is harmless. */
+    vec_where(client, v->clients, client->output) {
+      string_push_string(&client->pending_output, vte->emulator_output_buffer);
     }
 
-    vte->had_output = true;
+    /* Consider the output handled even if it was not transmitted to any client.
+     * We really don't want the buffer to accumulate when no clients are connected,
+     * and allowing a process to e.g. set the clipboard when no client is connected
+     * is kind of an anti-feature anyway,
+     */
+    string_clear(&vte->emulator_output_buffer);
+  }
 
-    if (window_visible(v, vte)) {
-      velvet_invalidate_render(v, "window output");
-    }
-  } else {
-    velvet_reap_exited_processes(v);
-    /* the window should have been removed in the remove_exited() call,
-     * but in case it was not detected we explicitly remove it by pty here */
-    struct velvet_window *vte;
-    vec_find(vte, v->scene.windows, vte->pty == src->fd);
-    if (vte) {
-      velvet_scene_close_and_remove_window(&v->scene, vte);
-    }
+  vte->had_output = true;
+
+  if (window_visible(v, vte)) {
+    velvet_invalidate_render(v, "window output");
   }
 }
 
@@ -658,29 +634,65 @@ static void velvet_sweep_processes(struct velvet *velvet) {
   vec_rwhere(proc, velvet->marked_for_death, !proc->killed && proc->termination_deadline < now) {
     kill(proc->pid, SIGKILL);
     proc->killed = true;
+    velvet_schedule_reap(velvet);
+  }
+}
+
+static void velvet_reap(struct velvet *v, int pid, int status) {
+  { /* check marked processes. This vec is likely to be empty, or
+     * emptied very quickly since its residents are signaled with SIGKILL */
+    struct velvet_process *d;
+    vec_find(d, v->marked_for_death, d->pid == pid);
+    if (d) {
+      velvet_process_destroy(d);
+      vec_remove(&v->marked_for_death, d);
+      return;
+    }
   }
 
-  /* note that the vec_rforeach macro is not being used here because
-   * it iterates the actual pointer. This is unsafe here because velvet_process_destroy
-   * can trigger a lua callback which can cause the base pointer to be realloc'ed.
-   * By using an indexed iteration we avoid this problem.
-   * The lua API can only start new processes, so any processes added to the list
-   * via the callback are going to be greater than `i`. */
-  for (int i = velvet->processes.length - 1; i >= 0; i--) {
-    proc = vec_nth_unchecked(velvet->processes, i);
-    /* if proc->pid is 0, this process has been reaped and can safely be destroyed. */
-    /* if proc has an expired termination deadline, kill it dead */
-    if (proc->pid == 0) {
-      struct velvet_process copy = *proc;
-      velvet_process_destroy(proc);
-      vec_remove_at(&velvet->processes, i);
-      velvet_process_on_exit(velvet, &copy);
+  { /* check pty-backed processes */
+    struct velvet_window *h;
+    struct velvet_scene *m = &v->scene;
+    vec_find(h, m->windows, h->pid == pid);
+    if (h) {
+      h->pid = 0;
+      h->exited_at = get_ms_since_startup();
+      velvet_scene_close_and_remove_window(&v->scene, h);
+      return;
+    }
+  }
+
+  { /* check regular processes */
+    struct velvet_process *p;
+    vec_find(p, v->processes, p->pid == pid);
+    if (p) {
+      struct velvet_process copy = *p;
+      vec_remove(&v->processes, p);
+      velvet_process_cleanup(v, copy, status);
+      return;
     }
   }
 }
 
+static void velvet_reap_all(struct velvet *v) {
+  int status;
+  pid_t pid = 0;
+  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    velvet_reap(v, pid, status);
+  }
+  v->reap = false;
+}
+
 void velvet_dispatch(struct velvet *velvet) {
   if (velvet->reloading) velvet_lua_restart_vm(velvet);
+
+  velvet_sweep_processes(velvet);
+  /* NOTE: We are reaping at the beginning of the event loop
+   * becaues it is not really safe to close file descriptors during io dispatch
+   * because a new file handle can be allocated to the free'd up slot, meaning a io_dispatch()
+   * can dispatch a callback to an, unrelated file descriptor, causing mayhem. */
+  if (velvet->reap) velvet_reap_all(velvet);
+
   struct io *const loop = &velvet->event_loop;
   struct velvet_client *focus = velvet_get_focused_client(velvet);
   if (focus) velvet_align_and_arrange(velvet, focus);
@@ -725,8 +737,6 @@ void velvet_dispatch(struct velvet *velvet) {
       if (output_src.fd) io_add_source(loop, output_src);
     }
   }
-
-  velvet_sweep_processes(velvet);
 
   struct velvet_process *proc;
   vec_foreach(proc, velvet->processes) {
@@ -844,4 +854,3 @@ void velvet_destroy(struct velvet *velvet) {
   vec_where(p, velvet->marked_for_death, p->pid) kill(p->pid, SIGKILL);
   if (velvet->L) lua_close(velvet->L);
 }
-

@@ -325,10 +325,14 @@ while true; do :; done
   assert(coroutine.yield() == 'kill', 'expected SIGKILL')
 end
 
-local function bug_repro()
-  for i = 1, 1000 do
-    local output = shell_oneline('printf "var = $MYENV"', { MYENV = "hello" .. i })
-    expect('var = hello' .. i, output)
+local function test_stdout_reap_race()
+  -- note that to provoke this bug originally I had to run
+  -- many thousands of iterations, or put my system under extreme load,
+  -- but that would make this suite extremely slow, so hopefully if the bug
+  -- surfaces again this will fail intermittently.
+  for i = 1, 100 do
+    local output = shell_oneline('printf hello' .. i)
+    expect('hello' .. i, output)
   end
 end
 
@@ -343,6 +347,7 @@ return {
     test_environment()
     test_spawn_errors()
     test_filedescriptor_leaks()
+    test_stdout_reap_race()
     test_signal_delivery()
   end
 }

@@ -505,32 +505,46 @@ static void ensure_streams_blocking(void);
 
 struct velvet_lua_payload_context {
   bool quit;
-  bool stdin_closed;
   enum velvet_coroutine_exit_code exit_code;
 };
 
+#define IO_FD_CLOSED (-2)
+
 static void vv_lua_on_output(struct io_source *src, struct u8_slice str) {
-  (void)src;
+  if (str.len == 0) {
+    src->fd = IO_FD_CLOSED;
+    return;
+  }
+
   io_write(STDOUT_FILENO, str);
 }
 
 static bool color_stderr = false;
 static void vv_lua_on_error(struct io_source *src, struct u8_slice str) {
-  (void)src;
-  struct u8_slice red = u8_slice_from_cstr("\x1b[31m");
-  struct u8_slice reset = u8_slice_from_cstr("\x1b[0m");
+  static struct string buf = {0};
 
-  if (color_stderr)
-    io_write(STDERR_FILENO, red);
-  io_write(STDERR_FILENO, str);
-  if (color_stderr)
-    io_write(STDERR_FILENO, reset);
+  if (str.len == 0) {
+    src->fd = IO_FD_CLOSED;
+    string_destroy(&buf);
+    return;
+  }
+
+  if (color_stderr) {
+    string_clear(&buf);
+    string_push_cstr(&buf, "\x1b[31m");
+    string_push_slice(&buf, str);
+    string_push_cstr(&buf, "\x1b[m");
+    io_write(STDERR_FILENO, u8_slice_from_string(buf));
+  } else {
+    io_write(STDERR_FILENO, str);
+  }
 }
+
 static void vv_lua_on_input(struct io_source *src, struct u8_slice str) {
-  (void)src;
-  (void)str;
-  struct velvet_lua_payload_context *ctx = src->data;
-  if (str.len == 0) ctx->stdin_closed = true;
+  if (str.len == 0) {
+    src->fd = IO_FD_CLOSED;
+    return;
+  }
 }
 static void vv_lua_on_socket(struct io_source *src, struct u8_slice str) {
   struct velvet_lua_payload_context *ctx = src->data;
@@ -649,10 +663,9 @@ static int vv_send_lua_payload(struct velvet_args args, struct u8_slice payload)
   }
   while (!ctx.quit) {
     io_dispatch(&io);
-    if (ctx.stdin_closed) {
-      /* STDIN is the last entry */
-      vec_remove_at(&io.sources, io.sources.length - 1);
-    }
+    struct io_source *src;
+    vec_rwhere(src, io.sources, src->fd == IO_FD_CLOSED)
+      vec_remove(&io.sources, src);
   }
 
   io_destroy(&io);

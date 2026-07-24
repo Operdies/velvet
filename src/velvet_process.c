@@ -287,8 +287,8 @@ void velvet_process_kill_and_destroy_all(struct velvet *v) {
   }
   vec_clear(&v->processes);
 
-  /* 3. attempt to reap */
-  velvet_reap_exited_processes(v);
+  /* 3. schedule reap */
+  velvet_schedule_reap(v);
 }
 
 void velvet_process_kill(struct velvet *v, struct velvet_process *p, int signal) {
@@ -304,6 +304,7 @@ void velvet_process_destroy(struct velvet_process *p) {
   if (p->in) close(p->in);
   if (p->out) close(p->out);
   if (p->err) close(p->err);
+  p->in = p->out = p->err = 0;
   if (p->pid > 0) {
     /* no longer asking nicely */
     kill(p->pid, SIGKILL);

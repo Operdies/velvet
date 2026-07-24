@@ -89,6 +89,7 @@ void io_dispatch(struct io *io) {
     if (pfd->revents) remaining--;
     for (int repeats = 0; pfd->revents && repeats < io->max_iterations; repeats++) {
       if (io->dispatch_break) return;
+      bool do_break = false;
       // Read output
       if ((pfd->revents & POLLIN) && src->on_readable) {
         src->on_readable(src);
@@ -106,7 +107,7 @@ void io_dispatch(struct io *io) {
             // assume this error is non-recoverable and close.
             struct u8_slice zero = {0};
             src->on_read(src, zero);
-            break;
+            do_break = true;
           }
           ERROR("read:");
         } else {
@@ -124,8 +125,18 @@ void io_dispatch(struct io *io) {
         else if (src->on_read) src->on_read(src, zero);
         else if (src->on_readable) src->on_readable(src);
         else if (src->on_writable) src->on_writable(src);
-        break;
+        do_break = true;
       }
+
+      if (do_break) {
+        /* It is generally not safe to continue dispatching after a file descriptor has been
+         * closed because the dispatcher risks dispatching a newly opened file descriptor
+         * which has been assigned an id related with the current set of file descriptors.
+         * This can potentially cause mayhem, so to avoid that we just break.
+         * Then the caller can set up a new, non-stale file descriptor set. */
+        return;
+      }
+
       pfd->revents = 0;
       pfd->events = src->events;
       int poll_ret = poll(pfd, 1, 0);

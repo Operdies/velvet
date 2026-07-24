@@ -321,29 +321,6 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
   string_clear(&stringbuf);
 
   lua_State *L = v->current;
-  lua_pushvalue(L, cmd); /* push cmd to top of stack */
-  if (lua_isstring(L, -1)) {
-    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (string must not be empty)");
-    split_and_push_string_array(L);
-  }
-
-  if (!lua_istable(L, -1)) lua_bail(v, "bad argument #1 to 'process_spawn'. string or string[] expected.");
-
-  int len = luaL_len(L, -1);
-  if (len == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
-
-  char *prog;
-  char **arglist = velvet_calloc(len + 1, sizeof(char *));
-  arglist[len] = NULL;
-  for (int i = 1; i <= len; i++) {
-    lua_geti(L, -1, i);
-    if (!lua_isstring(L, -1)) {
-      free(arglist);
-      lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
-    }
-    arglist[i - 1] = (char *)luaL_checkstring(L, -1);
-    lua_pop(L, 1);
-  }
 
   if (options.environment.set) {
     lua_pushvalue(L, options.environment.value);
@@ -384,6 +361,38 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
     }
     char *sentinel = NULL;
     vec_push(&envlist, &sentinel);
+  }
+
+  lua_pushvalue(L, cmd); /* push cmd to top of stack */
+  if (lua_isstring(L, -1)) {
+    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (string must not be empty)");
+    split_and_push_string_array(L);
+  }
+
+  if (!lua_istable(L, -1)) lua_bail(v, "bad argument #1 to 'process_spawn'. string or string[] expected.");
+
+  lua_Integer len = luaL_len(L, -1);
+  /* under -O2 gcc thinks len can overflow in the call to velvet_calloc(size_t) below to a
+   * gigantic value, but checking that it is positive here gets rid of that warning */
+  if (len <= 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
+
+  /* validate table */
+  for (int i = 1; i <= len; i++) {
+    lua_geti(L, -1, i);
+    if (!lua_isstring(L, -1)) {
+      lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
+    }
+    lua_pop(L, 1);
+  }
+
+  char *prog;
+  char **arglist = velvet_calloc(len + 1, sizeof(char *));
+  arglist[len] = NULL;
+
+  for (int i = 1; i <= len; i++) {
+    lua_geti(L, -1, i);
+    arglist[i - 1] = (char *)luaL_checkstring(L, -1);
+    lua_pop(L, 1);
   }
 
   char *wd = options.working_directory.set ? (char *)options.working_directory.value.content : NULL;

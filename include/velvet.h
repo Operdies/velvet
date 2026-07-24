@@ -108,6 +108,8 @@ struct velvet {
   int socket_cmd_sender;
   int socket;
   int signal_read;
+  /* set when reaping is required; velvet will schedule a reap on the main loop */
+  bool reap;
   bool quit;
   bool daemon;
   bool clean;
@@ -128,7 +130,7 @@ struct velvet {
   char **positional_args;
 };
 
-void velvet_reap_exited_processes(struct velvet *v);
+void velvet_schedule_reap(struct velvet *v);
 void velvet_force_full_redraw(struct velvet *scene);
 void velvet_invalidate_render(struct velvet *velvet, const char *reason);
 void velvet_loop(struct velvet *velvet, struct rect initial_size);
