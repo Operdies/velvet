@@ -1,6 +1,7 @@
 -- Setup {{{1
-local spec_path = assert(arg[1], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
-local out_dir = assert(arg[2], "usage: lua api_gen.lua <api_spec.lua> <out_dir>")
+local usage = "usage: lua generate.lua <spec.lua> <out_dir>"
+local spec_path = assert(arg[1], usage)
+local out_dir = assert(arg[2], usage)
 
 --- @type spec
 local spec = dofile(spec_path)

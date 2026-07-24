@@ -21,8 +21,8 @@ INSTALL_BIN2 = $(INSTALL_VELVET)/bin
 GEN_DIR = gen
 GEN_LUA_AUTOGEN = $(GEN_DIR)/velvet_autogen_helpers.c $(GEN_DIR)/velvet_lua_autogen.c $(GEN_DIR)/velvet_lua_event_emitters.c
 GEN_C_HEADER = $(GEN_DIR)/velvet_api.h
-GEN_LUA_SPEC = lua/velvet/spec.lua
-GEN_LUA_GENERATOR = lua/velvet/api_gen.lua
+GEN_LUA_SPEC = lua/generator/spec.lua
+GEN_LUA_GENERATOR = lua/generator/generate.lua
 
 LUA_VERSION = lua-5.5.0
 LUA_DIR = deps/$(LUA_VERSION)
