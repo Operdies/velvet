@@ -60,8 +60,9 @@ local function quake_builder(cmd, id)
   local opts = { easing_function = anim.easing.spring }
 
   local anim_duration = 200
-  local function hide(duration)
-    if prevFocus and vv.api.window_is_valid(prevFocus) and not quake_registry[prevFocus] then
+  local function hide(duration, no_restore_focus)
+
+    if no_restore_focus ~= false and prevFocus and vv.api.window_is_valid(prevFocus) and not quake_registry[prevFocus] then
       vv.api.set_focused_window(prevFocus)
       prevFocus = nil
     end
@@ -158,7 +159,8 @@ local function quake_builder(cmd, id)
       elseif reg == on_key then
         local focus = vv.api.get_focused_window()
         if quake and focus ~= quake.id and quake:valid() and instance.visible and not vv.api.window_is_lua(focus) then
-          hide()
+          local restore_focus = quake_registry[focus] and true or false
+          hide(nil, not restore_focus)
         end
       elseif reg == reloaded then
         if id and quake and quake:valid() then
