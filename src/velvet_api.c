@@ -1678,7 +1678,7 @@ static lua_Integer vv_api_get_environment(struct velvet *v) {
   return 1;
 }
 
-#include "velvet_lua_autogen.c"
+#include "velvet_lua_bindings.c"
 int luaopen_velvet_api(lua_State *L) {
   luaL_newlib(L, velvet_lua_function_table);
   return 1;

@@ -1,8 +1,8 @@
 --- The async API is a coroutine based implementation of velvet's event system, enabling linear control flow.
 
-local autogen = require('velvet.async.autogen')
-local known_events = autogen[1]
-local M = autogen[2]
+local wait_functions = require('velvet.async.wait_functions')
+local known_events = wait_functions[1]
+local M = wait_functions[2]
 
 --[[
 NOTE: It is easy to leak memory in the async API because we store a lot of gc handles.
@@ -264,7 +264,6 @@ local function resolve(event, data)
     local waiters = event_source_waiter_registry[event]
     if waiters then resolve_table(waiters, event, data) end
   elseif type(event) == 'string' then
-    if not known_events[event] then known_events[event] = true end
     local segments = {}
     for segment in event:gmatch('[^.]+') do
       segments[#segments + 1] = segment

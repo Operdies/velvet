@@ -19,10 +19,20 @@ INSTALL_LUA = $(INSTALL_VELVET)/lua
 INSTALL_BIN2 = $(INSTALL_VELVET)/bin
 
 GEN_DIR = gen
-GEN_LUA_AUTOGEN = $(GEN_DIR)/velvet_autogen_helpers.c $(GEN_DIR)/velvet_lua_autogen.c $(GEN_DIR)/velvet_lua_event_emitters.c
+GEN_IN = lua/generate
+GEN_INPUT = $(GEN_IN)/init.lua $(GEN_IN)/spec.lua $(GEN_IN)/utils.lua \
+$(GEN_IN)/api_meta.lua $(GEN_IN)/options_meta.lua $(GEN_IN)/default_options.lua $(GEN_IN)/async_wait_functions.lua \
+$(GEN_IN)/velvet_api_h.lua $(GEN_IN)/velvet_enum_converters_c.lua \
+$(GEN_IN)/velvet_lua_bindings_c.lua $(GEN_IN)/velvet_lua_event_emitters_c.lua
+
+GEN_OUTPUT = $(GEN_DIR)/velvet_enum_converters.c
+# GEN_OUTPUT actually outputs the below list of files,
+# but parallel builds will attempt to run the generator in parallel if we specify all the source files,
+# so for build purposes we just define the one C file which is a common dependency
+# $(GEN_DIR)/velvet_api.h $(GEN_DIR)/velvet_enum_converters.c $(GEN_DIR)/velvet_lua_bindings.c $(GEN_DIR)/velvet_lua_event_emitters.c
+# lua/velvet/_api.lua lua/velvet/_options.lua lua/velvet/default_options.lua lua/velvet/async/waiters.lua
 GEN_C_HEADER = $(GEN_DIR)/velvet_api.h
-GEN_LUA_SPEC = lua/generator/spec.lua
-GEN_LUA_GENERATOR = lua/generator/generate.lua
+GEN_LUA_GENERATOR = $(GEN_IN)/init.lua
 
 LUA_VERSION = lua-5.5.0
 LUA_DIR = deps/$(LUA_VERSION)
@@ -84,20 +94,20 @@ MODULE_LDFLAGS += $(LDFLAGS)
 .PHONY: all
 all: release
 
-$(DEBUG_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_LUA_AUTOGEN) $(BUILD_DEPS)
+$(DEBUG_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_OUTPUT) $(BUILD_DEPS)
 	@mkdir -p $(DEBUG_LUA_MODULE_DIR)
 	$(CC) $(DEBUG_MODULE_CFLAGS) $< -o $@ $(MODULE_LDFLAGS)
 
-$(RELEASE_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_LUA_AUTOGEN) $(BUILD_DEPS)
+$(RELEASE_LUA_MODULE_DIR)/%.so: $(LUA_MODULE_DIR)/%.c $(GEN_OUTPUT) $(BUILD_DEPS)
 	@mkdir -p $(RELEASE_LUA_MODULE_DIR)
 	$(CC) $(RELEASE_MODULE_CFLAGS) $< -o $@ $(MODULE_LDFLAGS)
 
-$(DEBUG_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(SUBMODULE_INIT)
+$(DEBUG_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_OUTPUT) | $(SUBMODULE_INIT)
 	@mkdir -p $(DEBUG_DIR)
 	@echo $(CC) -c $(DEBUG_CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(DEBUG_CFLAGS) $< -o $@
 
-$(DEBUG_DIR)/%.c.o: $(CMD_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(SUBMODULE_INIT)
+$(DEBUG_DIR)/%.c.o: $(CMD_DIR)/%.c $(GEN_OUTPUT) | $(SUBMODULE_INIT)
 	@mkdir -p $(DEBUG_DIR)
 	@echo $(CC) -c $(DEBUG_CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(DEBUG_CFLAGS) $< -o $@
@@ -107,12 +117,12 @@ $(DEBUG_DIR)/%: $(DEBUG_DIR)/%.c.o $(DEBUG_OBJECT_OUT) $(BUILD_DEPS)
 	@echo $(CC) $(DEBUG_CFLAGS) $^ -o $@ $(DEBUG_LDFLAGS) > $@.txt
 	$(CC) $(DEBUG_CFLAGS) $^ -o $@ $(DEBUG_LDFLAGS)
 
-$(RELEASE_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(SUBMODULE_INIT)
+$(RELEASE_DIR)/%.c.o: $(OBJECT_DIR)/%.c $(GEN_OUTPUT) | $(SUBMODULE_INIT)
 	@mkdir -p $(RELEASE_DIR)
 	@echo $(CC) -c $(RELEASE_CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(RELEASE_CFLAGS) $< -o $@
 
-$(RELEASE_DIR)/%.c.o: $(CMD_DIR)/%.c $(GEN_LUA_AUTOGEN) | $(SUBMODULE_INIT)
+$(RELEASE_DIR)/%.c.o: $(CMD_DIR)/%.c $(GEN_OUTPUT) | $(SUBMODULE_INIT)
 	@mkdir -p $(RELEASE_DIR)
 	@echo $(CC) -c $(RELEASE_CFLAGS) $< -o $@ > $@.txt
 	$(CC) -c $(RELEASE_CFLAGS) $< -o $@
@@ -149,10 +159,10 @@ $(SUBMODULE_INIT):
 $(LUA):
 	$(MAKE) CC="$(CC) -std=gnu99" -C $(LUA_DIR) all
 
-$(GEN_LUA_AUTOGEN): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
-	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
-$(GEN_C_HEADER): $(GEN_LUA_SPEC) $(GEN_LUA_GENERATOR) $(LUA)
-	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_LUA_SPEC) $(GEN_DIR)
+$(GEN_OUTPUT): $(GEN_INPUT) $(GEN_LUA_GENERATOR) $(LUA)
+	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_DIR)
+$(GEN_C_HEADER): $(GEN_INPUT) $(GEN_LUA_GENERATOR) $(LUA)
+	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_DIR)
 
 INSTALL_BASH_COMPLETION = $(PREFIX)/share/bash-completion/completions
 INSTALL_ZSH_COMPLETION = $(PREFIX)/share/zsh/site-functions
