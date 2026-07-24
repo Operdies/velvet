@@ -155,9 +155,8 @@ function M.spec()
     }
     local setter = {
       name = "set_" .. fn.name,
-      doc = ("Set %s. Returns the new value."):format(fn.name),
-      params = { { name = "new_value", type = fn.type, doc = fn.doc } },
-      returns = { type = fn.type, doc = "new " .. fn.name:gsub('_', ' '), name = fn.name }
+      doc = ("Set %s to |value|."):format(fn.name),
+      params = { { name = "value", type = fn.type, doc = fn.doc } },
     }
     table.insert(spec.api, getter)
     table.insert(spec.api, setter)

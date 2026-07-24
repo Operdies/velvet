@@ -932,7 +932,7 @@ static struct velvet_api_theme vv_api_get_theme(struct velvet *v) {
   return p;
 }
 
-static struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_api_theme new_value) {
+static void vv_api_set_theme(struct velvet *v, struct velvet_api_theme new_value) {
   v->scene.theme.palette[0] = rgb_from_palette(new_value.black);
   v->scene.theme.palette[1] = rgb_from_palette(new_value.red);
   v->scene.theme.palette[2] = rgb_from_palette(new_value.green);
@@ -965,17 +965,15 @@ static struct velvet_api_theme vv_api_set_theme(struct velvet *v, struct velvet_
   if (new_value.bold_bright_colors.set)
     v->scene.theme.bold_bright_colors = new_value.bold_bright_colors.value;
   velvet_invalidate_render(v, "color palette updated");
-  return vv_api_get_theme(v);
 }
 
 static lua_Integer vv_api_get_fps_target(struct velvet *v) {
   return v->fps_target;
 }
 
-static lua_Integer vv_api_set_fps_target(struct velvet *v, lua_Integer new_value) {
+static void vv_api_set_fps_target(struct velvet *v, lua_Integer new_value) {
   if (new_value <= 0) lua_bail(v, "fps target must be a positive integer.");
   v->fps_target = new_value;
-  return vv_api_get_fps_target(v);
 }
 
 static float vv_api_window_get_dim_factor(struct velvet *v, lua_Integer win_id) {
@@ -1534,8 +1532,8 @@ static lua_Integer vv_api_get_scrollback_scroll_multiplier(struct velvet *v) {
   return v->input.options.scroll_multiplier;
 }
 
-static lua_Integer vv_api_set_scrollback_scroll_multiplier(struct velvet *v, lua_Integer new_value) {
-  return v->input.options.scroll_multiplier = new_value;
+static void vv_api_set_scrollback_scroll_multiplier(struct velvet *v, lua_Integer new_value) {
+  v->input.options.scroll_multiplier = new_value;
 }
 
 static struct velvet_api_coordinate vv_api_get_mouse_position(struct velvet *v) {

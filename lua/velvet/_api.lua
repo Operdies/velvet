@@ -624,30 +624,30 @@ function api.get_environment() end
 --- @return integer scrollback_scroll_multiplier current scrollback scroll multiplier
 function api.get_scrollback_scroll_multiplier() end
 
---- Set scrollback_scroll_multiplier. Returns the new value.
---- @param new_value integer The number of lines scrolled per scroll wheel tick.
---- @return integer scrollback_scroll_multiplier new scrollback scroll multiplier
-function api.set_scrollback_scroll_multiplier(new_value) end
+--- Set scrollback_scroll_multiplier to |value|.
+--- @param value integer The number of lines scrolled per scroll wheel tick.
+--- @return nil  
+function api.set_scrollback_scroll_multiplier(value) end
 
 --- Get theme
 --- @return velvet.api.theme theme current theme
 function api.get_theme() end
 
---- Set theme. Returns the new value.
---- @param new_value velvet.api.theme The 16 numbered terminal colors.
---- @return velvet.api.theme theme new theme
-function api.set_theme(new_value) end
+--- Set theme to |value|.
+--- @param value velvet.api.theme The 16 numbered terminal colors.
+--- @return nil  
+function api.set_theme(value) end
 
 --- Get fps_target
 --- @return integer fps_target current fps target
 function api.get_fps_target() end
 
---- Set fps_target. Returns the new value.
---- @param new_value integer Set the rendering fps target. Under load, velvet dispatches frames on a timer.
+--- Set fps_target to |value|.
+--- @param value integer Set the rendering fps target. Under load, velvet dispatches frames on a timer.
 --- Note that this only affects frame scheduling behavior. When the system is not under load
 --- velvet will attempt to dispatch dirty frames regardless of fps target immediately after flushing all pending IO.
---- @return integer fps_target new fps target
-function api.set_fps_target(new_value) end
+--- @return nil  
+function api.set_fps_target(value) end
 
 --- @class velvet.api.event_handler
 --- @field name string The name of the handler
