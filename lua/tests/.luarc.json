@@ -1,8 +1,0 @@
-{
-  "workspace.library": ["../velvet"],
-  "runtime.version": "Lua 5.5",
-  "diagnostics": {
-    "enable": true
-  }
-}
-
