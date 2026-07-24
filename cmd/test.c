@@ -1395,17 +1395,18 @@ void test_lua_modules(void) {
   }
   lua_pop(L, lua_gettop(L));
 
-  lua_assert(L, "require('tests').run()");
-
+  /* lua does not have a way to set environment variables
+   * in the scope of the running process, so we help it a bit here. */
+  setenv("LUA_TEST_ENV", "123", true);
   /* value needed by lua test */
   lua_pushinteger(L, SIGTERM);
   lua_setglobal(L, "SIGTERM");
 
+  /* start tests and dispatch the main loop until TEST_STATUS is set */
+  lua_assert(L, "require('tests').run()");
+
   bool success = false;
-  /* lua does not have a way to set environment variables
-   * in the scope of the running process, so we help it a bit here. */
-  setenv("LUA_TEST_ENV", "123", true);
-  for (int i = 0; i < 100000; i++) {
+  while (true) {
     lua_getglobal(L, "TEST_STATUS");
     if (!lua_isnoneornil(L, -1)) {
       success = lua_toboolean(L, -1);

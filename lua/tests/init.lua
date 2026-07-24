@@ -25,19 +25,25 @@ function WARN(...)
   io.stderr:write(yellow .. str .. reset .. "\n")
 end
 
-
 local function run()
   local failed = 0
+  local tasks = {}
   for _, mod in ipairs(tests) do
     local test = require(mod).test
-    local ok, err = xpcall(test, debug.traceback)
+    tasks[mod] = vv.async.run(test)
+  end
+  local results = vv.async.wait_all(tasks)
+  for mod, result in pairs(results) do
+    local ret = result.data
+    local ok = ret[1]
     if not ok then
+      local err = ret[2]
       local lines = {}
       for line in err:gmatch("[^\r\n]+") do
-        lines[#lines+1] = line
+        lines[#lines + 1] = line
       end
       print('FAIL: ' .. mod .. ': ' .. lines[1])
-      for i = 2,#lines do
+      for i = 2, #lines do
         local line = lines[i]
         if line:match("in global 'xpcall'") then break end
         print(line)
@@ -52,6 +58,7 @@ end
 
 return {
   run = function()
+    vv.api.schedule_after(5000, function() TEST_STATUS = false end)
     vv.async.run(function()
       local status, result = pcall(run)
       if not status then print(result) end
