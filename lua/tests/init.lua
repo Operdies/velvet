@@ -2,10 +2,10 @@
 SIGTERM = 0
 
 local tests = {
-  'velvet.test.test_process',
-  'velvet.test.test_deep_extend',
-  'velvet.test.test_runtime_storage',
-  'velvet.test.test_async'
+  'tests.test_process',
+  'tests.test_deep_extend',
+  'tests.test_runtime_storage',
+  'tests.test_async'
 }
 
 -- vv redefines print() to use vv.log,

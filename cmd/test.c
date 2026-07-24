@@ -1395,7 +1395,7 @@ void test_lua_modules(void) {
   }
   lua_pop(L, lua_gettop(L));
 
-  lua_assert(L, "require('velvet.test').run()");
+  lua_assert(L, "require('tests').run()");
 
   /* value needed by lua test */
   lua_pushinteger(L, SIGTERM);
