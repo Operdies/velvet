@@ -527,12 +527,28 @@ void test_lua_modules(void) {
   /* lua does not have a way to set environment variables
    * in the scope of the running process, so we help it a bit here. */
   setenv("LUA_TEST_ENV", "123", true);
-  /* value needed by lua test */
+
+  lua_getglobal(L, "require");
+  lua_pushstring(L, "tests");
+  lua_call(L, 1, 1);
+  luaL_checktype(L, -1, LUA_TTABLE);
+
+  /* globals needed by tests.run() */
   lua_pushinteger(L, SIGTERM);
   lua_setglobal(L, "SIGTERM");
 
+  /* if stdout/err are tty's, the harness can print colors */
+  lua_pushboolean(L, isatty(STDOUT_FILENO));
+  lua_setglobal(L, "STDOUT_ISATTY");
+  lua_pushboolean(L, isatty(STDERR_FILENO));
+  lua_setglobal(L, "STDERR_ISATTY");
+
   /* start tests and dispatch the main loop until TEST_STATUS is set */
-  lua_assert(L, "require('tests').run()");
+  lua_getfield(L, -1, "run");
+  if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+    const char *err = lua_tostring(L, -1);
+    velvet_die("tests.run(): %s", err);
+  }
 
   bool success = false;
   while (true) {
@@ -548,6 +564,9 @@ void test_lua_modules(void) {
   struct velvet_process *p;
   vec_where(p, v.processes, p->pid) kill(p->pid, SIGKILL);
   vec_where(p, v.marked_for_death, p->pid) kill(p->pid, SIGKILL);
-  assert(success);
+  
+  /* velvet_destroy will kill any processes the tests failed to dispose. */
   velvet_destroy(&v);
+  /* no need for asserts, the lua test suite already reported nice errors */
+  if (!success) exit(1);
 }

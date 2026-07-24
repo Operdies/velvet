@@ -1,5 +1,7 @@
--- value overriden by the test harness
+-- globals overriden by the test harness
 SIGTERM = 0
+STDERR_ISATTY = false
+STDOUT_ISATTY = false
 
 local tests = {
   'tests.test_process',
@@ -16,6 +18,15 @@ local tests = {
 function print(...)
   local str = table.concat({ ... }, "\t")
   io.write(str .. "\n")
+end
+
+local function printerr(...)
+  local str = table.concat({ ... }, "\t")
+  if STDERR_ISATTY then
+    -- bold red
+    str = '\x1b[31;1m' .. str .. '\x1b[m'
+  end
+  io.stderr:write(str .. '\n')
 end
 
 function WARN(...)
@@ -42,17 +53,17 @@ local function run()
       for line in err:gmatch("[^\r\n]+") do
         lines[#lines + 1] = line
       end
-      print('FAIL: ' .. mod .. ': ' .. lines[1])
+      printerr('FAIL: ' .. mod .. ': ' .. lines[1])
       for i = 2, #lines do
         local line = lines[i]
         if line:match("in global 'xpcall'") then break end
-        print(line)
+        printerr(line)
       end
       failed = failed + 1
     end
   end
   if failed > 0 then
-    error(failed .. ' test module(s) failed')
+    printerr(failed .. ' test module(s) failed')
   end
 end
 
