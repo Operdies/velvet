@@ -176,6 +176,9 @@ install: release
 	install -m 644 doc/man3/*.3 $(INSTALL_MAN)/man3/
 	install -m 644 shell-completion/bash/vv $(INSTALL_BASH_COMPLETION)/vv
 	install -m 644 shell-completion/zsh/_vv $(INSTALL_ZSH_COMPLETION)/_vv
+	@ # delete any existing lua distribution from previous installs
+	test -n "$(INSTALL_LUA)"
+	rm -rf $(INSTALL_LUA)/
 	cp -r lua/velvet $(INSTALL_LUA)/
 
 uninstall:
