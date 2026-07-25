@@ -321,6 +321,15 @@ local function test_delivery()
   end
 end
 
+local function test_coroutine_close()
+  local src = async.event_source()
+  local trd = async.run(function() src:wait() end)
+  coroutine.close(trd)
+  local ok, err = async.wait_for_coroutine(trd)
+  expect(ok, false)
+  expect(err, 'closed')
+end
+
 
 return {
   test = function()
@@ -332,5 +341,6 @@ return {
     test_event_source_wait_all()
     test_coroutine_weakrefs()
     test_delivery()
+    test_coroutine_close()
   end
 }

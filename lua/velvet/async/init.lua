@@ -17,6 +17,17 @@ meaning the only handle is now the fact that it is running, and so forth.
 --- @param mode 'k'|'v'|'kv'
 local function make_weaktable(mode) return setmetatable({}, { __mode = mode }) end
 
+--- @param fn function(): nil
+--- @return table
+local function make_close(fn, arg)
+  return setmetatable({}, {
+    __close = function()
+      local ok, err = xpcall(fn, debug.traceback, arg)
+      if not ok then printerr("Unhandled error during close: " .. err) end
+    end
+  })
+end
+
 --- @generic T any
 --- @param obj T object to wrap
 --- @return [T] wrap array containing a weak reference to |obj|
@@ -83,6 +94,7 @@ local function exec_defer(co)
   state.deferring = true
 
   local defers = state.defers
+  assert(state.defers, "thread deferred twice!")
   state.defers = nil
   state_cancel_timeout(state)
 
@@ -124,8 +136,21 @@ local function co_run(f, ...)
   local state = { defers = {}, deferring = false }
   local co = coroutine.running()
   co_state[co] = state
+
+  local function defer()
+    -- the thread may have already deferred if it was cancelled.
+    -- if so, its defer table is nil
+    if state.defers ~= nil then
+      -- if xpcall did not return, then the coroutine must have been closed via coroutine.close().
+      if not state.result then
+        state.result = { false, 'closed' }
+      end
+      exec_defer(co)
+    end
+  end
+
+  local defer_handle <close> = make_close(defer)
   state.result = table.pack(xpcall(f, debug.traceback, ...))
-  exec_defer(co)
 end
 
 --- Execute |f| as a coroutine.
