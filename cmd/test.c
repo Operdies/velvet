@@ -511,6 +511,11 @@ void test_lua(void) {
 }
 
 void test_lua_modules(void) {
+  /* because the lua test context is dispatching with the real velvet event loop, if the test is terminated by a signal, (Ctrl-C, kill)
+   * it will delete the $VELVET socket file in its shutdown path.
+   * To avoid this, we unset the environment variable in the test context. */
+  unsetenv("VELVET");
+
   struct velvet v = {0};
   char *argv[] = { "-S", "test", NULL };
   int noop_fd[2];

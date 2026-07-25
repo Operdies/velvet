@@ -7,16 +7,6 @@
 --- but I am hesitant to build it because the async implementation must necessarily either make pessimistic
 --- assumptions about usage, or
 
-local function expect(x, y)
-  assert(x == y, string.format("'%s' expected, was '%s'", x, y))
-end
-
-local function expect_error(err, fn, ...)
-  local ok, result = xpcall(fn, function(e) return e end, ...)
-  assert(not ok)
-  if err and not result:match(err) then expect(err, result) end
-end
-
 local function test_basic_functionality()
   local co = coroutine.running()
   local payload = [[
@@ -42,15 +32,15 @@ local function test_basic_functionality()
   })
 
   local exit_code = coroutine.yield()
-  expect(0, exit_code)
-  expect(2, #outputs.stdout)
-  expect(2, #outputs.stderr)
-  expect("hello output", outputs.stdout[1])
-  expect("hello error", outputs.stderr[1])
-  expect("nil", outputs.stdout[2])
-  expect("nil", outputs.stderr[2])
-  expect(5, #ids) -- twice for output, twice for closing the stream, once for exiting
-  for _, id in ipairs(ids) do expect(id, proc_id) end
+  expect_eq(0, exit_code)
+  expect_eq(2, #outputs.stdout)
+  expect_eq(2, #outputs.stderr)
+  expect_eq("hello output", outputs.stdout[1])
+  expect_eq("hello error", outputs.stderr[1])
+  expect_eq("nil", outputs.stdout[2])
+  expect_eq("nil", outputs.stderr[2])
+  expect_eq(5, #ids) -- twice for output, twice for closing the stream, once for exiting
+  for _, id in ipairs(ids) do expect_eq(id, proc_id) end
 end
 
 local function test_stdin()
@@ -242,28 +232,28 @@ end
 
 local function test_environment()
   local env = vv.api.get_environment()
-  expect('123', env.LUA_TEST_ENV)
+  expect_eq('123', env.LUA_TEST_ENV)
 
   -- print test env set up in test harness
   local output = shell_oneline('printf $LUA_TEST_ENV')
-  expect('123', output)
+  expect_eq('123', output)
 
   -- verify the parent environment is discarded when an env table is provided
   output = shell_oneline('printf $LUA_TEST_ENV', {})
-  expect(nil, output)
+  expect_eq(nil, output)
 
   -- verify inserting the existing environment table works
   output = shell_oneline('printf $LUA_TEST_ENV', env)
-  expect('123', output)
+  expect_eq('123', output)
 
   output = shell_oneline('printf $MYENV', { MYENV = "hello" })
-  expect('hello', output)
+  expect_eq('hello', output)
 
   output = shell_oneline('printf "${ENV1}${ENV2}"', { ENV1 = " hello ", ENV2 = " world " })
-  expect(" hello  world ", output)
+  expect_eq(" hello  world ", output)
 
   output = shell_oneline('printf "${num1}${num2}"', { num1 = 12, num2 = 34 })
-  expect("1234", output)
+  expect_eq("1234", output)
 end
 
 local function test_spawn_errors()
@@ -337,7 +327,7 @@ local function test_stdout_reap_race()
   -- surfaces again this will fail intermittently.
   for i = 1, 100 do
     local output = shell_oneline('printf hello' .. i)
-    expect('hello' .. i, output)
+    expect_eq('hello' .. i, output)
   end
 
   -- concurrent now
@@ -347,8 +337,8 @@ local function test_stdout_reap_race()
   end
   local results = vv.async.wait_all(tasks)
   for i = 1, 100 do
-    expect(true, results[i].data[1])
-    expect('hello' .. i, results[i].data[2])
+    expect_eq(true, results[i].data[1])
+    expect_eq('hello' .. i, results[i].data[2])
   end
 end
 
@@ -357,20 +347,20 @@ local function test_process_wrapper()
   local process = require('velvet.process')
   local p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; sleep 0.1 ; printf le;' }, { stderr = false })
   expect_error('cannot read from closed stream', p.line, p, 'stderr')
-  expect('hello', p:line())
-  expect('worldle', p:line())
-  expect(nil, p:line())
-  expect(nil, p:line())
-  expect(nil, p:lines()())
-  expect(0, p:wait_for_exit())
+  expect_eq('hello', p:line())
+  expect_eq('worldle', p:line())
+  expect_eq(nil, p:line())
+  expect_eq(nil, p:line())
+  expect_eq(nil, p:lines()())
+  expect_eq(0, p:wait_for_exit())
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld\n"' })
   local lines = {}
   for line in p:lines() do lines[#lines+1] = line end
   assert(2, #lines)
-  expect('hello', lines[1])
-  expect('world', lines[2])
-  expect(0, p:wait_for_exit())
+  expect_eq('hello', lines[1])
+  expect_eq('world', lines[2])
+  expect_eq(0, p:wait_for_exit())
 
   local payload = [[
 i=1
@@ -381,9 +371,9 @@ done
 ]]
   p = process.spawn({ 'sh', '-c', payload }, { stdin = false, stderr = false })
   for i = 1, 100 do
-    expect(tostring(i), p:line('stdout'))
+    expect_eq(tostring(i), p:line('stdout'))
   end
-  expect(nil, p:line('stdout'))
+  expect_eq(nil, p:line('stdout'))
 
   payload = [[
 while read MY_ARG; do
@@ -394,32 +384,31 @@ done
   local items = { "this", "is", "my", "list", "of", "awesome and cool", "strings" }
   for _, v in ipairs(items) do
     p:write_stdin(v .. '\n')
-    expect(v, p:line('stdout'))
+    expect_eq(v, p:line('stdout'))
   end
   local large_string = string.rep('what a strange string this is', 1000)
   for _ = 1, 10 do
     p:write_stdin(large_string .. '\n')
-    expect(large_string, p:line('stdout'))
+    expect_eq(large_string, p:line('stdout'))
   end
   p:write_stdin(large_string .. '\n')
   p:close_stdin()
-  expect(large_string .. '\n', p:read_all('stdout'))
-  expect(nil, p:line('stdout'))
+  expect_eq(large_string .. '\n', p:read_all('stdout'))
+  expect_eq(nil, p:line('stdout'))
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le";' }, { stderr = false })
-  expect('hello\nworldle', p:read_all())
-  expect(nil, p:read_all())
-  expect(0, p:wait_for_exit())
+  expect_eq('hello\nworldle', p:read_all())
+  expect_eq(nil, p:read_all())
+  expect_eq(0, p:wait_for_exit())
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le\n";' }, { stderr = false })
-  expect('hello\nworldle\n', p:read_all())
-  expect(nil, p:read_all())
-  expect(0, p:wait_for_exit())
+  expect_eq('hello\nworldle\n', p:read_all())
+  expect_eq(nil, p:read_all())
+  expect_eq(0, p:wait_for_exit())
 end
 
 return {
   test = function()
-    test_environment()
     -- it is kind of necessary to insert sleeps in some process related
     -- tests because buffering behavior is timing sensitive by nature.
     -- we run these tests in parallel to save a bit of time.

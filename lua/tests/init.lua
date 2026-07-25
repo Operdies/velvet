@@ -1,3 +1,4 @@
+---@diagnostic disable: lowercase-global
 -- globals overriden by the test harness
 SIGTERM = 0
 STDERR_ISATTY = false
@@ -7,8 +8,16 @@ local tests = {
   'tests.test_process',
   'tests.test_deep_extend',
   'tests.test_runtime_storage',
-  'tests.test_async'
+  'tests.test_async',
 }
+
+local function stringify(...)
+  local tbl = table.pack(...)
+  for i = 1, tbl.n do
+    tbl[i] = tostring(tbl[i])
+  end
+  return table.concat(tbl, "\t") .. '\n'
+end
 
 -- vv redefines print() to use vv.log,
 -- so locally we should route print output to io.write() instead.
@@ -16,17 +25,25 @@ local tests = {
 -- velvet doesn't really define where the STDOUT / STDERR file descriptors
 -- are pointing, but this will only be used in a unit-testing context.
 function print(...)
-  local str = table.concat({ ... }, "\t")
-  io.write(str .. "\n")
+  io.write(stringify(...))
 end
 
-local function printerr(...)
-  local str = table.concat({ ... }, "\t")
+function printerr(...)
   if STDERR_ISATTY then
-    -- bold red
-    str = '\x1b[31;1m' .. str .. '\x1b[m'
+    io.stderr:write(stringify('\x1b[31;1m', ..., '\x1b[m'))
+  else
+    io.stderr:write(stringify(...))
   end
-  io.stderr:write(str .. '\n')
+end
+
+function expect_eq(x, y)
+  assert(x == y, string.format("'%s' expected, was '%s'", x, y))
+end
+
+function expect_error(err, fn, ...)
+  local ok, result = xpcall(fn, function(e) return e end, ...)
+  assert(not ok)
+  if err and not result:match(err) then expect_eq(err, result) end
 end
 
 function WARN(...)
@@ -65,6 +82,7 @@ local function run()
   if failed > 0 then
     printerr(failed .. ' test module(s) failed')
   end
+  return failed == 0
 end
 
 return {
@@ -73,7 +91,7 @@ return {
     vv.async.run(function()
       local status, result = pcall(run)
       if not status then print(result) end
-      TEST_STATUS = status
+      TEST_STATUS = status and result
     end)
   end
 }
