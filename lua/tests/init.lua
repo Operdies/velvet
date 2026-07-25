@@ -46,6 +46,12 @@ function expect_error(err, fn, ...)
   if err and not result:match(err) then expect_eq(err, result) end
 end
 
+function expect_error(err, fn, ...)
+  local ok, result = xpcall(fn, function(e) return e end, ...)
+  assert(not ok)
+  if err and not result:match(err) then expect_eq(err, result) end
+end
+
 function WARN(...)
   local yellow = '\x1b[33m'
   local reset = '\x1b[m'
@@ -55,17 +61,10 @@ end
 
 local function run()
   local failed = 0
-  local tasks = {}
   for _, mod in ipairs(tests) do
     local test = require(mod).test
-    tasks[mod] = vv.async.run(test)
-  end
-  local results = vv.async.wait_all(tasks)
-  for mod, result in pairs(results) do
-    local ret = result.data
-    local ok = ret[1]
+    local ok, err = vv.async.wait_for_coroutine(vv.async.run(test))
     if not ok then
-      local err = ret[2]
       local lines = {}
       for line in err:gmatch("[^\r\n]+") do
         lines[#lines + 1] = line

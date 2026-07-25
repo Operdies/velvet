@@ -650,8 +650,6 @@ function api.get_fps_target() end
 function api.set_fps_target(value) end
 
 --- @class velvet.api.event_handler
---- @field name string The name of the handler
---- @field id integer The id of the handler
 --- @field on_key? fun(event_args: velvet.api.on_key.event_args): nil Raised when a key is pressed.
 --- @field window_created? fun(event_args: velvet.api.window.created.event_args): nil Raised after a new window is created.
 --- @field window_closed? fun(event_args: velvet.api.window.closed.event_args): nil Raised after a window is closed.

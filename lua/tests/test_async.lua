@@ -1,3 +1,5 @@
+---we are accessing some vv.events() internals for testing purposes.
+---@diagnostic disable: invisible
 local async = vv.async
 local events = vv.events
 
@@ -290,19 +292,19 @@ end
 local function test_delivery()
   local thread_counts = { 1, 2, 3, 5, 7 }
   for _, num_threads in ipairs(thread_counts) do
-    for _, source in ipairs({ 'subject', vv.async.event_source() }) do
+    for _, source in ipairs({ 'subject', async.event_source() }) do
       local counters = {}
       local function dummy_listener(id)
         local counter = 0
         while true do
-          vv.async.wait(source)
+          async.wait(source)
           counter = counter + 1
           counters[id] = counter
         end
       end
       for id = 1, num_threads do
         counters[id] = 0
-        vv.async.run(dummy_listener, id)
+        async.run(dummy_listener, id)
       end
       local function emit()
         if type(source) == 'string' then
@@ -321,13 +323,92 @@ local function test_delivery()
   end
 end
 
+local function test_delivery_order()
+  local src = async.event_source()
+  -- 1000 may seem excessive, but in the past we encountered errors at 197 concurrent emitters due to a C stack overflow.
+  -- This bug was fixed with a trampoline in the async emitter.
+  local configurations = {
+    -- one to one
+    { num_emitters = 1,    num_listeners = 1 },
+    -- many to one
+    { num_emitters = 3,    num_listeners = 1 },
+    -- one to many
+    { num_emitters = 1,    num_listeners = 3 },
+    -- few to many
+    { num_emitters = 3,    num_listeners = 1000 },
+    -- many to few
+    { num_emitters = 1000, num_listeners = 3 },
+  }
+  for _, config in ipairs(configurations) do
+    local num_emitters, num_listeners = config.num_emitters, config.num_listeners
+
+    -- 1. set up a bunch of listeners to ensure they all see the same events in the same order
+    local listeners <close> = setmetatable({}, {
+      __close = function(self)
+        -- cancel these threads for the next loop iteration.
+        -- they don't caues problems, just slow the test down
+        for _, l in ipairs(self) do
+          async.cancel(l)
+        end
+      end
+    })
+    local counters = {}
+    for i = 1, num_listeners do
+      listeners[i] = async.run(function()
+        local counter = {}
+        counters[i] = counter
+        while true do
+          counter[#counter + 1] = src:wait()
+        end
+      end)
+    end
+
+    -- define an emitter which waits and emits on the same event
+    for _ = 1, num_emitters do
+      async.run(function()
+        src:wait()
+        src:emit(2)
+        src:wait()
+        src:emit(4)
+      end)
+    end
+
+    -- first pulse
+    src:emit(1)
+    -- second pulse
+    src:emit(3)
+
+    -- we expect the sequence to arrive in the order:
+    -- { 1, 2, 2, ..., 2, 3, 4, 4, ..., 4 }
+
+    -- verify every listener saw the same sequence
+    for _, lst in ipairs(counters) do
+      -- each emitter should have emitted 2 events, plus the two pulses
+      expect_eq(2 + num_emitters * 2, #lst)
+      local index = 1
+      expect_eq(1, lst[index]); index = index + 1 -- firsst pulse
+      for _ = 1, num_emitters do
+        -- each emitter should have emitted 2 once after the first pulse
+        expect_eq(2, lst[index]); index = index + 1
+      end
+      -- second pulse
+      expect_eq(3, lst[index]); index = index + 1
+      -- each emitter should have emitted 4 once after the second pulse
+      for _ = 1, num_emitters do
+        expect_eq(4, lst[index]); index = index + 1
+      end
+      expect_eq(nil, lst[index]); index = index + 1
+    end
+  end
+end
+
 local function test_coroutine_close()
   local src = async.event_source()
   local trd = async.run(function() src:wait() end)
   coroutine.close(trd)
   local ok, err = async.wait_for_coroutine(trd)
-  expect(ok, false)
-  expect(err, 'closed')
+  expect_eq(ok, false)
+  expect_eq(err, 'closed')
 end
 
 
@@ -342,5 +423,6 @@ return {
     test_coroutine_weakrefs()
     test_delivery()
     test_coroutine_close()
+    test_delivery_order()
   end
 }

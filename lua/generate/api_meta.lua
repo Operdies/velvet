@@ -74,11 +74,7 @@ local api = {}]=])
       { name = fn.name, params = table.concat(params, ", ") })
   end
 
-  builder:push([[
-
---- @class velvet.api.event_handler
---- @field name string The name of the handler
---- @field id integer The id of the handler]])
+  builder:push('\n--- @class velvet.api.event_handler')
   for _, evt in ipairs(spec.events) do
     local template = { field = evt.name:gsub('%.', '_'), args = evt.args, doc = evt.doc }
     builder:push('--- @field <field>? fun(event_args: velvet.api.<args>): nil <doc>', template)

@@ -282,9 +282,73 @@ local function recursive_resolve(event, data, wait_table, word, ...)
   end
 end
 
+--- @class velvet.async.result_lock
+--- @field queue { [integer]: thread }
+--- @field resolving boolean set if currently resolving
+--- @field schedule integer|nil event loop token
+local resolve_lock = { queue = {}, resolving = false, schedule = nil }
+
+function resolve_lock.pop_frame()
+  local function pop()
+    -- resume all threads which were yielded while this frame was being dispatched
+    local queue = resolve_lock.queue
+    resolve_lock.queue = {}
+    for i = 1, #queue do
+      coroutine.resume(queue[i])
+    end
+  end
+
+  pop()
+  resolve_lock.resolving = false
+
+  -- if popping the resolve stack queued new resolve frames,
+  -- they will be dispatched the next time an event is emitted.
+  -- However, if this does not happen before the context returns to C,
+  -- this will not happen. To work around this, we schedule an immediate flush on the event loop.
+  if resolve_lock.schedule == nil and resolve_lock.queue[1] then
+    resolve_lock.schedule = vv.api.schedule_after(0, function()
+      resolve_lock.schedule = nil
+      if resolve_lock.queue[1] then
+        resolve_lock.resolving = true
+        resolve_lock.pop_frame()
+      end
+    end)
+  end
+end
+
+
+resolve_lock.pop = make_close(resolve_lock.pop_frame)
+function resolve_lock.push_frame()
+  if resolve_lock.resolving then
+    -- if another event is currently being resolved, yield.
+    -- this thread will be resumed after the currently resolving event is finished.
+    resolve_lock.queue[#resolve_lock.queue + 1] = coroutine.running()
+    coroutine.yield()
+    return nil
+  end
+
+  resolve_lock.resolving = true
+  return resolve_lock.pop
+end
+
+
 --- @param event string|velvet.async.event_source
 --- @param data velvet.async.wait.result
 local function resolve(event, data)
+  -- if a waiter emits a new event while this event is resolving,
+  -- we want to finish resolving the current event before resolving the next one.
+  -- resolve_lock accomplishes this by yielding the emitter if necessary and resuming it
+  -- once the initiating event has been fully resolve.
+  --
+  -- In particular, this fixes an issue where a thread waiting for a single event in a loop
+  -- will drop instances of the event, or even receive them in different orders, if another thread
+  -- emits the event after waiting for it.
+  --
+  -- See the test in |tests.async.test_delivery_order| for a concrete reproduction.
+  -- push() returns a metatable with __close defined so the frame will be popped when this scope closes.
+  -- We need to use <close> here because we would otherwise miss the case where this coroutine is killed via coroutine.close()
+  local frame <close> = resolve_lock.push_frame()
+
   if type(event) == 'table' then
     local waiters = event_source_waiter_registry[event]
     if waiters then resolve_table(waiters, event, data) end
