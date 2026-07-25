@@ -158,6 +158,6 @@ int velvet_next_id(void);
 void velvet_lua_restart_vm(void*);
 void velvet_init(struct velvet *v, int sock_fd, char *arg0, char **argv);
 void velvet_dispatch(struct velvet * velvet);
-_Noreturn void velvet_fast_shutdown(struct velvet *velvet);
+_Noreturn void velvet_fast_shutdown(struct velvet *velvet, int signal);
 
 #endif

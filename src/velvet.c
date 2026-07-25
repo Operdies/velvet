@@ -325,7 +325,7 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
     int signal = signals.content[i];
     switch (signal) {
     case SIGTERM: {
-      velvet_fast_shutdown(velvet);
+      velvet_fast_shutdown(velvet, SIGTERM);
     } break;
     case SIGHUP: {
       /* ignore */
@@ -335,7 +335,7 @@ static void on_signal(struct io_source *src, struct u8_slice str) {
     } break;
     case SIGINT: {
       if (!velvet->daemon) {
-        velvet_fast_shutdown(velvet);
+        velvet_fast_shutdown(velvet, SIGINT);
       }
     } break;
     default:
@@ -853,7 +853,7 @@ void velvet_destroy(struct velvet *velvet) {
   if (velvet->L) lua_close(velvet->L);
 }
 
-_Noreturn void velvet_fast_shutdown(struct velvet *velvet) {
+_Noreturn void velvet_fast_shutdown(struct velvet *velvet, int sig) {
   uint8_t buf[PATH_MAX];
   // 1. Notify all attached clients to detach
   if (velvet->socket) {
@@ -895,6 +895,13 @@ _Noreturn void velvet_fast_shutdown(struct velvet *velvet) {
   vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
   vec_where(p, velvet->marked_for_death, p->pid && !p->killed) kill(p->pid, SIGKILL);
 
-  // 4. _exit to avoid any stdio or atexit() handlers without calling 
+  /* if we were terminated by a signal, reset the default signal handler
+  * and re-raise that signal to indicate the correct exit reason to anyone reaping us */
+  if (sig) {
+    signal(sig, SIG_DFL);
+    raise(sig);
+  }
+
+  // 4. _exit to avoid any stdio flushing which is not signal safe
   _exit(0);
 }

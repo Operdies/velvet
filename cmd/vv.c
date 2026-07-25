@@ -312,7 +312,7 @@ int main(int argc, char **argv) {
   velvet.clean = args.clean;
 
   velvet_loop(&velvet, initial_screen_size);
-  velvet_fast_shutdown(&velvet);
+  velvet_fast_shutdown(&velvet, 0);
 }
 
 static int signal_write;
@@ -670,10 +670,15 @@ struct vv_attach_context {
   io_schedule_id resize_token;
 };
 
-_Noreturn static void quit(char *reason, int status) {
+_Noreturn static void quit(char *reason, int status, int sig) {
   terminal_reset();
-  printf("[%s]\n", reason);
-  exit(status);
+  io_write_format_slow(STDOUT_FILENO, "[%s]\n", reason);
+  if (sig) {
+    /* indicate to the parent process that we exited by signal. */
+    signal(sig, SIG_DFL);
+    raise(sig);
+  }
+  _exit(status);
 }
 
 static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
@@ -683,9 +688,9 @@ static void vv_attach_on_output(struct io_source *src, struct u8_slice str) {
 
 static void vv_attach_on_socket(struct io_source *src, struct u8_slice str) {
   (void)src;
-  if (str.len == 0) quit("Shutdown", 0);
-  if (str.len == 1 && str.content[0] == 'Q') quit("Shutdown", 0);
-  if (str.len == 1 && str.content[0] == 'D') quit("Detached", 0);
+  if (str.len == 0) quit("Shutdown", 0, 0);
+  if (str.len == 1 && str.content[0] == 'Q') quit("Shutdown", 0, 0);
+  if (str.len == 1 && str.content[0] == 'D') quit("Detached", 0, 0);
   if (str.len > 1 && str.content[0] == 'R') {
     /* hack: writing to the buffer is technically illegal,
      * but it's guaranteed to be large enough and we are about to exec(). */
@@ -727,10 +732,10 @@ static void vv_attach_on_signal(struct io_source *src, struct u8_slice str) {
       /* on macOS, it seems SIGWINCH does not always update the screen size. Let's try to coerce it by trying again after a brief delay */
       io_reschedule(&ctx->loop, 100, vv_update_size_schedule, ctx, &ctx->resize_token);
     } break;
-    case SIGTERM: quit("SIGTERM", 128 + signal); break;
-    case SIGQUIT: quit("SIGQUIT", 128 + signal); break;
-    case SIGINT: quit("SIGINT", 128 + signal); break;
-    default: quit("Killed by signal", 128 + signal); break;
+    case SIGTERM: quit("SIGTERM", 0, signal); break;
+    case SIGQUIT: quit("SIGQUIT", 0, signal); break;
+    case SIGINT: quit("SIGINT", 0, signal); break;
+    default: quit("Killed by signal", 0, signal); break;
     }
   }
 }
