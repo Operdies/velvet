@@ -343,68 +343,121 @@ local function test_stdout_reap_race()
 end
 
 local function test_process_wrapper()
-  -- vv.async.run(function()
   local process = require('velvet.process')
   local p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; sleep 0.1 ; printf le;' }, { stderr = false })
-  expect_error('cannot read from closed stream', p.line, p, 'stderr')
-  expect_eq('hello', p:line())
-  expect_eq('worldle', p:line())
-  expect_eq(nil, p:line())
-  expect_eq(nil, p:line())
-  expect_eq(nil, p:lines()())
+  expect_eq(nil, p.stderr)
+  expect_eq('hello', p.stdout:line())
+  expect_eq('worldle', p.stdout:line())
+  expect_eq(nil, p.stdout:line())
+  expect_eq(nil, p.stdout:line())
+  expect_eq(nil, p.stdout:lines()())
   expect_eq(0, p:wait_for_exit())
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld\n"' })
   local lines = {}
-  for line in p:lines() do lines[#lines+1] = line end
+  for line in p.stdout:lines() do lines[#lines+1] = line end
   assert(2, #lines)
   expect_eq('hello', lines[1])
   expect_eq('world', lines[2])
   expect_eq(0, p:wait_for_exit())
 
-  local payload = [[
-i=1
+  local payload = [[ i=1
 while [ "$i" -le 100 ]; do
   echo "$i"
   i=$((i+1))
-done
-]]
+done ]]
   p = process.spawn({ 'sh', '-c', payload }, { stdin = false, stderr = false })
   for i = 1, 100 do
-    expect_eq(tostring(i), p:line('stdout'))
+    expect_eq(tostring(i), p.stdout:line())
   end
-  expect_eq(nil, p:line('stdout'))
+  expect_eq(nil, p.stdout:line())
 
-  payload = [[
-while read MY_ARG; do
+  payload = [[ while read MY_ARG; do
   echo "$MY_ARG"
-done
-]]
+done ]]
   p = process.spawn({ 'sh', '-c', payload }, { stdin = true, stderr = false })
   local items = { "this", "is", "my", "list", "of", "awesome and cool", "strings" }
   for _, v in ipairs(items) do
-    p:write_stdin(v .. '\n')
-    expect_eq(v, p:line('stdout'))
+    p.stdin:write(v .. '\n')
+    expect_eq(v, p.stdout:line())
   end
   local large_string = string.rep('what a strange string this is', 1000)
   for _ = 1, 10 do
-    p:write_stdin(large_string .. '\n')
-    expect_eq(large_string, p:line('stdout'))
+    p.stdin:write(large_string .. '\n')
+    expect_eq(large_string, p.stdout:line())
   end
-  p:write_stdin(large_string .. '\n')
-  p:close_stdin()
-  expect_eq(large_string .. '\n', p:read_all('stdout'))
-  expect_eq(nil, p:line('stdout'))
+  p.stdin:write(large_string .. '\n')
+  p.stdin:close()
+  expect_eq(large_string .. '\n', p.stdout:read_all())
+  expect_eq(nil, p.stdout:line())
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le";' }, { stderr = false })
-  expect_eq('hello\nworldle', p:read_all())
-  expect_eq(nil, p:read_all())
+  expect_eq('hello\nworldle', p.stdout:read_all())
+  expect_eq(nil, p.stdout:read_all())
   expect_eq(0, p:wait_for_exit())
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le\n";' }, { stderr = false })
-  expect_eq('hello\nworldle\n', p:read_all())
-  expect_eq(nil, p:read_all())
+  expect_eq('hello\nworldle\n', p.stdout:read_all())
+  expect_eq(nil, p.stdout:read_all())
   expect_eq(0, p:wait_for_exit())
+
+
+  -- test stderr stream
+  payload = [[ printf "hello output"
+  printf "hello error" >&2 ]]
+  p = process.spawn({ 'sh', '-c', payload })
+  expect_eq('hello error', p.stderr:line())
+  expect_eq(nil, p.stderr:line())
+  expect_eq('hello output', p.stdout:line())
+  expect_eq(nil, p.stdout:line())
+
+  -- ensure repeated line() calls return nil
+  expect_eq(nil, p.stderr:line())
+  expect_eq(nil, p.stdout:line())
+
+  -- ensure read_all() returns nil
+  expect_eq(nil, p.stderr:read_all())
+  expect_eq(nil, p.stdout:read_all())
+
+  -- lines() should not have any elements after consuming the stream
+  for line in p.stderr:lines() do
+    assert(false, "should be no lines! " .. line)
+  end
+
+  for line in p.stdout:lines() do
+    assert(false, "should be no lines! " .. line)
+  end
+  expect_eq(0, p:wait_for_exit())
+
+  -- test iterators with interleaved stdout/stderr output
+  payload = [[ printf "hello output 1\n"
+  printf "hello error 1\n" >&2
+  printf "hello output 2\n"
+  printf "hello output 3\n"
+  printf "hello error 2\n" >&2
+  printf "hello error 3\n" >&2
+  printf "hello error 4\n" >&2
+  printf "hello output 4\n"
+  printf "hello output 5\n" ]]
+  p = process.spawn({ 'sh', '-c', payload })
+  local counter = 1
+  for line in p.stderr:lines() do
+    expect_eq('hello error ' .. counter, line)
+    counter = counter + 1
+  end
+  counter = 1
+  for line in p.stdout:lines() do
+    expect_eq('hello output ' .. counter, line)
+    counter = counter + 1
+  end
+
+  -- test read_all
+  payload = [[ printf "hello output 1"
+  printf "hello error 1\n" >&2
+  printf "hello output 2\n" ]]
+  p = process.spawn({ 'sh', '-c', payload })
+  expect_eq("hello output 1" .. "hello output 2\n", p.stdout:read_all())
+  expect_eq("hello error 1\n", p.stderr:read_all())
 end
 
 return {

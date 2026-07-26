@@ -385,6 +385,7 @@ end
 --- @field emit fun(self, event?: T) emit a new event which is propagated to callers of |wait()|
 --- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by a call to |emit()|
 --- @field listener fun(self): velvet.async.event_listener<T> returns a readonly event listener which can only access |wait()|
+--- @field closed? boolean set when the event source is closed
 local EventSource = {}
 EventSource.__index = EventSource
 
