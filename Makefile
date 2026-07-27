@@ -17,6 +17,8 @@ INSTALL_MAN = $(PREFIX)/share/man
 INSTALL_VELVET = $(PREFIX)/share/velvet
 INSTALL_LUA = $(INSTALL_VELVET)/lua
 INSTALL_BIN2 = $(INSTALL_VELVET)/bin
+INSTALL_BASH_COMPLETION = $(PREFIX)/share/bash-completion/completions
+INSTALL_ZSH_COMPLETION = $(PREFIX)/share/zsh/site-functions
 
 GEN_DIR = gen
 GEN_IN = lua/generate
@@ -164,10 +166,11 @@ $(GEN_OUTPUT): $(GEN_INPUT) $(GEN_LUA_GENERATOR) $(LUA)
 $(GEN_C_HEADER): $(GEN_INPUT) $(GEN_LUA_GENERATOR) $(LUA)
 	$(LUA) $(GEN_LUA_GENERATOR) $(GEN_DIR)
 
-INSTALL_BASH_COMPLETION = $(PREFIX)/share/bash-completion/completions
-INSTALL_ZSH_COMPLETION = $(PREFIX)/share/zsh/site-functions
-
+.PHONY: install
 install: release
+	@ # delete any existing lua distribution from previous installs
+	test -n "$(INSTALL_VELVET)"
+	rm -rf $(INSTALL_VELVET)/
 	mkdir -p $(INSTALL_LUA) $(INSTALL_BIN) $(INSTALL_BIN2) $(INSTALL_MAN)/man1 $(INSTALL_MAN)/man3
 	mkdir -p $(INSTALL_BASH_COMPLETION) $(INSTALL_ZSH_COMPLETION)
 	install -m 755 $(RELEASE_DIR)/vv $(INSTALL_BIN2)/vv
@@ -176,12 +179,15 @@ install: release
 	install -m 644 doc/man3/*.3 $(INSTALL_MAN)/man3/
 	install -m 644 shell-completion/bash/vv $(INSTALL_BASH_COMPLETION)/vv
 	install -m 644 shell-completion/zsh/_vv $(INSTALL_ZSH_COMPLETION)/_vv
-	@ # delete any existing lua distribution from previous installs
-	test -n "$(INSTALL_LUA)"
-	rm -rf $(INSTALL_LUA)/
-	cp -r lua/velvet $(INSTALL_LUA)/
+	cp -r lua/velvet $(INSTALL_LUA)/.
 
+.PHONY: uninstall
 uninstall:
+	test -n "$(INSTALL_BIN)"
+	test -n "$(INSTALL_MAN)"
+	test -n "$(INSTALL_BASH_COMPLETION)"
+	test -n "$(INSTALL_ZSH_COMPLETION)"
+	test -n "$(INSTALL_VELVET)"
 	rm -f $(INSTALL_BIN)/vv
 	rm -f $(INSTALL_MAN)/man1/velvet.1
 	rm -f $(INSTALL_MAN)/man3/velvet*.3
