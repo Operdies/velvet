@@ -270,14 +270,21 @@ local function bar_render_segments(bar)
 
     for _, elem in ipairs(elem_array) do
       local segments = elem.segments
+      local populated = {}
       for i = 1, #segments do
         local segment = segments[i]
+        if segment.text and segment.text ~= '' then
+          populated[#populated+1] = segment
+        end
+      end
+      for i = 1, #populated do
+        local segment = populated[i]
         if segment.text then
           local space = 32 -- string.byte(' ', 1)
           local text = tostring(segment.text)
           -- pad outer elements if they are not already padded
           if i == 1 and text:byte(1) ~= space then text = ' ' .. text end
-          if i == #segments and text:byte(-1) ~= space then text = text .. ' ' end
+          if i == #populated and text:byte(-1) ~= space then text = text .. ' ' end
           segment.text = text
         end
       end
