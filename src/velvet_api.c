@@ -318,49 +318,44 @@ void velvet_process_on_stderr(struct velvet *v, struct velvet_process *p, struct
 static lua_stackRetCount
 vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
   vec_clear(&envlist);
-  string_clear(&stringbuf);
 
   lua_State *L = v->current;
 
   if (options.environment.set) {
+    /* pin temporary env strings to ensure they are not gc'ed before fork() */
+    lua_newtable(L);
+    int env_pin = lua_gettop(L);
+    int n_env = 0;
+
     lua_pushvalue(L, options.environment.value);
     luaL_checktable(L, -1);
-    struct u8_slice key, value;
+    struct u8_slice key;
 
     /* perfrom validation and writing in two passes.
      * This simplifies the cleanup path. */
 
     /* first pass: verify the table only contains string->string values */
     lua_pushnil(L);
-    int capacity = 0;
     while (lua_next(L, -2) != 0) {
-      if (!lua_isstring(L, -2)) lua_bail(v, "environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
+      if (!lua_isstring(L, -2)) 
+        lua_bail(v, "environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
       key = luaL_checkslice(L, -2);
-      if (!lua_isstring(L, -1)) lua_bail(v, "environment['%s']: expected string, got %s", key.content, lua_typename(L, lua_type(L, -1)));
-      value = luaL_checkslice(L, -1);
-      capacity += key.len + value.len + 2; /* additional space for '=' and '\0' */
-      lua_pop(L, 1); /* pop value, keep key for next() */
-    }
+      if (!lua_isstring(L, -1)) 
+        lua_bail(v, "environment['%s']: expected string, got %s", key.content, lua_typename(L, lua_type(L, -1)));
 
-    /* ensure the string does not get resized while pushing.
-     * this would invalidate all the pointers in envlist */
-    string_ensure_capacity(&stringbuf, capacity * 2);
-
-    /* second pass: write the values to envlist/stringbuf */
-    lua_pushnil(L);
-    while (lua_next(L, -2) != 0) {
-      key = luaL_checkslice(L, -2);
-      value = luaL_checkslice(L, -1);
-      char *entry = (char *)stringbuf.content + stringbuf.len;
-      string_push_slice(&stringbuf, key);
-      string_push_char(&stringbuf, '=');
-      string_push_slice(&stringbuf, value);
-      string_push_char(&stringbuf, 0);
+      lua_pushvalue(L, -2); /* table, key, value, key */
+      lua_insert(L, -2); /* table, key, key, value */
+      lua_pushstring(L, "="); /* table, key, key, value, '=' */
+      lua_insert(L, -2); /* table, key, key, '=', value */
+      lua_concat(L, 3); /* table, key, <key=value> */
+      const char *entry = lua_tostring(L, -1); /* entry = <key>=<value> */
       vec_push(&envlist, &entry);
-      lua_pop(L, 1);
+      /* ensure entry is pinned until this function returns. The concat result is very unlikely to be garbage collected but let's just be safe*/
+      lua_seti(L, env_pin, ++n_env); /* table, key */
     }
-    char *sentinel = NULL;
-    vec_push(&envlist, &sentinel);
+
+    /* NULL sentinel for env list */
+    vec_push(&envlist, NULL);
   }
 
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
@@ -372,41 +367,32 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
   if (!lua_istable(L, -1)) lua_bail(v, "bad argument #1 to 'process_spawn'. string or string[] expected.");
 
   lua_Integer len = luaL_len(L, -1);
-  /* under -O2 gcc thinks len can overflow in the call to velvet_calloc(size_t) below to a
-   * gigantic value, but checking that it is positive here gets rid of that warning */
-  if (len <= 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
+  if (len == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
 
-  /* validate table */
+  size_t argstart = envlist.length;
   for (int i = 1; i <= len; i++) {
     lua_geti(L, -1, i);
     if (!lua_isstring(L, -1)) {
       lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
     }
+    const char *arg = luaL_checkstring(L, -1);
+    vec_push(&envlist, &arg);
     lua_pop(L, 1);
   }
 
-  char *prog;
-  char **arglist = velvet_calloc(len + 1, sizeof(char *));
-  arglist[len] = NULL;
+  /* NULL sentinel for arglist */
+  vec_push(&envlist, NULL);
 
-  for (int i = 1; i <= len; i++) {
-    lua_geti(L, -1, i);
-    arglist[i - 1] = (char *)luaL_checkstring(L, -1);
-    lua_pop(L, 1);
-  }
-
+  char **arglist = vec_nth(envlist, argstart);
+  char **envp = options.environment.set ? vec_nth(envlist, 0) : NULL;
   char *wd = options.working_directory.set ? (char *)options.working_directory.value.content : NULL;
-  char **envp = envlist.length > 0 ? (char **)envlist.content : NULL;
   struct velvet_process_stream_options streams = {
-      .out = options.on_stdout.set,
-      .err = options.on_stderr.set,
+      .out = options.on_stdout.set, .err = options.on_stderr.set,
       .in = options.input.set == false || options.input.value.len > 0,
   };
   lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
-  prog = arglist[0];
-  free(arglist);
   if (proc_id < 0) {
-    lua_bail(v, "Error starting %s: %s", prog, strerror(-proc_id));
+    lua_bail(v, "Error starting %s: %s", arglist[0], strerror(-proc_id));
   }
 
   /* why do a scan when we know the index */
