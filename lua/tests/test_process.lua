@@ -297,7 +297,8 @@ local function test_signal_delivery()
 trap 'printf int' INT
 trap 'printf term' TERM
 printf 'ready'
-while true; do :; done
+# We need the shell to stay alive while we send signals. Each signal will interrupt a read
+read arg; read arg; read arg; read arg;
 ]]
   local co = coroutine.running()
   local proc = vv.api.process_spawn({ 'sh', '-c', script }, {
