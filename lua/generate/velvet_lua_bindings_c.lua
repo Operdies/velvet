@@ -93,8 +93,17 @@ if (lua_isstring(L, <idx>)) {
 <struct> <name> = <type>_slice_to_enum(<slice>);]], template)
         end
       else
-        local template = { struct = utils.c_type(p.type), name = p.name, check = utils.lua_check(p.type, idx) }
-        builder:push("<struct> <name> = <check>;", template)
+        local template = { type = utils.c_type(p.type), name = p.name, check = utils.lua_check(p.type, idx) }
+        if p.optional then
+          template.test = utils.lua_test(p.type, idx)
+          builder:push([[struct optional_<type> <name> = {0};
+if (<test>) {
+  <name>.set = true;
+  <name>.value = <check>;
+}]], template)
+        else
+          builder:push("<type> <name> = <check>; /* poggies */", template)
+        end
       end
     end
 
@@ -105,9 +114,18 @@ if (lua_isstring(L, <idx>)) {
       builder:push('vv_api_<name>(v<args>);', { name = fn.name, args = argsstring })
       builder:push('return 0;')
     else
-      builder:push('<struct> ret = vv_api_<name>(v<args>);',
-        { struct = utils.c_type(fn.returns.type), name = fn.name, args = argsstring })
-      utils.push.field(builder, fn.returns.type, "ret")
+      local template = { struct = utils.c_type(fn.returns.type), name = fn.name, args = argsstring }
+      if fn.returns.optional then
+        builder:push([[
+struct optional_<struct> ret = vv_api_<name>(v<args>);
+if (!ret.set) {
+  return 0;
+}]], template)
+        utils.push.field(builder, fn.returns.type, "ret.value")
+      else
+        builder:push('<struct> ret = vv_api_<name>(v<args>);', template)
+        utils.push.field(builder, fn.returns.type, "ret")
+      end
       builder:push('return 1;')
     end
     builder.indent = 0

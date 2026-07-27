@@ -156,8 +156,8 @@ end
 local function visibleontags(id)
   local win_tags = state.tags[id] or {}
   for i, v in ipairs(state.view) do
-    if v and win_tags[i] then 
-      return true 
+    if v and win_tags[i] then
+      return true
     end
   end
   return false
@@ -168,12 +168,12 @@ local function ignore_window(win)
     win = win.id
   end
   if not vv.api.window_is_valid(win) then return false end
-  return vv.api.window_is_lua(win) or vv.api.window_get_parent(win) > 0
+  return vv.api.window_is_lua(win) or vv.api.window_get_parent(win)
 end
 
 --- @param id integer
 local function set_focus(id)
-  local win = window.from_handle(id)
+  local win = id and window.from_handle(id) or nil
   if win == nil then return end
   if not win:is_lua() then
     local current_index = table_index(state.focus_order, win.id)
@@ -401,7 +401,7 @@ local function drop_or_show_hint(w, args)
     local stack = calc_win_stack(left, 1 + r_top, width, sz.height, stack_count)
     local r = args.global_pos.row
     for i, geom in ipairs(stack) do
-      if r >= geom.top and r <= geom.top + geom.height then 
+      if r >= geom.top and r <= geom.top + geom.height then
         return side, i, geom
       end
     end
@@ -427,7 +427,7 @@ local function drop_or_show_hint(w, args)
       state.nmaster = #left_stack
     end
     local before = nil
-    if side == 'left' then before = left_stack[index] or right_stack[1] 
+    if side == 'left' then before = left_stack[index] or right_stack[1]
     elseif side == 'right' then before = right_stack[index] or nil end
     local idx = before and table_index(state.windows, before.id) or (#state.windows + 1)
     table.insert(state.windows, idx, w.id)
@@ -448,9 +448,9 @@ local function add_window(id, init)
   win:set_frame_enabled(true)
   win.on_drag = function(w, args)
     drop_hint:set_visibility(false)
-    if args.type == 'move.end' or args.type == 'resize.end' then 
+    if args.type == 'move.end' or args.type == 'resize.end' then
       drop_hint:set_visibility(false)
-      dragging = nil 
+      dragging = nil
     end
     if args.type == 'move.end' and args.modifiers.alt then
       drop_or_show_hint(w, args)
@@ -459,7 +459,7 @@ local function add_window(id, init)
     elseif args.type == 'move.continue' then
       if not dragging then
         dragging = w
-        if table_index(left_stack, w) then 
+        if table_index(left_stack, w) then
           state.nmaster = clamp(state.nmaster - 1, 0, 10)
         end
         state.layers[w.id] = 'floating'
@@ -478,7 +478,7 @@ local function add_window(id, init)
     end
   end
 
-  if not table_index(state.windows, id) then 
+  if not table_index(state.windows, id) then
     state.windows[#state.windows + 1] = win.id
     if not state.tags[win.id] then
       table.insert(state.focus_order, 1, win.id)
@@ -711,7 +711,7 @@ end
 --- If the selected window is the first tiled window, swap with the next tiled window.
 function dwm.swap_main()
   local focus_id = vv.api.get_focused_window()
-  if focus_id == 0 then return end
+  if focus_id == nil then return end
   local focus_index = table_index(state.windows, focus_id)
   local next_index = get_first_matching(state.windows,
     function(win) return win ~= focus_id and visibleontags(win) and tiled(win) end)

@@ -588,7 +588,7 @@ local nil_window = {}
 function Window:get_parent()
   if not self.parent then
     local id = vv.api.window_get_parent(self.id)
-    if id == 0 then
+    if id == nil then
       self.parent = nil_window
       return nil
     end

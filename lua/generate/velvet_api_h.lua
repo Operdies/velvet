@@ -4,6 +4,7 @@ local utils = require('utils')
 --- @param spec spec
 --- @return string velvet_api.h
 function M.generate(spec)
+  local optional_cache = {}
   local builder = utils.builder()
   builder:push([[
 /***************************************************
@@ -49,15 +50,30 @@ struct velvet;]])
       if fld.optional then
         builder:push([[
   struct {
-    <field_name> value;
+    <type_name> value;
     bool set;
-  } <name>;]], { field_name = utils.c_type(fld.type), name = fld.name })
+  } <field_name>;]], { type_name = utils.c_type(fld.type), field_name = fld.name })
       else
         builder:push('  <type> <name>;', { type = utils.c_type(fld.type), name = fld.name })
       end
     end
     builder:push('};\n')
     ::continue::
+  end
+
+  local function add_optional(type)
+    if not optional_cache[type] then
+      optional_cache[type] = true
+      builder:push('struct optional_<type> { <type> value; bool set; };\n', { type = utils.c_type(type) })
+    end
+  end
+  for _, fn in ipairs(spec.api) do
+    if fn.returns.optional then add_optional(fn.returns.type) end
+    for _, p in ipairs(fn.params) do
+      if p.optional then
+        add_optional(p.type)
+      end
+    end
   end
 
   for _, evt in ipairs(spec.events) do

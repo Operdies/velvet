@@ -103,7 +103,7 @@ local function quake_builder(cmd, id)
     quakeHost = window.create()
     local cwd = nil
     local fg = vv.api.get_focused_window()
-    if fg ~= 0 then cwd = vv.api.window_get_working_directory(fg) end
+    if fg then cwd = vv.api.window_get_working_directory(fg) end
     if win then
       vv.api.window_set_parent(win.id, quakeHost.id)
       quake = win

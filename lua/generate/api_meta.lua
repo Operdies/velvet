@@ -53,8 +53,7 @@ local api = {}]=])
         {
           name = p.name .. (optional and '?' or ''),
           doc = utils.string_concatenate(p.doc, "\n--- "),
-          type = utils
-              .lua_type(p.type)
+          type = utils.lua_type(p.type)
         })
     end
 
@@ -62,10 +61,11 @@ local api = {}]=])
     for _, p in ipairs(fn.params or {}) do
       table.insert(params, p.name)
     end
-    builder:push('--- @return <type> <ret> <doc>',
+    builder:push('--- @return <type> <ret><optional> <doc>',
       {
         ret = fn.returns.name,
         type = utils.lua_type(fn.returns.type),
+        optional = fn.returns.optional and '?' or '',
         doc = utils.string_concatenate(fn.returns.doc,
           "\n--- ")
       })

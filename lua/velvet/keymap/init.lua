@@ -635,7 +635,7 @@ function Keys:get_passthrough() return self.passthrough end
 local global_keymap = Keys.create({async = true})
 global_keymap.on_unhandled_key = function(_, args)
   local win = vv.api.get_focused_window()
-  if win ~= 0 then vv.api.window_send_raw_key(win, args.key) end
+  if win then vv.api.window_send_raw_key(win, args.key) end
 end
 
 local evt = require('velvet.events')

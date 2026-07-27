@@ -552,9 +552,10 @@ static void vv_api_window_close(struct velvet *v, lua_Integer winid) {
   velvet_scene_close_and_remove_window(&v->scene, w);
 }
 
-static lua_Integer vv_api_get_focused_window(struct velvet *v) {
+static struct optional_int vv_api_get_focused_window(struct velvet *v) {
   struct velvet_window *w = velvet_scene_get_focus(&v->scene);
-  return w ? w->id : 0;
+  struct optional_int ret = { .set = w, .value = w ? w->id : 0 };
+  return ret;
 }
 
 static struct velvet_api_rect vv_api_window_get_geometry(struct velvet *v, lua_Integer winid) {
@@ -578,9 +579,10 @@ static void vv_api_window_set_geometry(struct velvet *v, lua_Integer winid, stru
   if (velvet_window_resize(w, new_geometry, v)) velvet_invalidate_render(v, "window resized");
 }
 
-static bool vv_api_window_is_valid(struct velvet *v, lua_Integer winid) {
+static bool vv_api_window_is_valid(struct velvet *v, struct optional_int winid) {
+  if (!winid.set) return false;
   struct velvet_window *w;
-  vec_find(w, v->scene.windows, w->id == winid);
+  vec_find(w, v->scene.windows, w->id == winid.value);
   return w ? true : false;
 }
 
@@ -1083,15 +1085,25 @@ static struct u8_slice vv_api_window_get_foreground_process_name(struct velvet *
   return (struct u8_slice){0};
 }
 
-static void vv_api_window_set_parent(struct velvet *v, lua_Integer win_id, lua_Integer parent) {
+static void vv_api_window_set_parent(struct velvet *v, lua_Integer win_id, struct optional_int parent) {
   struct velvet_window *w1 = check_window(v, win_id);
-  if (parent) check_window(v, parent);
-  w1->parent_window_id = parent;
+  if (parent.set) { 
+    check_window(v, parent.value);
+    w1->parent_window_id = parent.value;
+  } else {
+    w1->parent_window_id = 0;
+  }
 }
 
-static lua_Integer vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
+static struct optional_int vv_api_window_get_parent(struct velvet *v, lua_Integer win_id) {
   struct velvet_window *w = check_window(v, win_id);
-  return w->parent_window_id;
+  int parent = w->parent_window_id;
+  struct optional_int result = {0};
+  if (parent) {
+    result.set = true;
+    result.value = parent;
+  }
+  return result;
 }
 
 static struct u8_slice vv_api_get_startup_directory(struct velvet *v) {

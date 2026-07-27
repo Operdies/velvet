@@ -49,6 +49,7 @@
 --- @field name string
 --- @field type string
 --- @field doc spec_doc
+--- @field optional? boolean
 
 --- @class spec_function
 --- @field name string function name
@@ -762,7 +763,7 @@ return {
     {
       name = "get_focused_window",
       doc = "Get the id of the currently focused window.",
-      returns = { type = "int", doc = "id of the focused window.", name = 'id' }
+      returns = { type = "int", optional = true, doc = "id of the focused window or nil.", name = 'id' }
     },
     {
       name = "set_focused_window",
@@ -885,16 +886,16 @@ return {
     },
     {
       name = "window_get_parent",
-      doc = "Get the the parent of |win_id| or 0 if the window does not have a parent.",
+      doc = "Get the the parent of |win_id| or nil if the window does not have a parent.",
       params = { { name = "win_id", type = "int", doc = "Window id" } },
-      returns = { type = "int", doc = "id of the parent of |win_id|", name = 'parent_id' }
+      returns = { type = "int", optional = true, doc = "id of the parent of |win_id|", name = 'parent_id' }
     },
     {
       name = "window_set_parent",
-      doc = "Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to 0.",
+      doc = "Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to nil.",
       params = {
         { name = "win_id", type = "int", doc = "Window id" },
-        { name = "parent", type = "int", doc = "The window id of the new parent window." },
+        { name = "parent", type = "int", optional = true, doc = "The window id of the new parent window." },
       },
     },
     {
@@ -906,7 +907,7 @@ return {
     {
       name = "window_is_valid",
       doc = "Check if |win_id| refers to an existing window.",
-      params = { { name = "win_id", type = "int", doc = "Window id" } },
+      params = { { name = "win_id", type = "int", optional = true, doc = "Window id" } },
       returns = { type = "bool", doc = "true if |win_id| is valid.", name = 'is_valid' }
     },
     {

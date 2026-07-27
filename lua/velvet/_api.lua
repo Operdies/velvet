@@ -395,7 +395,7 @@ function api.window_get_dim_factor(win_id) end
 function api.window_set_dim_factor(win_id, factor) end
 
 --- Get the id of the currently focused window.
---- @return integer id id of the focused window.
+--- @return integer id? id of the focused window or nil.
 function api.get_focused_window() end
 
 --- Focus the window with id |win_id|
@@ -484,14 +484,14 @@ function api.window_get_working_directory(win_id) end
 --- @return string process_name name of the foreground_process of |win_id|
 function api.window_get_foreground_process_name(win_id) end
 
---- Get the the parent of |win_id| or 0 if the window does not have a parent.
+--- Get the the parent of |win_id| or nil if the window does not have a parent.
 --- @param win_id integer Window id
---- @return integer parent_id id of the parent of |win_id|
+--- @return integer parent_id? id of the parent of |win_id|
 function api.window_get_parent(win_id) end
 
---- Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to 0.
+--- Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to nil.
 --- @param win_id integer Window id
---- @param parent integer The window id of the new parent window.
+--- @param parent? integer The window id of the new parent window.
 --- @return nil  
 function api.window_set_parent(win_id, parent) end
 
@@ -501,7 +501,7 @@ function api.window_set_parent(win_id, parent) end
 function api.window_is_lua(win_id) end
 
 --- Check if |win_id| refers to an existing window.
---- @param win_id integer Window id
+--- @param win_id? integer Window id
 --- @return boolean is_valid true if |win_id| is valid.
 function api.window_is_valid(win_id) end
 

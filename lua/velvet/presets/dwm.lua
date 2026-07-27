@@ -249,7 +249,7 @@ local function cfg(settings)
 
   local function any_process_windows()
     for _, id in ipairs(vv.api.get_windows()) do
-      if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) and vv.api.window_get_parent(id) == 0 then return true end
+      if vv.api.window_is_valid(id) and not vv.api.window_is_lua(id) and vv.api.window_get_parent(id) == nil then return true end
     end
     return false
   end

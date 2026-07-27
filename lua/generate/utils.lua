@@ -51,8 +51,9 @@ local function table_insert_template(table, template_string, template_args)
 end
 
 --- @class gen_type
---- @field c_type string c name of the type
+--- @field c_type? string c name of the type
 --- @field lua_type string lua name of the type
+--- @field test? fun(idx: integer): string c code for testing if the value at stack position |idx| matches this type.
 --- @field check? fun(idx: integer): string c code for checking and retrieving the value at stack position |idx|
 --- @field check_shift? fun(idx: string, idx2: string): string c code for checking and retrieving the value at stack position |idx|
 --- @field push? fun(var: string): string c code for pushing a named variable to the stack
@@ -95,10 +96,11 @@ local type_lookup = {
     check = function(idx) return ("luaL_checkfunction(L, %d)"):format(idx) end,
   },
   int = {
-    c_type = "lua_Integer",
+    c_type = "int",
     lua_type = "integer",
     check = function(idx) return ("luaL_checkinteger(L, %d)"):format(idx) end,
-    push = function(var) return ("lua_pushinteger(L, %s)"):format(var) end
+    push = function(var) return ("lua_pushinteger(L, %s)"):format(var) end,
+    test = function(idx) return ("lua_isinteger(L, %d)"):format(idx) end,
   },
   string = {
     c_type = "struct u8_slice",
@@ -124,6 +126,7 @@ M.type_lookup = type_lookup
 
 function M.lua_type(t)
   if t == nil then return "nil" end
+  assert(type_lookup[t], "Unknown type: " .. t)
   return type_lookup[t].lua_type
 end
 
@@ -131,6 +134,12 @@ function M.lua_check(t, idx, idx2)
   local tp = type_lookup[t]
   if idx2 and tp.check_shift then return tp.check_shift(idx, idx2) end
   return tp.check(idx)
+end
+
+function M.lua_test(t, idx)
+  local tp = type_lookup[t]
+  assert(tp.test, "test not implemented for type " .. t)
+  return tp.test(idx)
 end
 
 function M.lua_push(t, var)

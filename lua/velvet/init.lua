@@ -213,7 +213,7 @@ function vv.cwd()
   local cwd = COROUTINE_CWD[coroutine.running()]
   if not cwd then
     local win = vv.api.get_focused_window()
-    if win and win ~= 0 then cwd = vv.api.window_get_working_directory(win) end
+    if win then cwd = vv.api.window_get_working_directory(win) end
   end
   return cwd or vv.api.get_startup_directory()
 end
