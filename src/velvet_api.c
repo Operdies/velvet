@@ -690,14 +690,6 @@ static void pcall_func_ref(lua_State *L, lua_Integer func_ref) {
   lua_pop(L, 1); // msgh
 }
 
-#define SCHEDULE_MAGIC 0xFADEDACE
-struct schedule_data {
-  uint64_t magic;
-  lua_State *state;
-  lua_Integer function;
-  lua_Integer state_ref;
-};
-
 static void schedule_unref(struct schedule_data *d) {
   assert(d->magic == SCHEDULE_MAGIC);
   // unpin function

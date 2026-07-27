@@ -320,9 +320,10 @@ void velvet_schedule_reap(struct velvet *v) {
 static void on_signal(struct io_source *src, struct u8_slice str) {
   struct velvet *velvet = src->data;
   // 1. Dispatch any pending signals
-  struct int_slice signals = {.content = (int *)str.content, .n = str.len / 4};
-  for (size_t i = 0; i < signals.n; i++) {
-    int signal = signals.content[i];
+  size_t num_signals = str.len / 4;
+  for (size_t num = 0; num < num_signals; num++) {
+    int signal;
+    memcpy(&signal, str.content + (4 * num), 4);
     switch (signal) {
     case SIGTERM: {
       velvet_fast_shutdown(velvet, SIGTERM);
@@ -830,7 +831,6 @@ void velvet_loop(struct velvet *velvet, struct rect initial_size) {
 }
 
 void velvet_destroy(struct velvet *velvet) {
-  io_destroy(&velvet->event_loop);
   velvet_scene_destroy(&velvet->scene);
   velvet_input_destroy(&velvet->input);
   while (velvet->clients.length) {
@@ -849,7 +849,18 @@ void velvet_destroy(struct velvet *velvet) {
   velvet_process_kill_and_destroy_all(velvet);
   struct velvet_process *p;
   vec_where(p, velvet->processes, p->pid) kill(p->pid, SIGKILL);
+  vec_destroy(&velvet->processes);
   vec_where(p, velvet->marked_for_death, p->pid) kill(p->pid, SIGKILL);
+  vec_destroy(&velvet->marked_for_death);
+
+  struct io_schedule *sched;
+  vec_foreach(sched, velvet->event_loop.scheduled_actions) {
+    struct schedule_data *d = sched->data;
+    if (d->magic == SCHEDULE_MAGIC) {
+      free(d);
+    }
+  }
+  io_destroy(&velvet->event_loop);
   if (velvet->L) lua_close(velvet->L);
 }
 

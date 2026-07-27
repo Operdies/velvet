@@ -2,6 +2,15 @@
 #define VELVET_LUA_H
 #include "velvet.h"
 
+#define SCHEDULE_MAGIC 0xFADEDACE
+struct schedule_data {
+  uint64_t magic;
+  lua_State *state;
+  lua_Integer function;
+  lua_Integer state_ref;
+};
+
+
 void velvet_lua_init(struct velvet *v);
 void velvet_lua_source(struct velvet *v, char *path);
 void velvet_source_config(struct velvet *v);

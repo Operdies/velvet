@@ -332,6 +332,7 @@ size_t u8_slice_strlen(struct u8_slice s) {
 bool u8_slice_equals(struct u8_slice a, struct u8_slice b) {
   if (a.len != b.len) return false;
   if (a.content == b.content) return true;
+  if (a.len == 0) return true;
   return memcmp(a.content, b.content, a.len) == 0;
 }
 
