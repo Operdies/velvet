@@ -95,7 +95,7 @@ _Noreturn static void process_setup_child(int error_pipe, const char *wd,
   int exec_error = errno;
   write(error_pipe, &exec_error, sizeof(int));
   exit(0);
-  /* write side automatically cleaned up in child */
+  /* write side automatically cleaned up in child due to cloexec */
 }
 
 static int pipe_pair_create_cloexec(int *r, int *w) {
@@ -230,7 +230,7 @@ int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp, s
   for (int i = 0; i < LENGTH(to_close); i++)
     if (to_close[i] && to_close[i] != nullfd) close(to_close[i]);
 
-  if (error > 0) {
+  if (error != 0) {
     /* close all streams in case of errors */
     int to_close[] = {in, out, err};
     for (int i = 0; i < LENGTH(to_close); i++)

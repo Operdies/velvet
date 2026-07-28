@@ -448,27 +448,46 @@ static void on_client_writable(struct io_source *src) {
   }
 }
 
-static void on_process_output(struct io_source *src, struct u8_slice output) {
+static void on_process_stderr(struct io_source *src, struct u8_slice output) {
   struct velvet *velvet = src->data;
   struct velvet_process *proc;
-  vec_find(proc, velvet->processes, proc->out == src->fd || proc->err == src->fd);
+  vec_find(proc, velvet->processes, proc->err == src->fd);
   if (proc) {
-    bool is_out = proc->out == src->fd;
-    if (output.len == 0) {
-      close(src->fd);
-      if (is_out) {
-        proc->out = 0;
-      } else {
-        proc->err = 0;
-      }
-    }
-    if (is_out)
-      velvet_process_on_stdout(velvet, proc, output);
-    else
-      velvet_process_on_stderr(velvet, proc, output);
+    if (output.len == 0) proc->err = 0;
+    velvet_process_on_stderr(velvet, proc, output);
   }
 
-  if (output.len == 0) velvet_schedule_reap(velvet);
+  if (output.len == 0) { 
+    close(src->fd);
+    velvet_schedule_reap(velvet);
+  }
+}
+
+static void on_process_stdout(struct io_source *src, struct u8_slice output) {
+  struct velvet *velvet = src->data;
+  struct velvet_process *proc;
+  vec_find(proc, velvet->processes, proc->out == src->fd);
+  if (proc) {
+    if (output.len == 0) proc->out = 0;
+    velvet_process_on_stdout(velvet, proc, output);
+  }
+
+  if (output.len == 0) {
+    close(src->fd);
+    velvet_schedule_reap(velvet);
+  }
+}
+
+static void on_process_stdin_hangup(struct io_source *src) {
+  close(src->fd);
+  struct velvet *velvet = src->data;
+  struct velvet_process *proc;
+  vec_find(proc, velvet->processes, proc->in == src->fd);
+  if (proc) {
+    string_destroy(&proc->pending_input);
+    proc->stdin_closed = true;
+    proc->in = 0;
+  }
 }
 
 static void on_process_writable(struct io_source *src) {
@@ -479,11 +498,10 @@ static void on_process_writable(struct io_source *src) {
     ssize_t written = io_write(proc->in, string_as_u8_slice(proc->pending_input));
     if (written > 0) {
       string_shift_left(&proc->pending_input, written);
-    } else if (written == 0) {
-      velvet_schedule_reap(velvet);
     }
     if (proc->in && proc->stdin_closed && proc->pending_input.len == 0) {
       close(proc->in);
+      string_destroy(&proc->pending_input);
       proc->in = 0;
     }
   }
@@ -498,8 +516,6 @@ static void on_window_writable(struct io_source *src) {
     ssize_t written = io_write(src->fd, string_as_u8_slice(win->emulator.pending_input));
     if (written > 0) {
       string_shift_left(&win->emulator.pending_input, (size_t)written);
-    } else if (written == 0) {
-      velvet_schedule_reap(v);
     }
   }
   if (win->emulator.pending_input.len == 0) src->events &= ~IO_SOURCE_POLLOUT;
@@ -517,6 +533,9 @@ bool window_visible(struct velvet *v, struct velvet_window *w) {
 static void on_window_output(struct io_source *src, struct u8_slice str) {
   struct velvet *v = src->data;
   if (str.len == 0) {
+    /* NOTE: this reap appears necessary for reasons I don't udnerstand.
+     * I would expect SIGCHLD to be raised, but that is apparently not always the case.
+     * Without this reap, velvet hangs when a window closes.  */
     velvet_schedule_reap(v);
     return;
   }
@@ -676,10 +695,10 @@ static void velvet_reap(struct velvet *v, int pid, int status) {
 static void velvet_reap_all(struct velvet *v) {
   int status;
   pid_t pid = 0;
+  v->reap = false;
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
     velvet_reap(v, pid, status);
   }
-  v->reap = false;
 }
 
 void velvet_dispatch(struct velvet *velvet) {
@@ -739,17 +758,32 @@ void velvet_dispatch(struct velvet *velvet) {
 
   struct velvet_process *proc;
   vec_foreach(proc, velvet->processes) {
-    struct io_source out = {
-        .fd = proc->out,
-        .events = IO_SOURCE_POLLIN,
-        .on_read = on_process_output,
-        .data = velvet,
-    };
-    if (out.fd) io_add_source(loop, out);
-    out.fd = proc->err;
-    if (out.fd) io_add_source(loop, out);
-    if (proc->pending_input.len) {
-      struct io_source in = { .fd = proc->in, .events = IO_SOURCE_POLLOUT, .on_writable = on_process_writable, .data = velvet};
+    if (proc->out) {
+      struct io_source out = {
+          .fd = proc->out,
+          .events = IO_SOURCE_POLLIN,
+          .on_read = on_process_stdout,
+          .data = velvet,
+      };
+      io_add_source(loop, out);
+    }
+    if (proc->err) {
+      struct io_source err = {
+          .fd = proc->err,
+          .events = IO_SOURCE_POLLIN,
+          .on_read = on_process_stderr,
+          .data = velvet,
+      };
+      io_add_source(loop, err);
+    }
+    if (proc->pending_input.len && proc->in) {
+      struct io_source in = {
+          .fd = proc->in,
+          .events = IO_SOURCE_POLLOUT,
+          .on_writable = on_process_writable,
+          .on_hangup = on_process_stdin_hangup,
+          .data = velvet,
+      };
       io_add_source(loop, in);
     }
   }
