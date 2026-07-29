@@ -308,33 +308,38 @@ local function test_spawn_errors()
   assert(no_such_directory:match("No such file or directory"))
 end
 
+local process = require('velvet.process')
+
 local function test_signal_delivery()
   local script = [[
-trap 'printf int' INT
-trap 'printf term' TERM
-printf 'ready'
+trap 'echo int' INT
+trap 'echo term' TERM
 # We need the shell to stay alive while we send signals. Each signal will interrupt a read
-read arg; read arg; read arg; read arg;
+echo ready
+read arg; read arg; read arg; read arg
 ]]
-  local co = coroutine.running()
-  local proc = vv.api.process_spawn({ 'sh', '-c', script }, {
-    on_stdout = function(_, out)
-      if out then coroutine.resume(co, out) end
-    end,
-    on_exit = function(_, _, sig) coroutine.resume(co, sig) end,
-  })
+  local p = process.spawn({ 'sh', '-c', script })
+  local o = assert(p.stdout)
+
+  local function kill(sig)
+    -- insert a small artificial delay before sending the signal.
+    -- otherwise we risk the shell hanging because a second signal was delivered
+    -- before it was fully done handling the first one.
+    vv.async.wait(1)
+    p:kill(sig)
+  end
 
   -- ensure we don't signal the process before trap
-  assert(coroutine.yield() == 'ready', 'ready')
+  expect_eq('ready', o:line())
   -- omitting the signal should send sigterm
-  vv.api.process_kill(proc)
-  assert(coroutine.yield() == 'term', 'expected SIGTERM')
-  vv.api.process_kill(proc, 'int')
-  assert(coroutine.yield() == 'int', 'expected SIGINT')
-  vv.api.process_kill(proc, 'term')
-  assert(coroutine.yield() == 'term', 'expected SIGTERM')
-  vv.api.process_kill(proc, 'kill')
-  assert(coroutine.yield() == 'kill', 'expected SIGKILL')
+  kill()
+  expect_eq('term', o:line())
+  kill('int')
+  expect_eq('int', o:line())
+  kill('term')
+  expect_eq('term', o:line())
+  kill('kill')
+  expect_eq('kill', p:wait_for_exit(10))
 end
 
 local function test_stdout_reap_race()
@@ -360,7 +365,6 @@ local function test_stdout_reap_race()
 end
 
 local function test_process_wrapper()
-  local process = require('velvet.process')
   local p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; sleep 0.1 ; printf le;' }, { stderr = false })
   expect_eq(nil, p.stderr)
   expect_eq('hello', p.stdout:line())
