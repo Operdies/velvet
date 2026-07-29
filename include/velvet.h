@@ -31,6 +31,7 @@ enum velvet_input_state {
   VELVET_INPUT_STATE_ESC,
   VELVET_INPUT_STATE_APPLICATION_KEYS,
   VELVET_INPUT_STATE_CSI,
+  VELVET_INPUT_STATE_PASTE,
 };
 
 /* used for sendning a lua chunk to the server via shared memory */

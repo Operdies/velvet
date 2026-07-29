@@ -1,5 +1,4 @@
 #include "csi.h"
-#include "platform.h"
 #include "utf8proc/utf8proc.h"
 #include "utils.h"
 #include "velvet.h"
@@ -180,39 +179,46 @@ static void window_paste(struct velvet_window *w, struct u8_slice text) {
   if (enclose) string_push_range(&w->emulator.pending_input, bracketed_paste_end, sizeof(bracketed_paste_end));
 }
 
-static void send_bracketed_paste(struct velvet *v) {
+static bool check_paste_start(const struct string *s) {
+  if (s->len < sizeof(bracketed_paste_start)) return false;
+  return memcmp(s->content, bracketed_paste_start, sizeof(bracketed_paste_start)) == 0;
+}
+
+static bool check_paste_end(const struct string *s) {
+  if (s->len < sizeof(bracketed_paste_start) + sizeof(bracketed_paste_end)) return false;
+  const uint8_t *search = s->content + s->len - sizeof(bracketed_paste_end);
+  return memcmp(search, bracketed_paste_end, sizeof(bracketed_paste_end)) == 0;
+}
+
+static void dispatch_paste(struct velvet *v, uint8_t ch) {
   struct velvet_input *in = &v->input;
-  struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
-  if (focus) {
-    uint8_t *start = in->command_buffer.content;
-    size_t len = in->command_buffer.len;
-    struct u8_slice paste = { .content=  start, .len = len };
-    paste = u8_slice_range(paste, sizeof(bracketed_paste_start), paste.len - sizeof(bracketed_paste_end));
-    window_paste(focus, paste);
+  string_push_char(&v->input.command_buffer, ch);
+
+  if (check_paste_end(&v->input.command_buffer)) {
+    struct velvet_window *focus = velvet_scene_get_focus(&v->scene);
+    if (focus) {
+      uint8_t *start = in->command_buffer.content;
+      size_t len = in->command_buffer.len;
+      struct u8_slice paste = {.content = start, .len = len};
+      paste = u8_slice_range(paste, sizeof(bracketed_paste_start), paste.len - sizeof(bracketed_paste_end));
+      window_paste(focus, paste);
+      scroll_to_bottom(focus);
+    }
+    string_clear(&v->input.command_buffer);
+    in->state = VELVET_INPUT_STATE_NORMAL;
+  } else if (in->command_buffer.len > BRACKETED_PASTE_MAX) {
+    ERROR("Bracketed Paste max exceeded!!");
+    string_clear(&v->input.command_buffer);
+    in->state = VELVET_INPUT_STATE_NORMAL;
   }
-  string_clear(&v->input.command_buffer);
-  in->state = VELVET_INPUT_STATE_NORMAL;
-  scroll_to_bottom(focus);
 }
 
 static void dispatch_csi(struct velvet *v, uint8_t ch) {
   struct velvet_input *in = &v->input;
   string_push_char(&v->input.command_buffer, ch);
 
-  struct string *b = &v->input.command_buffer;
-  if (b->len >= sizeof(bracketed_paste_start) &&
-      memcmp(b->content, bracketed_paste_start, sizeof(bracketed_paste_start)) == 0) {
-    if (memcmp(b->content + b->len - sizeof(bracketed_paste_end), bracketed_paste_end, sizeof(bracketed_paste_end)) ==
-        0) {
-      send_bracketed_paste(v);
-    }
-
-    if (in->command_buffer.len > BRACKETED_PASTE_MAX) {
-      ERROR("Bracketed Paste max exceeded!!");
-      string_clear(&v->input.command_buffer);
-      in->state = VELVET_INPUT_STATE_NORMAL;
-      return;
-    }
+  if (check_paste_start(&v->input.command_buffer)) {
+    in->state = VELVET_INPUT_STATE_PASTE;
     return;
   }
 
@@ -640,6 +646,7 @@ void velvet_input_process(struct velvet *v, struct u8_slice str) {
     case VELVET_INPUT_STATE_NORMAL: dispatch_normal(v, ch); break;
     case VELVET_INPUT_STATE_ESC: dispatch_esc(v, ch); break;
     case VELVET_INPUT_STATE_CSI: dispatch_csi(v, ch); break;
+    case VELVET_INPUT_STATE_PASTE: dispatch_paste(v, ch); break;
     case VELVET_INPUT_STATE_APPLICATION_KEYS: dispatch_app(v, ch); break;
     }
   }
