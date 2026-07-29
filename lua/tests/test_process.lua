@@ -170,6 +170,8 @@ local function test_filedescriptor_leaks()
     local spawned = 0
     local exited = 0
     local co = coroutine.running()
+    local resumed = false
+
     -- 1. spawn a ton of processes to exhaust max file descriptors
     for id = 1, spawn_max do
       local function on_exit(error)
@@ -179,9 +181,7 @@ local function test_filedescriptor_leaks()
           proc_status[id] = error
         end
         exited = exited + 1
-        if exited == spawned then
-          coroutine.resume(co)
-        end
+        if exited == spawned and not resumed then coroutine.resume(co, 'success') end
       end
 
       ok, err = pcall(spawn_process, on_exit)
@@ -193,8 +193,12 @@ local function test_filedescriptor_leaks()
       end
     end
 
+    vv.api.schedule_after(1000, function() if not resumed then coroutine.resume(co, "timeout") end end)
+
     -- 2. wait for all processes to exit
-    coroutine.yield()
+    local resume = coroutine.yield()
+    resumed = true
+    expect_eq('success', resume)
 
     return proc_status, err
   end
@@ -412,7 +416,6 @@ done ]]
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld" ; printf "le\n";' }, { stderr = false })
   expect_eq('hello\nworldle\n', p.stdout:read_all())
   expect_eq(nil, p.stdout:read_all())
-  expect_eq(0, p:wait_for_exit())
 
 
   -- test stderr stream
@@ -471,6 +474,7 @@ done ]]
   p = process.spawn({ 'sh', '-c', payload })
   expect_eq("hello output 1" .. "hello output 2\n", p.stdout:read_all())
   expect_eq("hello error 1\n", p.stderr:read_all())
+  expect_eq(0, p:wait_for_exit())
 end
 
 return {
@@ -480,28 +484,30 @@ return {
     -- we run these tests in parallel to save a bit of time.
     -- Parallel processes is closer to a real world scenario anyway.
     local tests = {
-      test_basic_functionality,
-      test_environment,
-      test_exitcodes,
-      test_process_kill,
-      test_process_wrapper,
-      test_signal_delivery,
-      test_spawn_errors,
-      test_stdin,
-      test_stdout_reap_race,
-      test_working_directory,
+      ['test_basic_functionality'] = test_basic_functionality,
+      ['test_environment'] = test_environment,
+      ['test_exitcodes'] = test_exitcodes,
+      ['test_process_kill'] = test_process_kill,
+      ['test_signal_delivery'] = test_signal_delivery,
+      ['test_spawn_errors'] = test_spawn_errors,
+      ['test_stdin'] = test_stdin,
+      ['test_stdout_reap_race'] = test_stdout_reap_race,
+      ['test_working_directory'] = test_working_directory,
+      ['test_process_wrapper'] = test_process_wrapper,
     }
 
     local tasks = {}
-    for i, v in ipairs(tests) do
-      tasks[i] = vv.async.run(v)
+    for name, fn in pairs(tests) do
+      tasks[name] = vv.async.run(fn)
     end
-    local result = vv.async.wait_all(tasks)
-    for _, v in ipairs(result) do
-      local ret = v.data
+
+    local result = vv.async.wait_all(tasks, 1000)
+    for k in pairs(tests) do
+      assert(result[k], "process test '" .. k .. "' timed out.")
+      local ret = result[k].data
       assert(ret[1], ret[2])
     end
-    -- we can't run this alongside the other tests because it is designed to cause errors
+    -- we can't run this alongside the other tests because its test conditions require exclusive process control
     test_filedescriptor_leaks()
   end
 }

@@ -59,11 +59,15 @@ function WARN(...)
   io.stderr:write(yellow .. str .. reset .. "\n")
 end
 
+local current_test = nil
+
 local function run()
   local failed = 0
   for _, mod in ipairs(tests) do
     local test = require(mod).test
-    local ok, err = vv.async.wait_for_coroutine(vv.async.run(test))
+    current_test = vv.async.run(test)
+    local ok, err = vv.async.wait_for_coroutine(current_test)
+    current_test = nil
     if not ok then
       local lines = {}
       for line in err:gmatch("[^\r\n]+") do
@@ -86,11 +90,20 @@ end
 
 return {
   run = function()
-    vv.api.schedule_after(5000, function() TEST_STATUS = false end)
-    vv.async.run(function()
+    local trd = vv.async.run(function()
       local status, result = pcall(run)
       if not status then print(result) end
       TEST_STATUS = status and result
+    end)
+
+    -- timing out misbehaving tests is unreliable because coroutines are in the end still cooperative.
+    -- if a thread is doing a lot of work without yielding, this action will be delayed until it is done.
+    -- but having a timeout is better than no timeout. The better soluton would be for the C harness
+    -- to install a debug break and dump the VM state if it exceeds some instruction limit.
+    vv.api.schedule_after(5000, function()
+      TEST_STATUS = false
+      vv.async.cancel(trd)
+      if current_test ~= nil then vv.async.cancel(current_test) end
     end)
   end
 }
