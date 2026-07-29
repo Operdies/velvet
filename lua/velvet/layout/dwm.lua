@@ -574,6 +574,7 @@ function dwm.activate()
   event_handler.window_closed = function(_) arrange() end
   event_handler.window_focus_changed = function(args)
     if ignore_window(args.new_focus) then return end
+    set_focus(args.new_focus)
     arrange()
   end
   arrange()
