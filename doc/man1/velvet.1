@@ -90,21 +90,27 @@ By default, you can view your current keybinds with the shortcut
 .B <C-x>h
 .SS Example Keybinds
 .nf
-local map = require('velvet.keymap').set
+local keymap = require('velvet.keymap')
 local spawn = vv.api.window_create_process
 .fi
 \-\- pressing Ctrl + Shift + F1 will open bash in the 
 .B $HOME
 directory.
 .nf
-map("<C-S-F1>",
+keymap:set("<C-S-F1>",
   function() spawn({"bash"}, { working_directory = os.getenv("HOME") }) end)
 .fi
 \-\- Pressing Ctrl + X and then C will open
 .B $SHELL
 in a new window.
 .nf
-map("<C-x>c", function() spawn(os.getenv("SHELL")) end)
+keymap:set("<C-x>c", function() spawn(os.getenv("SHELL")) end)
+.fi
+\-\- Use
+.B keymap:del()
+to remove keybinds.
+.nf
+keymap:del("<C-x>c")
 .fi
 
 .SS Modifiers
