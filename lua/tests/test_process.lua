@@ -142,72 +142,81 @@ local function test_process_kill()
 end
 
 local function test_filedescriptor_leaks()
-  -- unclear why, but tests sometimes fail if I don't put a 1ms sleep here.
-  vv.async.wait(1)
-  local function spawn_process(id, proc_status)
-    proc_status[id] = 'not yet started'
-    local co = coroutine.running()
-    -- ensure stdout/stderr is set and input is not set.
-    -- this makes velvet allocate a pipe for each.
-    vv.api.process_spawn('true', {
-      on_stdout = function() end,
-      on_stderr = function() end,
-      on_exit = function(_, code) coroutine.resume(co, code) end,
+  local function spawn_process(on_exit)
+    local stdout, stderr = 'not set', 'not set'
+    local payload = 'read INPUT ; printf "$INPUT" ; read INPUT ; printf "$INPUT" >&2 ;'
+    local p = vv.api.process_spawn({ 'sh', '-c', payload }, {
+      on_stdout = function(_, data) if data then stdout = data end end,
+      on_stderr = function(_, data) if data then stderr = data end end,
+      on_exit = function(_, status)
+        if status ~= 0 then
+          on_exit('unexpected exit code: ' .. status)
+        elseif stdout ~= 'hello output' then
+          on_exit('unexpected stdout: ' .. stdout)
+        elseif stderr ~= 'hello error' then
+          on_exit('unexpected stderr: ' .. stderr)
+        else
+          on_exit(nil)
+        end
+      end,
     })
-    local status = coroutine.yield()
-    if status == 0 then
-      proc_status[id] = 'success'
-    else
-      proc_status[id] = "unexpected exit code: " .. status
-    end
+    vv.api.process_write_stdin(p, 'hello output\n')
+    vv.api.process_write_stdin(p, 'hello error\n')
   end
 
-  local function spawn_procs(spawn_count)
+  local function spawn_procs(spawn_max)
+    local ok, err
     local proc_status = {}
-    local tasklist = {}
+    local spawned = 0
+    local exited = 0
+    local co = coroutine.running()
     -- 1. spawn a ton of processes to exhaust max file descriptors
-    for i = 1, spawn_count do
-      proc_status[i] = 'not started'
-      tasklist[i] = vv.async.run(function(id)
-        local ok, err = pcall(spawn_process, id, proc_status)
-        if not ok then proc_status[id] = err end
-      end, i)
+    for id = 1, spawn_max do
+      local function on_exit(error)
+        if error == nil then
+          proc_status[id] = 'success'
+        else
+          proc_status[id] = error
+        end
+        exited = exited + 1
+        if exited == spawned then
+          coroutine.resume(co)
+        end
+      end
+
+      ok, err = pcall(spawn_process, on_exit)
+      if ok then
+        spawned = spawned + 1
+      else
+        -- spawn failed, we can stop now
+        break
+      end
     end
-    -- 2. wait for all tasks to complete and return the first failure, if any
-    vv.async.wait_all(tasklist)
-    return proc_status
+
+    -- 2. wait for all processes to exit
+    coroutine.yield()
+
+    return proc_status, err
   end
 
-  local function check_first_error(spawn_result)
+  local function expect_success(spawn_result)
     for i, v in ipairs(spawn_result) do
-      if v ~= 'success' then return true, i end
+      assert(v == 'success', string.format("bad status at index %d: expected '%s', was '%s'", i, 'success', v))
     end
-    return false
   end
 
-  local spawn_count = 900
-  local spawn_result = spawn_procs(spawn_count)
-  if check_first_error(spawn_result) ~= true then
-    -- we could crank the spawn count but I don't want this test to take too long.
-    WARN("fd leak test: failed to exhaust fds. Try raising the limit.")
-  end
-
-  local _, e1 = check_first_error(spawn_result)
+  local spawn_max = 10000 -- likely to fault much, much earlier
+  local spawn1, err1 = spawn_procs(spawn_max)
+  assert(err1 and (err1:match("Too many open files") or err1:match("No file descriptors available")), err1)
+  expect_success(spawn1)
 
   -- 3. now that the initial set of processes have exited,
   -- we should be able to spawn new processes again.
-  -- If we did not leak any file descriptors, the errors should occur at the exact same indices.
-  local second_spawn_result = spawn_procs(spawn_count)
-  local _, e2 = check_first_error(second_spawn_result)
-  assert(e1 == e2, "Errored at different indices! " .. e1 .. " - " .. e2)
-  for i = 1, spawn_count do
-    local fst = spawn_result[i]
-    local snd = second_spawn_result[i]
-    -- since coroutine execution is deterministic we can expect that both spawn tests yielded the same result,
-    -- but only if velvet did not leak any handles
-    assert(fst and fst == snd)
-    if fst ~= 'success' then assert(fst:match('Error starting true:'), 'unexpected failure mode') end
-  end
+  -- If we did not leak any file descriptors, the error should occur at the exact same count.
+  local spawn2, err2 = spawn_procs(#spawn1 + 1)
+  assert(#spawn1 == #spawn2, string.format("Errored at different indices! %d vs. %d", #spawn1, #spawn2))
+  expect_eq(err1, err2)
+  expect_success(spawn2)
 end
 
 local function shell_oneline(cmd, env, debug)
@@ -219,15 +228,18 @@ local function shell_oneline(cmd, env, debug)
     on_stdout = function(_, data)
       if output == nil then
         output = data
-        coroutine.resume(co)
       end
     end,
     on_stderr = debug and function(_, data)
       if data then WARN(data) end
     end or nil,
+    on_exit = function(_, status)
+      coroutine.resume(co, status)
+    end
   })
-  coroutine.yield()
-  return output
+  local status = coroutine.yield()
+  expect_eq(0, status)
+  return output, status
 end
 
 local function test_environment()
@@ -239,7 +251,7 @@ local function test_environment()
   expect_eq('123', output)
 
   -- verify the parent environment is discarded when an env table is provided
-  output = shell_oneline('printf $LUA_TEST_ENV', {})
+  output = shell_oneline('printf "$LUA_TEST_ENV"', {})
   expect_eq(nil, output)
 
   -- verify inserting the existing environment table works
