@@ -322,8 +322,11 @@ function resolve_lock.push_frame()
   if resolve_lock.resolving then
     -- if another event is currently being resolved, yield.
     -- this thread will be resumed after the currently resolving event is finished.
-    resolve_lock.queue[#resolve_lock.queue + 1] = coroutine.running()
-    coroutine.yield()
+    local idx = #resolve_lock.queue + 1
+    resolve_lock.queue[idx] = coroutine.running()
+    -- yield will fail if it would attempt to yield across a C-call boundary.
+    -- In this case, we should just emit the event but skip the trampoline.
+    if not pcall(coroutine.yield) then resolve_lock.queue[idx] = nil end
     return nil
   end
 
