@@ -12,7 +12,7 @@
 #include "velvet_lua.h"
 #include "velvet_scene.h"
 #include "velvet_process.h"
-
+#include <sys/resource.h>
 
 /* the grid tests cause treesitter to freak out for some reason, so they are banished to another file */
 #include "grid_tests.c"
@@ -510,11 +510,24 @@ void test_lua(void) {
   velvet_destroy(&v);
 }
 
+static void set_max_fds(rlim_t n) {
+  struct rlimit rlim;
+  if (getrlimit(RLIMIT_NOFILE, &rlim) != 0) velvet_die("getrlimit:");
+  rlim.rlim_cur = MIN(n, rlim.rlim_max);
+  if (setrlimit(RLIMIT_NOFILE, &rlim) != 0) velvet_die("setrlimit:");
+  if (getrlimit(RLIMIT_NOFILE, &rlim) != 0) velvet_die("getrlimit:");
+  assert(rlim.rlim_cur == n);
+}
+
 void test_lua_modules(void) {
   /* because the lua test context is dispatching with the real velvet event loop, if the test is terminated by a signal, (Ctrl-C, kill)
    * it will delete the $VELVET socket file in its shutdown path.
    * To avoid this, we unset the environment variable in the test context. */
   unsetenv("VELVET");
+
+  /* in order to speed up the fd exhaustion test, we artificially cap
+   * the number of open file handles. */
+  set_max_fds(150);
 
   struct velvet v = {0};
   char *argv[] = { "-S", "test", NULL };
