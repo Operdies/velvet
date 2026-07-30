@@ -71,15 +71,16 @@ void io_dispatch(struct io *io) {
     }
   }
 
+  /* almost certainly an application bug, would cause indefinite wait */
   assert(io->pollfds.length > 0 || timeout >= 0);
   int polled = poll(io->pollfds.content, io->pollfds.length, timeout);
   if (polled == -1) {
-    // EAGAIN / EINTR are expected. In this case we should just return.
-    // For other errors, log them for visibility. although they are usually not serious.
-    if (errno != EAGAIN && errno != EINTR) {
-      ERROR("poll:");
+    if (errno == EAGAIN || errno == EINTR) {
+      /* EAGAIN / EINTR are expected. In this case we should just return. */
+      return;
     }
-    return;
+    /* other errors indicate an application bug, so let's fail loudly */
+    velvet_die("poll:");
   }
 
   for (size_t i = 0, remaining = polled; remaining && i < io->pollfds.length; i++) {
