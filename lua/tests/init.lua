@@ -1,4 +1,4 @@
----@diagnostic disable: lowercase-global
+---@diagnostic disable: lowercase-global, await-in-sync
 -- globals overriden by the test harness
 SIGTERM = 0
 STDERR_ISATTY = false

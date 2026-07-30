@@ -10,7 +10,7 @@ local vv = {
   --- can work with different window managers.
   z_hint = {
     --- windows which should appear behind other windows,
-    --- such as wallpapers and desktop elements. Works best when windows in higher layers 
+    --- such as wallpapers and desktop elements. Works best when windows in higher layers
     background = -100000,
     --- tiled windows, if a tiling layout scheme is used
     tiled = -10000,
@@ -37,6 +37,7 @@ local vv = {
   --- @param level? velvet.api.severity
   log = function(message, level)
     if type(message) ~= 'string' then message = inspect(message) end
+    ---@diagnostic disable-next-line: invisible
     ev.emit('system_message', { message = message, level = level or 'info' })
   end,
 
@@ -79,7 +80,7 @@ local function string_to_rgb(hex)
     return nil, "expected string"
   end
 
-  -- allow recursively looking up a color. This allows patterns such as setting 
+  -- allow recursively looking up a color. This allows patterns such as setting
   -- theme.cursor = 'red', where 'red' is automatically inferred as theme.red
   if vv.options.theme[hex] then return vv.options.theme[hex] end
 
@@ -175,7 +176,7 @@ vv.options = setmetatable(vv.options, {
 local function make_weaktable() return setmetatable({}, { __mode = 'k' }) end
 
 --- The main use case is for sockets to redirect all print statements
---- to their execution context. Setting _ENV.print was almost a good solution, 
+--- to their execution context. Setting _ENV.print was almost a good solution,
 --- but not quite since it doesn't capture prints from other modules.
 COROUTINE_PRINT = make_weaktable()
 

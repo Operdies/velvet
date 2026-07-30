@@ -38,6 +38,7 @@ end
 --- @field ms_per_frame? integer the number of milliseconds between animation frames
 
 --- Change the dimensions of window |id| to |target| over |duration| ms
+--- @async returns after anomation completes
 --- @param id integer Window ID
 --- @param target velvet.api.rect Final rect
 --- @param duration integer Animation duration in milliseconds

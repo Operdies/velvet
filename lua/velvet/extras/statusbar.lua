@@ -77,6 +77,7 @@ Bar.register = M.register
 
 local default_option_fields = { 'foreground', 'background', 'bold', 'italic' }
 
+--- @async
 --- @param name string
 --- @param update_completed velvet.async.event_source<string>
 --- @param bar_updating velvet.async.event_source<string>
@@ -332,6 +333,7 @@ local function bar_render_segments(bar)
   priv.segment_lookup = partition
 end
 
+--- @async
 --- @param bar velvet.statusbar
 local function bar_dispatch_events(bar)
   local priv = bar_data[bar]
@@ -397,6 +399,7 @@ local function bar_update_workers(bar)
       if elem then
         local thread_data = {}
         segment_data[key] = thread_data
+        ---@async
         thread_data.co = vv.async.run(function()
           local ok, err = xpcall(run_segment, debug.traceback, key.name, priv.update, priv.bar_updating:listener(),
             thread_data, key.options)

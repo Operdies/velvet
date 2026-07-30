@@ -1,3 +1,4 @@
+---@diagnostic disable: await-in-sync
 --- NOTE:
 --- The manual coroutine usage in these tests is not necessarily the recommended way to use this API.
 --- They are being uesd this way for two reasons:

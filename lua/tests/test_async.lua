@@ -1,3 +1,4 @@
+---@diagnostic disable: await-in-sync
 ---we are accessing some vv.events() internals for testing purposes.
 ---@diagnostic disable: invisible
 local async = vv.async

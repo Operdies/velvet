@@ -17,6 +17,7 @@ local function register_statusbar_elements()
   local window = require('velvet.window')
   statusbar.register('window_title', {
     default_options = { foreground = '#000000', background = 'red', bold = true },
+    ---@async
     content = function()
       local id = vv.api.get_focused_window()
       local win = vv.api.window_is_valid(id) and window.from_handle(id)
@@ -106,7 +107,7 @@ local function register_statusbar_elements()
     local never = vv.async.event_source()
     statusbar.register('servername', {
       -- The server name never changes, so we never need to update this segment.
-      -- statusbar handles empty or nil update_triggers by polling |content| every time the bar is being updated. 
+      -- statusbar handles empty or nil update_triggers by polling |content| every time the bar is being updated.
       -- To avoid this we instead wait for an object which will never be signaled.
       update_triggers = { never },
       default_options = { foreground = '#000000', background = 'red', bold = true },
@@ -130,6 +131,7 @@ local function register_statusbar_elements()
   local function minute_ticker()
     local ticker = vv.async.event_source()
     local listener = setmetatable({ ticker:listener() }, { __mode = 'v' })
+    ---@async
     vv.async.run(function()
       -- stop ticking when the listener is garbage collected
       while listener[1] do
@@ -212,9 +214,9 @@ local function cfg(settings)
     { description = "Set all tags on window." })
   map_prefix("t", function() dwm.set_layer(vv.api.get_focused_window(), 'tiled') end,
     { description = "Tile current window." })
-  map_prefix("f", function() 
+  map_prefix("f", function()
     local win = vv.api.get_focused_window()
-    dwm.set_layer(win, 'floating') 
+    dwm.set_layer(win, 'floating')
   end, { description = "Float current window." })
 
   local function apply(func, ...)
@@ -257,15 +259,15 @@ local function cfg(settings)
   if settings.shutdown.on_last_window_exit then
     local event_manager = vv.events.create_group('default_config.shutdown', true)
     event_manager.window_closed = function()
-      if not any_process_windows() then 
-        vv.api.quit() 
+      if not any_process_windows() then
+        vv.api.quit()
       end
     end
   end
 
   local function start_shell_if_no_windows()
-    if not any_process_windows() then 
-      vv.api.window_create_process(default_shell, { working_directory = vv.api.get_startup_directory() }) 
+    if not any_process_windows() then
+      vv.api.window_create_process(default_shell, { working_directory = vv.api.get_startup_directory() })
     end
   end
 

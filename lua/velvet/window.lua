@@ -70,7 +70,7 @@ local function hex_to_rgb(hex)
     return nil, "expected string"
   end
 
-  -- allow recursively looking up a color. This allows patterns such as setting 
+  -- allow recursively looking up a color. This allows patterns such as setting
   -- theme.cursor = 'red', where 'red' is automatically inferred as theme.red
 ---@diagnostic disable-next-line: return-type-mismatch
   if vv.options.theme[hex] then return vv.options.theme[hex] end
@@ -190,7 +190,7 @@ local function update_borders(self)
     if scroll_height > 0 and scroll_offset > 0 then
       local text = ('[%d of %d]'):format(scroll_offset, scroll_height)
       local start = title_geom.width - string.len(text) - 1
-      if start > 0 then 
+      if start > 0 then
         title_budget = start - 3
         t:set_cursor(start, 1)
         t:draw(text)
@@ -199,7 +199,7 @@ local function update_borders(self)
 
     t:set_cursor(3, 1)
     local trunc = '…'
-    local title = self:get_friendly_title()
+    local title = self:get_friendly_title() or '<no title>'
     local codes = {}
     if title_budget > 0 then
       for p, c in utf8.codes(title) do
@@ -248,17 +248,17 @@ local function apply_anchors(win, cache)
   if win.parent then apply_anchors(win.parent, cache) end
   if win.z_anchor then
     local rel_win = win.z_anchor.of == 'parent' and win.parent or win.z_anchor.of
-    if rel_win then 
+    if rel_win then
       --- @cast rel_win velvet.window
       apply_anchors(rel_win, cache)
-      win:set_z_index(rel_win:get_z_index() + (win.z_anchor.offset or 0)) 
+      win:set_z_index(rel_win:get_z_index() + (win.z_anchor.offset or 0))
     end
   end
   local wr = rect(win:get_geometry())
   for side, anchor in pairs(win.anchors) do
     local anchor_geom = sg
     local rel_win = getmetatable(anchor.of) == Window and anchor.of or win.parent
-    if rel_win then 
+    if rel_win then
       --- @cast rel_win velvet.window
       apply_anchors(rel_win, cache)
       anchor_geom = rect(rel_win:get_geometry())
@@ -286,7 +286,7 @@ local function apply_all_anchors()
   end
 end
 
-hooks.window_moved = function(evt) 
+hooks.window_moved = function(evt)
   local win = win_registry[evt.win_id]
   if win then
     win.events.moved:emit(evt)
@@ -294,7 +294,7 @@ hooks.window_moved = function(evt)
   end
 end
 
-hooks.window_resized = function(evt) 
+hooks.window_resized = function(evt)
   local win = win_registry[evt.win_id]
   if win then
     win.events.resized:emit(evt)
@@ -302,14 +302,14 @@ hooks.window_resized = function(evt)
   end
 end
 
-hooks.window_on_key = function(evt) 
+hooks.window_on_key = function(evt)
   local win = win_registry[evt.win_id]
   if win then
     if win.on_window_on_key_handler then win:on_window_on_key_handler(evt) end
   end
 end
 
-hooks.pre_render = function() 
+hooks.pre_render = function()
   apply_all_anchors()
   for _, win in pairs(win_registry) do
     update_borders(win)
@@ -475,12 +475,16 @@ local function route_mouse_events(event, args)
     end
 
     -- only emit the mouse event if the window did not 'passthrough'.
+    ---@diagnostic disable-next-line: invisible
     vv.events.emit(("window.%s"):format(event), args)
     if event == 'mouse.click' then
+      ---@diagnostic disable-next-line: param-type-mismatch
       win.events.mouse.click:emit(args)
     elseif event == 'mouse.scroll' then
+      ---@diagnostic disable-next-line: param-type-mismatch
       win.events.mouse.scroll:emit(args)
     elseif event == 'mouse.move' then
+      ---@diagnostic disable-next-line: param-type-mismatch
       win.events.mouse.move:emit(args)
     end
   end
@@ -529,6 +533,7 @@ function Window:create_child_process_window(cmd, opts)
   return child
 end
 
+--- @return string? friendly_title
 function Window:get_friendly_title()
   if self.title then return self.title end
   -- lua windows do not have a process or a meaningful working directory
@@ -567,7 +572,7 @@ function Window:set_visibility(visible)
   api.window_set_hidden(self.id, not visible)
 end
 
---- @return boolean window 
+--- @return boolean window
 function Window:get_visibility()
   return not api.window_get_hidden(self.id)
 end
@@ -684,7 +689,7 @@ function Window:set_alternate_screen(alternate)
 end
 
 --- Create an automatically managed frame for the window. The frame will occupy one cell around the window.
---- @param enabled boolean set 
+--- @param enabled boolean set
 function Window:set_frame_enabled(enabled)
   assert(not self.is_border, "Bad argument #0 (window is a border)")
   if self.frame_visible == enabled then return end
@@ -750,7 +755,7 @@ local indexed_colors = {
 
 --- @param color velvet.color the new foreground color
 function Window:set_frame_color(color)
-  if type(color) == 'string' then 
+  if type(color) == 'string' then
     if not indexed_colors[color] then
       -- if this is not a pre-configured color, assume it is an #rrggbb string.
       color = color_from_string(color)
@@ -833,7 +838,7 @@ function Window:set_alpha(alpha)
   alpha = clamp(alpha, 0, 1)
   if alpha < 1 then
     local mode = api.window_get_transparency_mode(self.id)
-    if mode == 'none' then 
+    if mode == 'none' then
       self:set_transparency_mode('all')
     end
   end

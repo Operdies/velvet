@@ -187,12 +187,10 @@ local function do_copy(initial_mode)
     end
     local text = table.concat(ll, '\n')
     vv.api.clipboard_set(text)
-    vv.async.run(function()
-      overlay:set_foreground_color(confirm_text_color)
-      selection_highlight_color = selection_confirm_color
-      vv.async.wait(150)
-      dispose()
-    end)
+
+    overlay:set_foreground_color(confirm_text_color)
+    selection_highlight_color = selection_confirm_color
+    vv.api.schedule_after(150, dispose)
   end
 
   -- TIL: a count can be specified both for an operator,
@@ -278,6 +276,7 @@ local function do_copy(initial_mode)
 
   --- @param motion velvet.copy.vim_motion
   --- @param count? integer
+  ---@async when motions require an operand
   local function vim_motion(motion, count)
     local op = nil
     local operand_required = { f = true, F = true, t = true, T = true, g = true, a = true, i = true }
@@ -336,27 +335,39 @@ local function do_copy(initial_mode)
     ['0'] = { '<home>' },
   }
 
+  local function map_motion(m)
+    ---@async
+    return function()
+      local cnt = digit
+      digit = nil
+      vim_motion(m, cnt)
+    end
+  end
+
   for _, m in ipairs(mo.motions) do
     local lst = aliases[m] or {}
     lst[#lst + 1] = m
-    keymap[#keymap + 1] = { lst, function()
-      local cnt = digit; digit = nil; vim_motion(m, cnt)
-    end }
+    keymap[#keymap + 1] = { lst, map_motion(m) }
   end
 
-  for _, m in ipairs(mo.selectors) do
-    keymap[#keymap + 1] = { { m }, function()
+  local function map_selector(m)
+    return function()
       if mode ~= 'none' then
-        local cnt = digit;
+        local cnt = digit
         digit = nil
         vim_select_textobject(m, cnt)
       end
-    end }
+    end
+  end
+
+  for _, m in ipairs(mo.selectors) do
+    keymap[#keymap + 1] = { { m }, map_selector(m) }
   end
 
   for i = 0, 9 do
     keymap[#keymap + 1] = { { tostring(i) }, function()
       if i == 0 and digit == nil then
+        ---@diagnostic disable-next-line: await-in-sync suppress: motion '0' is not async
         vim_motion('0')
       else
         digit = (digit or 0) * 10 + i
@@ -423,8 +434,8 @@ local function do_copy(initial_mode)
       local delta = sz2 - sz
 
       local off = vv.api.window_get_scroll_offset(target)
-      if off == 0 then 
-        cursor_move(0, -delta) 
+      if off == 0 then
+        cursor_move(0, -delta)
       elseif end_selection then
         end_selection.row = end_selection.row - delta
       end

@@ -71,6 +71,7 @@ local function quake_builder(cmd, id)
     local new_size = calculate_size()
     new_size.top = screen.height
     quake:set_z_index(unfocused_z)
+    ---@async
     vv.async.run(function()
       if anim.animate(quake.id, new_size, duration or anim_duration, opts) then
         quake:set_visibility(false)

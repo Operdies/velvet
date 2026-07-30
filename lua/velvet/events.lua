@@ -57,18 +57,18 @@ function M.emit(event_name, data)
     groups[k] = v
   end
 
+  -- we need to run the async emitter specifically synchronously
+  -- because it will internally yield the emitter thread if it is currently dispatching another event.
+  -- this will never be triggered for internal events (emitted from C) because it flushes its dispatch queue
+  -- before returning. This mainly causes problems when an event handler re-emits another event via events.emit().
+  async_emitter['**'](event_name, data)
+
   for _, group in pairs(groups) do
     local handler = group[event_name] or group[lookup_name]
     if handler then
       vv.async.run(dispatch_event, event_name, handler, vv.deepcopy(data))
     end
   end
-
-  -- we need to run the async emitter specifically synchronously
-  -- because it will internally yield the emitter thread if it is currently dispatching another event.
-  -- this will never be triggered for internal events (emitted from C) because it flushes its dispatch queue
-  -- before returning. This mainly causes problems when an event handler re-emits another event via events.emit().
-  async_emitter['**'](event_name, data)
 
   -- it would be problematic if pre_reload.late or pre_render.late did not get emitted immediately (because the async emitter was yielded)
   -- but that should not be possible because the this call frame is directly above the C context.

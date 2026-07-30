@@ -52,6 +52,7 @@ local known_events = {]==])
     builder:push([[
 
 --- Wait for <name>
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.<return_type>> predicate function
 --- @return velvet.api.<return_type> ret Result, or nil on timeout.

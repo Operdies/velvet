@@ -63,6 +63,7 @@ local known_events = {
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
 
 --- Wait for on_key
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.on_key.event_args> predicate function
 --- @return velvet.api.on_key.event_args ret Result, or nil on timeout.
@@ -71,6 +72,7 @@ function M.wait_for_on_key(timeout, when)
 end
 
 --- Wait for window.created
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.created.event_args> predicate function
 --- @return velvet.api.window.created.event_args ret Result, or nil on timeout.
@@ -79,6 +81,7 @@ function M.wait_for_window_created(timeout, when)
 end
 
 --- Wait for window.closed
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.closed.event_args> predicate function
 --- @return velvet.api.window.closed.event_args ret Result, or nil on timeout.
@@ -87,6 +90,7 @@ function M.wait_for_window_closed(timeout, when)
 end
 
 --- Wait for window.output
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.output.event_args> predicate function
 --- @return velvet.api.window.output.event_args ret Result, or nil on timeout.
@@ -95,6 +99,7 @@ function M.wait_for_window_output(timeout, when)
 end
 
 --- Wait for window.bell
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.bell.event_args> predicate function
 --- @return velvet.api.window.bell.event_args ret Result, or nil on timeout.
@@ -103,6 +108,7 @@ function M.wait_for_window_bell(timeout, when)
 end
 
 --- Wait for window.moved
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.moved.event_args> predicate function
 --- @return velvet.api.window.moved.event_args ret Result, or nil on timeout.
@@ -111,6 +117,7 @@ function M.wait_for_window_moved(timeout, when)
 end
 
 --- Wait for window.resized
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.resized.event_args> predicate function
 --- @return velvet.api.window.resized.event_args ret Result, or nil on timeout.
@@ -119,6 +126,7 @@ function M.wait_for_window_resized(timeout, when)
 end
 
 --- Wait for window.on_key
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.on_key.event_args> predicate function
 --- @return velvet.api.window.on_key.event_args ret Result, or nil on timeout.
@@ -127,6 +135,7 @@ function M.wait_for_window_on_key(timeout, when)
 end
 
 --- Wait for window.focus_changed
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.window.focus_changed.event_args> predicate function
 --- @return velvet.api.window.focus_changed.event_args ret Result, or nil on timeout.
@@ -135,6 +144,7 @@ function M.wait_for_window_focus_changed(timeout, when)
 end
 
 --- Wait for screen.resized
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.screen.resized.event_args> predicate function
 --- @return velvet.api.screen.resized.event_args ret Result, or nil on timeout.
@@ -143,6 +153,7 @@ function M.wait_for_screen_resized(timeout, when)
 end
 
 --- Wait for mouse.move
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.mouse.move.event_args> predicate function
 --- @return velvet.api.mouse.move.event_args ret Result, or nil on timeout.
@@ -151,6 +162,7 @@ function M.wait_for_mouse_move(timeout, when)
 end
 
 --- Wait for mouse.click
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.mouse.click.event_args> predicate function
 --- @return velvet.api.mouse.click.event_args ret Result, or nil on timeout.
@@ -159,6 +171,7 @@ function M.wait_for_mouse_click(timeout, when)
 end
 
 --- Wait for mouse.scroll
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.mouse.scroll.event_args> predicate function
 --- @return velvet.api.mouse.scroll.event_args ret Result, or nil on timeout.
@@ -167,6 +180,7 @@ function M.wait_for_mouse_scroll(timeout, when)
 end
 
 --- Wait for system_message
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.system_message.event_args> predicate function
 --- @return velvet.api.system_message.event_args ret Result, or nil on timeout.
@@ -175,6 +189,7 @@ function M.wait_for_system_message(timeout, when)
 end
 
 --- Wait for pre_render
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.pre_render.event_args> predicate function
 --- @return velvet.api.pre_render.event_args ret Result, or nil on timeout.
@@ -183,6 +198,7 @@ function M.wait_for_pre_render(timeout, when)
 end
 
 --- Wait for pre_reload
+--- @async always yields
 --- @param timeout? integer Optional timeout.
 --- @param when? velvet.async.single_when<velvet.api.pre_reload.event_args> predicate function
 --- @return velvet.api.pre_reload.event_args ret Result, or nil on timeout.

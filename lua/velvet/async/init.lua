@@ -153,8 +153,8 @@ local function co_run(f, ...)
   state.result = table.pack(xpcall(f, debug.traceback, ...))
 end
 
---- Execute |f| as a coroutine.
---- @param f fun(...): ...
+--- Execute |f| in a coroutine with the given arguments.
+--- @param f async fun(...): ...
 --- @param ... any arguments passed to f
 --- @return thread co the coroutine executing |f|. Can be cancelled with M.cancel()
 function M.run(f, ...)
@@ -318,6 +318,7 @@ end
 
 
 resolve_lock.pop = make_close(resolve_lock.pop_frame)
+
 function resolve_lock.push_frame()
   if resolve_lock.resolving then
     -- if another event is currently being resolved, yield.
@@ -375,10 +376,11 @@ local source_to_listener = make_weaktable('kv')
 --- listener for an event source which cannot emit new events
 --- @generic T
 --- @class velvet.async.event_listener<T>
---- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by the source of this listener
+--- @field wait async fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by the source of this listener
 local EventListener = {}
 EventListener.__index = EventListener
 
+--- @async always yields
 function EventListener:wait(...)
   return listener_to_source[self]:wait(...)
 end
@@ -386,7 +388,7 @@ end
 --- @generic T
 --- @class velvet.async.event_source<T>
 --- @field emit fun(self, event?: T) emit a new event which is propagated to callers of |wait()|
---- @field wait fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by a call to |emit()|
+--- @field wait async fun(self, timeout?: nil|integer, when?: velvet.async.single_when<T>?): T wait for an event to be emitted by a call to |emit()|
 --- @field listener fun(self): velvet.async.event_listener<T> returns a readonly event listener which can only access |wait()|
 --- @field closed? boolean set when the event source is closed
 local EventSource = {}
@@ -406,6 +408,7 @@ function EventSource:emit(event)
   resolve(self, event)
 end
 
+--- @async always yields
 function EventSource:wait(timeout, when)
   assert(getmetatable(self) == EventSource, "Bad argument #1 (event_source expected)")
   --- @type velvet.async.event_source|velvet.async.conditional_event
@@ -499,6 +502,7 @@ local function emit_coroutine_result(evt)
 end
 
 --- Wait for all registrations in |events| to fire, or |timeout|.
+--- @async yields if |events| contains a valid event.
 --- @param events table<any, velvet.async.event_registration> One or more events to wait for.
 --- @param timeout? integer optional timeout
 --- @return table<any, velvet.async.wait.result> the result of each wait operation, with the same keys as |events|
@@ -557,6 +561,8 @@ function M.wait_all(events, timeout)
   return result
 end
 
+--- Wait for |co| to complete. Its first result is the status code (a boolean), which is true if the coroutine completed without errors. In such case, `wait_for_coroutine` also returns all results from the function, after this first result. In case of any error, `wait_for_coroutine` returns `false` plus the error object.
+--- @async yields if |co| has not yet completed
 --- @param co thread
 --- @param timeout? nil|integer Optional timeout
 --- @return boolean success
@@ -569,6 +575,7 @@ end
 
 --- Yield the current thread. This is useful for giving control back to the system during a heavy computation,
 --- or in certain scenarios where the thread might want to give control back to its parent.
+--- @async always yields
 function M.yield()
   -- A wait of 0ms will allow the lua context to return back to C where velvet can complete any pending tasks, such as process io.
   -- This thread will be resumed immediately after there is no more work to do.
@@ -576,6 +583,7 @@ function M.yield()
 end
 
 --- Wait for one of the events to fire, or |timeout|.
+--- @async yields if any valid events are provided.
 --- @param ... velvet.async.event_registration|integer One or more events to wait for. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
 --- @return velvet.async.event_registration, velvet.async.wait.result The argument which resolved the wait, and the wait result, or 'timeout' on timeout
 function M.wait(...)
@@ -676,9 +684,10 @@ end
 
 --- Returns an iterator which yields whenever an event in |...| is fired. Terminates on timeout if specified.
 --- @param ... velvet.async.event_registration|integer One or more events to stream. A number can optionally be parsed which will be interpreted as the timeout in milliseconds.
---- @return fun(): velvet.async.event_registration, velvet.async.wait.result Iterator which streams the input events
+--- @return async fun(): velvet.async.event_registration, velvet.async.wait.result Iterator which streams the input events
 function M.stream(...)
   local args = table.pack(...)
+  --- @async
   return function()
     local registration, result = M.wait(table.unpack(args, 1, args.n))
     return registration or 'timeout', result
