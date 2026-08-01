@@ -42,15 +42,22 @@ local function weakref(obj) return setmetatable({ obj }, { __mode = 'v' }) end
 --- @generic T
 --- @alias velvet.async.generic_when<T> fun(registration: velvet.async.event_registration, event: velvet.async.wait.result): boolean
 
---- @class velvet.async.waiter_registry
+--- @class velvet.async.waiter_registrations
 --- @field [integer] velvet.async.event_registration[]
---- @field [string] velvet.async.waiter_registry
 
 --- mapping from an integer handle to a resolve callback.
 --- @type velvet.async.resolve_table
 local sequence_callbacks = {}
---- @type velvet.async.waiter_registry
+
+--- @type table<string, velvet.async.waiter_registrations>
 local waiter_registry = {}
+
+-- NOTE: this registry is weakly key'd because it is safe to gc
+-- registrations if the source object is no longer reachable.
+-- This is not the case for waiter_registry, because a string may still be composed
+-- even if it is not reachable at this point in time.
+--- @type table<velvet.async.event_source, velvet.async.waiter_registrations>
+local event_source_waiter_registry = make_weaktable('k')
 
 --- @class velvet.async.coroutine_state
 --- @field deferring? boolean true if the coroutine is currently deferring
@@ -62,7 +69,9 @@ local waiter_registry = {}
 --- @type table<thread, velvet.async.coroutine_state>
 local co_state = make_weaktable('k')
 
-local event_source_waiter_registry = make_weaktable('k')
+--- @class velvet.async.event_source_waiters
+--- @field [integer] velvet.async.event_registration[]
+
 --- weak-valued table containing the currently deferring coroutine, or nil
 --- @type [thread?]
 local currently_deferring_coroutine = make_weaktable('v')
@@ -206,7 +215,7 @@ function M.defer(defer, ...)
   defer_on(coroutine.running(), defer, ...)
 end
 
---- @param wait_table velvet.async.waiter_registry
+--- @param wait_table velvet.async.waiter_registrations
 --- @param event string|velvet.async.event_source
 --- @param data velvet.async.wait.result
 local function resolve_table(wait_table, event, data)
@@ -258,27 +267,6 @@ local function resolve_table(wait_table, event, data)
       end
     end
     ::next_sequence::
-  end
-end
-
---- @param event string|velvet.async.event_source
---- @param data velvet.async.wait.result
---- @param wait_table velvet.async.waiter_registry
---- @param word string
---- @param ... string
-local function recursive_resolve(event, data, wait_table, word, ...)
-  local leaf = select('#', ...) == 0
-  local any = wait_table['**']
-  if any then resolve_table(any, event, data) end
-  local star = wait_table['*']
-  local match = wait_table[word]
-
-  if leaf then
-    if star then resolve_table(star, event, data) end
-    if match then resolve_table(match, event, data) end
-  else
-    if star then recursive_resolve(event, data, star, ...) end
-    if match then recursive_resolve(event, data, match, ...) end
   end
 end
 
@@ -357,11 +345,8 @@ local function resolve(event, data)
     local waiters = event_source_waiter_registry[event]
     if waiters then resolve_table(waiters, event, data) end
   elseif type(event) == 'string' then
-    local segments = {}
-    for segment in event:gmatch('[^.]+') do
-      segments[#segments + 1] = segment
-    end
-    recursive_resolve(event, data, waiter_registry, table.unpack(segments))
+    local waiters = waiter_registry[event]
+    if waiters then resolve_table(waiters, event, data) end
   end
 end
 
@@ -654,16 +639,10 @@ function M.wait(...)
         event = evt.event
       end
       assert(type(event) == 'string')
-      local wait_table = waiter_registry
-      for segment in event:gmatch('[^.]+') do
-        local sub_table = wait_table[segment]
-        if not sub_table then
-          sub_table = {}; wait_table[segment] = sub_table
-        end
-        wait_table = sub_table
-      end
-      if wait_table == waiter_registry then
-        error(('Bad argument #%d (malformed event specifier %s)'):format(idx, event))
+      local wait_table = waiter_registry[event]
+      if wait_table == nil then
+        wait_table = {}
+        waiter_registry[event] = wait_table
       end
       if wait_table[sequence] then
         -- this event has multiple registrations on the same event.
