@@ -1,6 +1,6 @@
 local ev = require('velvet.events')
 local inspect = require('velvet.inspect').inspect
-local cli = require('velvet.cli_commands')
+local cli = require('velvet.cli')
 local async = require('velvet.async')
 ---@class vv
 local vv = {
