@@ -64,7 +64,7 @@ if (!lua_isnoneornil(L, <idx>)) {
   lua_pushvalue(L, <idx>); /* push table to the top of the stack */
 ]], { type = utils.c_type(p.type), name = p.name, idx = idx })
         builder.indent = builder.indent + 2
-        utils.check.field(builder, p.type, p.name)
+        utils.check.field(builder, p.type, p.name, p.default_value)
         builder:push('lua_pop(L, 1); /* pop pushed table */')
         builder.indent = builder.indent - 2
         builder:push('}')

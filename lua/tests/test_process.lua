@@ -48,13 +48,15 @@ local function test_stdin()
   do -- 1. test sending the payload on startup
     local test_input = "hello stdin"
     local co = coroutine.running()
-    vv.api.process_spawn('cat', {
+    local proc = vv.api.process_spawn('cat', {
       on_exit = function(_, exit_code) coroutine.resume(co, exit_code) end,
-      input = test_input,
+      stdin_pipe = true,
       on_stdout = function(_, data, _)
         if data then coroutine.resume(co, data) end
       end,
     })
+    vv.api.process_write_stdin(proc, test_input)
+    vv.api.process_close_stdin(proc)
     local output = coroutine.yield()
     local exit_code = coroutine.yield()
     assert(exit_code == 0)
@@ -72,18 +74,19 @@ local function test_stdin()
         output = output .. (data or '')
         if data ~= nil then coroutine.resume(co) end
       end,
+      stdin_pipe = true,
     })
 
     vv.api.process_write_stdin(proc, 'msg1\n')
-    assert(output == '')
+    expect_eq('', output)
     -- wait for output to arrive
     coroutine.yield()
-    assert(output == 'msg1\n')
+    expect_eq('msg1\n', output)
 
     vv.api.process_write_stdin(proc, 'msg2\n')
     -- wait for output to arrive
     coroutine.yield()
-    assert(output == 'msg1\nmsg2\n')
+    expect_eq('msg1\nmsg2\n', output)
 
     -- `cat` will keep waiting until we close stdin
     vv.api.process_close_stdin(proc)
@@ -94,7 +97,7 @@ local function test_stdin()
 
     local exit_code = coroutine.yield()
     assert(exit_code == 0)
-    assert(output == 'msg1\nmsg2\n')
+    expect_eq('msg1\nmsg2\n', output)
   end
 end
 
@@ -147,6 +150,7 @@ local function test_filedescriptor_leaks()
     local stdout, stderr = 'not set', 'not set'
     local payload = 'read INPUT ; printf "$INPUT" ; read INPUT ; printf "$INPUT" >&2 ;'
     local p = vv.api.process_spawn({ 'sh', '-c', payload }, {
+      stdin_pipe = true,
       on_stdout = function(_, data) if data then stdout = data end end,
       on_stderr = function(_, data) if data then stderr = data end end,
       on_exit = function(_, status)
@@ -281,7 +285,7 @@ local function test_spawn_errors()
   end
 
   local bad_binary = spawn('-non-existent-binary-')
-  assert(bad_binary:match("No such file or directory"))
+  assert(bad_binary:match("No such file or directory"), bad_binary)
 
   local bad_filetype = spawn("/etc/")
   assert(bad_filetype:match("Permission denied"))
@@ -293,8 +297,8 @@ local function test_spawn_errors()
   assert(bad_stderr:match("function expected, got boolean"))
   local bad_exit = spawn("true", { on_exit = {} })
   assert(bad_exit:match("function expected, got table"))
-  local bad_input = spawn("true", { input = true })
-  assert(bad_input:match("string expected, got boolean"))
+  local bad_input = spawn("true", { stdin_pipe = 'yes' })
+  expect_match("boolean expected, got string", bad_input)
   local bad_working_directory = spawn("true", { working_directory = {} })
   assert(bad_working_directory:match("string expected, got table"))
 

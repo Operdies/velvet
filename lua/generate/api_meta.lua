@@ -39,8 +39,9 @@ local api = {}]=])
       if t.enumeration and t.enumeration.flags then
         typename = typename .. 's'
       end
-      builder:push('--- @field <field> <type> <doc>',
-        { field = fld.name .. (fld.optional and '?' or ''), type = typename, doc = fld.doc or "" })
+      local optional = fld.optional == true or fld.default_value ~= nil
+      builder:push('--- @field <field><optional> <type> <doc>',
+        { field = fld.name, type = typename, doc = fld.doc or "", optional = optional and '?' or '' })
     end
   end
 
@@ -49,11 +50,12 @@ local api = {}]=])
     for _, p in ipairs(fn.params or {}) do
       local t = utils.type_lookup[p.type]
       local optional = p.optional == true or t.optional == true or p.default_value ~= nil
-      builder:push('--- @param <name> <type> <doc>',
+      builder:push('--- @param <name> <type> <doc><default>',
         {
           name = p.name .. (optional and '?' or ''),
           doc = utils.string_concatenate(p.doc, "\n--- "),
-          type = utils.lua_type(p.type)
+          type = utils.lua_type(p.type),
+          default = p.default_value ~= nil and (' Defaults to ' .. p.default_value) or '',
         })
     end
 

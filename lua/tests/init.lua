@@ -37,14 +37,15 @@ function printerr(...)
 end
 
 function expect_eq(x, y)
-  assert(x == y, string.format("'%s' expected, was '%s'", x, y))
+  assert(x == y, string.format("'%s' expected, was '%s'", x, y):gsub('\n', '\\n'))
 end
 
-function expect_error(err, fn, ...)
-  local ok, result = xpcall(fn, function(e) return e end, ...)
-  assert(not ok)
-  if err and not result:match(err) then expect_eq(err, result) end
+--- @param pattern string|number
+--- @param str string|number
+function expect_match(pattern, str)
+  assert(str:match(pattern), string.format("Expected '%s' to match '%s'", pattern, str):gsub('\n', '\\n'))
 end
+
 
 function expect_error(err, fn, ...)
   local ok, result = xpcall(fn, function(e) return e end, ...)

@@ -388,7 +388,7 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
   char *wd = options.working_directory.set ? (char *)options.working_directory.value.content : NULL;
   struct velvet_process_stream_options streams = {
       .out = options.on_stdout.set, .err = options.on_stderr.set,
-      .in = options.input.set == false || options.input.value.len > 0,
+      .in = options.stdin_pipe,
   };
   lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
   if (proc_id < 0) {
@@ -418,10 +418,7 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
     proc->callbacks.on_stderr = LUA_NOREF;
   }
 
-  if (options.input.set) {
-    velvet_process_write_stdin(v, proc, options.input.value);
-    velvet_process_close_stdin(v, proc);
-  }
+  proc->stdin_closed = !options.stdin_pipe;
 
   lua_pushinteger(L, proc_id);
   return 1;

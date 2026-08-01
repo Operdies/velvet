@@ -31,6 +31,7 @@
 --- @field type string the name of the member type
 --- @field doc? spec_doc member description
 --- @field optional? boolean if true, this member can be omitted
+--- @field default_value? any if the field is omitted, use this value instead. Implies optional.
 --- @field alias? string if set, the lua type shall have this alias.
 
 --- @class spec_type
@@ -343,12 +344,12 @@ return {
     {
       name = "process.spawn_options",
       fields = {
-        { name = "working_directory", type = "string",                doc = "The initial working directory of the new process.",                                                   optional = true },
-        { name = "environment",       type = "table<string, string>", doc = "Optional table of environment variables to set in the new process.",                                  optional = true },
-        { name = "input",             type = "string",                doc = "If set, |input| will be written to process stdin. Stdin will be automatically closed after writing.", optional = true },
-        { name = "on_stdout",         type = "on_data",               doc = "Callback invoked when the process produces output on stdout.",                                        optional = true },
-        { name = "on_stderr",         type = "on_data",               doc = "Callback invoked when the process produces output on stderr.",                                        optional = true },
-        { name = "on_exit",           type = "on_exit",               doc = "Callback invoked when the process exits.",                                                            optional = true },
+        { name = "working_directory", type = "string",                doc = "The initial working directory of the new process.",                  optional = true },
+        { name = "environment",       type = "table<string, string>", doc = "Optional table of environment variables to set in the new process.", optional = true },
+        { name = "stdin_pipe",        type = "bool",                  doc = "If true, a pipe will be allocated for stdin.",                       default_value = false },
+        { name = "on_stdout",         type = "on_data",               doc = "Callback invoked when the process produces output on stdout.",       optional = true },
+        { name = "on_stderr",         type = "on_data",               doc = "Callback invoked when the process produces output on stderr.",       optional = true },
+        { name = "on_exit",           type = "on_exit",               doc = "Callback invoked when the process exits.",                           optional = true },
       },
     },
     {
@@ -442,8 +443,8 @@ return {
       doc = "A line of text extracted from a window",
       fields = {
         { name = "text",      type = "string", doc = "Text content" },
-        { name = "wraps",     type = "bool",   doc = "Set if the line continues on the next row" },
-        { name = "truncated", type = "bool",   doc = "Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space." },
+        { name = "wraps",     type = "bool",   doc = "True if the line continues on the next row" },
+        { name = "truncated", type = "bool",   doc = "True if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space." },
       },
     },
     {
@@ -462,7 +463,7 @@ return {
       "A line of cells extracted from a window. This is easier to work with than text when grid alignment matters, or extended cell attributes are needed.",
       fields = {
         { name = "cells", type = "cell[]", doc = "A list of cells such that cells[n] corresponds to the nth terminal column." },
-        { name = "wraps", type = "bool",   doc = "Set if the line continues on the next row" },
+        { name = "wraps", type = "bool",   doc = "True if the line continues on the next row" },
       },
     },
     {
@@ -895,7 +896,7 @@ return {
       doc = "Make |parent| the new parent of |win_id|. To orphan |win_id|, set |parent| to nil.",
       params = {
         { name = "win_id", type = "int", doc = "Window id" },
-        { name = "parent", type = "int", optional = true, doc = "The window id of the new parent window." },
+        { name = "parent", type = "int", optional = true,  doc = "The window id of the new parent window." },
       },
     },
     {

@@ -250,7 +250,7 @@ function M.spawn(cmd, options)
   local id = vv.api.process_spawn(cmd, {
     environment = opt.environment or nil,
     working_directory = opt.working_directory or nil,
-    input = opt.stdin == false and "" or nil,
+    stdin_pipe = opt.stdin,
     on_stdout = opt.stdout and on_output or nil,
     on_stderr = opt.stderr and on_output or nil,
     on_exit = on_exit,

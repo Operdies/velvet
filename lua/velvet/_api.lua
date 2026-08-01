@@ -135,7 +135,7 @@ local api = {}
 --- @class velvet.api.process.spawn_options
 --- @field working_directory? string The initial working directory of the new process.
 --- @field environment? table<string, string> Optional table of environment variables to set in the new process.
---- @field input? string If set, |input| will be written to process stdin. Stdin will be automatically closed after writing.
+--- @field stdin_pipe? boolean If true, a pipe will be allocated for stdin.
 --- @field on_stdout? fun(id: integer, data: string|nil, channel: 'stdout'|'stderr'): nil Callback invoked when the process produces output on stdout.
 --- @field on_stderr? fun(id: integer, data: string|nil, channel: 'stdout'|'stderr'): nil Callback invoked when the process produces output on stderr.
 --- @field on_exit? fun(id: integer, exit_code: integer|nil, signal: string|nil): nil Callback invoked when the process exits.
@@ -197,8 +197,8 @@ local api = {}
 
 --- @class velvet.api.line
 --- @field text string Text content
---- @field wraps boolean Set if the line continues on the next row
---- @field truncated boolean Set if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space.
+--- @field wraps boolean True if the line continues on the next row
+--- @field truncated boolean True if the first cell is a continuation of a wide character. If set, the first character of |text| will be a space.
 
 --- @class velvet.api.cell
 --- @field content string Cell content. If nil, the previous cell is a wide character which occupies this cell.
@@ -208,7 +208,7 @@ local api = {}
 
 --- @class velvet.api.cell_line
 --- @field cells velvet.api.cell[] A list of cells such that cells[n] corresponds to the nth terminal column.
---- @field wraps boolean Set if the line continues on the next row
+--- @field wraps boolean True if the line continues on the next row
 
 --- @class velvet.api.coordinate
 --- @field row integer row
@@ -595,7 +595,7 @@ function api.get_processes() end
 
 --- Kill the process with id |id|.
 --- @param id integer The process to kill.
---- @param signal? velvet.api.unix_signal The signal to send. Defaults to 'term' if omitted.
+--- @param signal? velvet.api.unix_signal The signal to send. Defaults to 'term' if omitted. Defaults to term
 --- @return nil  
 function api.process_kill(id, signal) end
 

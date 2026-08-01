@@ -112,7 +112,8 @@ local type_lookup = {
     c_type = "bool",
     lua_type = "boolean",
     check = function(idx) return ("luaL_checkboolean(L, %d)"):format(idx) end,
-    push = function(var) return ("lua_pushboolean(L, %s)"):format(var) end
+    push = function(var) return ("lua_pushboolean(L, %s)"):format(var) end,
+    test = function(idx) return ("lua_isboolean(L, %d)"):format(idx) end,
   },
   float = {
     c_type = "float",
@@ -131,7 +132,7 @@ function M.lua_type(t)
 end
 
 function M.lua_check(t, idx, idx2)
-  local tp = type_lookup[t]
+  local tp = assert(type_lookup[t], 'Unknown type: ' .. t)
   if idx2 and tp.check_shift then return tp.check_shift(idx, idx2) end
   return tp.check(idx)
 end
@@ -186,7 +187,7 @@ function M.spec()
   --- @return boolean
   local function compute_is_optional(type)
     for _, fld in pairs(type.fields) do
-      if fld.optional ~= true then return false end
+      if fld.optional ~= true and fld.default_value == nil then return false end
     end
     return true
   end
@@ -366,11 +367,11 @@ function check.composite(type_name, path)
       result:push('\nif (!lua_isnoneornil(L, -1)) {')
       result.indent = result.indent + 2
       result:push('<path>.set = true;', { path = mem_path })
-      check.field(result, mem.type, mem_path .. '.value')
+      check.field(result, mem.type, mem_path .. '.value', mem.default_value)
       result.indent = result.indent - 2
       result:push('}\n')
     else
-      check.field(result, mem.type, mem_path)
+      check.field(result, mem.type, mem_path, mem.default_value)
     end
     result:push('lua_pop(L, 1); /* pop <path> */', { path = mem_path })
   end
@@ -411,22 +412,34 @@ end
 
 --- @param type_name string
 --- @param path string
-function check.primitive(type_name, path)
-  return M.string_replace('<path> = <check>;', { path = path, check = M.lua_check(type_name, -1, "++argtop") })
+function check.primitive(type_name, path, default_value)
+  local template = { path = path, check = M.lua_check(type_name, -1, "++argtop") }
+  if default_value ~= nil then
+    template.default_value = tostring(default_value)
+    return M.string_replace([[if (lua_isnoneornil(L, -1)) {
+  <path> = <default_value>;
+} else {
+  <path> = <check>;
+}]], template)
+  end
+  return M.string_replace('<path> = <check>;', template)
 end
 
 --- @param tbl builder
 --- @param type_name string
 --- @param path string
-function check.field(tbl, type_name, path)
+--- @param default_value any
+function check.field(tbl, type_name, path, default_value)
   local type = M.type_lookup[type_name]
   local checked = nil
   if type and type.composite then
+    assert(default_value == nil, "default value not implemented for composites")
     checked = check.composite(type_name, path)
   elseif type and type.enumeration then
+    assert(default_value == nil, "default value not implemented for enums")
     checked = check.enumeration(type_name, path)
   else
-    checked = check.primitive(type_name, path)
+    checked = check.primitive(type_name, path, default_value)
   end
   tbl:push(checked)
 end
