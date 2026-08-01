@@ -12,8 +12,6 @@ end
 local async_emitter = nil
 --- @type table<string, velvet.api.event_handler>
 local event_groups = {}
---- @type table<string, string>
-local gsub_cache = {}
 
 ---Create a new event group. An event group can be cleared and unregistered together
 ---@param group_name string the name of the new group.
@@ -44,12 +42,6 @@ end
 --- @param data any event data
 --- @package
 function M.emit(event_name, data)
-  local lookup_name = gsub_cache[event_name]
-  if lookup_name == nil then
-    lookup_name = event_name:gsub('%.', '_')
-    gsub_cache[event_name] = lookup_name
-  end
-
   -- event_groups could be modified during event dispatch,
   -- so we extract the groups first and then dispatch them
   local groups = {}
@@ -64,7 +56,7 @@ function M.emit(event_name, data)
   async_emitter['**'](event_name, data)
 
   for _, group in pairs(groups) do
-    local handler = group[event_name] or group[lookup_name]
+    local handler = group[event_name]
     if handler then
       vv.async.run(dispatch_event, event_name, handler, vv.deepcopy(data))
     end

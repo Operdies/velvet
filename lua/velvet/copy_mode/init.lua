@@ -78,11 +78,11 @@ local function do_copy(initial_mode)
   vv.async.defer(dispose)
 
   local on_key = {
-    event = 'window.on_key',
+    event = 'window_on_key',
     when = function(_, e) return not km.is_modifier(e.data) and e.data.key.event_type ~= 'release' and e.data.win_id == overlay.id end
   }
   local either_closed = {
-    event = 'window.closed',
+    event = 'window_closed',
     when = function(_, e) return e.data.win_id == target or e.data.win_id == overlay.id end
   }
 
@@ -413,13 +413,13 @@ local function do_copy(initial_mode)
   end
 
   local focus_lost = {
-    event = 'window.focus_changed',
+    event = 'window_focus_changed',
     when = function(_, e) return e.data.new_focus ~= overlay.id end
   }
 
-  local target_resized = { event = 'window.resized', when = function(_, evt) return evt.data.win_id == target end }
+  local target_resized = { event = 'window_resized', when = function(_, evt) return evt.data.win_id == target end }
   -- target output can cause scrolling which must be handled
-  local target_output = { event = 'window.output', when = function(_, evt) return evt.data.win_id == target end }
+  local target_output = { event = 'window_output', when = function(_, evt) return evt.data.win_id == target end }
 
   if initial_mode then selection_mode(initial_mode) end
   draw()

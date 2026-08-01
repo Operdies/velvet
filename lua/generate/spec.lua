@@ -375,23 +375,23 @@ return {
       }
     },
     {
-      name = "window.created.event_args",
+      name = "window_created.event_args",
       fields = { { name = "win_id", type = "int", doc = "The id of the newly created window." } }
     },
     {
-      name = "window.closed.event_args",
+      name = "window_closed.event_args",
       fields = { { name = "win_id", type = "int", doc = "The id of the closed window." } }
     },
     {
-      name = "window.output.event_args",
+      name = "window_output.event_args",
       fields = { { name = "win_id", type = "int", doc = "The id of the window that received output." } }
     },
     {
-      name = "window.bell.event_args",
+      name = "window_bell.event_args",
       fields = { { name = "win_id", type = "int", doc = "The id of the window that sent BEL." } }
     },
     {
-      name = "window.moved.event_args",
+      name = "window_moved.event_args",
       fields = {
         { name = "win_id",   type = "int",  doc = "The id of the resized window." },
         { name = "old_size", type = "rect", doc = "The old geometry of |id|." },
@@ -399,7 +399,7 @@ return {
       }
     },
     {
-      name = "window.resized.event_args",
+      name = "window_resized.event_args",
       fields = {
         { name = "win_id",   type = "int",  doc = "The id of the resized window." },
         { name = "old_size", type = "rect", doc = "The old geometry of |id|." },
@@ -407,14 +407,14 @@ return {
       }
     },
     {
-      name = "window.focus_changed.event_args",
+      name = "window_focus_changed.event_args",
       fields = {
         { name = "old_focus", type = "int", doc = "The previous focused window." },
         { name = "new_focus", type = "int", doc = "The new focused window." },
       }
     },
     {
-      name = "screen.resized.event_args",
+      name = "screen_resized.event_args",
       fields = {
         { name = "old_size", type = "screen.geometry", doc = "The old screen size" },
         { name = "new_size", type = "screen.geometry", doc = "The new screen size" },
@@ -431,7 +431,7 @@ return {
       },
     },
     {
-      name = "window.on_key.event_args",
+      name = "window_on_key.event_args",
       fields = {
         { name = "win_id", type = "int",              doc = "The id of the window the keys were sent to." },
         { name = "key",    type = "window.key_event", doc = "The key which generated the event." },
@@ -480,7 +480,7 @@ return {
       },
     },
     {
-      name = "mouse.move.event_args",
+      name = "mouse_move.event_args",
       fields = {
         { name = "win_id",       type = "int",          doc = "The id of the topmost visible window at the coordinates." },
         { name = "pos",          type = "coordinate",   doc = "1-indexed screen coordinate of the mouse when the event was raised." },
@@ -489,7 +489,7 @@ return {
       },
     },
     {
-      name = "mouse.click.event_args",
+      name = "mouse_click.event_args",
       fields = {
         { name = "win_id",       type = "int",              doc = "The id of the topmost visible window at the coordinates." },
         { name = "pos",          type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
@@ -499,7 +499,7 @@ return {
       },
     },
     {
-      name = "mouse.scroll.event_args",
+      name = "mouse_scroll.event_args",
       fields = {
         { name = "win_id",    type = "int",              doc = "The id of the topmost visible window at the coordinates." },
         { name = "pos",       type = "coordinate",       doc = "1-indexed screen coordinate of the mouse when the event was raised." },
@@ -542,18 +542,18 @@ return {
   --- {{{1 events
   events = {
     { name = "on_key",               doc = "Raised when a key is pressed.",                args = "on_key.event_args" },
-    { name = "window.created",       doc = "Raised after a new window is created.",        args = "window.created.event_args" },
-    { name = "window.closed",        doc = "Raised after a window is closed.",             args = "window.closed.event_args" },
-    { name = "window.output",        doc = "Raised when a window produces output.",        args = "window.output.event_args" },
-    { name = "window.bell",          doc = "Raised when a window sends BEL.",              args = "window.bell.event_args" },
-    { name = "window.moved",         doc = "Raised after a window is moved.",              args = "window.moved.event_args" },
-    { name = "window.resized",       doc = "Raised after a window is resized.",            args = "window.resized.event_args" },
-    { name = "window.on_key",        doc = "Raised when a key is sent to a lua window.",   args = "window.on_key.event_args" },
-    { name = "window.focus_changed", doc = "Raised after focus changes.",                  args = "window.focus_changed.event_args" },
-    { name = "screen.resized",       doc = "Raised after the screen is resized.",          args = "screen.resized.event_args" },
-    { name = "mouse.move",           doc = "Raised when the mouse moves.",                 args = "mouse.move.event_args" },
-    { name = "mouse.click",          doc = "Raised when the mouse is clicked.",            args = "mouse.click.event_args" },
-    { name = "mouse.scroll",         doc = "Raised when the mouse scrolls.",               args = "mouse.scroll.event_args" },
+    { name = "window_created",       doc = "Raised after a new window is created.",        args = "window_created.event_args" },
+    { name = "window_closed",        doc = "Raised after a window is closed.",             args = "window_closed.event_args" },
+    { name = "window_output",        doc = "Raised when a window produces output.",        args = "window_output.event_args" },
+    { name = "window_bell",          doc = "Raised when a window sends BEL.",              args = "window_bell.event_args" },
+    { name = "window_moved",         doc = "Raised after a window is moved.",              args = "window_moved.event_args" },
+    { name = "window_resized",       doc = "Raised after a window is resized.",            args = "window_resized.event_args" },
+    { name = "window_on_key",        doc = "Raised when a key is sent to a lua window.",   args = "window_on_key.event_args" },
+    { name = "window_focus_changed", doc = "Raised after focus changes.",                  args = "window_focus_changed.event_args" },
+    { name = "screen_resized",       doc = "Raised after the screen is resized.",          args = "screen_resized.event_args" },
+    { name = "mouse_move",           doc = "Raised when the mouse moves.",                 args = "mouse_move.event_args" },
+    { name = "mouse_click",          doc = "Raised when the mouse is clicked.",            args = "mouse_click.event_args" },
+    { name = "mouse_scroll",         doc = "Raised when the mouse scrolls.",               args = "mouse_scroll.event_args" },
     { name = "system_message",       doc = "Raised when the system logs an error message", args = "system_message.event_args", },
     {
       name = "pre_render",
@@ -838,19 +838,19 @@ return {
       name = "window_send_mouse_move",
       doc =
       "Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.",
-      params = { { name = "mouse_move", doc = "Mouse move event args", type = "mouse.move.event_args" } }
+      params = { { name = "mouse_move", doc = "Mouse move event args", type = "mouse_move.event_args" } }
     },
     {
       name = "window_send_mouse_click",
       doc =
       "Send mouse click event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.",
-      params = { { name = "mouse_click", doc = "Mouse click event args", type = "mouse.click.event_args" } }
+      params = { { name = "mouse_click", doc = "Mouse click event args", type = "mouse_click.event_args" } }
     },
     {
       name = "window_send_mouse_scroll",
       doc =
       "Send mouse scroll event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable. If the window does not handle scrolling, and it has content in its scrollback buffer, this scrolls the window content.",
-      params = { { name = "mouse_scroll", doc = "Mouse scroll event args", type = "mouse.scroll.event_args" } }
+      params = { { name = "mouse_scroll", doc = "Mouse scroll event args", type = "mouse_scroll.event_args" } }
     },
     {
       name = "window_create",

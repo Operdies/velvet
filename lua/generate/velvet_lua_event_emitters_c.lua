@@ -21,7 +21,7 @@ function M.generate(spec)
 
   for _, evt in ipairs(spec.events) do
     local template = {
-      event = evt.name:gsub("%.", "_"),
+      event = evt.name,
       arg = utils.get_cname(evt.args),
       value = evt.name,
       len = #evt

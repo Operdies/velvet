@@ -71,7 +71,7 @@ local function ticker()
   vv.async.defer(function() timer:close() end)
   while timer:valid() do
     update()
-    vv.async.wait('screen.resized', 1000)
+    vv.async.wait('screen_resized', 1000)
   end
 end
 ticker()

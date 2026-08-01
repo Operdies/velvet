@@ -77,7 +77,7 @@ struct velvet;]])
   end
 
   for _, evt in ipairs(spec.events) do
-    local event_name = evt.name:gsub("%.", "_")
+    local event_name = evt.name
     local event_arg_name = utils.get_cname(evt.args)
     builder:push('/* <doc> */', { doc = evt.doc })
     builder:push('void velvet_api_raise_<event>(struct velvet *v, __attribute__((unused)) struct <arg_type> args);',

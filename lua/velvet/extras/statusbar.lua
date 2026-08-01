@@ -19,13 +19,13 @@ local M = {}
 --- @field segment velvet.statusbar.segment|table the segment which was clicked. Note that if a string was returned, that string will have been converted into a segment element. Furthermore, if the segment was at the first or last index, the string content may have been padded. In other words, the text property cannot be used to identify the segment. If you need to identify this segment somehow, return a segment table with a text property and annotate it with a custom field such as `id = x`
 
 --- @class velvet.statusbar.on_click_event_args : velvet.statusbar.mouse_event_args
---- @field click velvet.api.mouse.click.event_args the raw click event
+--- @field click velvet.api.mouse_click.event_args the raw click event
 
 --- @class velvet.statusbar.on_scroll_event_args : velvet.statusbar.mouse_event_args
---- @field scroll velvet.api.mouse.scroll.event_args the raw scroll event
+--- @field scroll velvet.api.mouse_scroll.event_args the raw scroll event
 
 --- @class velvet.statusbar.on_mouse_move_event_args : velvet.statusbar.mouse_event_args
---- @field move velvet.api.mouse.move.event_args the raw mouse move event
+--- @field move velvet.api.mouse_move.event_args the raw mouse move event
 
 --- @class velvet.statusbar.element_definition
 --- @field content fun(opt: velvet.statusbar.element.options|table, trigger?: velvet.async.event_registration, data?: velvet.async.wait.result): velvet.statusbar.element.content function returning the segments for this element. The function will be executed as a coroutine, and is thus allowed to yield with the async system. The statusbar will be updated immediately when the function returns.

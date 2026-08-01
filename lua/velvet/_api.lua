@@ -154,33 +154,33 @@ local api = {}
 --- @field width integer The width of the screen
 --- @field height integer The height of the screen
 
---- @class velvet.api.window.created.event_args
+--- @class velvet.api.window_created.event_args
 --- @field win_id integer The id of the newly created window.
 
---- @class velvet.api.window.closed.event_args
+--- @class velvet.api.window_closed.event_args
 --- @field win_id integer The id of the closed window.
 
---- @class velvet.api.window.output.event_args
+--- @class velvet.api.window_output.event_args
 --- @field win_id integer The id of the window that received output.
 
---- @class velvet.api.window.bell.event_args
+--- @class velvet.api.window_bell.event_args
 --- @field win_id integer The id of the window that sent BEL.
 
---- @class velvet.api.window.moved.event_args
+--- @class velvet.api.window_moved.event_args
 --- @field win_id integer The id of the resized window.
 --- @field old_size velvet.api.rect The old geometry of |id|.
 --- @field new_size velvet.api.rect The new geometry of |id|.
 
---- @class velvet.api.window.resized.event_args
+--- @class velvet.api.window_resized.event_args
 --- @field win_id integer The id of the resized window.
 --- @field old_size velvet.api.rect The old geometry of |id|.
 --- @field new_size velvet.api.rect The new geometry of |id|.
 
---- @class velvet.api.window.focus_changed.event_args
+--- @class velvet.api.window_focus_changed.event_args
 --- @field old_focus integer The previous focused window.
 --- @field new_focus integer The new focused window.
 
---- @class velvet.api.screen.resized.event_args
+--- @class velvet.api.screen_resized.event_args
 --- @field old_size velvet.api.screen.geometry The old screen size
 --- @field new_size velvet.api.screen.geometry The new screen size
 
@@ -191,7 +191,7 @@ local api = {}
 --- @field event_type velvet.api.key_event_type Event type, such as key press, repeat, and release.
 --- @field modifiers velvet.api.key_modifiers Key modifier such as super, shift, control, alt
 
---- @class velvet.api.window.on_key.event_args
+--- @class velvet.api.window_on_key.event_args
 --- @field win_id integer The id of the window the keys were sent to.
 --- @field key velvet.api.window.key_event The key which generated the event.
 
@@ -217,20 +217,20 @@ local api = {}
 --- @class velvet.api.on_key.event_args
 --- @field key velvet.api.window.key_event The key which generated the event.
 
---- @class velvet.api.mouse.move.event_args
+--- @class velvet.api.mouse_move.event_args
 --- @field win_id integer The id of the topmost visible window at the coordinates.
 --- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
 --- @field mouse_button velvet.api.mouse_button Mouse button state when the event was raised.
 --- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
 
---- @class velvet.api.mouse.click.event_args
+--- @class velvet.api.mouse_click.event_args
 --- @field win_id integer The id of the topmost visible window at the coordinates.
 --- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
 --- @field mouse_button velvet.api.mouse_button The mouse button which was clicked.
 --- @field event_type velvet.api.mouse_event_type Flag indicating if the button was pressed or released.
 --- @field modifiers velvet.api.key_modifiers The keyboard modifier which were held when the event was raised.
 
---- @class velvet.api.mouse.scroll.event_args
+--- @class velvet.api.mouse_scroll.event_args
 --- @field win_id integer The id of the topmost visible window at the coordinates.
 --- @field pos velvet.api.coordinate 1-indexed screen coordinate of the mouse when the event was raised.
 --- @field direction velvet.api.scroll_direction The scroll direction which raised the event.
@@ -449,17 +449,17 @@ function api.window_send_keys(win_id, keys) end
 function api.window_paste_text(win_id, text) end
 
 --- Send mouse move event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
---- @param mouse_move velvet.api.mouse.move.event_args Mouse move event args
+--- @param mouse_move velvet.api.mouse_move.event_args Mouse move event args
 --- @return nil  
 function api.window_send_mouse_move(mouse_move) end
 
 --- Send mouse click event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable.
---- @param mouse_click velvet.api.mouse.click.event_args Mouse click event args
+--- @param mouse_click velvet.api.mouse_click.event_args Mouse click event args
 --- @return nil  
 function api.window_send_mouse_click(mouse_click) end
 
 --- Send mouse scroll event to window with id |win_id|. The event will be encoded according to window emulator's options if applicable. If the window does not handle scrolling, and it has content in its scrollback buffer, this scrolls the window content.
---- @param mouse_scroll velvet.api.mouse.scroll.event_args Mouse scroll event args
+--- @param mouse_scroll velvet.api.mouse_scroll.event_args Mouse scroll event args
 --- @return nil  
 function api.window_send_mouse_scroll(mouse_scroll) end
 
@@ -651,18 +651,18 @@ function api.set_fps_target(value) end
 
 --- @class velvet.api.event_handler
 --- @field on_key? fun(event_args: velvet.api.on_key.event_args): nil Raised when a key is pressed.
---- @field window_created? fun(event_args: velvet.api.window.created.event_args): nil Raised after a new window is created.
---- @field window_closed? fun(event_args: velvet.api.window.closed.event_args): nil Raised after a window is closed.
---- @field window_output? fun(event_args: velvet.api.window.output.event_args): nil Raised when a window produces output.
---- @field window_bell? fun(event_args: velvet.api.window.bell.event_args): nil Raised when a window sends BEL.
---- @field window_moved? fun(event_args: velvet.api.window.moved.event_args): nil Raised after a window is moved.
---- @field window_resized? fun(event_args: velvet.api.window.resized.event_args): nil Raised after a window is resized.
---- @field window_on_key? fun(event_args: velvet.api.window.on_key.event_args): nil Raised when a key is sent to a lua window.
---- @field window_focus_changed? fun(event_args: velvet.api.window.focus_changed.event_args): nil Raised after focus changes.
---- @field screen_resized? fun(event_args: velvet.api.screen.resized.event_args): nil Raised after the screen is resized.
---- @field mouse_move? fun(event_args: velvet.api.mouse.move.event_args): nil Raised when the mouse moves.
---- @field mouse_click? fun(event_args: velvet.api.mouse.click.event_args): nil Raised when the mouse is clicked.
---- @field mouse_scroll? fun(event_args: velvet.api.mouse.scroll.event_args): nil Raised when the mouse scrolls.
+--- @field window_created? fun(event_args: velvet.api.window_created.event_args): nil Raised after a new window is created.
+--- @field window_closed? fun(event_args: velvet.api.window_closed.event_args): nil Raised after a window is closed.
+--- @field window_output? fun(event_args: velvet.api.window_output.event_args): nil Raised when a window produces output.
+--- @field window_bell? fun(event_args: velvet.api.window_bell.event_args): nil Raised when a window sends BEL.
+--- @field window_moved? fun(event_args: velvet.api.window_moved.event_args): nil Raised after a window is moved.
+--- @field window_resized? fun(event_args: velvet.api.window_resized.event_args): nil Raised after a window is resized.
+--- @field window_on_key? fun(event_args: velvet.api.window_on_key.event_args): nil Raised when a key is sent to a lua window.
+--- @field window_focus_changed? fun(event_args: velvet.api.window_focus_changed.event_args): nil Raised after focus changes.
+--- @field screen_resized? fun(event_args: velvet.api.screen_resized.event_args): nil Raised after the screen is resized.
+--- @field mouse_move? fun(event_args: velvet.api.mouse_move.event_args): nil Raised when the mouse moves.
+--- @field mouse_click? fun(event_args: velvet.api.mouse_click.event_args): nil Raised when the mouse is clicked.
+--- @field mouse_scroll? fun(event_args: velvet.api.mouse_scroll.event_args): nil Raised when the mouse scrolls.
 --- @field system_message? fun(event_args: velvet.api.system_message.event_args): nil Raised when the system logs an error message
 --- @field pre_render? fun(event_args: velvet.api.pre_render.event_args): nil Raised right before content is rendered. This is useful for applying updates just-in-time.
 --- @field pre_reload? fun(event_args: velvet.api.pre_reload.event_args): nil Raised before reloading. This event can be used to store state.

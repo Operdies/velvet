@@ -16,14 +16,14 @@
 
 --- @class velvet.window.events
 --- @field mouse velvet.window.mouse_event
---- @field resized velvet.async.event_source<velvet.api.window.resized.event_args>
---- @field moved velvet.async.event_source<velvet.api.window.moved.event_args>
---- @field closed velvet.async.event_source<velvet.api.window.closed.event_args>
+--- @field resized velvet.async.event_source<velvet.api.window_resized.event_args>
+--- @field moved velvet.async.event_source<velvet.api.window_moved.event_args>
+--- @field closed velvet.async.event_source<velvet.api.window_closed.event_args>
 
 --- @class velvet.window.mouse_event
---- @field click velvet.async.event_source<velvet.api.mouse.click.event_args>
---- @field scroll velvet.async.event_source<velvet.api.mouse.scroll.event_args>
---- @field move velvet.async.event_source<velvet.api.mouse.move.event_args>
+--- @field click velvet.async.event_source<velvet.api.mouse_click.event_args>
+--- @field scroll velvet.async.event_source<velvet.api.mouse_scroll.event_args>
+--- @field move velvet.async.event_source<velvet.api.mouse_move.event_args>
 
 --- @alias velvet.window.anchor_point 'left'|'top'|'bottom'|'right'
 
@@ -335,11 +335,6 @@ hooks.screen_resized = function (args)
   end
 end
 
---- @alias mouse_event
---- | 'mouse.click'
---- | 'mouse.move'
---- | 'mouse.scroll'
-
 --- @class border_drag
 --- @field win velvet.window
 --- @field row integer
@@ -351,7 +346,7 @@ end
 local border_drag = nil
 
 --- @param brd velvet.window
---- @param args velvet.api.mouse.click.event_args|velvet.api.mouse.move.event_args
+--- @param args velvet.api.mouse_click.event_args|velvet.api.mouse_move.event_args
 --- @param event_name string
 local function top_border_drag(brd, args, event_name)
   local geom = brd:get_geometry()
@@ -370,7 +365,7 @@ local function top_border_drag(brd, args, event_name)
     end
   end
 
-  if event_name == 'mouse.click' then
+  if event_name == 'mouse_click' then
     if args.event_type == 'mouse_up' then
       if border_drag then dispatch_evt(border_drag, 'move.end') end
       border_drag = nil
@@ -387,7 +382,7 @@ local function top_border_drag(brd, args, event_name)
 end
 
 --- @param brd velvet.window
---- @param args velvet.api.mouse.click.event_args|velvet.api.mouse.move.event_args
+--- @param args velvet.api.mouse_click.event_args|velvet.api.mouse_move.event_args
 --- @param event_name string
 local function corner_resize_drag(brd, args, event_name)
   local geom = brd:get_geometry()
@@ -406,7 +401,7 @@ local function corner_resize_drag(brd, args, event_name)
     end
   end
 
-  if event_name == 'mouse.click' and args.pos.col == geom.width and args.event_type == 'mouse_down' then
+  if event_name == 'mouse_click' and args.pos.col == geom.width and args.event_type == 'mouse_down' then
     border_drag = { win = brd, col = gcol, row = grow, left = pg.left, top = pg.top }
   elseif args.event_type == 'mouse_up' then
     if border_drag then dispatch_evt(border_drag, 'resize.end') end
@@ -425,15 +420,15 @@ end
 --- @type velvet.window | nil
 local mouse_locked_window = nil
 
---- @param event mouse_event event name
---- @param args velvet.api.mouse.click.event_args | velvet.api.mouse.move.event_args | velvet.api.mouse.scroll.event_args
+--- @param event string event name
+--- @param args velvet.api.mouse_click.event_args | velvet.api.mouse_move.event_args | velvet.api.mouse_scroll.event_args
 local function route_mouse_events(event, args)
   local win = args.win_id and args.win_id > 0 and win_registry[args.win_id]
   if mouse_locked_window and mouse_locked_window:valid() then win = mouse_locked_window end
   if not win then return end
 
   if win and win:valid() then
-    if event == 'mouse.click' then
+    if event == 'mouse_click' then
       local foc = win.is_border and win.parent or win
       foc:focus()
     end
@@ -450,13 +445,10 @@ local function route_mouse_events(event, args)
     args.pos = { col = 1 + gpos.col - geom.left, row = 1 + gpos.row - geom.top }
     args.win_id = win.id
 
-    -- the lua-friendly event name uses '.' as separators, but
-    -- the C api uses '_' as separators.
-    local underscored_event = event:gsub('%.', '_')
     if not win:is_lua() then
-      vv.api['window_send_' .. underscored_event](args)
+      vv.api['window_send_' .. event](args)
     else
-      local window_func = win['on_' .. underscored_event .. '_handler']
+      local window_func = win['on_' .. event .. '_handler']
       if window_func then
         local ret = window_func(win, args)
         if ret == 'passthrough' then
@@ -476,23 +468,23 @@ local function route_mouse_events(event, args)
 
     -- only emit the mouse event if the window did not 'passthrough'.
     ---@diagnostic disable-next-line: invisible
-    vv.events.emit(("window.%s"):format(event), args)
-    if event == 'mouse.click' then
+    vv.events.emit(("window_%s"):format(event), args)
+    if event == 'mouse_click' then
       ---@diagnostic disable-next-line: param-type-mismatch
       win.events.mouse.click:emit(args)
-    elseif event == 'mouse.scroll' then
+    elseif event == 'mouse_scroll' then
       ---@diagnostic disable-next-line: param-type-mismatch
       win.events.mouse.scroll:emit(args)
-    elseif event == 'mouse.move' then
+    elseif event == 'mouse_move' then
       ---@diagnostic disable-next-line: param-type-mismatch
       win.events.mouse.move:emit(args)
     end
   end
 end
 
-hooks['mouse.click'] = function(args) route_mouse_events('mouse.click', args) end
-hooks['mouse.move'] = function(args) route_mouse_events('mouse.move', args) end
-hooks['mouse.scroll'] = function(args) route_mouse_events('mouse.scroll', args) end
+hooks.mouse_click = function(args) route_mouse_events('mouse_click', args) end
+hooks.mouse_move = function(args) route_mouse_events('mouse_move', args) end
+hooks.mouse_scroll = function(args) route_mouse_events('mouse_scroll', args) end
 
 --- get window geometry
 --- @return velvet.api.rect
@@ -711,10 +703,10 @@ function Window:set_frame_enabled(enabled)
       brd:set_geometry({left = 1, top = 1, width = 1, height = 1})
       brd:set_z_anchor({ offset = 0, of = 'parent' })
     end
-    self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse.click") end)
-    self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse.move") end)
-    self.borders.bottom:on_mouse_click(function(win, args) corner_resize_drag(win, args, "mouse.click") end)
-    self.borders.bottom:on_mouse_move(function(win, args) corner_resize_drag(win, args, "mouse.move") end)
+    self.borders.top:on_mouse_click(function(win, args) top_border_drag(win, args, "mouse_click") end)
+    self.borders.top:on_mouse_move(function(win, args) top_border_drag(win, args, "mouse_move") end)
+    self.borders.bottom:on_mouse_click(function(win, args) corner_resize_drag(win, args, "mouse_click") end)
+    self.borders.bottom:on_mouse_move(function(win, args) corner_resize_drag(win, args, "mouse_move") end)
 
     self.borders.left:set_anchors({
       left   = { to = 'left', offset   = -1 },
@@ -850,42 +842,42 @@ function Window:get_alpha()
   return api.window_get_alpha(self.id)
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.mouse.click.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.mouse_click.event_args)
 function Window:on_mouse_click(handler)
   self.on_mouse_click_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.mouse.scroll.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.mouse_scroll.event_args)
 function Window:on_mouse_scroll(handler)
   self.on_mouse_scroll_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.mouse.move.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.mouse_move.event_args)
 function Window:on_mouse_move(handler)
   self.on_mouse_move_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.screen.resized.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.screen_resized.event_args)
 function Window:on_screen_resized(handler)
   self.on_screen_resized_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.window.closed.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.window_closed.event_args)
 function Window:on_window_closed(handler)
   self.on_window_closed_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.window.moved.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.window_moved.event_args)
 function Window:on_window_moved(handler)
   self.on_window_moved_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.window.resized.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.window_resized.event_args)
 function Window:on_window_resized(handler)
   self.on_window_resized_handler = handler
 end
 
---- @param handler fun(self: velvet.window, args: velvet.api.window.on_key.event_args)
+--- @param handler fun(self: velvet.window, args: velvet.api.window_on_key.event_args)
 function Window:on_window_on_key(handler)
   self.on_window_on_key_handler = handler
 end

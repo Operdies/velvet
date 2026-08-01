@@ -582,7 +582,7 @@ function dwm.activate()
 
   local win_under_cursor = nil
   vv.async.run(function()
-    for _, move_event in vv.async.stream('window.mouse.move') do
+    for _, move_event in vv.async.stream('window_mouse_move') do
       local args = move_event.data
       local id = args.win_id
       if dragging then goto continue end

@@ -27,18 +27,18 @@ end
 --- @type table<string, string>
 local known_events = {
   [ [[on_key]] ] = [[Raised when a key is pressed.]],
-  [ [[window.created]] ] = [[Raised after a new window is created.]],
-  [ [[window.closed]] ] = [[Raised after a window is closed.]],
-  [ [[window.output]] ] = [[Raised when a window produces output.]],
-  [ [[window.bell]] ] = [[Raised when a window sends BEL.]],
-  [ [[window.moved]] ] = [[Raised after a window is moved.]],
-  [ [[window.resized]] ] = [[Raised after a window is resized.]],
-  [ [[window.on_key]] ] = [[Raised when a key is sent to a lua window.]],
-  [ [[window.focus_changed]] ] = [[Raised after focus changes.]],
-  [ [[screen.resized]] ] = [[Raised after the screen is resized.]],
-  [ [[mouse.move]] ] = [[Raised when the mouse moves.]],
-  [ [[mouse.click]] ] = [[Raised when the mouse is clicked.]],
-  [ [[mouse.scroll]] ] = [[Raised when the mouse scrolls.]],
+  [ [[window_created]] ] = [[Raised after a new window is created.]],
+  [ [[window_closed]] ] = [[Raised after a window is closed.]],
+  [ [[window_output]] ] = [[Raised when a window produces output.]],
+  [ [[window_bell]] ] = [[Raised when a window sends BEL.]],
+  [ [[window_moved]] ] = [[Raised after a window is moved.]],
+  [ [[window_resized]] ] = [[Raised after a window is resized.]],
+  [ [[window_on_key]] ] = [[Raised when a key is sent to a lua window.]],
+  [ [[window_focus_changed]] ] = [[Raised after focus changes.]],
+  [ [[screen_resized]] ] = [[Raised after the screen is resized.]],
+  [ [[mouse_move]] ] = [[Raised when the mouse moves.]],
+  [ [[mouse_click]] ] = [[Raised when the mouse is clicked.]],
+  [ [[mouse_scroll]] ] = [[Raised when the mouse scrolls.]],
   [ [[system_message]] ] = [[Raised when the system logs an error message]],
   [ [[pre_render]] ] = [[Raised right before content is rendered. This is useful for applying updates just-in-time.]],
   [ [[pre_reload]] ] = [[Raised before reloading. This event can be used to store state.]],
@@ -46,18 +46,18 @@ local known_events = {
 
 --- @alias velvet.async.event
 ---| 'on_key' Raised when a key is pressed.
----| 'window.created' Raised after a new window is created.
----| 'window.closed' Raised after a window is closed.
----| 'window.output' Raised when a window produces output.
----| 'window.bell' Raised when a window sends BEL.
----| 'window.moved' Raised after a window is moved.
----| 'window.resized' Raised after a window is resized.
----| 'window.on_key' Raised when a key is sent to a lua window.
----| 'window.focus_changed' Raised after focus changes.
----| 'screen.resized' Raised after the screen is resized.
----| 'mouse.move' Raised when the mouse moves.
----| 'mouse.click' Raised when the mouse is clicked.
----| 'mouse.scroll' Raised when the mouse scrolls.
+---| 'window_created' Raised after a new window is created.
+---| 'window_closed' Raised after a window is closed.
+---| 'window_output' Raised when a window produces output.
+---| 'window_bell' Raised when a window sends BEL.
+---| 'window_moved' Raised after a window is moved.
+---| 'window_resized' Raised after a window is resized.
+---| 'window_on_key' Raised when a key is sent to a lua window.
+---| 'window_focus_changed' Raised after focus changes.
+---| 'screen_resized' Raised after the screen is resized.
+---| 'mouse_move' Raised when the mouse moves.
+---| 'mouse_click' Raised when the mouse is clicked.
+---| 'mouse_scroll' Raised when the mouse scrolls.
 ---| 'system_message' Raised when the system logs an error message
 ---| 'pre_render' Raised right before content is rendered. This is useful for applying updates just-in-time.
 ---| 'pre_reload' Raised before reloading. This event can be used to store state.
@@ -71,112 +71,112 @@ function M.wait_for_on_key(timeout, when)
   return wait_impl('on_key', timeout, when)
 end
 
---- Wait for window.created
+--- Wait for window_created
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.created.event_args> predicate function
---- @return velvet.api.window.created.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_created.event_args> predicate function
+--- @return velvet.api.window_created.event_args ret Result, or nil on timeout.
 function M.wait_for_window_created(timeout, when)
-  return wait_impl('window.created', timeout, when)
+  return wait_impl('window_created', timeout, when)
 end
 
---- Wait for window.closed
+--- Wait for window_closed
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.closed.event_args> predicate function
---- @return velvet.api.window.closed.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_closed.event_args> predicate function
+--- @return velvet.api.window_closed.event_args ret Result, or nil on timeout.
 function M.wait_for_window_closed(timeout, when)
-  return wait_impl('window.closed', timeout, when)
+  return wait_impl('window_closed', timeout, when)
 end
 
---- Wait for window.output
+--- Wait for window_output
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.output.event_args> predicate function
---- @return velvet.api.window.output.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_output.event_args> predicate function
+--- @return velvet.api.window_output.event_args ret Result, or nil on timeout.
 function M.wait_for_window_output(timeout, when)
-  return wait_impl('window.output', timeout, when)
+  return wait_impl('window_output', timeout, when)
 end
 
---- Wait for window.bell
+--- Wait for window_bell
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.bell.event_args> predicate function
---- @return velvet.api.window.bell.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_bell.event_args> predicate function
+--- @return velvet.api.window_bell.event_args ret Result, or nil on timeout.
 function M.wait_for_window_bell(timeout, when)
-  return wait_impl('window.bell', timeout, when)
+  return wait_impl('window_bell', timeout, when)
 end
 
---- Wait for window.moved
+--- Wait for window_moved
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.moved.event_args> predicate function
---- @return velvet.api.window.moved.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_moved.event_args> predicate function
+--- @return velvet.api.window_moved.event_args ret Result, or nil on timeout.
 function M.wait_for_window_moved(timeout, when)
-  return wait_impl('window.moved', timeout, when)
+  return wait_impl('window_moved', timeout, when)
 end
 
---- Wait for window.resized
+--- Wait for window_resized
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.resized.event_args> predicate function
---- @return velvet.api.window.resized.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_resized.event_args> predicate function
+--- @return velvet.api.window_resized.event_args ret Result, or nil on timeout.
 function M.wait_for_window_resized(timeout, when)
-  return wait_impl('window.resized', timeout, when)
+  return wait_impl('window_resized', timeout, when)
 end
 
---- Wait for window.on_key
+--- Wait for window_on_key
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.on_key.event_args> predicate function
---- @return velvet.api.window.on_key.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_on_key.event_args> predicate function
+--- @return velvet.api.window_on_key.event_args ret Result, or nil on timeout.
 function M.wait_for_window_on_key(timeout, when)
-  return wait_impl('window.on_key', timeout, when)
+  return wait_impl('window_on_key', timeout, when)
 end
 
---- Wait for window.focus_changed
+--- Wait for window_focus_changed
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.window.focus_changed.event_args> predicate function
---- @return velvet.api.window.focus_changed.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.window_focus_changed.event_args> predicate function
+--- @return velvet.api.window_focus_changed.event_args ret Result, or nil on timeout.
 function M.wait_for_window_focus_changed(timeout, when)
-  return wait_impl('window.focus_changed', timeout, when)
+  return wait_impl('window_focus_changed', timeout, when)
 end
 
---- Wait for screen.resized
+--- Wait for screen_resized
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.screen.resized.event_args> predicate function
---- @return velvet.api.screen.resized.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.screen_resized.event_args> predicate function
+--- @return velvet.api.screen_resized.event_args ret Result, or nil on timeout.
 function M.wait_for_screen_resized(timeout, when)
-  return wait_impl('screen.resized', timeout, when)
+  return wait_impl('screen_resized', timeout, when)
 end
 
---- Wait for mouse.move
+--- Wait for mouse_move
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.mouse.move.event_args> predicate function
---- @return velvet.api.mouse.move.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.mouse_move.event_args> predicate function
+--- @return velvet.api.mouse_move.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_move(timeout, when)
-  return wait_impl('mouse.move', timeout, when)
+  return wait_impl('mouse_move', timeout, when)
 end
 
---- Wait for mouse.click
+--- Wait for mouse_click
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.mouse.click.event_args> predicate function
---- @return velvet.api.mouse.click.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.mouse_click.event_args> predicate function
+--- @return velvet.api.mouse_click.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_click(timeout, when)
-  return wait_impl('mouse.click', timeout, when)
+  return wait_impl('mouse_click', timeout, when)
 end
 
---- Wait for mouse.scroll
+--- Wait for mouse_scroll
 --- @async always yields
 --- @param timeout? integer Optional timeout.
---- @param when? velvet.async.single_when<velvet.api.mouse.scroll.event_args> predicate function
---- @return velvet.api.mouse.scroll.event_args ret Result, or nil on timeout.
+--- @param when? velvet.async.single_when<velvet.api.mouse_scroll.event_args> predicate function
+--- @return velvet.api.mouse_scroll.event_args ret Result, or nil on timeout.
 function M.wait_for_mouse_scroll(timeout, when)
-  return wait_impl('mouse.scroll', timeout, when)
+  return wait_impl('mouse_scroll', timeout, when)
 end
 
 --- Wait for system_message

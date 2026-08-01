@@ -5,7 +5,6 @@
 --- | 'servername'
 --- | 'window_title'
 --- | 'pending_keys'
---- | 'uptime'
 
 local did_register_statusbar = false
 local function register_statusbar_elements()
@@ -34,7 +33,7 @@ local function register_statusbar_elements()
       end
       return title
     end,
-    update_triggers = { 'window.focus_changed' },
+    update_triggers = { 'window_focus_changed' },
   })
 
 

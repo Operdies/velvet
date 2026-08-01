@@ -151,7 +151,7 @@ local function quake_builder(cmd, id)
   end
 
   vv.async.run(function()
-    local resized = 'screen.resized'
+    local resized = 'screen_resized'
     local reloaded = 'pre_reload'
     local on_key = 'on_key'
     for reg, _ in vv.async.stream(resized, reloaded, on_key) do

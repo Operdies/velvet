@@ -116,9 +116,9 @@ local function test_when()
     end)
   end)
   assert(not result)
-  events.emit('mouse.click', { event_type = 'mouse_down' })
+  events.emit('mouse_click', { event_type = 'mouse_down' })
   assert(not result)
-  events.emit('mouse.click', { event_type = 'mouse_up' })
+  events.emit('mouse_click', { event_type = 'mouse_up' })
   assert(result)
 end
 
