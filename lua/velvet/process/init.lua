@@ -13,9 +13,13 @@ local process_data = setmetatable({}, { __mode = 'k' })
 --- @type table<integer, velvet.process>
 local id_to_process = setmetatable({}, { __mode = 'v' })
 
---- Streams are linked to their process id so stream functions
---- can call process-related functions and access internal stream buffers
---- @type table<velvet.process.input_stream|velvet.process.output_stream, integer>
+--- Streams are linked to their process so stream functions
+--- can call process-related functions and access internal stream buffers.
+--- NOTE: streams pin the owning process. Otherwise the process might be garbage collected in such scenarios as:
+--- ```lua
+--- for line in process.spawn('long-lived', { stdout = true }).stdout:lines() do body end
+--- ```
+--- @type table<velvet.process.input_stream|velvet.process.output_stream, velvet.process>
 local stream_to_process = setmetatable({}, { __mode = 'k' })
 
 --- @class velvet.process
@@ -69,13 +73,13 @@ end
 --- write |data| to the process
 --- @param data string
 function InputStream:write(data)
-  local id = stream_to_process[self]
-  vv.api.process_write_stdin(id, data)
+  local proc = stream_to_process[self]
+  vv.api.process_write_stdin(proc.id, data)
 end
 
 function InputStream:close()
-  local id = stream_to_process[self]
-  vv.api.process_close_stdin(id)
+  local proc = stream_to_process[self]
+  vv.api.process_close_stdin(proc.id)
 end
 
 --- @param buffer velvet.process.buffered_stream
@@ -140,8 +144,7 @@ end
 ---
 --- @return string|nil data Remaining data from the stream
 function OutputStream:read_all()
-  local id = stream_to_process[self]
-  local proc = id_to_process[id]
+  local proc = stream_to_process[self]
   local data = process_data[proc]
   if not self.closed then
     -- Wait for the stream to close. The stream is closed when it returns nil.
@@ -166,8 +169,7 @@ end
 ---
 --- @return string|nil line The next line, or nil if the stream closed before another complete line was available.
 function OutputStream:line()
-  local id = stream_to_process[self]
-  local proc = id_to_process[id]
+  local proc = stream_to_process[self]
   local data = assert(process_data[proc])
   local stream = self == proc.stdout and 'stdout' or 'stderr'
   --- @type velvet.process.buffered_stream
@@ -269,7 +271,6 @@ function M.spawn(cmd, options)
 
   local function stream(event)
     return setmetatable({
-      owner = instance,
       closed = false,
       on_output = event:listener(),
     }, OutputStream)
@@ -277,15 +278,15 @@ function M.spawn(cmd, options)
 
   if on_stdout then
     instance.stdout = stream(on_stdout)
-    stream_to_process[instance.stdout] = instance.id
+    stream_to_process[instance.stdout] = instance
   end
   if on_stderr then
     instance.stderr = stream(on_stderr)
-    stream_to_process[instance.stderr] = instance.id
+    stream_to_process[instance.stderr] = instance
   end
   if opt.stdin then
     instance.stdin = setmetatable({ owner = instance }, InputStream)
-    stream_to_process[instance.stdin] = instance.id
+    stream_to_process[instance.stdin] = instance
   end
 
   id_to_process[id] = instance
