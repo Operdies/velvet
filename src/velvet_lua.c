@@ -131,9 +131,7 @@ void velvet_lua_init(struct velvet *v) {
   char init[] = {
       "package.path = '../lua/?/init.lua;../lua/?.lua'\n"
       "_G.vv = require('velvet')\n"
-      "vv.api, API = API, nil\n"
-      "vv.startup_arguments, ARGS = ARGS, nil\n"
-      "require('velvet.default_options')\n",
+      "vv.init()\n",
   };
 
   if (luaL_dostring(L, init) != LUA_OK) {

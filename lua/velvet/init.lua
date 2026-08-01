@@ -235,20 +235,26 @@ _G = setmetatable(_G, {
   end
 })
 
--- quit() and reload() are wrapped because the vv functions have not been loaded yet.
-cli.add_command({ name = "quit", action = function() vv.api.quit() end, description = "Quit the velvet server, killing all windows." });
-cli.add_command({ name = "reload", action = function() vv.api.reload() end, description = "Restart the lua VM and source configs." });
-cli.add_command({
-  name = "detach",
-  action = function() vv.api.client_detach(vv.api.get_active_client()) end,
-  description =
-  "Detach the current terminal from the server."
-});
-cli.add_command({
-  name = "spawn",
-  action = function(_, ...) vv.api.window_create_process({...}, { working_directory = vv.cwd() }) end,
-  description = "Spawn a new window running the provided command."
-})
+-- called during early startup
+vv['init'] = function()
+  -- ensure init is only called once
+  vv['init'] = nil
+
+  -- vv.api is initialized in a global variable during early init.
+  ---@diagnostic disable-next-line: assign-type-mismatch
+  vv.api = API
+  API = nil
+
+  -- ARGS are also initialized in a global variable
+  ---@diagnostic disable-next-line: assign-type-mismatch
+  vv.startup_arguments = ARGS
+  ARGS = nil
+
+  -- source configurations which depend on vv and vv.api to be ready
+  require('velvet.default_options')
+  require('velvet.cli.builtin')
+end
+
 
 _G["VELVET_PRESET"] = 'velvet.presets.dwm'
 
