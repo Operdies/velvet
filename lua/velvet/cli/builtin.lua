@@ -11,4 +11,5 @@
     action = function(_, ...) vv.api.window_create_process({...}, { working_directory = vv.cwd() }) end,
     description = "Spawn a new window running the provided command."
   })
+  require('velvet.cli.log')
 
