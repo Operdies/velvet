@@ -47,16 +47,21 @@ local function merge_rec(obj, guard, resolve, ...)
 end
 
 
+--- @generic T
 ---@param behavior 'error'|'keep'|'force'|fun(key:any, prev_value:any?, value:any): any Decides what to do if a key is found in more than one map:
 ---      - "error": raise an error
 ---      - "keep":  use value from the leftmost map
 ---      - "force": use value from the rightmost map
 ---      - If a function, it receives the current key, the previous value in the currently merged table (if present), the current value and should
 ---        return the value for the given key in the merged table.
----@param ... table Two or more tables
----@return table Merged table
-return function(behavior, ...)
+---@param t1 T first table
+---@param t2 T second table
+---@param ... table optionally many additional tables to merge
+---@return T Merged table
+return function(behavior, t1, t2, ...)
   local resolve_func = behaviors[behavior] or behavior
   assert(type(resolve_func) == "function", "bad argument #1 ('error'|'keep'|'force'|function expected)")
-  return merge_rec({}, {}, resolve_func, ...)
+  assert(type(t1) == 'table', 'bad argument #2 (table expected)')
+  assert(type(t2) == 'table', 'bad argument #3 (table expected)')
+  return merge_rec({}, {}, resolve_func, t1, t2, ...)
 end
