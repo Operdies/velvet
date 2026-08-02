@@ -7,16 +7,17 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include "platform.h"
 #include <stdio.h>
 #include <dirent.h>
+#include "servernames.h"
 
 #include "utils.h"
 #include "velvet.h"
 #include "velvet_alloc.h"
-#include "velvet_process.h"
 
 static bool file_exists(const char *path) {
   struct stat st;
@@ -42,32 +43,56 @@ static void ensure_parent_dir_exists(char *base) {
   }
 }
 
+static void get_cute_servername(struct string *path) {
+  pid_t pid = getpid();
+  int initial_index = pid % LENGTH(servernames);
+  size_t basepath = path->len;
+  for (size_t i = 0; i < LENGTH(servernames); i++) {
+    int idx = (initial_index + i) % LENGTH(servernames);
+    string_joinpath(path, servernames[idx]);
+    string_ensure_null_terminated(path);
+    if (!file_exists((char *)path->content)) return;
+    string_truncate(path, basepath);
+  }
+
+  /* fallback to sock.pid */
+  string_joinpath(path, "sock.");
+  struct u8_slice pid_str = number_as_u8_slice(pid);
+  string_push_slice(path, pid_str);
+}
+
 static int create_socket(char *name) {
+  struct string path = {0};
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
   int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd == -1) velvet_die("socket:");
 
-  char namebuf[256] = {0};
-  if (name) {
-    snprintf(namebuf, LENGTH(namebuf) - 1, "%s", name);
-  } else {
-    snprintf(namebuf, LENGTH(namebuf) - 1, "sock.%d", getpid());
-  }
+  bool connect_error_fatal = false;
 
-  struct string path = {0};
-  string_joinpath(&path, getenv("HOME"), ".local", "share", "velvet", "sockets",
-                  namebuf);
+  string_joinpath(&path, getenv("HOME"), ".local", "share", "velvet", "sockets/");
+  size_t socket_dir_base = path.len;
   string_ensure_null_terminated(&path);
   ensure_parent_dir_exists((char*)path.content);
-  if (path.len >= LENGTH(addr.sun_path)) velvet_fatal("Socket name too long.");
 
-  snprintf(addr.sun_path, LENGTH(addr.sun_path), "%.*s", (int)path.len, (char*)path.content);
+  if (name) {
+    /* if a name was provided, use that unconditionally. */
+    string_joinpath(&path, name);
+    connect_error_fatal = true;
+  } else {
+    /* otherwise use an arbitrary available name, falling back to a pid-derived name. */
+    get_cute_servername(&path);
+  }
+
+  if (path.len >= LENGTH(addr.sun_path)) velvet_fatal("Socket name too long.");
+  memcpy(addr.sun_path, path.content, path.len);
   if (file_exists((char *)path.content)) {
     if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) != -1) {
-      close(sockfd);
-      velvet_fatal("Server name %s is already in use.", namebuf);
+      if (connect_error_fatal) {
+        velvet_fatal("Server name %s is already in use.", name);
+      }
     }
   }
+
   unlink((char *)path.content);
   string_destroy(&path);
 
@@ -82,10 +107,7 @@ static int create_socket(char *name) {
     velvet_fatal("listen:");
   }
 
-  char buf[sizeof(addr.sun_path)];
-  snprintf(buf, sizeof(buf), "%s", addr.sun_path);
-  char *lastslash = strrchr(buf, '/');
-  setenv("VELVET", lastslash + 1, true);
+  setenv("VELVET", addr.sun_path + socket_dir_base, true);
   return sockfd;
 }
 

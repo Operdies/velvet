@@ -52,7 +52,8 @@ struct vec {
 #endif
 };
 
-void string_ensure_capacity(struct string *str, size_t required);
+/* truncate `s` to size `len`. If `len` is greater than the current size, `s` will be resized and elements zero'd */
+void string_truncate(struct string *s, size_t len);
 int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
 struct u8_slice u8_slice_from_string(struct string s);
 void string_push_cstr(struct string *str, const char *cstr);
@@ -74,8 +75,7 @@ bool string_starts_with_cstr(struct string *str, const char *cstr);
 bool string_starts_with(struct string *str, struct u8_slice slice);
 bool string_ends_with(struct string *str, struct u8_slice slice);
 void string_shift_left(struct string *str, size_t n);
-/* truncate `v` to size `len`. If `len` is greater than the current size,
- * `v` will be resized and elements zero'd */
+/* truncate `v` to size `len`. If `len` is greater than the current size, `v` will be resized and elements zero'd */
 void vec_truncate(struct vec *v, size_t len);
 /* insert `elem` and index `i` and move succeeding elements as needed. */
 void vec_insert(struct vec *v, size_t i, const void *elem);
@@ -181,7 +181,7 @@ void _string_joinpath(struct string *str, int n, ...);
 /* join `n` strings by `separator` '/'. */
 void _string_join(struct string *str, char separator, int n, ...);
 
-#define string_join(str, separator, ...) _string_join(str, separator, LENGTH(((char *[]){__VA_ARGS__})), __VA_ARGS__);
-#define string_joinpath(str, ...) _string_joinpath(str, LENGTH(((char *[]){__VA_ARGS__})), __VA_ARGS__);
+#define string_join(str, separator, ...) _string_join(str, separator, LENGTH(((const char *[]){__VA_ARGS__})), __VA_ARGS__);
+#define string_joinpath(str, ...) _string_joinpath(str, LENGTH(((const char *[]){__VA_ARGS__})), __VA_ARGS__);
 
 #endif /*  COLLECTIONS_H */

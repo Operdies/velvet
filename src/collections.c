@@ -18,11 +18,14 @@ void *vec_nth_unchecked(struct vec v, size_t i) {
   return (void *)((char*)base + offset);
 }
 
-void string_ensure_capacity(struct string *str, size_t required) {
+void string_truncate(struct string *str, size_t required) {
   if (str->content == NULL || str->cap < required) {
     size_t newsize = next_size(required);
     str->content = velvet_erealloc(str->content, newsize, 1);
     str->cap = newsize;
+  } else if (str->len > required) {
+    str->len = required;
+    str->content[required] = 0;
   }
 }
 
@@ -67,7 +70,7 @@ void string_push_slice(struct string *str, struct u8_slice slice) {
 
 void string_push_range(struct string *str, const uint8_t *const src, size_t len) {
   size_t required = str->len + len;
-  string_ensure_capacity(str, required);
+  string_truncate(str, required);
   memcpy(str->content + str->len, src, len);
   str->len += len;
 }
@@ -138,7 +141,7 @@ void string_memset(struct string *str, uint8_t ch, size_t len) {
   // Some big number. This would most likely be caused by an overflow, and not some legitimate allocation.
   assert(len < (1 << 30));
   size_t required = str->len + len;
-  string_ensure_capacity(str, required);
+  string_truncate(str, required);
   memset(str->content + str->len, ch, len);
   str->len += len;
 }
@@ -441,7 +444,7 @@ int string_replace_inplace_slow(struct string *str, const char *const _old, cons
   string_clear(&buffer);
 
   int replacements = 0;
-  string_ensure_capacity(str, str->len * 2);
+  string_truncate(str, str->len * 2);
   struct u8_slice old = u8_slice_from_cstr(_old);
   struct u8_slice new = u8_slice_from_cstr(_new);
   if (str->len < old.len) return 0;
@@ -493,7 +496,7 @@ void string_push_vformat_slow(struct string *s, const char *fmt, va_list ap) {
   va_list copy;
   va_copy(copy, ap);
   size_t required = vsnprintf(NULL, 0, fmt, copy);
-  string_ensure_capacity(s, s->len + required + 1);
+  string_truncate(s, s->len + required + 1);
   s->len += vsnprintf((char*)s->content + s->len, s->cap - s->len, fmt, ap);
 }
 
@@ -575,10 +578,11 @@ void _string_joinpath(struct string *str, int n, ...) {
   va_start(ap, n);
   for (int i = 0; i < n; i++) {
     const char *arg = va_arg(ap, char*);
-    if (i) {
-      if (str->content[str->len-1] == separator) str->len--;
-      if (arg[0] != separator) string_push_char(str, separator);
+    if ((str->len == 0 || str->content[str->len-1] != separator)) {
+      string_push_char(str, separator);
     }
+    /* we already ensured the separator above, now skip all leading separators in arg */
+    while (*arg == separator) arg++;
     string_push_cstr(str, arg);
   }
   va_end(ap);

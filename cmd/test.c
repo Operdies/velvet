@@ -315,13 +315,31 @@ void test_vec(void) {
   vec_destroy(&v);
 }
 
+static void test_string_joinpath(void) {
+  struct string str = {0};
+  string_joinpath(&str, "hello", "path/");
+  string_ensure_null_terminated(&str);
+  assert(strcmp("/hello/path/", (char *)str.content) == 0);
+  string_joinpath(&str, "/addition");
+  string_ensure_null_terminated(&str);
+  assert(strcmp("/hello/path/addition", (char *)str.content) == 0);
+  size_t here = str.len;
+  string_joinpath(&str, "another one");
+  string_ensure_null_terminated(&str);
+  assert(strcmp("/hello/path/addition/another one", (char *)str.content) == 0);
+  string_truncate(&str, here);
+  string_joinpath(&str, "sike");
+  string_ensure_null_terminated(&str);
+  assert(strcmp("/hello/path/addition/sike", (char *)str.content) == 0);
+}
+
 static void test_num_as_slice(void) {
-  uint64_t cases[] = { 0, 1, 10, 1234567890, UINT64_MAX };
+  uint64_t cases[] = {0, 1, 10, 1234567890, UINT64_MAX};
   char testbuf[30];
   for (int i = 0; i < LENGTH(cases); i++) {
-    snprintf(testbuf, sizeof(testbuf)-1, "%lu", cases[i]);
+    snprintf(testbuf, sizeof(testbuf) - 1, "%lu", cases[i]);
     struct u8_slice slice = number_as_u8_slice(cases[i]);
-    assert(strcmp(testbuf, (char*)slice.content) == 0);
+    assert(strcmp(testbuf, (char *)slice.content) == 0);
   }
 }
 
@@ -500,6 +518,7 @@ int main(void) {
   test_csi_parsing();
   test_string();
   test_num_as_slice();
+  test_string_joinpath();
   test_base64();
   test_vec();
   test_lua();

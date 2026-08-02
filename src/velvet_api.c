@@ -1130,7 +1130,7 @@ static bool read_file(struct string *str, char *path) {
   fseek(f, 0, SEEK_END);
   size_t len = ftell(f);
   fseek(f, 0, SEEK_SET);
-  string_ensure_capacity(str, len);
+  string_truncate(str, len);
   fread(str->content, 1, len, f);
   str->len = len;
   fclose(f);
