@@ -211,6 +211,16 @@ void test_vec(void) {
   vec_destroy(&v);
 }
 
+static void test_num_as_slice(void) {
+  uint64_t cases[] = { 0, 1, 10, 1234567890, UINT64_MAX };
+  char testbuf[30];
+  for (int i = 0; i < LENGTH(cases); i++) {
+    snprintf(testbuf, sizeof(testbuf)-1, "%zu", cases[i]);
+    struct u8_slice slice = number_as_u8_slice(cases[i]);
+    assert(strcmp(testbuf, (char*)slice.content) == 0);
+  }
+}
+
 static void test_lua(void);
 static void test_lua_modules(void);
 
@@ -439,6 +449,7 @@ int main(void) {
   test_nowrap();
   test_csi_parsing();
   test_string();
+  test_num_as_slice();
   test_base64();
   test_vec();
   test_lua();

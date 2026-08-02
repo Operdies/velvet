@@ -1190,9 +1190,8 @@ velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, c
     }
   }
 
-  char id[20];
-  snprintf(id, sizeof(id) - 1, "%d", velvet_window->id);
-  setenv("VELVET_WINID", id, true);
+  struct u8_slice id = number_as_u8_slice(velvet_window->id);
+  setenv("VELVET_WINID", (char*)id.content, true);
   execvp(arglist[0], arglist);
   exec_error = errno;
   write(error_pipe, &exec_error, sizeof(int));

@@ -76,11 +76,8 @@ static bool osc_dispatch_hyperlink(struct vte *vte, struct osc *osc) {
     string_push_slice(&link->buffer, id);
   } else {
     uint64_t synthetic_id = osc_hyperlink_new_id();
-    while (synthetic_id) {
-      uint8_t digit = synthetic_id % 10;
-      synthetic_id /= 10;
-      string_push_char(&link->buffer, '0' + digit);
-    }
+    struct u8_slice decimal = number_as_u8_slice(synthetic_id);
+    string_push_slice(&link->buffer, decimal);
   }
   link->id_len = link->buffer.len;
   string_push_slice(&link->buffer, url);

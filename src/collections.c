@@ -26,18 +26,23 @@ void string_ensure_capacity(struct string *str, size_t required) {
   }
 }
 
-void string_push_int(struct string *str, int n) {
-  assert(n >= 0);
-  const int max = 11;
-  uint8_t buf[max];
-  size_t idx = max;
+struct u8_slice number_as_u8_slice(uint64_t n) {
+  static char buf[23] = {0}; /* large enough to hold any 64-bit integer */
+  size_t idx = 22;
+  buf[idx] = 0;
 
   do {
     buf[--idx] = (uint8_t)('0' + n % 10);
     n /= 10;
   } while (n);
 
-  string_push_range(str, buf + idx, max - idx);
+  struct u8_slice s = { .content = (uint8_t*)buf + idx, .len = sizeof(buf) - idx - 1 };
+  return s;
+}
+
+void string_push_int(struct string *str, int n) {
+  assert(n >= 0);
+  string_push_slice(str, number_as_u8_slice(n));
 }
 
 void string_push_csi(struct string *str, uint8_t prefix, struct int_slice params, const char *const final) {
@@ -319,7 +324,7 @@ void string_push_string(struct string *dest, struct string src) {
 }
 
 size_t string_strlen(struct string s) {
-    return u8_slice_strlen(string_as_u8_slice(s));
+  return u8_slice_strlen(string_as_u8_slice(s));
 }
 
 size_t u8_slice_strlen(struct u8_slice s) {

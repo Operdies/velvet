@@ -107,6 +107,12 @@ ssize_t vec_binsearch(struct vec v, const void *elem, int (*cmp)(const void *, c
 void *vec_new_element(struct vec *v);
 void *vec_nth_unchecked(struct vec v, size_t i);
 void *vec_nth(struct vec v, size_t i);
+/* returns a slice containing the decimal representation of `num`.
+ * This function uses a static buffer, so the result is valid until the next call to number_as_u8_slice.
+ * The string is null terminated, but the null terminator is not included in the slice length.
+ * This utility exists because format strings are extremely slow, so when we know we just need an integer
+ * for concatenation it is much faster to computer the decimal representation and copy the buffer. */
+struct u8_slice number_as_u8_slice(uint64_t num);
 struct u8_slice string_as_u8_slice(struct string s);
 struct u8_slice u8_slice_from_cstr(const char *const str);
 struct u8_slice u8_slice_range(struct u8_slice s, ssize_t start, ssize_t end);
@@ -122,7 +128,9 @@ struct u8_slice string_range(const struct string *const s, ssize_t start, ssize_
 ssize_t vec_index(struct vec *v, const void *const item);
 void string_push_vformat_slow(struct string *s, const char *fmt, va_list ap);
 void string_push_format_slow(struct string *s, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+/* returns the number of unicode codepoints in `s` */
 size_t u8_slice_strlen(struct u8_slice s);
+/* returns the number of unicode codepoints in `s` */
 size_t string_strlen(struct string s);
 void string_ensure_null_terminated(struct string *s);
 bool u8_slice_codepoint_iterator_next(struct u8_slice_codepoint_iterator *s);
