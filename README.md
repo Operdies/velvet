@@ -9,6 +9,9 @@ to create a truly custom velvet configuration. But 99% of users will want to use
 
 Velvet is tested on Linux and macOS. It may or may not work on other unixes. (Makefile patching required for sure)
 
+## Pre-1.0 status
+Until version 1.0.0, the public API should be considered unstable. Breaking changes may occur in any release.
+
 ## Try it out
 
 Try the live web demo at https://velvet.opie.lol
