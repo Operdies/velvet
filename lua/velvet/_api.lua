@@ -521,7 +521,7 @@ function api.window_get_scroll_offset(win_id) end
 --- @return nil  
 function api.window_set_scroll_offset(win_id, scroll_offset) end
 
---- Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \r, \n, color escapes, cursor movement, etc.
+--- Write to the backing emulator of a window. This is only valid for lua windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \r, \n, color escapes, cursor movement, etc.
 --- @param win_id integer Window id
 --- @param text string String which can embed any VT compatible ansi escape.
 --- @return nil  

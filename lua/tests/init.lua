@@ -9,6 +9,7 @@ local tests = {
   'tests.test_deep_extend',
   'tests.test_runtime_storage',
   'tests.test_async',
+  'tests.test_grid',
 }
 
 local function stringify(...)

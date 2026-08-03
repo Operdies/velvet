@@ -935,7 +935,7 @@ return {
     {
       name = "window_write",
       doc =
-      "Write to the backing emulator of a window. This is only valid for naked windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \\r, \\n, color escapes, cursor movement, etc.",
+      "Write to the backing emulator of a window. This is only valid for lua windows, and will error if the |win_id| is process backed. The backing emulator acts like screen pty, and will parse ansi escapes such as \\r, \\n, color escapes, cursor movement, etc.",
       params = {
         { name = "win_id", type = "int",    doc = "Window id" },
         { name = "text",   type = "string", doc = "String which can embed any VT compatible ansi escape." },
