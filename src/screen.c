@@ -195,7 +195,8 @@ static void screen_insert_batch_ascii_wrapless(struct screen *g, struct screen_c
 
   if ((int)run.len > rem) {
     c.cp.value = run.content[run.len - 1];
-    row->cells[screen_right(g)] = c;
+    row_set_cell(row, screen_right(g), c);
+    cur->column = screen_right(g);
   }
 
   row->eol = MAX(row->eol, cur->column);
