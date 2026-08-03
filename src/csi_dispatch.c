@@ -506,9 +506,15 @@ bool SD(struct vte *vte, struct csi *csi) {
 }
 
 bool DECST8C(struct vte *vte, struct csi *csi) {
-  (void)csi;
-  vte->tabstop = tabstop_bitmap_default;
-  return true;
+  /* WORKAROUND: The CSI parser parses '5' as a parameter, and not an intermediate.
+   * To simplify the implementation, the DECST8C dispatcher manually checks the parameter.
+   * This should be fine because CSI ? _ W does not clash with anything else we support. */
+
+  if (csi->n_params == 1 && csi->params[0].primary == 5) {
+    vte->tabstop = tabstop_bitmap_default;
+    return true;
+  }
+  return csi_dispatch_todo(vte, csi);
 }
 
 static bool ECH(struct vte *vte, struct csi *csi) {

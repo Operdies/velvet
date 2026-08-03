@@ -108,7 +108,10 @@ CSI(___,    ___,  'S', SU,                         "CSI Ps S  Scroll up Ps lines
 
 // VT5xx {{{1
 // VT510 {{{2
-CSI('?',    '5',  'W', DECST8C,                    "CSI ? 5 W Reset tab stops to start with column 9, every 8 columns (DECST8C), VT510.")
+
+/* csi parser ambiguity workaround: see comment in DECST8C implementation for details. */
+// CSI('?',    '5',  'W', DECST8C,                    "CSI ? 5 W Reset tab stops to start with column 9, every 8 columns (DECST8C), VT510.")
+CSI('?',    ___,  'W', DECST8C,                    "CSI ? 5 W Reset tab stops to start with column 9, every 8 columns (DECST8C), VT510.")
 // VT520 {{{2
 CSI(___,    ' ',  'q', DECSCUSR,                   "CSI Ps SP q Set cursor style (DECSCUSR), VT520.")
 CSI(___,    ' ',  't', DECSWBV,                    "CSI Ps SP t Set warning-bell volume (DECSWBV), VT520.")
