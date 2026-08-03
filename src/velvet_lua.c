@@ -7,6 +7,19 @@
 #include "velvet_lua_event_emitters.c"
 #include "velvet_process.h"
 
+#include "slaballoc.c"
+
+static void *lua_slab_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
+  struct slab_alloc *ally = ud;
+  if (nsize == 0) {
+    slab_free(ally, ptr, osize);
+    ptr = NULL;
+  } else {
+    ptr = slab_realloc(ally, ptr, nsize, osize);
+  }
+  return ptr;
+}
+
 static void *lua_allocator(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)osize;
   (void)ud;
@@ -97,7 +110,9 @@ void velvet_source_config(struct velvet *v) {
 
 void velvet_lua_init(struct velvet *v) {
   assert(!v->L);
-  lua_State *L = lua_newstate(lua_allocator, NULL, 0);
+  // lua_State *L = lua_newstate(lua_allocator, v, 0);
+  struct slab_alloc *ally = slab_new();
+  lua_State *L = lua_newstate(lua_slab_allocator, ally, 0);
   v->L = L;
   luaL_openselectedlibs(v->L, ~0, 0);
   struct velvet **extra = lua_getextraspace(v->L);
