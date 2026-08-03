@@ -126,27 +126,21 @@ local function register_statusbar_elements()
     end,
   })
 
-  -- create a ticker which will tick once a minute on the minute
-  local function minute_ticker()
-    local ticker = vv.async.event_source()
-    local listener = setmetatable({ ticker:listener() }, { __mode = 'v' })
-    ---@async
-    vv.async.run(function()
-      -- stop ticking when the listener is garbage collected
-      while listener[1] do
-        local current_seconds = tonumber(os.date('%S'))
-        local next_minute = (60 - current_seconds) * 1000
-        vv.async.wait(next_minute)
-        ticker:emit()
-      end
-    end)
-    return listener[1]
-  end
 
   statusbar.register('clock', {
     default_options = { foreground = '#000000', background = 'blue', bold = true },
-    update_triggers = { minute_ticker() },
-    content = function() return tostring(os.date('%H:%M')) end,
+    update_triggers = { 0 }, -- waiting is implemented in the content() function -- tick immediately after returning
+    ---@async
+    content = function(opt)
+      if opt.wait then
+        local current_seconds = tonumber(os.date('%S'))
+        local next_minute = (60 - current_seconds) * 1000
+        vv.async.wait(next_minute)
+      end
+      -- return immediately on the first call, and wait for the minute to change on subsequent calls
+      opt.wait = true
+      return tostring(os.date('%H:%M'))
+    end,
   })
 
   statusbar.register('copy_mode', {
