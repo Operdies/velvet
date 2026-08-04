@@ -231,7 +231,7 @@ static int vv_send_cmd(struct velvet_args args) {
                    /* set exit code to 7, meaning the cli action does not exist */
                    "if not success then COROUTINE_EXIT_CODE[coroutine.running()] = 7 end\n"
                    /* if the action had multiple return values, wrap them in a table, skipping the status element */
-                   "return table.unpack(results, 2)");
+                   "return table.unpack(results, 2, results.n)");
 
   int success = vv_send_lua_payload(args, u8_slice_from_string(lua_buf));
   string_destroy(&lua_buf);

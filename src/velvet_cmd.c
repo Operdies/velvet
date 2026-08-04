@@ -11,8 +11,6 @@ static int l_socket_print(lua_State *L) {
   vec_find(ctx, v->coroutines, ctx->socket == source_socket);
   if (!ctx) return 0;
 
-  if (source_socket == 0) return 0;
-
   int out_stream = luaL_checkinteger(L, 1);
   struct u8_slice msg = luaL_checkslice(L, 2);
 

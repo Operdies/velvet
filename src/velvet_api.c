@@ -19,15 +19,17 @@
 static struct string stringbuf = {0};
 static struct vec envlist = vec(char*);
 
-_Noreturn static void lua_bail(struct velvet *v, char *fmt, ...) {
+_Noreturn static void lua_bail(lua_State *L, char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  lua_pushvfstring(v->current, fmt, ap);
+  lua_pushvfstring(L, fmt, ap);
   va_end(ap);
-  lua_error(v->current);
+  lua_error(L);
   /* lua_error longjumps back to lua call site */
   assert(!"Unreachable");
 }
+
+#define bail(...) lua_bail(L, __VA_ARGS__)
 
 static int lua_debug_traceback_handler(lua_State *L) {
   luaL_traceback(L, L, lua_tostring(L, 1), 1);
@@ -35,31 +37,35 @@ static int lua_debug_traceback_handler(lua_State *L) {
 }
 
 static struct velvet_window *check_lua_window(struct velvet *v, int win) {
+  struct lua_State *L = v->current;
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v, "Window id %I is not valid.", win);
-  if (!w->is_lua_window) lua_bail(v, "Window id %I is not a lua window.", win);
+  if (!w) bail("Window id %I is not valid.", win);
+  if (!w->is_lua_window) bail("Window id %I is not a lua window.", win);
   assert(w);
   return w;
 }
 
 static struct velvet_process *check_process(struct velvet *v, int proc) {
+  struct lua_State *L = v->current;
   struct velvet_process *p;
   vec_find(p, v->processes, p->id == proc);
-  if (!p) lua_bail(v, "Process id %I is not valid.", proc);
+  if (!p) bail("Process id %I is not valid.", proc);
   return p;
 }
 
 static struct velvet_window *check_window(struct velvet *v, int win) {
+  struct lua_State *L = v->current;
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v, "Window id %I is not valid.", win);
+  if (!w) bail("Window id %I is not valid.", win);
   assert(w);
   return w;
 }
 
 static struct velvet_window *check_process_window(struct velvet *v, int win) {
+  struct lua_State *L = v->current;
   struct velvet_window *w = velvet_scene_get_window_from_id(&v->scene, win);
-  if (!w) lua_bail(v, "Window id %I is not valid.", win);
-  if (w->is_lua_window) lua_bail(v, "Window id %I is a lua window.", win);
+  if (!w) bail("Window id %I is not valid.", win);
+  if (w->is_lua_window) bail("Window id %I is a lua window.", win);
   assert(w);
   return w;
 }
@@ -208,7 +214,6 @@ static void vv_api_process_kill(struct velvet *v, lua_Integer id, enum velvet_ap
 }
 
 static void split_and_push_string_array(lua_State *L) {
-  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
   struct velvet_wordsplit_iterator it = {0};
   it.src.content = (uint8_t *)luaL_checklstring(L, -1, &it.src.len);
   lua_newtable(L);
@@ -220,7 +225,7 @@ static void split_and_push_string_array(lua_State *L) {
   }
   string_destroy(&it.current);
   if (it.reject) {
-    lua_bail(v, "Invalid command: %s", it.reject_reason); /* TODO: Explain the problem */
+    bail("Invalid command: %s", it.reject_reason); /* TODO: Explain the problem */
   }
 }
 
@@ -338,10 +343,10 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
     lua_pushnil(L);
     while (lua_next(L, -2) != 0) {
       if (!lua_isstring(L, -2)) 
-        lua_bail(v, "environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
+        bail("environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
       key = luaL_checkslice(L, -2);
       if (!lua_isstring(L, -1)) 
-        lua_bail(v, "environment['%s']: expected string, got %s", key.content, lua_typename(L, lua_type(L, -1)));
+        bail("environment['%s']: expected string, got %s", key.content, lua_typename(L, lua_type(L, -1)));
 
       lua_pushvalue(L, -2); /* table, key, value, key */
       lua_insert(L, -2); /* table, key, key, value */
@@ -360,20 +365,20 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
 
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
   if (lua_isstring(L, -1)) {
-    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (string must not be empty)");
+    if (luaL_len(L, -1) == 0) bail("bad argument #1 to 'process_spawn' (string must not be empty)");
     split_and_push_string_array(L);
   }
 
-  if (!lua_istable(L, -1)) lua_bail(v, "bad argument #1 to 'process_spawn'. string or string[] expected.");
+  if (!lua_istable(L, -1)) bail("bad argument #1 to 'process_spawn'. string or string[] expected.");
 
   lua_Integer len = luaL_len(L, -1);
-  if (len == 0) lua_bail(v, "bad argument #1 to 'process_spawn' (table must not be empty)");
+  if (len == 0) bail("bad argument #1 to 'process_spawn' (table must not be empty)");
 
   size_t argstart = envlist.length;
   for (int i = 1; i <= len; i++) {
     lua_geti(L, -1, i);
     if (!lua_isstring(L, -1)) {
-      lua_bail(v, "bad argument #1 to 'process_spawn' (table must only contain strings)");
+      bail("bad argument #1 to 'process_spawn' (table must only contain strings)");
     }
     const char *arg = luaL_checkstring(L, -1);
     vec_push(&envlist, &arg);
@@ -392,7 +397,7 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
   };
   lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
   if (proc_id < 0) {
-    lua_bail(v, "Error starting %s: %s", arglist[0], strerror(-proc_id));
+    bail("Error starting %s: %s", arglist[0], strerror(-proc_id));
   }
 
   /* why do a scan when we know the index */
@@ -425,8 +430,9 @@ vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_pro
 }
 
 static void vv_api_process_write_stdin(struct velvet *v, lua_Integer id, struct u8_slice text) {
+  lua_State *L = v->current;
   struct velvet_process *p = check_process(v, id);
-  if (p->stdin_closed) lua_bail(v, "Cannot write to process %I: stdin is closed", id);
+  if (p->stdin_closed) bail("Cannot write to process %I: stdin is closed", id);
   velvet_process_write_stdin(v, p, text);
 }
 
@@ -436,44 +442,52 @@ static void vv_api_process_close_stdin(struct velvet *v, lua_Integer id) {
 }
 
 static lua_stackRetCount
-vv_api_window_create_process(struct velvet *v, lua_stackIndex cmd, struct velvet_api_window_create_options options) {
+vv_api_window_create_process(struct velvet *v, lua_stackIndex cmd,
+                             struct velvet_api_window_create_options options) {
+  vec_clear(&envlist);
   lua_State *L = v->current;
   struct velvet_window template = {.emulator = vte_default};
-  if (options.parent_window.set) template.parent_window_id = options.parent_window.value;
+  if (options.parent_window.set)
+    template.parent_window_id = options.parent_window.value;
 
   lua_pushvalue(L, cmd); /* push cmd to top of stack */
   if (lua_isstring(L, -1)) {
-    if (luaL_len(L, -1) == 0) lua_bail(v, "bad argument #1 to 'window_create_process' (string must not be empty)");
+    if (luaL_len(L, -1) == 0)
+      bail("bad argument #1 to 'process_spawn' (string must not be empty)");
     split_and_push_string_array(L);
   }
 
-  if (lua_istable(L, -1)) {
-    int len = luaL_len(L, -1);
-    if (len == 0) lua_bail(v, "bad argument #1 to 'window_create_process' (table must not be empty)");
-    char *prog;
-    char **arglist = velvet_calloc(len + 1, sizeof(char*));
-    arglist[len] = NULL;
-    for (int i = 1; i <= len; i++) {
-      lua_geti(L, -1, i);
-      if (!lua_isstring(L, -1)) {
-        free(arglist);
-        lua_bail(v, "bad argument #1 to 'window_create_process' (table must only contain strings)");
-      }
-      arglist[i - 1] = (char*)luaL_checkstring(L, -1);
-      lua_pop(L, 1);
-    }
+  if (!lua_istable(L, -1))
+    bail("bad argument #1 to 'process_spawn'. string or string[] expected.");
 
-    if (options.working_directory.set) string_push_slice(&template.cwd, options.working_directory.value);
-    lua_Integer win = (lua_Integer)velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
-    prog = arglist[0];
-    free(arglist);
-    if (win < 0) { 
-      lua_bail(v, "Error starting %s: %s", prog, strerror(-win));
+  lua_Integer len = luaL_len(L, -1);
+  if (len == 0)
+    bail("bad argument #1 to 'process_spawn' (table must not be empty)");
+
+  for (int i = 1; i <= len; i++) {
+    lua_geti(L, -1, i);
+    if (!lua_isstring(L, -1)) {
+      bail("bad argument #1 to 'process_spawn' (table must only contain "
+           "strings)");
     }
-    lua_pushinteger(L, win);
-    return 1;
+    const char *arg = luaL_checkstring(L, -1);
+    vec_push(&envlist, &arg);
+    lua_pop(L, 1);
   }
-  lua_bail(v, "bad argument #1 to 'window_create_process' (string or table expected, got %s)", lua_typename(L, -1));
+
+  /* NULL sentinel for arglist */
+  vec_push(&envlist, NULL);
+
+  char **arglist = vec_nth(envlist, 0);
+  char *prog = *arglist;
+  if (options.working_directory.set)
+    string_push_slice(&template.cwd, options.working_directory.value);
+  lua_Integer win = velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+  if (win < 0) {
+    bail("Error starting %s: %s", prog, strerror(-win));
+  }
+  lua_pushinteger(L, win);
+  return 1;
 }
 
 static lua_Integer vv_api_window_create(struct velvet *v, struct velvet_api_window_create_options options) {
@@ -495,8 +509,9 @@ static bool vv_api_window_is_lua(struct velvet *v, lua_Integer win_id) {
 }
 
 static void vv_api_window_write(struct velvet *v, lua_Integer win_id, struct u8_slice text) {
+  lua_State *L = v->current;
   struct velvet_window *w = check_lua_window(v, win_id);
-  if (w->geometry.height == 0 || w->geometry.width == 0) lua_bail(v, "Cannot write to window: size is 0");
+  if (w->geometry.height == 0 || w->geometry.width == 0) bail("Cannot write to window: size is 0");
   velvet_window_process_output(w, text);
   /* Lua windows should not trigger emulator output. Clear it to be safe just to avoid accumulating buffers. */
   string_clear(&w->emulator_output_buffer);
@@ -506,26 +521,29 @@ static void vv_api_window_write(struct velvet *v, lua_Integer win_id, struct u8_
 }
 
 static void vv_api_client_detach(struct velvet *v, lua_Integer client_id) {
+  lua_State *L = v->current;
   struct velvet_client *s;
   vec_find(s, v->clients, s->socket == client_id);
-  if (!s) lua_bail(v, "No client exists with socket id %I", client_id);
+  if (!s) bail("No client exists with socket id %I", client_id);
   velvet_detach_client(v, s, NULL);
 }
 
 #define SOCKET_PATH_MAX (int)((sizeof((struct sockaddr_un*)((void*)0))->sun_path) - 1)
 static void check_server(struct velvet *v, struct u8_slice server) {
+  lua_State *L = v->current;
   string_clear(&stringbuf);
   string_joinpath(&stringbuf, getenv("HOME"), ".local", "share", "velvet", "sockets", (char*)server.content);
   string_ensure_null_terminated(&stringbuf);
-  if (strchr((char*)server.content, '/')) lua_bail(v, "Socket name must not contain '/'");
-  if (stringbuf.len > SOCKET_PATH_MAX) lua_bail(v, "Socket name too long.");
+  if (strchr((char*)server.content, '/')) bail("Socket name must not contain '/'");
+  if (stringbuf.len > SOCKET_PATH_MAX) bail("Socket name too long.");
   string_destroy(&stringbuf);
 }
 
 static void vv_api_client_reattach(struct velvet *v, lua_Integer id, struct u8_slice server) {
+  lua_State *L = v->current;
   struct velvet_client *s;
   vec_find(s, v->clients, s->socket == id);
-  if (!s) lua_bail(v, "No client exists with socket id %I", id);
+  if (!s) bail("No client exists with socket id %I", id);
   check_server(v, server);
   velvet_detach_client(v, s, (char*)server.content);
 }
@@ -705,19 +723,20 @@ static bool vv_api_schedule_cancel(struct velvet *v, lua_Integer cancellation_id
 }
 
 static lua_Integer vv_api_schedule_after(struct velvet *v, lua_Integer delay, lua_Integer func) {
+  lua_State *L = v->current;
   lua_Integer func_ref, state_ref;
   func_ref = state_ref = 0;
 
-  luaL_checktype(v->current, func, LUA_TFUNCTION);
-  lua_pushvalue(v->current, func);
+  luaL_checktype(L, func, LUA_TFUNCTION);
+  lua_pushvalue(L, func);
   /* if this was called from a coroutine, move the function from the coroutine stack to the main stack */
-  if (v->current != v->L)
-    lua_xmove(v->current, v->L, 1); 
+  if (L != v->L)
+    lua_xmove(L, v->L, 1); 
   func_ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
-  if (v->current != v->L) {
+  if (L != v->L) {
     // pin the coroutine thread to ensure it does not get garbage collected
-    lua_pushthread(v->current);
-    lua_xmove(v->current, v->L, 1);
+    lua_pushthread(L);
+    lua_xmove(L, v->L, 1);
     state_ref = luaL_ref(v->L, LUA_REGISTRYINDEX);
   }
 
@@ -789,9 +808,10 @@ static lua_stackRetCount vv_api_get_clients(struct velvet *v) {
 }
 
 static void vv_api_set_active_client(struct velvet *v, lua_Integer client_id) {
+  lua_State *L = v->current;
   struct velvet_client *s;
   vec_find(s, v->clients, s->socket == client_id);
-  if (s == NULL || !s->output) lua_bail(v, "client %I is not a valid client.", client_id);
+  if (s == NULL || !s->output) bail("client %I is not a valid client.", client_id);
   velvet_set_focused_client(v, client_id);
 }
 
@@ -850,6 +870,7 @@ static enum velvet_api_transparency_mode vv_api_window_get_transparency_mode(str
 }
 
 static void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer win_id, enum velvet_api_transparency_mode mode) {
+  lua_State *L = v->current;
   struct velvet_window *w = check_window(v, win_id);
 
   if (w->transparency.mode != mode) {
@@ -857,7 +878,7 @@ static void vv_api_window_set_transparency_mode(struct velvet *v, lua_Integer wi
     case VELVET_API_TRANSPARENCY_MODE_NONE:
     case VELVET_API_TRANSPARENCY_MODE_CLEAR:
     case VELVET_API_TRANSPARENCY_MODE_ALL: w->transparency.mode = mode; break;
-    default: lua_bail(v, "Invalid transparency mode %I", mode);
+    default: bail("Invalid transparency mode %I", mode);
     }
 
     velvet_invalidate_render(v, "transparency mode changed.");
@@ -958,7 +979,8 @@ static lua_Integer vv_api_get_fps_target(struct velvet *v) {
 }
 
 static void vv_api_set_fps_target(struct velvet *v, lua_Integer new_value) {
-  if (new_value <= 0) lua_bail(v, "fps target must be a positive integer.");
+  lua_State *L = v->current;
+  if (new_value <= 0) bail("fps target must be a positive integer.");
   v->fps_target = new_value;
 }
 
@@ -1094,11 +1116,12 @@ static struct u8_slice vv_api_get_startup_directory(struct velvet *v) {
 }
 
 static void vv_api_client_set_options(struct velvet *v, lua_Integer client_id, struct velvet_api_client_options options) {
+  lua_State *L = v->current;
   struct velvet_client *s;
   /* bit of a hack because clients don't really have a way of knowing their own id */
   if (client_id == 0) client_id = v->socket_cmd_sender;
   vec_find(s, v->clients, s->socket == client_id);
-  if (s == NULL) lua_bail(v, "client %I is not a valid client.", client_id);
+  if (s == NULL) bail("client %I is not a valid client.", client_id);
   s->ws.height = options.lines;
   s->ws.width = options.columns;
   s->ws.x_pixel = options.x_pixel;
@@ -1132,6 +1155,7 @@ static bool read_file(struct string *str, char *path) {
 /* validate the user's config. If this fails, an appropriate lua error will be thrown.
  * Normal return indicates success */
 static void check_config(struct velvet *v) {
+  lua_State *L = v->current;
   struct string path = {0};
   string_joinpath(&path, getenv("HOME"), ".config/velvet/init.lua");
   string_ensure_null_terminated(&path);
@@ -1146,14 +1170,14 @@ static void check_config(struct velvet *v) {
   bool ok = read_file(&config, (char*)path.content);
   string_destroy(&path);
 
-  if (!ok) lua_bail(v, "Unable to open config for reading.");
+  if (!ok) bail("Unable to open config for reading.");
 
   int status = luaL_loadbuffer(v->L, (char*)config.content, config.len, "@init.lua");
   string_destroy(&config);
   if (status != LUA_OK) {
     const char *s = luaL_checkstring(v->L, -1);
     /* raise the config error to the caller if loadbuffer failed */
-    lua_bail(v, "Error parsing config: %s", s);
+    bail("Error parsing config: %s", s);
   }
   /* pop the loadbuffer() chunk */
   lua_pop(v->L, 1);
@@ -1189,16 +1213,18 @@ static void vv_api_reload(struct velvet *v) {
 }
 
 static lua_Integer vv_api_string_display_width(struct velvet *v, struct u8_slice string) {
+  lua_State *L = v->current;
   lua_Integer result = 0;
   struct u8_slice_codepoint_iterator it = {.src = string};
   while (u8_slice_codepoint_iterator_next(&it)) {
     result += utf8proc_charwidth(it.current.value);
   }
-  if (it.reject) lua_bail(v, "Could not determine display width of '%s': Invalid utf8 sequence.", string.content);
+  if (it.reject) bail("Could not determine display width of '%s': Invalid utf8 sequence.", string.content);
   return result;
 }
 
 static struct u8_slice vv_api_string_lower(struct velvet *v, struct u8_slice string) {
+  lua_State *L = v->current;
   struct string *s = &stringbuf;
   string_clear(s);
   struct u8_slice_codepoint_iterator it = { .src = string };
@@ -1206,10 +1232,12 @@ static struct u8_slice vv_api_string_lower(struct velvet *v, struct u8_slice str
     uint32_t cp = utf8proc_tolower(it.current.value);
     string_push_codepoint(s, cp);
   }
-  if (it.reject) lua_bail(v, "Could not lower '%s': Invalid utf8 sequence.", string.content);
+  if (it.reject) bail("Could not lower '%s': Invalid utf8 sequence.", string.content);
   return string_as_u8_slice(*s);
 }
+
 static struct u8_slice vv_api_string_upper(struct velvet *v, struct u8_slice string) {
+  lua_State *L = v->current;
   struct string *s = &stringbuf;
   string_clear(s);
   struct u8_slice_codepoint_iterator it = { .src = string };
@@ -1217,7 +1245,7 @@ static struct u8_slice vv_api_string_upper(struct velvet *v, struct u8_slice str
     uint32_t cp = utf8proc_toupper(it.current.value);
     string_push_codepoint(s, cp);
   }
-  if (it.reject) lua_bail(v, "Could not upper '%s': Invalid utf8 sequence.", string.content);
+  if (it.reject) bail("Could not upper '%s': Invalid utf8 sequence.", string.content);
   return string_as_u8_slice(*s);
 }
 
