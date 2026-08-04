@@ -10,6 +10,7 @@ local tests = {
   'tests.test_runtime_storage',
   'tests.test_async',
   'tests.test_grid',
+  'tests.test_cli',
 }
 
 local function stringify(...)
@@ -47,7 +48,6 @@ function expect_match(pattern, str)
   assert(str:match(pattern), string.format("Expected '%s' to match '%s'", pattern, str):gsub('\n', '\\n'))
 end
 
-
 function expect_error(err, fn, ...)
   local ok, result = xpcall(fn, function(e) return e end, ...)
   assert(not ok)
@@ -63,12 +63,19 @@ end
 
 local current_test = nil
 
+local print_timing = false
+
 local function run()
   local failed = 0
   for _, mod in ipairs(tests) do
     local test = require(mod).test
     current_test = vv.async.run(test)
+    local start = vv.api.get_current_tick()
     local ok, err = vv.async.wait_for_coroutine(current_test)
+    if print_timing then
+      local test_name = mod:match("[^.]+$")
+      print(string.format("[%4d ms] finished %s", vv.api.get_current_tick() - start, test_name))
+    end
     current_test = nil
     if not ok then
       local lines = {}
