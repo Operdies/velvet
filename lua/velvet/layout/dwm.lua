@@ -38,7 +38,7 @@ local r_top = 0
 local r_bottom = 0
 local r_right = 0
 
-local tiled_alpha = 0.8
+local tiled_alpha = 1.0
 local floating_alpha = 0.8
 
 local move_duration = 0
