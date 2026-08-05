@@ -158,7 +158,7 @@ function OutputStream:read_all()
   return buffer_consume_all(buffer)
 end
 
---- Read the next line from a stream.
+--- Read the next line from a stream. On timeout, returns false. On end of stream, returns nil.
 ---
 --- This suspends the calling coroutine until a complete line is available or
 --- the stream closes. The returned line does not include the trailing newline.
@@ -167,8 +167,10 @@ end
 ---
 --- All read operations consume data from a single read cursor per stream.
 ---
---- @return string|nil line The next line, or nil if the stream closed before another complete line was available.
-function OutputStream:line()
+--- @async when timeout is not 0, and no line is ready for reading
+--- @param timeout? integer wait at most |timeout| ms for a line to be available. Returns false if no line is ready. Waits indefinitely if timeout is nil.
+--- @return string|nil|boolean line The next line, or nil if the stream closed before another complete line was available.
+function OutputStream:line(timeout)
   local proc = stream_to_process[self]
   local data = assert(process_data[proc])
   local stream = self == proc.stdout and 'stdout' or 'stderr'
@@ -176,11 +178,30 @@ function OutputStream:line()
   local buffer = data[stream]
   if buffer == nil then return nil end
 
+  if timeout ~= nil and math.type(timeout) ~= 'integer' then
+    error(("Bad argument #2 (integer expected, got %s)"):format(type(timeout)))
+  end
+
+  local deadline
+  if timeout then deadline = vv.api.get_current_tick() + timeout end
+  local remaining = nil
+
   while not self.closed do
     local line = buffer_consume_line(buffer)
     if line then return line end
+
+    if deadline then
+      remaining = deadline - vv.api.get_current_tick()
+      -- break if we missed the deadline
+      if remaining ~= nil and remaining <= 0 then
+        return false
+      end
+    end
     -- no newline found -- wait for content
-    self.on_output:wait()
+    local trigger = vv.async.wait(self.on_output, remaining)
+    if trigger ~= self.on_output then
+      return false -- timed out
+    end
   end
   -- stream closed -- return a line if possible, otherwise the rest of the data
   return buffer_consume_line(buffer) or self:read_all()

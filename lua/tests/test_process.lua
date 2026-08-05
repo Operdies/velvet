@@ -381,7 +381,7 @@ local function test_process_wrapper()
 
   p = process.spawn({ 'sh', '-c', 'printf "hello\nworld\n"' })
   local lines = {}
-  for line in p.stdout:lines() do lines[#lines+1] = line end
+  for line in p.stdout:lines() do lines[#lines + 1] = line end
   assert(2, #lines)
   expect_eq('hello', lines[1])
   expect_eq('world', lines[2])
@@ -486,6 +486,34 @@ done ]]
   expect_eq(0, p:wait_for_exit())
 end
 
+local function test_line_read_timeout()
+  -- print sequence one character and finish with a newline
+  -- read between each character to ensure output is emitted separately
+  local payload = [[
+for ((i=0;i<10;i++)); do
+printf "$i"
+read THROWAWAY
+done
+printf '\n'
+]]
+  local p = process.spawn({ 'bash', '-c', payload })
+  for _ = 1, 10 do
+    -- read with a timeout >0 to actually yield to the event loop
+    expect_eq(false, p.stdout:line(1)) -- newline not emitted yet
+    p.stdin:write('continue\n')
+  end
+  -- read timeout of 0 must not yield, meaning the final write()
+  -- should not be sent even if we keep looping here
+  for _ = 1, 1000 do expect_eq(false, p.stdout:line(0)) end
+  -- finally read with a timeout, breaking to the event loop
+  expect_eq('0123456789', p.stdout:line(100))
+  expect_eq(0, p:wait_for_exit())
+  -- after exit, all reads should return nil to indicate stream end
+  expect_eq(nil, p.stdout:line(100000))
+  expect_eq(nil, p.stdout:line(0))
+  expect_eq(nil, p.stdout:line())
+end
+
 return {
   test = function()
     -- it is kind of necessary to insert sleeps in some process related
@@ -503,6 +531,7 @@ return {
       ['test_stdout_reap_race'] = test_stdout_reap_race,
       ['test_working_directory'] = test_working_directory,
       ['test_process_wrapper'] = test_process_wrapper,
+      ['test_line_read_timeout'] = test_line_read_timeout,
     }
 
     local tasks = {}
@@ -510,7 +539,7 @@ return {
       tasks[name] = vv.async.run(fn)
     end
 
-    local result = vv.async.wait_all(tasks, 1000)
+    local result = vv.async.wait_all(tasks, 5000)
     for k in pairs(tests) do
       assert(result[k], "process test '" .. k .. "' timed out.")
       local ret = result[k].data

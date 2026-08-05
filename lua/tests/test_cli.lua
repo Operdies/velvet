@@ -1,3 +1,4 @@
+---@diagnostic disable: await-in-sync
 -- setup {{{1
 -- find the vv binary next to the test binary
 local vv_binary = vv.cwd() .. '/vv'
@@ -17,6 +18,9 @@ local function start_server(socket)
   server = process.spawn(
     { vv_binary, 'foreground', '--clean', '--socket', socket, "--", "first arg", "second arg" },
     { environment = server_env })
+  -- Wait for the server to listen before proceeding. The read timeout is set very high
+  -- because macOS can be extremely slow when starting a process for the first time.
+  expect_eq("Server listening at " .. socket, server.stdout:line(5000))
   -- kill the server if this test fails before the shutdown test
   vv.async.defer(function()
     if server ~= nil then
