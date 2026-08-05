@@ -68,6 +68,7 @@ static void install_signal_handlers(int *pipes) {
 
 static char startup_directory[PATH_MAX] = {0};
 void velvet_init(struct velvet *v, int sock_fd, char *arg0, char **argv) {
+  set_cloexec(sock_fd);
   assert(!signal_write);
   int signal_pipes[2];
 
