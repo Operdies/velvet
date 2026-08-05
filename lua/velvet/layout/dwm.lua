@@ -808,4 +808,17 @@ function dwm.get_state()
   return vv.deepcopy(state)
 end
 
+function dwm.set_tiled_alpha(num)
+  assert(type(num) == 'number' and num >= 0 and num <= 1, "bad argument #1 (expected number between 0 and 1)")
+  tiled_alpha = num
+  arrange()
+end
+
+function dwm.set_floating_alpha(num)
+  assert(type(num) == 'number' and num >= 0 and num <= 1, "bad argument #1 (expected number between 0 and 1)")
+  floating_alpha = num
+  arrange()
+end
+
+
 return dwm
