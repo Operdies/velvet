@@ -11,6 +11,7 @@
 #include <signal.h>
 #include "velvet_api.h"
 #include "velvet.h"
+#include "velvet_process.h"
 
 static bool cell_equals(struct screen_cell a, struct screen_cell b);
 static bool cell_style_equals(struct screen_cell_style a, struct screen_cell_style b);
@@ -122,13 +123,13 @@ static void velvet_scene_remove_window(struct velvet_scene *m, struct velvet_win
 }
 
 /* returns 0 on success, otherwise the errno set by execlp */
-static int velvet_window_start(struct velvet_window *velvet_window, char * const *arglist);
+static int velvet_window_start(struct velvet_window *velvet_window, char * const *arglist, char * const *envp);
 
-int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template, char * const *arglist) {
+int velvet_scene_spawn_process_from_template(struct velvet_scene *scene, struct velvet_window template, char * const *arglist, char * const *envp) {
   assert(scene->windows.element_size == sizeof(struct velvet_window));
   struct velvet_window *host = velvet_scene_manage(scene, template);
   if (host) {
-    int started = velvet_window_start(host, arglist);
+    int started = velvet_window_start(host, arglist, envp);
     if (started != 0) {
       velvet_scene_remove_window(scene, host);
       return -started;
@@ -1172,7 +1173,7 @@ static void restore_signals(void) {
 }
 
 _Noreturn static void
-velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, char *const *arglist) {
+velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, const char *filename, char *const *argv, char * const *envp) {
   int exec_error;
   /* close read side in fork */
   char *dir = NULL;
@@ -1192,15 +1193,27 @@ velvet_window_setup_child(struct velvet_window *velvet_window, int error_pipe, c
 
   struct u8_slice id = number_as_u8_slice(velvet_window->id);
   setenv("VELVET_WINID", (char*)id.content, true);
-  execvp(arglist[0], arglist);
+  if (envp) {
+    execve(filename, argv, envp);
+  } else {
+    execv(filename, argv);
+  }
   exec_error = errno;
   write(error_pipe, &exec_error, sizeof(int));
   exit(0);
   /* write side automatically cleaned up in child */
 }
 
-static int velvet_window_start(struct velvet_window *velvet_window, char * const *arglist) {
-  assert(arglist && arglist[0] && arglist[0][0]);
+static int velvet_window_start(struct velvet_window *velvet_window, char * const *argv, char * const *envp) {
+  assert(argv && argv[0] && argv[0][0]);
+
+  char *filename = argv[0];
+  if (!strchr(filename, '/')) { 
+    char *path = velvet_process_find_path(envp);
+    if (path) filename = velvet_process_find_binary_in_path(argv[0], path);
+  }
+  if (!filename) return ENOENT;
+
   struct rect c = velvet_window->geometry;
   struct winsize velvet_windowsize = {.ws_col = c.width, .ws_row = c.height, .ws_xpixel = c.x_pixel, .ws_ypixel = c.y_pixel};
 
@@ -1245,7 +1258,7 @@ static int velvet_window_start(struct velvet_window *velvet_window, char * const
   if (pid == 0) {
     /* close write side in child */
     close(rw[0]);
-    velvet_window_setup_child(velvet_window, rw[1], arglist);
+    velvet_window_setup_child(velvet_window, rw[1], filename, argv, envp);
   }
 
   /* Close write side in parent. Otherwise read(rw[0]) will block. */
@@ -1259,8 +1272,8 @@ static int velvet_window_start(struct velvet_window *velvet_window, char * const
   if (read_count == sizeof(int)) return exec_error;
 
   string_clear(&velvet_window->cmdline);
-  for (char *const *arg = arglist; *arg; arg++) {
-    if (arg != arglist) string_push_char(&velvet_window->cmdline, ' ');
+  for (char *const *arg = argv; *arg; arg++) {
+    if (arg != argv) string_push_char(&velvet_window->cmdline, ' ');
     /* don't care about quote escaping, cmdline is only constructed for convenience. */
     if (strchr(*arg, ' ')) {
       string_push_char(&velvet_window->cmdline, '\'');

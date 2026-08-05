@@ -29,6 +29,8 @@ struct velvet_process {
 };
 
 
+char *velvet_process_find_binary_in_path(const char *name, const char *p);
+char *velvet_process_find_path(char * const *envp);
 int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp, struct velvet_process_stream_options streams);
 void velvet_process_write_stdin(struct velvet *v, struct velvet_process *p, struct u8_slice text);
 void velvet_process_close_stdin(struct velvet *v, struct velvet_process *p);

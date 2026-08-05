@@ -357,6 +357,7 @@ return {
       fields = {
         { name = "working_directory", type = "string", doc = "The initial working directory of the new window.",                                  optional = true },
         { name = "parent_window",     type = "int",    doc = "The parent window of this window. If set, this window will close with the parent.", optional = true },
+        { name = "environment",       type = "table<string, string>", doc = "Optional table of environment variables to set in the new process.", optional = true },
       },
     },
     {

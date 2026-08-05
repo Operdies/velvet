@@ -1,12 +1,12 @@
+#include "velvet_process.h"
+#include "collections.h"
 #include "platform.h"
 #include "velvet.h"
-#include <signal.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <string.h>
 #include <sys/wait.h>
-#include "collections.h"
-#include "velvet_process.h"
-#include <fcntl.h>
 
 static int nullfd = -2;
 
@@ -23,7 +23,7 @@ static void restore_signals(void) {
   for (int i = 0; i < LENGTH(restore); i++) sigaction(restore[i], &sa, NULL);
 }
 
-static char *find_binary(const char *name, const char *p) {
+char *velvet_process_find_binary_in_path(const char *name, const char *p) {
   static char temp[PATH_MAX] = {0};
   const char *p_end = p + strlen(p);
   int n_len = strlen(name);
@@ -38,7 +38,7 @@ static char *find_binary(const char *name, const char *p) {
     }
 
     memcpy(temp, p, i);
-    if (temp[i-1] != '/') {
+    if (temp[i - 1] != '/') {
       temp[i++] = '/';
     }
     memcpy(temp + i, name, n_len);
@@ -55,45 +55,54 @@ static char *find_binary(const char *name, const char *p) {
   return NULL;
 }
 
-_Noreturn static void process_setup_child(int error_pipe, const char *wd,
+_Noreturn static void process_setup_child(int error_pipe,
+                                          const char *working_directory,
                                           const char *filename,
-                                          char *const *argv, char *const *envp,
-                                          int in, int out, int err) {
-  if (!wd) {
+                                          char *const *argv,
+                                          char *const *envp,
+                                          int in,
+                                          int out,
+                                          int err) {
+  int error = 0;
+  if (!working_directory) {
     /* the working directory of the current process is likely to be
      * something like /usr/local/share/velvet or similar.
      * Most processes would probably prefer to be running in the home folder or something. */
-    wd = getenv("HOME");
+    working_directory = getenv("HOME");
   }
-  if (chdir(wd) == -1) {
-    int err = errno;
-    write(error_pipe, &err, sizeof(int));
+  if (chdir(working_directory) == -1) {
+    error = errno;
+    write(error_pipe, &error, sizeof(int));
     exit(0);
   }
 
   if (in == nullfd || out == nullfd || err == nullfd) {
-    int devnull = open("/dev/null", O_RDWR);
-    if (in == nullfd) in = devnull;
-    if (out == nullfd) out = devnull;
-    if (err == nullfd) err = devnull;
+    if (in == nullfd) in = open("/dev/null", O_RDONLY);
+    if (out == nullfd) out = open("/dev/null", O_WRONLY);
+    if (err == nullfd) err = open("/dev/null", O_WRONLY);
   }
 
-  dup2(in, STDIN_FILENO);
-  dup2(out, STDOUT_FILENO);
-  dup2(err, STDERR_FILENO);
-
-  close(in);
-  if (out != in) close(out);
-  if (err != out && err != in) close(err);
-  /* close read side in fork */
+  int streams[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
+  int dupclose[] = {[STDIN_FILENO] = in, [STDOUT_FILENO] = out, [STDERR_FILENO] = err};
+  for (int i = 0; i < LENGTH(streams); i++) {
+    int stream = streams[i];
+    if (dupclose[stream] != stream) {
+      if (dup2(dupclose[stream], stream) == -1) {
+        error = errno;
+        write(error_pipe, &error, sizeof(int));
+        exit(0);
+      }
+      close(dupclose[stream]);
+    }
+  }
 
   if (envp) {
     execve(filename, argv, envp);
   } else {
     execv(filename, argv);
   }
-  int exec_error = errno;
-  write(error_pipe, &exec_error, sizeof(int));
+  error = errno;
+  write(error_pipe, &error, sizeof(int));
   exit(0);
   /* write side automatically cleaned up in child due to cloexec */
 }
@@ -108,20 +117,18 @@ static int pipe_pair_create_cloexec(int *r, int *w) {
   return 0;
 }
 
-static char *find_path(char **envp) {
+char *velvet_process_find_path(char *const *envp) {
   static char *default_path = NULL;
   /* 1. if envp specifies PATH, use that.
    * Otherwise use the system path. */
   for (; envp && *envp; envp++) {
     char *env = *envp;
-    if (strncmp("PATH=", env, 5) == 0)
-      return (*envp) + 5;
+    if (strncmp("PATH=", env, 5) == 0) return (*envp) + 5;
   }
 
   /* 2. check if PATH is defined */
   char *path = getenv("PATH");
-  if (path) 
-    return path;
+  if (path) return path;
 
   /* 3. fall back to the systems default PATH */
   if (!default_path) {
@@ -140,18 +147,23 @@ struct streams {
   int in, out, err;
 };
 
-static int spawn_process(struct velvet_process *p, const char *filename, char *wd, char **argv, char **envp, struct streams streams) {
+static int spawn_process(struct velvet_process *p,
+                         const char *filename,
+                         char *working_directory,
+                         char **argv,
+                         char **envp,
+                         struct streams streams) {
   assert(argv && argv[0] && argv[0][0]);
 
   int guard_read = 0;
   int guard_write = 0;
   int status = pipe_pair_create_cloexec(&guard_read, &guard_write);
-  if (status != 0) { 
+  if (status != 0) {
     return status;
   }
 
   /* fork sequence largely copied from velvet_scene.c. The same principles apply;
-  * block signal generation before forking so the child cannot write to velvet's signal pipes. */
+   * block signal generation before forking so the child cannot write to velvet's signal pipes. */
   sigset_t block, sighandler, trash_signalset;
   sigfillset(&block);
   sigprocmask(SIG_BLOCK, &block, &sighandler);
@@ -165,7 +177,8 @@ static int spawn_process(struct velvet_process *p, const char *filename, char *w
   sigprocmask(SIG_SETMASK, &sighandler, &trash_signalset);
 
   if (pid < 0) {
-    close(guard_read); close(guard_write);
+    close(guard_read);
+    close(guard_write);
     ERROR("Unable to spawn process:");
     return errno;
   }
@@ -173,14 +186,14 @@ static int spawn_process(struct velvet_process *p, const char *filename, char *w
   if (pid == 0) {
     /* close read side in child */
     close(guard_read);
-    process_setup_child(guard_write, wd, filename, argv, envp, streams.in, streams.out, streams.err);
+    process_setup_child(guard_write, working_directory, filename, argv, envp, streams.in, streams.out, streams.err);
     /* child does not return here */
   }
 
   /* Close write side in parent. Otherwise read(rw[0]) will block. */
   close(guard_write);
   int exec_error;
-  int read_count = read(guard_read, &exec_error, sizeof(int)); 
+  int read_count = read(guard_read, &exec_error, sizeof(int));
   /* close read side in parent */
   close(guard_read);
   if (read_count == sizeof(int)) {
@@ -191,19 +204,20 @@ static int spawn_process(struct velvet_process *p, const char *filename, char *w
   return 0;
 }
 
-int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp, struct velvet_process_stream_options streams) {
+int velvet_process_spawn(
+    struct velvet *v, char *wd, char **argv, char **envp, struct velvet_process_stream_options streams) {
   /* reuse a single handle to /dev/null for all processes */
   char *filename = argv[0];
   int error = 0;
-  if (!strchr(filename, '/')) { 
-    char *path = find_path(envp);
-    if (path) filename = find_binary(argv[0], path);
+  if (!strchr(filename, '/')) {
+    char *path = velvet_process_find_path(envp);
+    if (path) filename = velvet_process_find_binary_in_path(argv[0], path);
   }
   if (!filename) return -ENOENT;
 
   int in, out, err;
   in = out = err = 0;
-  struct streams s = { .in = nullfd, .out = nullfd, .err = nullfd };
+  struct streams s = {.in = nullfd, .out = nullfd, .err = nullfd};
   if (error == 0 && streams.in) {
     error = pipe_pair_create_cloexec(&s.in, &in);
   }
@@ -243,7 +257,9 @@ int velvet_process_spawn(struct velvet *v, char *wd, char **argv, char **envp, s
     if (nonblock[i] && nonblock[i] != nullfd) set_nonblocking(nonblock[i]);
 
   p.id = velvet_next_id();
-  p.in = in; p.out = out; p.err = err;
+  p.in = in;
+  p.out = out;
+  p.err = err;
   vec_push(&v->processes, &p);
   assert(p.pid);
   return p.id;
@@ -280,9 +296,18 @@ void velvet_process_kill_and_destroy_all(struct velvet *v) {
    * They will be rudely killed later if they fail to exit. */
   vec_foreach(p, v->processes) {
     p->termination_deadline = now + 1000;
-    if (p->in) { close(p->in); p->in = 0; }
-    if (p->out) { close(p->out); p->out = 0; }
-    if (p->err) { close(p->err); p->err = 0; }
+    if (p->in) {
+      close(p->in);
+      p->in = 0;
+    }
+    if (p->out) {
+      close(p->out);
+      p->out = 0;
+    }
+    if (p->err) {
+      close(p->err);
+      p->err = 0;
+    }
     vec_push(&v->marked_for_death, p);
   }
   vec_clear(&v->processes);

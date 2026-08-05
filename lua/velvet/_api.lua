@@ -143,6 +143,7 @@ local api = {}
 --- @class velvet.api.window.create_options
 --- @field working_directory? string The initial working directory of the new window.
 --- @field parent_window? integer The parent window of this window. If set, this window will close with the parent.
+--- @field environment? table<string, string> Optional table of environment variables to set in the new process.
 
 --- @class velvet.api.rect
 --- @field left integer The leftmost cell of the window.

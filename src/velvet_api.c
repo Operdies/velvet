@@ -320,84 +320,95 @@ void velvet_process_on_stderr(struct velvet *v, struct velvet_process *p, struct
   pcall_func_with_args(v->L, 3);
 }
 
-static lua_stackRetCount
-vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
-  vec_clear(&envlist);
+static void push_argp_envp(lua_State *L, char *caller, lua_stackIndex cmd, lua_stackIndex env, struct vec *lst, char ***envp, char ***argp) {
+  size_t argstart = lst->length;
 
-  lua_State *L = v->current;
+  lua_Integer cmdtype = lua_type(L, cmd);
+  if (cmdtype != LUA_TSTRING && cmdtype != LUA_TTABLE) {
+    const char *actual = lua_typename(L, cmdtype);
+    bail("bad argument #%I to '%s' (string or string[] expected, got %s)", cmd, caller, actual);
+  }
 
-  if (options.environment.set) {
+  lua_pushvalue(L, cmd); /* push cmd to top of stack */
+  if (lua_isstring(L, -1)) {
+    if (luaL_len(L, -1) == 0) bail("bad argument #1 to '%s' (string must not be empty)", caller);
+    split_and_push_string_array(L);
+  }
+
+  lua_Integer len = luaL_len(L, -1);
+  if (len == 0) bail("bad argument #1 to '%s' (table must not be empty)", caller);
+
+  for (int i = 1; i <= len; i++) {
+    lua_geti(L, -1, i);
+    if (!lua_isstring(L, -1)) {
+      bail("bad argument #1 to '%s' (table must only contain strings)", caller);
+    }
+    const char *arg = luaL_checkstring(L, -1);
+    vec_push(lst, &arg);
+    lua_pop(L, 1);
+  }
+
+  /* NULL sentinel for arglist */
+  vec_push(lst, NULL);
+
+  size_t envp_index = lst->length;
+  if (env) {
     /* pin temporary env strings to ensure they are not gc'ed before fork() */
     lua_newtable(L);
     int env_pin = lua_gettop(L);
     int n_env = 0;
 
-    lua_pushvalue(L, options.environment.value);
+    lua_pushvalue(L, env);
     luaL_checktable(L, -1);
     struct u8_slice key;
 
     /* perfrom validation and writing in two passes.
-     * This simplifies the cleanup path. */
+   * This simplifies the cleanup path. */
 
     /* first pass: verify the table only contains string->string values */
     lua_pushnil(L);
     while (lua_next(L, -2) != 0) {
-      if (!lua_isstring(L, -2)) 
-        bail("environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
+      if (!lua_isstring(L, -2)) bail("environment: expected string keys, got %s", lua_typename(L, lua_type(L, -2)));
       key = luaL_checkslice(L, -2);
-      if (!lua_isstring(L, -1)) 
+      if (!lua_isstring(L, -1))
         bail("environment['%s']: expected string, got %s", key.content, lua_typename(L, lua_type(L, -1)));
 
-      lua_pushvalue(L, -2); /* table, key, value, key */
-      lua_insert(L, -2); /* table, key, key, value */
-      lua_pushstring(L, "="); /* table, key, key, value, '=' */
-      lua_insert(L, -2); /* table, key, key, '=', value */
-      lua_concat(L, 3); /* table, key, <key=value> */
+      lua_pushvalue(L, -2);                    /* table, key, value, key */
+      lua_insert(L, -2);                       /* table, key, key, value */
+      lua_pushstring(L, "=");                  /* table, key, key, value, '=' */
+      lua_insert(L, -2);                       /* table, key, key, '=', value */
+      lua_concat(L, 3);                        /* table, key, <key=value> */
       const char *entry = lua_tostring(L, -1); /* entry = <key>=<value> */
-      vec_push(&envlist, &entry);
-      /* ensure entry is pinned until this function returns. The concat result is very unlikely to be garbage collected but let's just be safe*/
+      vec_push(lst, &entry);
+      /* ensure entry is pinned until this function returns. The concat result is very unlikely to be garbage collected
+     * but let's just be safe*/
       lua_seti(L, env_pin, ++n_env); /* table, key */
     }
 
     /* NULL sentinel for env list */
-    vec_push(&envlist, NULL);
+    vec_push(lst, NULL);
   }
 
-  lua_pushvalue(L, cmd); /* push cmd to top of stack */
-  if (lua_isstring(L, -1)) {
-    if (luaL_len(L, -1) == 0) bail("bad argument #1 to 'process_spawn' (string must not be empty)");
-    split_and_push_string_array(L);
-  }
+  *envp = env ? vec_nth(*lst, envp_index) : NULL;
+  *argp = vec_nth(*lst, argstart);
+}
 
-  if (!lua_istable(L, -1)) bail("bad argument #1 to 'process_spawn'. string or string[] expected.");
+static lua_stackRetCount
+vv_api_process_spawn(struct velvet *v, lua_stackIndex cmd, struct velvet_api_process_spawn_options options) {
+  vec_clear(&envlist);
 
-  lua_Integer len = luaL_len(L, -1);
-  if (len == 0) bail("bad argument #1 to 'process_spawn' (table must not be empty)");
+  lua_State *L = v->current;
+  char **envp, **argp;
+  push_argp_envp(L, "process_spawn", cmd, options.environment.value, &envlist, &envp, &argp);
 
-  size_t argstart = envlist.length;
-  for (int i = 1; i <= len; i++) {
-    lua_geti(L, -1, i);
-    if (!lua_isstring(L, -1)) {
-      bail("bad argument #1 to 'process_spawn' (table must only contain strings)");
-    }
-    const char *arg = luaL_checkstring(L, -1);
-    vec_push(&envlist, &arg);
-    lua_pop(L, 1);
-  }
-
-  /* NULL sentinel for arglist */
-  vec_push(&envlist, NULL);
-
-  char **arglist = vec_nth(envlist, argstart);
-  char **envp = options.environment.set ? vec_nth(envlist, 0) : NULL;
   char *wd = options.working_directory.set ? (char *)options.working_directory.value.content : NULL;
   struct velvet_process_stream_options streams = {
       .out = options.on_stdout.set, .err = options.on_stderr.set,
       .in = options.stdin_pipe,
   };
-  lua_Integer proc_id = velvet_process_spawn(v, wd, arglist, envp, streams);
+  lua_Integer proc_id = velvet_process_spawn(v, wd, argp, envp, streams);
   if (proc_id < 0) {
-    bail("Error starting %s: %s", arglist[0], strerror(-proc_id));
+    bail("Error starting %s: %s", argp[0], strerror(-proc_id));
   }
 
   /* why do a scan when we know the index */
@@ -444,47 +455,21 @@ static void vv_api_process_close_stdin(struct velvet *v, lua_Integer id) {
 static lua_stackRetCount
 vv_api_window_create_process(struct velvet *v, lua_stackIndex cmd,
                              struct velvet_api_window_create_options options) {
-  vec_clear(&envlist);
-  lua_State *L = v->current;
   struct velvet_window template = {.emulator = vte_default};
   if (options.parent_window.set)
     template.parent_window_id = options.parent_window.value;
 
-  lua_pushvalue(L, cmd); /* push cmd to top of stack */
-  if (lua_isstring(L, -1)) {
-    if (luaL_len(L, -1) == 0)
-      bail("bad argument #1 to 'process_spawn' (string must not be empty)");
-    split_and_push_string_array(L);
-  }
+  vec_clear(&envlist);
+  lua_State *L = v->current;
 
-  if (!lua_istable(L, -1))
-    bail("bad argument #1 to 'process_spawn'. string or string[] expected.");
+  char **envp, **argp;
+  push_argp_envp(L, "window_create_process", cmd, options.environment.value, &envlist, &envp, &argp);
 
-  lua_Integer len = luaL_len(L, -1);
-  if (len == 0)
-    bail("bad argument #1 to 'process_spawn' (table must not be empty)");
-
-  for (int i = 1; i <= len; i++) {
-    lua_geti(L, -1, i);
-    if (!lua_isstring(L, -1)) {
-      bail("bad argument #1 to 'process_spawn' (table must only contain "
-           "strings)");
-    }
-    const char *arg = luaL_checkstring(L, -1);
-    vec_push(&envlist, &arg);
-    lua_pop(L, 1);
-  }
-
-  /* NULL sentinel for arglist */
-  vec_push(&envlist, NULL);
-
-  char **arglist = vec_nth(envlist, 0);
-  char *prog = *arglist;
   if (options.working_directory.set)
     string_push_slice(&template.cwd, options.working_directory.value);
-  lua_Integer win = velvet_scene_spawn_process_from_template(&v->scene, template, arglist);
+  lua_Integer win = velvet_scene_spawn_process_from_template(&v->scene, template, argp, envp);
   if (win < 0) {
-    bail("Error starting %s: %s", prog, strerror(-win));
+    bail("Error starting %s: %s", *argp, strerror(-win));
   }
   lua_pushinteger(L, win);
   return 1;
