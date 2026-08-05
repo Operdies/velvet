@@ -4,25 +4,28 @@ local cli = require('velvet.cli')
 local async = require('velvet.async')
 ---@class vv
 local vv = {
-  --- This is a hint for managiging z indices.
-  --- They are defined at this level so different window managers can make a reasonable
-  --- guess about Z planes to use so user-defined windows (popups, statusbars, etc.)
-  --- can work with different window managers.
+  --- Hints for managing window Z values.
+  --- They are defined at this level so different window managers and gui plugins
+  --- can make reasonable guesses about what will be above / below their windows.
+  --- The most common usecase for plugins will likely be popups (notification toasts, selection menus),
+  --- and overlays (search for text in all windows, highlight matching).
+  --- This makes it possible for plugins to work with different layout managers as long as they honor these conventions.
   z_hint = {
-    --- windows which should appear behind other windows,
-    --- such as wallpapers and desktop elements. Works best when windows in higher layers
-    background = -100000,
+    --- windows which should appear below regular windows, such as wallpapers and desktop elements.
+    --- Enable transparency for tiled windows for always-visible backgrounds, otherwise they will only be visible on empty layouts.
+    background = 0,
     --- tiled windows, if a tiling layout scheme is used
-    tiled = -10000,
-    --- status bars, power lines, etc. Should appear above tiled windows but below floating windows and popups
-    statusbar = -1000,
+    tiled = 1000,
+    --- status bars, other potential gutter elements, etc. Should appear above tiled windows but below floating windows and popups
+    statusbar = 2000,
     --- floating windows, if a layout scheme with stacking capabilities is used
-    floating = 1000,
-    --- elements which require user attention. Should appear above everything else.
-    popup = 10000,
-    --- Special overlays which should affect everything. One example of this is the mouse-copy implementation
-    --- which tints all content and intercepts mouse input
-    overlay = 100000,
+    floating = 3000,
+    --- elements which require user attention. Should appear above everything, except overlays.
+    popup = 4000,
+    --- Overlays windows which should be drawn on top of everything.
+    --- This is how copy-mode highlights selections without modifying window content.
+    --- Overlays can intercept mouse input since topmost windows always pass the hit test first.
+    overlay = 5000,
   },
 
   -- populated during lua vm initialization
@@ -181,7 +184,7 @@ local function make_weaktable() return setmetatable({}, { __mode = 'k' }) end
 COROUTINE_PRINT = make_weaktable()
 
 local real_print = function(stream, ...)
-  local tbl = {...}
+  local tbl = { ... }
   for i, v in ipairs(tbl) do tbl[i] = tostring(v) end
   local msg = table.concat(tbl, '\t')
 
