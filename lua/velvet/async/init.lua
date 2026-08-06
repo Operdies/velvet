@@ -308,19 +308,28 @@ end
 resolve_lock.pop = make_close(resolve_lock.pop_frame)
 
 function resolve_lock.push_frame()
-  if resolve_lock.resolving then
-    -- if another event is currently being resolved, yield.
-    -- this thread will be resumed after the currently resolving event is finished.
-    local idx = #resolve_lock.queue + 1
-    resolve_lock.queue[idx] = coroutine.running()
-    -- yield will fail if it would attempt to yield across a C-call boundary.
-    -- In this case, we should just emit the event but skip the trampoline.
-    if not pcall(coroutine.yield) then resolve_lock.queue[idx] = nil end
-    return nil
+  if not resolve_lock.resolving then
+    resolve_lock.resolving = true
+    return resolve_lock.pop
   end
 
-  resolve_lock.resolving = true
-  return resolve_lock.pop
+  local co = coroutine.running()
+  -- only yield if the coroutine is yieldable. A coroutine is not yieldable
+  -- if yielding would cross a C call boundary. This is mostly the case when called
+  -- during require(), such as a top-level print statement in a module.
+  -- If the coroutine cannot be yielded, we just emit the event immediately.
+  -- The worst consequence of this compromise is that events may be delivered
+  -- out of order specifically when require() is called in a continuation,
+  -- and that require() emits a new event.
+  if not coroutine.isyieldable(co) then return end
+
+  -- if another event is currently being resolved, yield.
+  -- this thread will be resumed after the currently resolving event is finished.
+  -- ignore @async diagnostic for this function since the yield is guaranteed
+  -- to be resumed as soon as the event being emitted is resolved.
+  resolve_lock.queue[#resolve_lock.queue + 1] = co
+  ---@diagnostic disable-next-line: await-in-sync
+  coroutine.yield()
 end
 
 
