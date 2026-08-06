@@ -308,14 +308,27 @@ end
 resolve_lock.pop = make_close(resolve_lock.pop_frame)
 
 function resolve_lock.push_frame()
+  -- if another event is currently being resolved, yield.
+  -- this thread will be resumed after the currently resolving event is finished.
   if resolve_lock.resolving then
-    -- if another event is currently being resolved, yield.
-    -- this thread will be resumed after the currently resolving event is finished.
-    local idx = #resolve_lock.queue + 1
-    resolve_lock.queue[idx] = coroutine.running()
-    -- yield will fail if it would attempt to yield across a C-call boundary.
-    -- In this case, we should just emit the event but skip the trampoline.
-    if not pcall(coroutine.yield) then resolve_lock.queue[idx] = nil end
+    -- only yield if the coroutine is yieldable. A coroutine is not yieldable
+    -- if yielding would cross a C call boundary. This is mostly the case when called
+    -- during require(), such as a top-level print statement in a module.
+    -- If the coroutine cannot be yielded, we just emit the event immediately.
+    -- The worst consequence of this compromise is that events may be delivered
+    -- out of order specifically when require() is called in a continuation, 
+    -- and that require() emits a new event.
+    if coroutine.isyieldable() then
+      resolve_lock.queue[#resolve_lock.queue + 1] = coroutine.running()
+      -- the await-in-sync diagnostic is mostly used for detecting
+      -- whether a function call can take a long time, or cause
+      -- a return to the main event loop. In this case, the thread
+      -- being yielded will be resumed before returning to the main loop,
+      -- so the diagnostic is not helpful here. Marking push_frame()
+      -- as @async would just be noise.
+      ---@diagnostic disable-next-line: await-in-sync
+      coroutine.yield()
+    end
     return nil
   end
 

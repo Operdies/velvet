@@ -540,7 +540,7 @@ return function()
     tasks[name] = vv.async.run(fn)
   end
 
-  local result = vv.async.wait_all(tasks, 5000)
+  local result = vv.async.wait_all(tasks, 3000)
   for k in pairs(tests) do
     assert(result[k], "process test '" .. k .. "' timed out.")
     local ret = result[k].data
