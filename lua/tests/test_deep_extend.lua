@@ -1,4 +1,4 @@
-local function test()
+return function()
   local deep_extend = require('velvet.lib.deep_extend')
 
   -- basic merge, disjoint keys
@@ -46,5 +46,3 @@ local function test()
   local r8 = deep_extend('force', { a = 5 }, { a = { nested = 1 } })
   assert(type(r8.a) == 'table' and r8.a.nested == 1)
 end
-
-return { test = test }

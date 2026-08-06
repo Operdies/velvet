@@ -684,7 +684,7 @@ end
 --
 -- ED(3) — erase scrollback buffer (xterm extension, implemented)
 
-local function test() -- {{{1
+return function() -- {{{1
   test_input_output()
   test_erase()
   test_scrolling()
@@ -692,8 +692,6 @@ local function test() -- {{{1
   test_reflow()
   test_tabs()
 end
-
-return { test = test }
 
 -- Modeline {{{1
 -- vim: fdm=marker shiftwidth=2 foldlevel=0

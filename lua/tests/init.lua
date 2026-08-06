@@ -1,17 +1,13 @@
 ---@diagnostic disable: lowercase-global, await-in-sync
--- globals overriden by the test harness
-SIGTERM = 0
-STDERR_ISATTY = false
-STDOUT_ISATTY = false
 
-local tests = {
-  'tests.test_process',
-  'tests.test_deep_extend',
-  'tests.test_runtime_storage',
-  'tests.test_async',
-  'tests.test_grid',
-  'tests.test_cli',
-}
+--- Module with various utilities and environmental information
+--- populated by the C harness
+--- @class test.utils
+--- @field fatal fun(message: string): nil
+--- @field stderr_isatty boolean
+--- @field stdout_isatty boolean
+--- @field print_timing boolean
+test_utils = {}
 
 local function stringify(...)
   local tbl = table.pack(...)
@@ -30,8 +26,23 @@ function print(...)
   io.write(stringify(...))
 end
 
+function expect(x, msg)
+  if x == nil or x == false then
+    msg = msg or 'expect failure:'
+    local traceback = debug.traceback(msg)
+    local relevant = {}
+    for line in traceback:gmatch("[^\r\n]+") do
+      if line:match("global 'xpcall'") then break end
+      relevant[#relevant + 1] = line
+    end
+    printerr(table.concat(relevant, '\n'))
+    test_utils.fatal(traceback)
+  end
+  return x
+end
+
 function printerr(...)
-  if STDERR_ISATTY then
+  if test_utils.stderr_isatty then
     io.stderr:write(stringify('\x1b[31;1m', ..., '\x1b[m'))
   else
     io.stderr:write(stringify(...))
@@ -39,18 +50,18 @@ function printerr(...)
 end
 
 function expect_eq(x, y)
-  assert(x == y, string.format("'%s' expected, was '%s'", x, y):gsub('\n', '\\n'))
+  expect(x == y, string.format("'%s' expected, was '%s'", x, y):gsub('\n', '\\n'))
 end
 
 --- @param pattern string|number
 --- @param str string|number
 function expect_match(pattern, str)
-  assert(str:match(pattern), string.format("Expected '%s' to match '%s'", pattern, str):gsub('\n', '\\n'))
+  expect(str:match(pattern), string.format("Expected '%s' to match '%s'", pattern, str):gsub('\n', '\\n'))
 end
 
 function expect_error(err, fn, ...)
   local ok, result = xpcall(fn, function(e) return e end, ...)
-  assert(not ok)
+  expect(not ok)
   if err and not result:match(err) then expect_eq(err, result) end
 end
 
@@ -63,18 +74,32 @@ end
 
 local current_test = nil
 
-local print_timing = false
-
 local function run()
+  local tests = {}
+  -- use io.popen() for test discovery. velvet processes are equally capable and have a similar API,
+  -- but io.popen() is preferred here because a velvet process bug could mask other bugs by not discovering tests.
+  -- The real strength of vv.process() is the implicit async-ness via coroutines, but that flexibility is not needed here.
+  io.popen('ls ../lua/tests', 'r'):lines()
+  for line in io.popen('ls ../lua/tests', 'r'):lines() do
+    local module = line:match('(.*).lua')
+    if module and line ~= 'init.lua' then
+      local load = require('tests.' .. line:match('(.*).lua'))
+      local fn = load
+      if type(fn) ~= 'function' then
+        fn = expect(load and type(load) == 'table' and type(load.test) == 'function' and load.test,
+          ("module '%s' does not export a test function."):format(module))
+      end
+      tests[module] = fn
+    end
+  end
+
   local failed = 0
-  for _, mod in ipairs(tests) do
-    local test = require(mod).test
-    current_test = vv.async.run(test)
+  for name, fn in pairs(tests) do
     local start = vv.api.get_current_tick()
+    current_test = vv.async.run(fn)
     local ok, err = vv.async.wait_for_coroutine(current_test)
-    if print_timing then
-      local test_name = mod:match("[^.]+$")
-      print(string.format("[%4d ms] finished %s", vv.api.get_current_tick() - start, test_name))
+    if test_utils.print_timing then
+      print(string.format("[%4d ms] finished %s", vv.api.get_current_tick() - start, name))
     end
     current_test = nil
     if not ok then
@@ -82,7 +107,7 @@ local function run()
       for line in err:gmatch("[^\r\n]+") do
         lines[#lines + 1] = line
       end
-      printerr('FAIL: ' .. mod .. ': ' .. lines[1])
+      printerr('FAIL: ' .. name .. ': ' .. lines[1])
       for i = 2, #lines do
         local line = lines[i]
         if line:match("in global 'xpcall'") then break end
@@ -99,20 +124,10 @@ end
 
 return {
   run = function()
-    local trd = vv.async.run(function()
-      local status, result = pcall(run)
-      if not status then print(result) end
-      TEST_STATUS = status and result
-    end)
-
-    -- timing out misbehaving tests is unreliable because coroutines are in the end still cooperative.
-    -- if a thread is doing a lot of work without yielding, this action will be delayed until it is done.
-    -- but having a timeout is better than no timeout. The better soluton would be for the C harness
-    -- to install a debug break and dump the VM state if it exceeds some instruction limit.
-    vv.api.schedule_after(5000, function()
-      TEST_STATUS = false
-      vv.async.cancel(trd)
-      if current_test ~= nil then vv.async.cancel(current_test) end
+    vv.async.run(function()
+      local yes, why = xpcall(run, debug.traceback)
+      if not yes then printerr(why) end
+      TEST_STATUS = yes and why
     end)
   end
 }

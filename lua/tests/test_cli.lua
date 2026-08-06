@@ -183,15 +183,14 @@ local function test_quit()    -- {{{1
 end
 
 -- test {{{1
-return {
-  test = function()
-    start_server(servername)
-    test_server_cli()
-    test_exit_codes()
-    test_spawn()
-    test_quit()
-  end
-}
+
+return function()
+  start_server(servername)
+  test_server_cli()
+  test_exit_codes()
+  test_spawn()
+  test_quit()
+end
 
 -- Modeline {{{1
 -- vim: fdm=marker shiftwidth=2 foldlevel=0

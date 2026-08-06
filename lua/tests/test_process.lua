@@ -49,18 +49,20 @@ local function test_stdin()
     local test_input = "hello stdin"
     local co = coroutine.running()
     local proc = vv.api.process_spawn('cat', {
-      on_exit = function(_, exit_code) coroutine.resume(co, exit_code) end,
+      on_exit = function(_, exit_code, signal)
+        expect_eq(0, exit_code)
+        expect_eq(nil, signal)
+        coroutine.resume(co)
+      end,
       stdin_pipe = true,
       on_stdout = function(_, data, _)
-        if data then coroutine.resume(co, data) end
+        if data then expect_eq(test_input, data) end
       end,
     })
     vv.api.process_write_stdin(proc, test_input)
     vv.api.process_close_stdin(proc)
-    local output = coroutine.yield()
-    local exit_code = coroutine.yield()
-    assert(exit_code == 0)
-    assert(output == test_input)
+    -- wait for process to exit
+    coroutine.yield()
   end
 
   do -- 2. test sending the payload piecemeal
@@ -514,38 +516,36 @@ printf '\n'
   expect_eq(nil, p.stdout:line())
 end
 
-return {
-  test = function()
-    -- it is kind of necessary to insert sleeps in some process related
-    -- tests because buffering behavior is timing sensitive by nature.
-    -- we run these tests in parallel to save a bit of time.
-    -- Parallel processes is closer to a real world scenario anyway.
-    local tests = {
-      ['test_basic_functionality'] = test_basic_functionality,
-      ['test_environment'] = test_environment,
-      ['test_exitcodes'] = test_exitcodes,
-      ['test_process_kill'] = test_process_kill,
-      ['test_signal_delivery'] = test_signal_delivery,
-      ['test_spawn_errors'] = test_spawn_errors,
-      ['test_stdin'] = test_stdin,
-      ['test_stdout_reap_race'] = test_stdout_reap_race,
-      ['test_working_directory'] = test_working_directory,
-      ['test_process_wrapper'] = test_process_wrapper,
-      ['test_line_read_timeout'] = test_line_read_timeout,
-    }
+return function()
+  -- it is kind of necessary to insert sleeps in some process related
+  -- tests because buffering behavior is timing sensitive by nature.
+  -- we run these tests in parallel to save a bit of time.
+  -- Parallel processes is closer to a real world scenario anyway.
+  local tests = {
+    ['test_basic_functionality'] = test_basic_functionality,
+    ['test_environment'] = test_environment,
+    ['test_exitcodes'] = test_exitcodes,
+    ['test_process_kill'] = test_process_kill,
+    ['test_signal_delivery'] = test_signal_delivery,
+    ['test_spawn_errors'] = test_spawn_errors,
+    ['test_stdin'] = test_stdin,
+    ['test_stdout_reap_race'] = test_stdout_reap_race,
+    ['test_working_directory'] = test_working_directory,
+    ['test_process_wrapper'] = test_process_wrapper,
+    ['test_line_read_timeout'] = test_line_read_timeout,
+  }
 
-    local tasks = {}
-    for name, fn in pairs(tests) do
-      tasks[name] = vv.async.run(fn)
-    end
-
-    local result = vv.async.wait_all(tasks, 5000)
-    for k in pairs(tests) do
-      assert(result[k], "process test '" .. k .. "' timed out.")
-      local ret = result[k].data
-      assert(ret[1], ret[2])
-    end
-    -- we can't run this alongside the other tests because its test conditions require exclusive process control
-    test_filedescriptor_leaks()
+  local tasks = {}
+  for name, fn in pairs(tests) do
+    tasks[name] = vv.async.run(fn)
   end
-}
+
+  local result = vv.async.wait_all(tasks, 5000)
+  for k in pairs(tests) do
+    assert(result[k], "process test '" .. k .. "' timed out.")
+    local ret = result[k].data
+    assert(ret[1], ret[2])
+  end
+  -- we can't run this alongside the other tests because its test conditions require exclusive process control
+  test_filedescriptor_leaks()
+end

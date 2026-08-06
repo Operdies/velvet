@@ -413,17 +413,15 @@ local function test_coroutine_close()
 end
 
 
-return {
-  test = function()
-    test_when()
-    test_event_sources()
-    test_event_source_when()
-    test_coroutine_return()
-    test_wait_all()
-    test_event_source_wait_all()
-    test_coroutine_weakrefs()
-    test_delivery()
-    test_coroutine_close()
-    test_delivery_order()
-  end
-}
+return function()
+  test_when()
+  test_event_sources()
+  test_event_source_when()
+  test_coroutine_return()
+  test_wait_all()
+  test_event_source_wait_all()
+  test_coroutine_weakrefs()
+  test_delivery()
+  test_coroutine_close()
+  test_delivery_order()
+end

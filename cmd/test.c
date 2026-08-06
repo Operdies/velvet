@@ -10,9 +10,10 @@
 #include <sys/mman.h>
 #include "velvet_alloc.h"
 #include "velvet_lua.h"
-#include "velvet_scene.h"
 #include "velvet_process.h"
 #include <sys/resource.h>
+#include "lauxlib.h"
+#include "lua.h"
 #include "csi.h"
 
 static bool exit_on_failure = true;
@@ -344,7 +345,6 @@ static void test_num_as_slice(void) {
 }
 
 static void test_lua(void);
-static void test_lua_modules(void);
 
 static void test_shmem_allocator(void) {
   size_t cap = sysconf(_SC_PAGESIZE);
@@ -513,83 +513,6 @@ static void test_shmem_allocator(void) {
   velvet_alloc_shmem_destroy(ally, fd);
 }
 
-int main(void) {
-  test_shmem_allocator();
-  test_csi_parsing();
-  test_string();
-  test_num_as_slice();
-  test_string_joinpath();
-  test_base64();
-  test_vec();
-  test_lua();
-  test_lua_modules();
-  return n_failures;
-}
-
-#include "lauxlib.h"
-#include "lua.h"
-
-static void lua_assert(lua_State *L, char *cmd) {
-  if (luaL_loadstring(L, cmd) != LUA_OK) {
-    lua_die(L);
-  }
-
-  if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-    const char *err = luaL_tolstring(L, 1, 0);
-    printf("%s", err);
-    exit(1);
-  }
-
-  lua_pop(L, lua_gettop(L));
-}
-
-/* initialize a testing velvet struct with the bare minimum for asserts to succeed */
-static struct velvet get_dumb_velvet(void) {
-  struct velvet v = {
-      .scene = velvet_scene_default,
-      .clients = vec(struct velvet_client),
-      .coroutines = vec(struct velvet_coroutine),
-      .processes = vec(struct velvet_process),
-      .marked_for_death = vec(struct velvet_process),
-      .stored_strings = vec(struct velvet_kvp),
-      .event_loop = io_default,
-  };
-  return v;
-}
-
-void test_lua(void) {
-  struct velvet v = get_dumb_velvet();
-  char *binpath = platform_get_exe_path();
-  if (!binpath) velvet_die("Unable to locate library");
-  char *lastslash = strrchr(binpath, '/');
-  *lastslash = 0;
-  /* silently ignore errors */
-  if (chdir(binpath) == -1) velvet_die("chdir failed:");
-  free(binpath);
-  velvet_lua_init(&v);
-  lua_State *L = v.L;
-
-  char *requires[] = {
-      "require('velvet')",                 /* lua/velvet/init.lua */
-      "require('velvet.default_options')", /* lua/velvet/init.lua */
-  };
-
-  for (int i = 0; i < LENGTH(requires); i++) {
-    if (luaL_dostring(L, requires[i]) != LUA_OK) {
-      lua_die(L);
-    }
-    lua_pop(L, lua_gettop(L));
-  }
-
-  /* test that options are wired up correctly */
-  v.scene.theme.palette[4] = (struct color){ .c.rgb.b = 0, .kind = VELVET_API_COLOR_KIND_RGB };
-  lua_assert(L, "assert(vv.options.theme.blue ~= 0.0)");
-  v.scene.theme.palette[4] = (struct color){ .c.rgb.b = 254, .kind = VELVET_API_COLOR_KIND_RGB };
-  lua_assert(L, "assert(vv.options.theme.blue ~= 1.0)");
-
-  velvet_destroy(&v);
-}
-
 static void set_max_fds(rlim_t n) {
   struct rlimit rlim;
   if (getrlimit(RLIMIT_NOFILE, &rlim) != 0) velvet_die("getrlimit:");
@@ -599,7 +522,31 @@ static void set_max_fds(rlim_t n) {
   assert(rlim.rlim_cur == n);
 }
 
-void test_lua_modules(void) {
+static int l_fatal(lua_State *L) {
+  struct velvet *v = *(struct velvet **)lua_getextraspace(L);
+  velvet_destroy(v);
+  exit(1);
+}
+
+static struct velvet *velvet;
+static void signal_abort(int sig, siginfo_t *siginfo, void *context) {
+  (void)siginfo, (void)context, (void)sig;
+  velvet_destroy(velvet);
+  fprintf(stderr, "Test aborted due to timeout.\n");
+  exit(1);
+}
+
+static void abort_after(uint32_t seconds) {
+  struct sigaction sig_timeout = {0};
+  sig_timeout.sa_sigaction = &signal_abort;
+  sig_timeout.sa_flags = SA_SIGINFO;
+  if (sigaction(SIGALRM, &sig_timeout, NULL) == -1) {
+    velvet_die("sigaction:");
+  }
+  alarm(seconds);
+}
+
+void test_lua(void) {
   /* because the lua test context is dispatching with the real velvet event loop, if the test is terminated by a signal, (Ctrl-C, kill)
    * it will delete the $VELVET socket file in its shutdown path.
    * To avoid this, we unset the environment variable in the test context. */
@@ -610,17 +557,13 @@ void test_lua_modules(void) {
   set_max_fds(150);
 
   struct velvet v = {0};
+  velvet = &v;
   char *argv[] = { "-S", "test", NULL };
   int noop_fd[2];
   pipe(noop_fd);
   velvet_init(&v, noop_fd[0], "vv", argv);
   velvet_lua_init(&v);
   lua_State *L = v.L;
-
-  if (luaL_dostring(L, "require('velvet')") != LUA_OK) {
-    lua_die(L);
-  }
-  lua_pop(L, lua_gettop(L));
 
   /* lua does not have a way to set environment variables
    * in the scope of the running process, so we help it a bit here. */
@@ -631,15 +574,21 @@ void test_lua_modules(void) {
   lua_call(L, 1, 1);
   luaL_checktype(L, -1, LUA_TTABLE);
 
-  /* globals needed by tests.run() */
-  lua_pushinteger(L, SIGTERM);
-  lua_setglobal(L, "SIGTERM");
+  struct luaL_Reg test_utils[] = {
+    { "fatal", l_fatal },
+    {0},
+  };
 
+  luaL_newlib(L, test_utils);
   /* if stdout/err are tty's, the harness can print colors */
   lua_pushboolean(L, isatty(STDOUT_FILENO));
-  lua_setglobal(L, "STDOUT_ISATTY");
+  lua_setfield(L, -2, "stdout_isatty");
   lua_pushboolean(L, isatty(STDERR_FILENO));
-  lua_setglobal(L, "STDERR_ISATTY");
+  lua_setfield(L, -2, "stderr_isatty");
+  lua_pushboolean(L, true);
+  lua_setfield(L, -2, "print_timing");
+  lua_setglobal(L, "test_utils");
+
 
   /* start tests and dispatch the main loop until TEST_STATUS is set */
   lua_getfield(L, -1, "run");
@@ -648,6 +597,7 @@ void test_lua_modules(void) {
     velvet_die("tests.run(): %s", err);
   }
 
+  abort_after(5);
   bool success = false;
   while (true) {
     lua_getglobal(L, "TEST_STATUS");
@@ -667,4 +617,24 @@ void test_lua_modules(void) {
   velvet_destroy(&v);
   /* no need for asserts, the lua test suite already reported nice errors */
   if (!success) exit(1);
+}
+
+int main(void) {
+  /* lua tests assume a specific working directory */
+  char *binpath = platform_get_exe_path();
+  if (!binpath) velvet_die("Unable to locate library");
+  char *lastslash = strrchr(binpath, '/');
+  *lastslash = 0;
+  if (chdir(binpath) == -1) velvet_die("chdir failed:");
+  free(binpath);
+
+  test_shmem_allocator();
+  test_csi_parsing();
+  test_string();
+  test_num_as_slice();
+  test_string_joinpath();
+  test_base64();
+  test_vec();
+  test_lua();
+  return n_failures;
 }

@@ -129,14 +129,12 @@ if (!ret.set) {
       builder:push('return 1;')
     end
     builder.indent = 0
-    builder:push('}')
+    builder:push('}\n')
   end
 
   -- Generate lua function table {{{3
 
-  builder:push([=[
-__attribute__((unused)) static const struct luaL_Reg velvet_lua_function_table[] = {
-]=])
+  builder:push('static const struct luaL_Reg velvet_lua_function_table[] = {')
 
   for _, fn in ipairs(spec.options) do
     builder:push('  { "get_<name>", l_vv_api_get_<name> },', { name = fn.name })

@@ -1,4 +1,4 @@
-local function test()
+return function()
   local store = vv.api.runtime_store_value
   local load = vv.api.runtime_load_value
 
@@ -160,5 +160,3 @@ local function test()
   assert(t.prefs.keymap.quit == 'ctrl+q', 'keymap.quit: expected "ctrl+q", got ' .. tostring(t.prefs.keymap.quit))
   assert(t.prefs.keymap.reload == 'ctrl+r', 'keymap.reload: expected "ctrl+r", got ' .. tostring(t.prefs.keymap.reload))
 end
-
-return { test = test }
