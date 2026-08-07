@@ -553,7 +553,7 @@ static void on_window_output(struct io_source *src, struct u8_slice str) {
      * client with an output pipe. The worst case is something like the system clipboard being set multiple times
      * which is harmless. */
     vec_where(client, v->clients, client->output) {
-      string_push_string(&client->pending_output, vte->emulator_output_buffer);
+      string_push_string(&client->pending_output, &vte->emulator_output_buffer);
     }
 
     /* Consider the output handled even if it was not transmitted to any client.

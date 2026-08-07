@@ -1532,7 +1532,7 @@ static void vv_api_clipboard_set(struct velvet *v, struct u8_slice text) {
     * and hope one of them handles OSC 52 */
   struct velvet_client *s;
   vec_where(s, v->clients, s->input && s->output) {
-    string_push_string(&s->pending_output, osc_buffer);
+    string_push_string(&s->pending_output, &osc_buffer);
   }
   string_destroy(&osc_buffer);
 }

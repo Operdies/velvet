@@ -57,7 +57,8 @@ void string_truncate(struct string *s, size_t len);
 int string_replace_inplace_slow(struct string *str, const char *const old, const char *const new);
 struct u8_slice u8_slice_from_string(struct string s);
 void string_push_cstr(struct string *str, const char *cstr);
-void string_push_string(struct string *dest, struct string src);
+/* NOTE: pushing a string to itself is undefined becaause the underlying copy uses memcpy. */
+void string_push_string(struct string *restrict dest, const struct string *const restrict src);
 void string_push_slice(struct string *str, struct u8_slice slice);
 void string_push_range(struct string *str, const uint8_t *const src,
                        size_t len);

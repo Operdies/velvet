@@ -322,8 +322,8 @@ struct u8_slice string_as_u8_slice(struct string s) {
   return (struct u8_slice) { .content = s.content, .len = s.len };
 }
 
-void string_push_string(struct string *dest, struct string src) {
-  string_push_slice(dest, string_as_u8_slice(src));
+void string_push_string(struct string *restrict dest, const struct string *const restrict src) {
+  string_push_slice(dest, string_as_u8_slice(*src));
 }
 
 size_t string_strlen(struct string s) {
