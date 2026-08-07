@@ -128,13 +128,14 @@ void velvet_lua_init(struct velvet *v) {
   /* The lua distribution is in the parent directory of the folder containing the vv binary.
    * We don't want to load lua libraries from any other directories by default.
    * End users can manually add search paths if they want to. */
-  char init[] = {
-      "package.path = '../lua/?/init.lua;../lua/?.lua'\n"
-      "_G.vv = require('velvet')\n"
-      "vv.init()\n",
-  };
+  char base[PATH_MAX];
+  realpath("../lua", base);
+  lua_getglobal(L, "package");
+  lua_pushfstring(L, "%s/?/init.lua;%s/?.lua;", base, base);
+  lua_setfield(L, -2, "path");
+  lua_pop(L, 1); /* pop package */
 
-  if (luaL_dostring(L, init) != LUA_OK) {
+  if (luaL_dostring(L, "vv = require('velvet'); vv.init();") != LUA_OK) {
     lua_die(L);
   }
 
